@@ -1,0 +1,37 @@
+version: '3.9'
+
+# Gunakan bersama docker-compose.yml:
+# docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    volumes: []          # tidak mount source code di production
+    command: node dist/server.js
+    restart: always
+
+  worker:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    volumes: []
+    command: node dist/workers/index.js
+    restart: always
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    volumes: []
+    restart: always
+
+  # postgres & rabbitmq: rekomendasi gunakan managed service di production
+  # (misal: Neon/Supabase untuk Postgres, CloudAMQP untuk RabbitMQ).
+  # Jika tetap self-host, tambahkan strategi backup volume secara terpisah.
+  postgres:
+    restart: always
+
+  rabbitmq:
+    restart: always

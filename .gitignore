@@ -1,0 +1,21 @@
+# env files — never commit actual secrets, only *.example
+.env
+.env.local
+api/.env
+!*.env.example
+
+# dependencies
+node_modules/
+api/node_modules/
+
+# build output
+.next/
+dist/
+
+# misc
+.DS_Store
+*.log
+npm-debug.log*
+
+# Claude Code local session config (personal, not shared)
+.claude/settings.local.json
