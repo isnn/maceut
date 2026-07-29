@@ -36,7 +36,7 @@ export function MapCanvas({
   const mapCenter = center ?? latLngs?.[0] ?? DEFAULT_CENTER
 
   return (
-    <div className={`bg-gray-950 rounded-lg overflow-hidden ${className ?? 'h-80 w-full'}`}>
+    <div className={`maceut-map-dark bg-gray-950 rounded-lg overflow-hidden ${className ?? 'h-80 w-full'}`}>
       <MapContainer
         center={mapCenter}
         zoom={zoom}
@@ -46,11 +46,7 @@ export function MapCanvas({
         zoomControl={interactive}
         style={{ height: '100%', width: '100%', background: '#0a0a0a' }}
       >
-        <TileLayer
-          url={OSM_TILE_URL}
-          attribution={OSM_ATTRIBUTION}
-          className="brightness-[.7] invert-[.92] contrast-[.85] hue-rotate-180 saturate-[.6]"
-        />
+        <TileLayer url={OSM_TILE_URL} attribution={OSM_ATTRIBUTION} />
         {latLngs && latLngs.length >= 3 && (
           <Polygon positions={latLngs} pathOptions={{ color: '#5A35F3', fillOpacity: 0.15, weight: 2 }} />
         )}
