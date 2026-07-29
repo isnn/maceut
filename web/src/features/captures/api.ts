@@ -4,6 +4,7 @@
 // to stand in for the RabbitMQ + Playwright worker pipeline.
 
 import { ApiError } from '@/types/api'
+import { generateId } from '@/lib/utils'
 import type { CaptureStyleInput } from '@/features/zones/types'
 import type { Capture } from './types'
 
@@ -55,7 +56,7 @@ export async function triggerManual(zoneId: string, style: CaptureStyleInput): P
   }
 
   const capture: Capture = {
-    id: crypto.randomUUID(),
+    id: generateId(),
     zoneId,
     status: 'pending',
     filePath: null,

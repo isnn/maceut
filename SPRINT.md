@@ -118,6 +118,18 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   yang sudah ada (spacing, borderRadius — keduanya aman karena tidak collide dengan max-w-*/w-*/h-* resolution),
   gunakan arbitrary value jika perlu named-size Tailwind bawaan (max-w, w, h) berdampingan dengan custom spacing.
 
+[2026-07-29] Bug kritis kedua ditemukan & diperbaiki: Register selalu gagal dengan pesan generik "Terjadi
+  kesalahan, coba lagi." di SEMUA percobaan. Root cause: `crypto.randomUUID()` dipakai di 3 file mock API
+  (auth/api.ts, zones/api.ts, captures/api.ts) untuk generate id, tapi method ini HANYA tersedia di secure
+  context (HTTPS atau localhost) — app di-serve lewat HTTP plain via public IP VPS, jadi `crypto.randomUUID`
+  undefined di browser, throw TypeError yang bukan instance ApiError → jatuh ke pesan error generik.
+  Fix: tambah `generateId()` di lib/utils.ts (pakai `crypto.getRandomValues` yang tidak ada batasan secure
+  context, fallback ke Math.random jika crypto sama sekali tidak ada), ganti semua 3 pemanggilan
+  `crypto.randomUUID()` ke `generateId()`. Ini juga akan mempengaruhi create zone & manual capture (sama-sama
+  pakai crypto.randomUUID) kalau belum di-test — sudah diperbaiki sekaligus.
+  ⚠️ Kalau nanti pindah ke domain dengan HTTPS asli, `crypto.randomUUID()` native akan tersedia lagi — helper
+  ini tetap aman dipakai (langsung pakai randomUUID native kalau ada, tidak perlu diubah lagi).
+
 ---
 
 ## Decisions This Sprint
