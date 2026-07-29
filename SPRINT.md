@@ -37,7 +37,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | 🔴 | Setup api/: Dockerfile.dev + Dockerfile | deployment.md |
 | 🔴 | Setup api/.env dari .env.example | api/.env.example |
 | ✅ | Setup web/: Next.js + Tailwind (token dari design.md) + Base UI | design.md |
-| 🔴 | Setup web/: Dockerfile.dev + Dockerfile | deployment.md |
+| 🟡 | Setup web/: Dockerfile.dev + Dockerfile | deployment.md |
 | ✅ | Setup web/.env.local dari .env.example | web/.env.example |
 | 🔴 | Jalankan `docker compose up` — pastikan semua service start | deployment.md |
 | 🔴 | Setup Drizzle: drizzle.config.ts + schema.ts dasar (users, user_plans) | zone-management/tasks.md Phase 1 |
@@ -98,6 +98,11 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   interactive browser flows (polygon drawing clicks, dialog open/close, full stepper submit) — no browser tool
   available this session; needs a manual click-through before considering Phase 4 frontend tickets fully done.
 
+[2026-07-29] web/Dockerfile.dev dibuat (node:20-alpine, npm install, npm run dev) — dev server sekarang bisa dijalankan
+  via `docker compose up --no-deps -d --build web` tanpa perlu service `api` (belum ada Dockerfile-nya). Ditambahkan
+  `allowedDevOrigins` di next.config.ts untuk fix HMR websocket yang diblokir saat akses lewat IP publik VPS.
+  Verified: container up, curl / → 200. NOT done: web/Dockerfile (production, multi-stage) — masih 🔴, ditunda.
+
 ---
 
 ## Decisions This Sprint
@@ -151,6 +156,15 @@ Format:
     untuk migrasi bertahap, jadi token di design.md tidak perlu ditulis ulang ke sintaks `@theme` CSS-native
   Impact: web/src/app/globals.css menambahkan `@config "../../tailwind.config.ts";`, tailwind.config.ts tetap persis seperti
     struktur di design.md
+
+[2026-07-29] Keputusan: Port host untuk service `web` di docker-compose.yml diubah dari "3000:3000" menjadi "3001:3000"
+  Alasan: Port 3000 di VPS dev sudah dipakai proses lain (project tidak terkait, di luar Maceut) — bukan konflik dari Maceut sendiri
+  Impact: docker-compose.yml (web.ports), akses dev via docker sekarang di :3001 bukan :3000; port container tetap 3000
+
+[2026-07-29] Keputusan: allowedDevOrigins ditambahkan ke web/next.config.ts (berisi IP publik VPS)
+  Alasan: Next.js 16 dev server memblokir cross-origin request ke resource dev (termasuk webpack-hmr WebSocket) secara default;
+    tanpa ini HMR gagal connect saat diakses lewat IP publik meskipun halaman utama tetap ter-load normal
+  Impact: web/next.config.ts — perlu ditinjau ulang/dihapus saat pindah ke domain tetap atau reverse proxy di production
 ```
 
 ---
