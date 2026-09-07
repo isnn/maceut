@@ -124,7 +124,7 @@ export function ManualCaptureButton({ zoneId, zoneName }: { zoneId: string; zone
               <div className="space-y-md">
                 <Alert variant="warning">
                   {capture!.status === 'skipped_limit'
-                    ? 'Batas 100 captures/hari tercapai.'
+                    ? 'Batas captures harian plan Anda tercapai.'
                     : capture!.errorMessage ?? 'Capture gagal diproses.'}
                 </Alert>
                 <div className="flex justify-end">

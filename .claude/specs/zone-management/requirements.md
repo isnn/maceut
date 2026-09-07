@@ -216,7 +216,7 @@ supaya **saya bisa mendapatkan snapshot traffic terkini tanpa harus menunggu sch
 - [ ] Legend traffic (green/yellow/orange/red) tampil di sudut gambar (BR-019)
 - [ ] Setelah `done`, tampilkan preview gambar dan tombol download PNG
 - [ ] Gambar capture menampilkan road class **efektif** = MIN(road class tersimpan di zona, batas plan aktif user saat ini) (BR-022)
-- [ ] Jika daily limit tercapai (BR-006), tampilkan pesan "Batas 100 captures/hari tercapai. Reset pukul 00:00 WIB"
+- [ ] Jika daily limit tercapai (BR-006), tampilkan pesan "Batas captures harian plan Anda tercapai. Reset pukul 00:00 WIB"
 
 **Edge Cases:**
 - Capture gagal (Playwright error / R2 error) → status `failed`, tampilkan pesan error dari `error_message`, sediakan tombol "Coba Lagi" (membuka lagi Style Selector, tidak otomatis pakai style sebelumnya)

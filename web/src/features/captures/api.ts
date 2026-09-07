@@ -5,11 +5,12 @@
 
 import { ApiError } from '@/types/api'
 import { generateId } from '@/lib/utils'
+import { PLAN_LIMITS } from '@/lib/constants'
+import * as authApi from '@/features/auth/api'
 import type { CaptureStyleInput } from '@/features/zones/types'
 import type { Capture } from './types'
 
 const CAPTURES_KEY = 'maceut_mock_captures'
-const MAX_DAILY_CAPTURES = 100
 
 function delay<T>(value: T, ms = 300): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms))
@@ -50,9 +51,14 @@ function runMockPipeline(captureId: string) {
 }
 
 export async function triggerManual(zoneId: string, style: CaptureStyleInput): Promise<Capture> {
-  if (countToday() >= MAX_DAILY_CAPTURES) {
+  const user = await authApi.getMe()
+  const capturesLimit = PLAN_LIMITS[user?.plan ?? 'free'].capturesLimit
+  if (countToday() >= capturesLimit) {
     await delay(null)
-    throw new ApiError({ code: 'PLAN_LIMIT_EXCEEDED', message: 'Anda telah mencapai batas 100 captures hari ini.' })
+    throw new ApiError({
+      code: 'PLAN_LIMIT_EXCEEDED',
+      message: `Anda telah mencapai batas ${capturesLimit} captures hari ini.`,
+    })
   }
 
   const capture: Capture = {

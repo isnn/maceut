@@ -81,7 +81,7 @@
   - [ ] Tombol Pause / Resume per card
   - [ ] Tombol Hapus dengan confirmation dialog (Base UI Dialog)
   - [ ] Empty state + CTA buat schedule pertama
-  - [ ] Tombol "Buat Schedule" disabled + tooltip jika sudah 10 active (BR-005)
+  - [ ] Tombol "Buat Schedule" disabled + tooltip jika sudah mencapai batas active schedule plan aktif (BR-005)
 
 - [ ] **Create Schedule Drawer** — `features/schedules/components/ScheduleCreateDrawer.tsx`
   - [ ] Field: nama schedule, pilih zona (Select dari daftar zones user), cron input
@@ -101,15 +101,15 @@
 
 - [ ] **Usage Summary di Dashboard** — `app/(dashboard)/page.tsx`
   - [ ] Fetch `GET /usage`
-  - [ ] Tampilkan: captures hari ini (X/100), schedules aktif (X/10), plan badge
+  - [ ] Tampilkan: captures hari ini (X/capturesLimit), schedules aktif (X/schedulesLimit) sesuai plan aktif, plan badge
 
 ---
 
 ## Phase 5: Integration & Edge Cases
 
-- [ ] Test: buat 10 schedule aktif → schedule ke-11 ditolak dengan SCHEDULE_LIMIT_EXCEEDED
-- [ ] Test: pause schedule ke-10 → buat schedule baru → berhasil
-- [ ] Test: resume schedule saat sudah 10 active → ditolak
+- [ ] Test: buat schedule aktif hingga batas plan (Free=10) → schedule berikutnya ditolak dengan SCHEDULE_LIMIT_EXCEEDED
+- [ ] Test: pause schedule terakhir pada limit → buat schedule baru → berhasil
+- [ ] Test: resume schedule saat sudah di batas plan aktif → ditolak
 - [ ] Test: cron trigger → capture record dibuat → worker proses → status `done`
 - [ ] Test: zona dihapus → scheduled capture berstatus `failed` dengan error "Zone not found"
 - [ ] Test: download capture → presigned URL R2 berfungsi
@@ -123,6 +123,6 @@
 
 ```
 [YYYY-MM-DD] Keputusan: Gunakan node-cron untuk scheduler in-process
-  Alasan: Library ringan, simple API, cukup untuk MVP dengan 10 schedules/user
+  Alasan: Library ringan, simple API, cukup untuk MVP dengan hingga 50 schedules/user (batas Premium)
   Trade-off: Tidak fault-tolerant jika server restart — schedules perlu reload dari DB saat startup
 ```
