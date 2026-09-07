@@ -71,6 +71,8 @@ const config: Config = {
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+        // Wordmark face — used by the logo only, never for interface text.
+        brand: ['var(--font-bricolage)', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         'elevation-1': 'none',

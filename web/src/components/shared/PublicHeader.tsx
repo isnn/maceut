@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { Logo } from '@/components/ui/Logo'
+import { buttonClass } from '@/components/ui/Button'
 
 const NAV = [
-  { href: '#produk', label: 'Produk' },
-  { href: '#harga', label: 'Harga' },
+  { href: '#product', label: 'Product' },
+  { href: '#pricing', label: 'Pricing' },
   { href: '#docs', label: 'Docs' },
   { href: '#support', label: 'Support' },
 ]
@@ -27,13 +28,13 @@ export function PublicHeader({ minimal, trailing }: { minimal?: boolean; trailin
           {trailing ?? (
             <>
               <Link href="/login" className="text-body font-medium text-text-primary no-underline hover:text-primary transition-colors">
-                Masuk
+                Log in
               </Link>
               <Link
                 href="/register"
-                className="h-10 px-lg inline-flex items-center bg-primary hover:bg-primary-hover text-on-primary text-body font-semibold rounded-md no-underline transition-colors"
+                className={buttonClass()}
               >
-                Mulai gratis
+                Start free
               </Link>
             </>
           )}

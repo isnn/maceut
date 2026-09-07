@@ -51,7 +51,7 @@ export function ManualCaptureButton({ zoneId, zoneName }: { zoneId: string; zone
       setCapture(created)
       startPolling(created.id)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Terjadi kesalahan, coba lagi.')
+      setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
     } finally {
       setTriggering(false)
     }
@@ -69,8 +69,8 @@ export function ManualCaptureButton({ zoneId, zoneName }: { zoneId: string; zone
 
   return (
     <>
-      <Button variant="primary" className="h-10 px-lg" onClick={openModal}>
-        Capture Sekarang
+      <Button variant="primary" onClick={openModal}>
+        Capture now
       </Button>
 
       <Dialog.Root open={open} onOpenChange={(next) => !next && setOpen(false)}>
@@ -87,11 +87,11 @@ export function ManualCaptureButton({ zoneId, zoneName }: { zoneId: string; zone
               <>
                 <StyleSelector value={style} onChange={setStyle} />
                 <div className="flex justify-end gap-sm mt-xl">
-                  <Button variant="secondary" className="h-10 px-lg" onClick={() => setOpen(false)}>
-                    Batal
+                  <Button variant="secondary" onClick={() => setOpen(false)}>
+                    Cancel
                   </Button>
-                  <Button className="h-10 px-lg" onClick={handleConfirm} disabled={triggering}>
-                    {triggering ? 'Memproses...' : 'Capture Sekarang'}
+                  <Button onClick={handleConfirm} disabled={triggering}>
+                    {triggering ? 'Working…' : 'Capture now'}
                   </Button>
                 </div>
               </>
@@ -100,7 +100,7 @@ export function ManualCaptureButton({ zoneId, zoneName }: { zoneId: string; zone
             {inProgress && (
               <div className="text-center py-xl space-y-md">
                 <StatusBadge status={capture!.status} />
-                <p className="text-body text-text-secondary">Sedang memproses capture...</p>
+                <p className="text-body text-text-secondary">Processing capture…</p>
               </div>
             )}
 
@@ -114,7 +114,7 @@ export function ManualCaptureButton({ zoneId, zoneName }: { zoneId: string; zone
                     download={`${zoneName}.png`}
                     className="text-info no-underline hover:underline text-label"
                   >
-                    Unduh
+                    Download
                   </a>
                 </div>
               </div>
@@ -124,12 +124,12 @@ export function ManualCaptureButton({ zoneId, zoneName }: { zoneId: string; zone
               <div className="space-y-md">
                 <Alert variant="warning">
                   {capture!.status === 'skipped_limit'
-                    ? 'Batas captures harian plan Anda tercapai.'
-                    : capture!.errorMessage ?? 'Capture gagal diproses.'}
+                    ? "You have reached your plan's daily capture limit."
+                    : capture!.errorMessage ?? 'Capture failed to process.'}
                 </Alert>
                 <div className="flex justify-end">
-                  <Button variant="secondary" className="h-10 px-lg" onClick={retry}>
-                    Coba Lagi
+                  <Button variant="secondary" onClick={retry}>
+                    Try again
                   </Button>
                 </div>
               </div>

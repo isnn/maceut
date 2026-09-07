@@ -16,9 +16,9 @@ export const PLAN_LIMITS = {
     zonesLimit: 1,
     seatsLimit: 1,
     storageGb: 1,
-    captureInterval: 'Harian',
-    historyLabel: '7 hari',
-    exportLabel: 'Gambar saja',
+    captureInterval: 'Daily',
+    historyLabel: '7 days',
+    exportLabel: 'Images only',
   },
   standard: {
     maxRoadClass: 'nasional_provinsi',
@@ -27,8 +27,8 @@ export const PLAN_LIMITS = {
     zonesLimit: 5,
     seatsLimit: 5,
     storageGb: 10,
-    captureInterval: 'Per jam',
-    historyLabel: '90 hari',
+    captureInterval: 'Hourly',
+    historyLabel: '90 days',
     exportLabel: 'GIF + MP4',
   },
   premium: {
@@ -38,9 +38,9 @@ export const PLAN_LIMITS = {
     zonesLimit: 25,
     seatsLimit: 25,
     storageGb: 100,
-    captureInterval: '15 menit',
-    historyLabel: 'Tanpa batas',
-    exportLabel: 'Semua format + API',
+    captureInterval: '15 minutes',
+    historyLabel: 'Unlimited',
+    exportLabel: 'All formats + API',
   },
 } as const
 
@@ -53,37 +53,32 @@ export const PLAN_LABEL: Record<Plan, string> = {
 }
 
 export const PLAN_PRICE: Record<Plan, { amount: string; period: string }> = {
-  free: { amount: 'Rp 0', period: '/ bulan' },
-  standard: { amount: 'Rp 490rb', period: '/ bulan' },
-  premium: { amount: 'Rp 1,9jt', period: '/ bulan' },
+  free: { amount: 'Rp 0', period: '/ month' },
+  standard: { amount: 'Rp 490k', period: '/ month' },
+  premium: { amount: 'Rp 1.9m', period: '/ month' },
 }
 
 /** Bullet list shown on plan cards (landing, sign up, onboarding). */
 export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
-  free: [
-    '1 zona · 10 capture / hari',
-    'Kelas jalan Nasional',
-    'Riwayat 7 hari',
-    'Gambar saja, tanpa ekspor animasi',
-  ],
+  free: ['1 zone · 10 captures / day', 'Nasional road class', '7-day frame history', 'Images only, no animation export'],
   standard: [
-    '5 zona · 50 capture / hari',
-    'Kelas jalan Nasional + Provinsi',
-    'Riwayat 90 hari · ekspor CSV',
-    'Ekspor animasi GIF + MP4',
+    '5 zones · 50 captures / day',
+    'Nasional + Provinsi road classes',
+    '90-day history · CSV export',
+    'GIF + MP4 animation export',
   ],
   premium: [
-    '25 zona · 100 capture / hari',
-    'Tambahan kelas Kota / Lokal',
-    'Riwayat tanpa batas · interval 15 menit',
-    'Akses API · SSO · SLA',
+    '25 zones · 100 captures / day',
+    'Adds Kota / Lokal road classes',
+    'Unlimited history · 15-minute interval',
+    'API access · SSO · SLA',
   ],
 }
 
 export const ROAD_CLASS_LABEL: Record<string, string> = {
   nasional: 'Nasional',
   nasional_provinsi: 'Nasional + Provinsi',
-  semua: 'Semua Jalan',
+  semua: 'All roads',
 }
 
 export const ROAD_CLASS_REQUIRED_PLAN: Record<string, string> = {

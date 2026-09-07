@@ -16,7 +16,7 @@ interface TrafficSchematicProps {
  */
 export function TrafficSchematic({ showBoundary, baseMapOnly, className }: TrafficSchematicProps) {
   return (
-    <svg viewBox="0 0 400 240" role="img" aria-label="Skema jaringan jalan dengan kondisi lalu lintas" className={cn('w-full h-full', className)}>
+    <svg viewBox="0 0 400 240" role="img" aria-label="Road network schematic with traffic conditions" className={cn('w-full h-full', className)}>
       <rect width="400" height="240" fill="#F3F4F8" />
       {[0, 1, 2, 3, 4].map((i) => (
         <line key={`h${i}`} x1="0" y1={40 + i * 40} x2="400" y2={40 + i * 40} stroke="#E4E5EC" strokeWidth="1" />
@@ -62,10 +62,10 @@ export function TrafficSchematic({ showBoundary, baseMapOnly, className }: Traff
 /** The green→red key that ships on every capture (BR-019). */
 export function TrafficLegend({ className }: { className?: string }) {
   const levels: [string, string][] = [
-    ['Lancar', TRAFFIC_COLORS.normal],
-    ['Padat', TRAFFIC_COLORS.slow],
-    ['Berat', TRAFFIC_COLORS.heavy],
-    ['Macet', TRAFFIC_COLORS.congested],
+    ['Free', TRAFFIC_COLORS.normal],
+    ['Slow', TRAFFIC_COLORS.slow],
+    ['Heavy', TRAFFIC_COLORS.heavy],
+    ['Congested', TRAFFIC_COLORS.congested],
   ]
   return (
     <div className={cn('flex items-center gap-md', className)}>

@@ -64,7 +64,7 @@ export async function register(input: RegisterInput): Promise<User> {
   const users = readUsers()
   if (users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) {
     await delay(null)
-    throw new ApiError({ code: 'EMAIL_ALREADY_TAKEN', message: 'Email sudah terdaftar.' })
+    throw new ApiError({ code: 'EMAIL_ALREADY_TAKEN', message: 'That email is already registered.' })
   }
   const record: MockUserRecord = {
     id: generateId(),
@@ -86,7 +86,7 @@ export async function login(input: LoginInput): Promise<User> {
   const record = users.find((u) => u.email.toLowerCase() === input.email.toLowerCase())
   if (!record || record.password !== input.password) {
     await delay(null)
-    throw new ApiError({ code: 'INVALID_CREDENTIALS', message: 'Email atau password salah.' })
+    throw new ApiError({ code: 'INVALID_CREDENTIALS', message: 'Incorrect email or password.' })
   }
   window.localStorage.setItem(SESSION_KEY, record.id)
   return delay(toPublicUser(record))
@@ -120,7 +120,7 @@ async function patchCurrentUser(patch: Partial<MockUserRecord>): Promise<User> {
   const record = users.find((u) => u.id === userId)
   if (!record) {
     await delay(null)
-    throw new ApiError({ code: 'UNAUTHORIZED', message: 'Sesi Anda berakhir, silakan login kembali.' })
+    throw new ApiError({ code: 'UNAUTHORIZED', message: 'Your session has ended. Please log in again.' })
   }
   const updated = { ...record, ...patch }
   writeUsers(users.map((u) => (u.id === updated.id ? updated : u)))

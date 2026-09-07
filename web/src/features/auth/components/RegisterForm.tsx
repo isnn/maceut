@@ -3,7 +3,7 @@
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
-import { FormLabel, Input } from '@/components/ui/Input'
+import { Checkbox, FormLabel, Input } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_ORDER, PLAN_PRICE } from '@/lib/constants'
 import { ApiError } from '@/types/api'
@@ -13,9 +13,9 @@ import * as authApi from '../api'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const PLAN_SUMMARY: Record<Plan, string> = {
-  free: '1 zona · 10 capture / hari',
-  standard: '5 zona · 50 capture / hari',
-  premium: '25 zona · hubungi sales',
+  free: '1 zone · 10 captures / day',
+  standard: '5 zones · 50 captures / day',
+  premium: '25 zones · contact sales',
 }
 
 /** 0-3; drives the strength meter under the password field. */
@@ -27,7 +27,7 @@ function passwordScore(value: string): number {
   return Math.min(score, 3)
 }
 
-const STRENGTH_LABEL = ['Terlalu pendek', 'Lemah', 'Cukup', 'Kuat']
+const STRENGTH_LABEL = ['Too short', 'Weak', 'Fair', 'Strong']
 
 export function RegisterForm() {
   const router = useRouter()
@@ -42,10 +42,10 @@ export function RegisterForm() {
   const [loading, setLoading] = useState(false)
 
   const score = passwordScore(password)
-  const nameError = submitted && !fullName.trim() ? 'Nama lengkap wajib diisi.' : null
-  const emailError = submitted && !EMAIL_RE.test(email) ? 'Format email tidak valid.' : null
-  const passwordError = submitted && password.length < 8 ? 'Password minimal 8 karakter.' : null
-  const agreedError = submitted && !agreed ? 'Anda perlu menyetujui ketentuan layanan.' : null
+  const nameError = submitted && !fullName.trim() ? 'Full name is required.' : null
+  const emailError = submitted && !EMAIL_RE.test(email) ? 'Enter a valid email address.' : null
+  const passwordError = submitted && password.length < 8 ? 'Password must be at least 8 characters.' : null
+  const agreedError = submitted && !agreed ? 'You need to accept the terms of service.' : null
   const clientValid = fullName.trim() !== '' && EMAIL_RE.test(email) && password.length >= 8 && agreed
 
   async function handleSubmit(e: FormEvent) {
@@ -58,7 +58,7 @@ export function RegisterForm() {
       await authApi.register({ fullName, organisation, email, password, plan })
       router.push('/onboarding')
     } catch (err) {
-      setServerError(err instanceof ApiError ? err.message : 'Terjadi kesalahan, coba lagi.')
+      setServerError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
       setLoading(false)
     }
   }
@@ -67,12 +67,12 @@ export function RegisterForm() {
     <form onSubmit={handleSubmit} className="space-y-lg" noValidate>
       <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
         <div className="space-y-xs">
-          <FormLabel htmlFor="fullName">Nama lengkap</FormLabel>
+          <FormLabel htmlFor="fullName">Full name</FormLabel>
           <Input id="fullName" placeholder="Rizky Zulkarnain" value={fullName} onChange={(e) => setFullName(e.target.value)} />
           {nameError && <p className="text-caption text-danger-text">{nameError}</p>}
         </div>
         <div className="space-y-xs">
-          <FormLabel htmlFor="organisation">Instansi</FormLabel>
+          <FormLabel htmlFor="organisation">Organisation</FormLabel>
           <Input
             id="organisation"
             placeholder="Dinas Bina Marga"
@@ -83,7 +83,7 @@ export function RegisterForm() {
       </div>
 
       <div className="space-y-xs">
-        <FormLabel htmlFor="email">Email kerja</FormLabel>
+        <FormLabel htmlFor="email">Work email</FormLabel>
         <Input id="email" type="email" placeholder="rizky@binamarga.go.id" value={email} onChange={(e) => setEmail(e.target.value)} />
         {emailError && <p className="text-caption text-danger-text">{emailError}</p>}
         {serverError && <p className="text-caption text-danger-text">{serverError}</p>}
@@ -110,14 +110,14 @@ export function RegisterForm() {
       </div>
 
       <fieldset className="space-y-sm">
-        <legend className="text-label text-text-secondary font-medium mb-sm">Paket awal</legend>
+        <legend className="text-label text-text-secondary font-medium mb-sm">Starting plan</legend>
         <div className="grid grid-cols-1 tablet:grid-cols-3 gap-sm">
           {PLAN_ORDER.map((option) => (
             <label
               key={option}
               className={cn(
                 'cursor-pointer border rounded-md p-md transition-colors',
-                plan === option ? 'border-primary bg-primary-soft/40 ring-2 ring-primary-soft' : 'border-border hover:bg-canvas-secondary'
+                plan === option ? 'border-primary bg-primary-soft/40' : 'border-border hover:bg-canvas-secondary'
               )}
             >
               <input
@@ -136,21 +136,16 @@ export function RegisterForm() {
       </fieldset>
 
       <label className="flex items-start gap-sm text-body text-text-secondary">
-        <input
-          type="checkbox"
-          checked={agreed}
-          onChange={(e) => setAgreed(e.target.checked)}
-          className="w-5 h-5 mt-[2px] rounded-xs border-border text-primary focus:ring-primary focus:ring-2 shrink-0"
-        />
+        <Checkbox checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-[2px] shrink-0" />
         <span>
-          Saya menyetujui <span className="text-info">Ketentuan Layanan</span> dan pengumpulan data lalu lintas di dalam
-          zona yang saya tentukan.
+          I agree to the <span className="text-info">Terms of Service</span> and to traffic data being collected within
+          the zones I define.
         </span>
       </label>
       {agreedError && <p className="text-caption text-danger-text">{agreedError}</p>}
 
       <Button type="submit" disabled={loading} className="w-full">
-        {loading ? 'Memproses...' : 'Buat akun'}
+        {loading ? 'Creating account…' : 'Create account'}
       </Button>
     </form>
   )

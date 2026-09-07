@@ -23,18 +23,18 @@ export default function RegisterPage() {
         minimal
         trailing={
           <span className="text-body text-text-secondary">
-            Sudah punya akun?{' '}
+            Already have an account?{' '}
             <Link href="/login" className="text-info no-underline hover:underline">
-              Masuk
+              Log in
             </Link>
           </span>
         }
       />
       <main className="flex-1 flex justify-center px-xl py-section">
         <div className="w-full max-w-[34rem]">
-          <h1 className="text-page-title font-bold text-text-primary">Buat akun Anda</h1>
+          <h1 className="text-page-title font-bold text-text-primary">Create your account</h1>
           <p className="mt-xs text-body text-text-secondary mb-xl">
-            Satu akun per workspace instansi — undang tim Anda setelahnya.
+            One account per agency workspace — invite your team afterwards.
           </p>
           <RegisterForm />
         </div>
