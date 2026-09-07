@@ -16,12 +16,27 @@ export function RoadClassBadge({ roadClass, className }: { roadClass: RoadClass;
   )
 }
 
+/** Whether a zone's windows are running (3f, 3g). */
+export function ZoneStatusPill({ status, className }: { status: 'collecting' | 'paused'; className?: string }) {
+  return (
+    <span
+      className={cn(
+        'text-micro font-semibold rounded-xs px-sm py-xs whitespace-nowrap',
+        status === 'collecting' ? 'bg-success-bg text-success-text' : 'bg-canvas-secondary text-text-muted border border-border',
+        className
+      )}
+    >
+      {status === 'collecting' ? 'Collecting' : 'Paused'}
+    </span>
+  )
+}
+
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
   const style: Record<string, string> = {
     pending: 'bg-canvas-secondary text-text-muted border border-border',
     processing: 'bg-primary-soft text-[#5A35F3]',
     done: 'bg-success-bg text-success-text',
-    failed: 'bg-red-100 text-red-600',
+    failed: 'bg-danger-bg text-danger-text',
     skipped_limit: 'bg-warning-bg text-warning-text',
   }
   return (
