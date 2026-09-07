@@ -16,15 +16,16 @@ export default function OnboardingPage() {
   const { user, loading } = useCurrentUser()
   const router = useRouter()
   const logout = useLogout()
-  const [plan, setPlan] = useState<Plan>('free')
   const [pendingPlan, setPendingPlan] = useState<Plan | null>(null)
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login')
-    if (user) setPlan(user.plan)
   }, [loading, user, router])
 
   if (loading || !user) return null
+
+  // The plan chosen at sign-up is pre-selected; picking a card commits it.
+  const plan: Plan = pendingPlan ?? user.plan
 
   async function choosePlan(next: Plan) {
     setPendingPlan(next)
