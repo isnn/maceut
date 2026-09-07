@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Dashboard' },
+  { href: '/dashboard', label: 'Dashboard' },
   { href: '/zones', label: 'Zona' },
 ]
 

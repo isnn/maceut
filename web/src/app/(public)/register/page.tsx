@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { PublicHeader } from '@/components/shared/PublicHeader'
 import { RegisterForm } from '@/features/auth/components/RegisterForm'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 
@@ -11,21 +12,33 @@ export default function RegisterPage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading && user) router.replace('/')
+    if (!loading && user) router.replace(user.onboardingDone ? '/dashboard' : '/onboarding')
   }, [loading, user, router])
 
   if (loading || user) return null
 
   return (
     <>
-      <h1 className="text-section-title mb-lg">Buat akun Maceut</h1>
-      <RegisterForm />
-      <p className="text-caption text-text-secondary mt-lg text-center">
-        Sudah punya akun?{' '}
-        <Link href="/login" className="text-info no-underline hover:underline">
-          Masuk
-        </Link>
-      </p>
+      <PublicHeader
+        minimal
+        trailing={
+          <span className="text-body text-text-secondary">
+            Sudah punya akun?{' '}
+            <Link href="/login" className="text-info no-underline hover:underline">
+              Masuk
+            </Link>
+          </span>
+        }
+      />
+      <main className="flex-1 flex justify-center px-xl py-section">
+        <div className="w-full max-w-[34rem]">
+          <h1 className="text-page-title font-bold text-text-primary">Buat akun Anda</h1>
+          <p className="mt-xs text-body text-text-secondary mb-xl">
+            Satu akun per workspace instansi — undang tim Anda setelahnya.
+          </p>
+          <RegisterForm />
+        </div>
+      </main>
     </>
   )
 }

@@ -36,6 +36,12 @@ const config: Config = {
 
         // Semantic — Info
         info: '#3178F6',
+        'info-bg': '#EAF1FE',
+
+        // Semantic — Danger (destructive actions & failed states)
+        'danger-bg': '#FCEAE9',
+        'danger-text': '#B3261E',
+        'danger-icon': '#EF4444',
       },
       borderRadius: {
         xs: '4px',
