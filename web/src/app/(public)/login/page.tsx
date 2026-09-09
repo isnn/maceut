@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { Logo } from '@/components/ui/Logo'
 import { LoginForm } from '@/features/auth/components/LoginForm'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
+import { homePathFor } from '@/features/auth/home-path'
 import { IconCheck } from '@/components/ui/icons'
 
 const VALUE_PROPS = [
@@ -20,7 +21,7 @@ function LoginRedirectGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading && user) router.replace(user.onboardingDone ? '/dashboard' : '/onboarding')
+    if (!loading && user) router.replace(homePathFor(user))
   }, [loading, user, router])
 
   if (loading || user) return null

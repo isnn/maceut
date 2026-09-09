@@ -57,9 +57,6 @@ export function InternalHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-md">
-          <Link href="/dashboard" className="text-body text-text-secondary no-underline hover:text-text-primary transition-colors">
-            Back to workspace
-          </Link>
           {user && (
             <Dropdown
               triggerLabel="Account menu"
@@ -75,14 +72,15 @@ export function InternalHeader() {
                       Internal
                     </span>
                   </div>
+                  {/* An account page, not a section of the tooling — hence the menu, not the nav. */}
                   <nav className="py-xs">
                     <Link
-                      href="/dashboard"
+                      href="/internal/profile"
                       onClick={close}
                       role="menuitem"
                       className="block px-lg py-sm text-body text-text-secondary no-underline hover:bg-canvas-secondary hover:text-text-primary transition-colors"
                     >
-                      Exit to workspace
+                      Profile
                     </Link>
                   </nav>
                   <div className="border-t border-divider py-xs">

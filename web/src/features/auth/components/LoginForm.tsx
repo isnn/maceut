@@ -9,6 +9,7 @@ import { Checkbox, FormLabel, Input, PasswordInput } from '@/components/ui/Input
 import { Alert } from '@/components/ui/Alert'
 import { ApiError } from '@/types/api'
 import * as authApi from '../api'
+import { homePathFor } from '../home-path'
 
 export function LoginForm() {
   const router = useRouter()
@@ -24,8 +25,11 @@ export function LoginForm() {
     setLoading(true)
     try {
       const user = await authApi.login({ email, password })
+      const home = homePathFor(user)
+      // ?redirect= points into the tenant app, which staff can't open — send
+      // them home instead of bouncing them off a page they'd be redirected from.
       const redirect = searchParams.get('redirect')
-      router.push(user.onboardingDone ? redirect || '/dashboard' : '/onboarding')
+      router.push(home === '/dashboard' && redirect ? redirect : home)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
       setLoading(false)

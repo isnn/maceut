@@ -6,13 +6,14 @@ import { useRouter } from 'next/navigation'
 import { Logo } from '@/components/ui/Logo'
 import { RegisterForm } from '@/features/auth/components/RegisterForm'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
+import { homePathFor } from '@/features/auth/home-path'
 
 export default function RegisterPage() {
   const { user, loading } = useCurrentUser()
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading && user) router.replace(user.onboardingDone ? '/dashboard' : '/onboarding')
+    if (!loading && user) router.replace(homePathFor(user))
   }, [loading, user, router])
 
   if (loading || user) return null
