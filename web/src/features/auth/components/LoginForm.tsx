@@ -1,11 +1,11 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
-import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button, buttonClass } from '@/components/ui/Button'
+import { IconLock, IconMail } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
-import { Checkbox, FormLabel, Input } from '@/components/ui/Input'
+import { Checkbox, FormLabel, Input, PasswordInput } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
 import { ApiError } from '@/types/api'
 import * as authApi from '../api'
@@ -55,7 +55,7 @@ export function LoginForm() {
             Forgot password?
           </a>
         </div>
-        <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+        <PasswordInput id="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
 
       <label className="flex items-center gap-sm text-body text-text-secondary">
@@ -80,6 +80,7 @@ export function LoginForm() {
           title="SSO is not wired up in this build"
           className={cn(buttonClass('secondary'), 'w-full')}
         >
+          <IconMail size={18} />
           Continue with Google Workspace
         </button>
         <button
@@ -88,17 +89,12 @@ export function LoginForm() {
           title="Agency SSO is available on the Premium plan"
           className={cn(buttonClass('secondary'), 'w-full')}
         >
+          <IconLock size={18} />
           Agency SSO
-          <span className="bg-primary-soft text-[#5A35F3] text-micro font-semibold rounded-xs px-sm py-[2px]">Premium</span>
+          <span className="text-micro text-text-muted font-normal">· Premium</span>
         </button>
       </div>
 
-      <p className="text-caption text-text-secondary text-center">
-        New to Maceut?{' '}
-        <Link href="/register" className="text-info no-underline hover:underline">
-          Create an account
-        </Link>
-      </p>
     </form>
   )
 }

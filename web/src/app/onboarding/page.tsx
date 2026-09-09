@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { Logo } from '@/components/ui/Logo'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
-import { SignupSteps } from '@/components/shared/SignupSteps'
 import { PLAN_LABEL } from '@/lib/constants'
 import * as authApi from '@/features/auth/api'
 import type { Plan } from '@/features/auth/types'
@@ -45,10 +44,6 @@ export default function OnboardingPage() {
       </header>
 
       <main className="flex-1 mx-auto w-full max-w-[1180px] px-xl py-section">
-        <div className="mb-xxl">
-          <SignupSteps current={1} />
-        </div>
-
         <div className="grid grid-cols-1 laptop:grid-cols-[1fr_320px] gap-xl items-start">
           <div>
             <h1 className="text-page-title font-bold text-text-primary">Choose your plan</h1>
