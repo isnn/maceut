@@ -6,6 +6,7 @@
 import type { LoginInput, Plan, PlatformRole, RegisterInput, User } from './types'
 import { ApiError } from '@/types/api'
 import { generateId } from '@/lib/utils'
+import { isInternalByConfig } from './internal-access'
 
 interface MockUserRecord {
   id: string
@@ -45,15 +46,12 @@ function readUsers(): MockUserRecord[] {
     createdAt: u.createdAt ?? new Date().toISOString(),
   }))
 
-  // Someone has to be able to open /internal on a fresh install. Prefer whoever
-  // is signed in — promoting the earliest account instead means the role can
-  // land on a stale account the person isn't using, with no way to tell.
-  if (records.length > 0 && !records.some((u) => u.role === 'internal')) {
-    const sessionId = window.localStorage.getItem(SESSION_KEY)
-    const target =
-      records.find((u) => u.id === sessionId) ?? records.reduce((a, b) => (a.createdAt <= b.createdAt ? a : b))
-    target.role = 'internal'
-    writeUsers(records)
+  // Internal access comes from NEXT_PUBLIC_INTERNAL_EMAILS, so who can reach
+  // /internal is a deployment decision rather than an accident of who
+  // registered first. Config always wins; roles granted through the internal
+  // users table are kept for everyone else.
+  for (const record of records) {
+    if (isInternalByConfig(record.email)) record.role = 'internal'
   }
 
   return records
@@ -132,16 +130,6 @@ export async function completeOnboarding(): Promise<User> {
   return patchCurrentUser({ onboardingDone: true })
 }
 
-/**
- * Prototype-only escape hatch so the staff area is reachable without editing
- * localStorage by hand. It exists because the mock has no way to provision an
- * internal account out of band — a real backend grants this role server-side
- * and no such endpoint should ever ship.
- */
-export async function grantSelfInternal(): Promise<User> {
-  return patchCurrentUser({ role: 'internal' })
-}
-
 async function patchCurrentUser(patch: Partial<MockUserRecord>): Promise<User> {
   const userId = window.localStorage.getItem(SESSION_KEY)
   const users = readUsers()
@@ -183,6 +171,13 @@ export async function setUserRole(userId: string, role: PlatformRole): Promise<U
     throw new ApiError({
       code: 'CANNOT_CHANGE_OWN_ROLE',
       message: 'You cannot change your own role — ask another internal user to do it.',
+    })
+  }
+  if (isInternalByConfig(target.email) && role !== 'internal') {
+    await delay(null)
+    throw new ApiError({
+      code: 'ROLE_SET_BY_CONFIG',
+      message: 'This account is listed in NEXT_PUBLIC_INTERNAL_EMAILS — remove it there to change the role.',
     })
   }
   if (target.role === 'internal' && role !== 'internal') {

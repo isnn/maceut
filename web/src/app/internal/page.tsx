@@ -8,6 +8,7 @@ import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { cn, formatDate } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_ORDER } from '@/lib/constants'
 import * as internalApi from '@/features/internal/api'
+import { configuredInternalEmails } from '@/features/auth/internal-access'
 import { formatIdr } from '@/features/internal/api'
 import type { InternalUserRow, PlatformStats } from '@/features/internal/types'
 import type { Plan } from '@/features/auth/types'
@@ -66,7 +67,11 @@ export default function InternalOverviewPage() {
 
       <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-lg">
         <StatTile label="Total accounts" value={stats.totalAccounts} note={`${stats.signupsLast7d} new in 7 days`} />
-        <StatTile label="Internal users" value={stats.internalUsers} note="at least 1 required" />
+        <StatTile
+          label="Internal users"
+          value={stats.internalUsers}
+          note={`${configuredInternalEmails().length} granted by env`}
+        />
         <StatTile label="Zones collecting" value={stats.zonesTotal} note={`${stats.capturesTodayTotal} captures today`} />
         <StatTile label="Estimated MRR" value={formatIdr(stats.mrr)} note={`${stats.storageUsedGbTotal} GB stored`} />
       </div>

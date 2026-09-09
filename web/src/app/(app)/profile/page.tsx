@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button, buttonClass } from '@/components/ui/Button'
-import { Alert } from '@/components/ui/Alert'
 import { Card } from '@/components/ui/Card'
 import { UsageMeter, AttributeRow } from '@/components/ui/UsageMeter'
 import { Checkbox } from '@/components/ui/Input'
@@ -27,7 +26,6 @@ export default function ProfilePage() {
   const [usage, setUsage] = useState<UsageSummary | null>(null)
   const [tab, setTab] = useState<Tab>('Usage')
   const [pendingPlan, setPendingPlan] = useState<Plan | null>(null)
-  const [granting, setGranting] = useState(false)
 
   useEffect(() => {
     dashboardApi.getUsage().then(setUsage)
@@ -164,41 +162,17 @@ export default function ProfilePage() {
             </dl>
           </Card>
 
-          <Card className="p-lg">
-            <h2 className="text-heading-sm text-text-primary">Internal access</h2>
-            {user.role === 'internal' ? (
-              <>
-                <p className="text-body text-text-secondary mt-xs">
-                  This account can open the staff area.
-                </p>
-                <Link href="/internal" className={cn(buttonClass('secondary'), 'mt-lg')}>
-                  Open internal tools
-                </Link>
-              </>
-            ) : (
-              <>
-                <p className="text-body text-text-secondary mt-xs max-w-[70ch]">
-                  Grant this account access to the staff area at <code className="font-mono">/internal</code>.
-                </p>
-                <Alert variant="warning" className="mt-md">
-                  Prototype only. A real deployment grants this role server-side — no endpoint like this should ever
-                  ship, because it would let any visitor make themselves staff.
-                </Alert>
-                <Button
-                  variant="secondary"
-                  className="mt-lg"
-                  disabled={granting}
-                  onClick={async () => {
-                    setGranting(true)
-                    await authApi.grantSelfInternal()
-                    window.location.reload()
-                  }}
-                >
-                  {granting ? 'Granting…' : 'Grant internal access'}
-                </Button>
-              </>
-            )}
-          </Card>
+          {user.role === 'internal' && (
+            <Card className="p-lg">
+              <h2 className="text-heading-sm text-text-primary">Internal access</h2>
+              <p className="text-body text-text-secondary mt-xs">
+                This account is configured for the staff area.
+              </p>
+              <Link href="/internal" className={cn(buttonClass('secondary'), 'mt-lg')}>
+                Open internal tools
+              </Link>
+            </Card>
+          )}
         </div>
       )}
 

@@ -17,9 +17,19 @@ workspace/team role (`owner`/`editor`/`viewer`) yang masih out of scope MVP.
 - `user` — pelanggan biasa, hanya punya akses ke workspace-nya sendiri.
 - `internal` — staf Maceut, bisa membuka `/internal` untuk mengelola semua akun & konfigurasi sistem.
 
-**Bootstrap**: saat belum ada satu pun akun ber-role `internal`, akun dengan `createdAt` paling awal
-otomatis dipromosikan (backfill di read path). Ini agar instalasi yang sudah berjalan tetap punya
-jalan masuk tanpa reset data atau kredensial default yang bocor.
+**Siapa yang dapat role `internal`** ditentukan lewat env `NEXT_PUBLIC_INTERNAL_EMAILS` di
+`web/.env.local` — daftar email dipisah koma. Setiap akun yang emailnya ada di daftar itu otomatis
+ber-role `internal` saat dibaca; akun lain bisa dipromosikan lewat `/internal/users` dan tersimpan
+di record user.
+
+- Akun yang di-grant lewat env **tidak bisa** diturunkan dari UI (`ROLE_SET_BY_CONFIG`) — sumber
+  kebenarannya file env, bukan tabel. Hapus emailnya dari env untuk mencabut akses.
+- Daftar kosong = tidak ada yang bisa membuka `/internal`.
+- Mengubah env butuh restart dev server / container agar Next memuat ulang `.env.local`.
+
+⚠️ `NEXT_PUBLIC_` berarti nilainya ikut ter-bundle ke browser — daftar ini **bukan rahasia dan bukan
+pengaman**, hanya konfigurasi prototipe. Saat `api/` ada, penentuan role pindah ke kolom `users.role`
++ middleware server.
 
 ---
 
@@ -65,6 +75,7 @@ supaya **saya bisa menangani permintaan upgrade/downgrade dan memberi akses inte
 
 **Business Rules:**
 - BR-024: User tidak bisa mengubah role dirinya sendiri (`CANNOT_CHANGE_OWN_ROLE`) — mencegah mengunci diri sendiri keluar.
+- BR-027: Akun yang di-grant lewat `NEXT_PUBLIC_INTERNAL_EMAILS` tidak bisa diubah rolenya dari UI (`ROLE_SET_BY_CONFIG`). Konfigurasi menang atas tabel, supaya UI tidak pernah bertentangan dengan file env.
 - BR-025: Akun `internal` terakhir tidak boleh diturunkan ke `user` (`LAST_INTERNAL`) — selalu harus ada minimal satu staf yang bisa masuk.
 - Kedua aturan di atas di-enforce di **service layer** (mengikuti BR-007), bukan di halaman. Kontrol yang di-disable di UI hanya lapis kedua.
 

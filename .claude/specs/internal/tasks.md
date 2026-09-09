@@ -8,7 +8,7 @@
 
 ## Phase 1: Frontend (mock) — ✅ selesai 2026-09-09
 
-- [x] `role: 'user' | 'internal'` di `User` + backfill & promosi akun terawal (`features/auth/api.ts`)
+- [x] `role: 'user' | 'internal'` di `User` + grant lewat env `NEXT_PUBLIC_INTERNAL_EMAILS` (`features/auth/internal-access.ts`)
 - [x] `listUsers`, `setUserRole`, `setUserPlan`, `seedUsers` dengan guard BR-024 & BR-025 di service layer
 - [x] Gate `/internal` (`app/internal/layout.tsx`) + `InternalHeader` + entry point di profile dropdown `AppHeader`
 - [x] F-21 Overview — stat tile, plan mix, signup terbaru, banner data demo
@@ -38,6 +38,15 @@
 ## Decisions Made
 
 ```
+[2026-09-09] Keputusan: akses internal ditentukan env `NEXT_PUBLIC_INTERNAL_EMAILS`, bukan heuristik
+  "akun terdaftar paling awal" dan bukan tombol self-grant di UI
+  Alasan: heuristik akun terawal tidak bisa ditebak — role bisa mendarat di akun lama yang tidak dipakai
+    dan tidak ada indikasi apa pun di UI; tombol self-grant memberi pola yang berbahaya untuk ditiru
+    (endpoint yang membiarkan pemanggil menjadikan dirinya staf). Env membuat aksesnya keputusan
+    deployment yang eksplisit dan bisa direview
+  Trade-off: ubah env butuh restart container; dan karena NEXT_PUBLIC_, daftarnya terbaca di browser —
+    dapat diterima karena ini konfigurasi prototipe, bukan pengaman
+
 [2026-09-09] Keputusan: platform role dipisah dari workspace/team role
   Alasan: `internal` adalah operator platform (lintas akun), sedangkan owner/editor/viewer adalah
     kolaborasi di dalam satu workspace — menggabungkannya akan mencampur dua model izin yang berbeda

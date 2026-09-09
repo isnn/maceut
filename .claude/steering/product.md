@@ -42,7 +42,9 @@ MVP menggunakan **single workspace** — tidak ada multi-tenant atau team role. 
 ### Platform Administration (prototype)
 
 Ada field **platform-level** `role: 'user' | 'internal'` di record user — `internal` = staf Maceut,
-dipakai untuk gate area `/internal` (manajemen user + konfigurasi sistem). Ini **berbeda** dari
+dipakai untuk gate area `/internal` (manajemen user + konfigurasi sistem). Siapa yang mendapatkannya
+ditentukan env `NEXT_PUBLIC_INTERNAL_EMAILS` (daftar email dipisah koma), bukan lewat pendaftaran.
+Ini **berbeda** dari
 workspace/team role (`owner`/`editor`/`viewer`) yang tetap out of scope MVP: yang satu operator
 platform, yang satu kolaborasi di dalam satu workspace.
 
