@@ -45,12 +45,14 @@ function readUsers(): MockUserRecord[] {
     createdAt: u.createdAt ?? new Date().toISOString(),
   }))
 
-  // Someone has to be able to open /internal on a fresh install: if no account
-  // holds the role, the earliest-created one is promoted and the change stuck,
-  // so it stays stable across reads instead of drifting with the sort order.
+  // Someone has to be able to open /internal on a fresh install. Prefer whoever
+  // is signed in — promoting the earliest account instead means the role can
+  // land on a stale account the person isn't using, with no way to tell.
   if (records.length > 0 && !records.some((u) => u.role === 'internal')) {
-    const earliest = records.reduce((a, b) => (a.createdAt <= b.createdAt ? a : b))
-    earliest.role = 'internal'
+    const sessionId = window.localStorage.getItem(SESSION_KEY)
+    const target =
+      records.find((u) => u.id === sessionId) ?? records.reduce((a, b) => (a.createdAt <= b.createdAt ? a : b))
+    target.role = 'internal'
     writeUsers(records)
   }
 
@@ -128,6 +130,16 @@ export async function updatePlan(plan: Plan): Promise<User> {
 
 export async function completeOnboarding(): Promise<User> {
   return patchCurrentUser({ onboardingDone: true })
+}
+
+/**
+ * Prototype-only escape hatch so the staff area is reachable without editing
+ * localStorage by hand. It exists because the mock has no way to provision an
+ * internal account out of band — a real backend grants this role server-side
+ * and no such endpoint should ever ship.
+ */
+export async function grantSelfInternal(): Promise<User> {
+  return patchCurrentUser({ role: 'internal' })
 }
 
 async function patchCurrentUser(patch: Partial<MockUserRecord>): Promise<User> {
