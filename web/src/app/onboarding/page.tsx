@@ -5,13 +5,10 @@ import { useRouter } from 'next/navigation'
 import { Logo } from '@/components/ui/Logo'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
+import { SignupSteps } from '@/components/shared/SignupSteps'
 import { PLAN_LABEL } from '@/lib/constants'
-import { cn } from '@/lib/utils'
-import { IconCheck } from '@/components/ui/icons'
 import * as authApi from '@/features/auth/api'
 import type { Plan } from '@/features/auth/types'
-
-const STEPS = ['Account', 'First zone', 'Choose a plan']
 
 export default function OnboardingPage() {
   const { user, loading } = useCurrentUser()
@@ -48,34 +45,13 @@ export default function OnboardingPage() {
       </header>
 
       <main className="flex-1 mx-auto w-full max-w-[1180px] px-xl py-section">
-        <ol className="flex flex-wrap items-center gap-lg mb-xxl">
-          {STEPS.map((label, i) => {
-            const done = i < 2
-            const active = i === 2
-            return (
-              <li key={label} className="flex items-center gap-sm">
-                <span
-                  className={cn(
-                    'w-7 h-7 rounded-full flex items-center justify-center text-label font-semibold',
-                    done && 'bg-success-bg text-success-text',
-                    active && 'bg-primary text-on-primary',
-                    !done && !active && 'bg-canvas-secondary text-text-muted'
-                  )}
-                >
-                  {done ? <IconCheck /> : i + 1}
-                </span>
-                <span className={cn('text-body', active ? 'text-text-primary font-semibold' : 'text-text-secondary')}>
-                  {label}
-                </span>
-                {i < STEPS.length - 1 && <span aria-hidden className="w-8 h-px bg-border ml-md" />}
-              </li>
-            )
-          })}
-        </ol>
+        <div className="mb-xxl">
+          <SignupSteps current={1} />
+        </div>
 
         <div className="grid grid-cols-1 laptop:grid-cols-[1fr_320px] gap-xl items-start">
           <div>
-            <h1 className="text-page-title font-bold text-text-primary">Choose a plan</h1>
+            <h1 className="text-page-title font-bold text-text-primary">Choose your plan</h1>
             <p className="mt-xs text-body text-text-secondary mb-xl">
               Start free and upgrade when you need more zones or more frequent captures.
             </p>
@@ -90,7 +66,7 @@ export default function OnboardingPage() {
                 onClick={() => router.push('/register')}
                 className="text-body text-text-secondary hover:text-text-primary transition-colors"
               >
-                Back
+                Back to details
               </button>
               <span className="text-caption text-text-muted">No card needed for Free</span>
             </div>
@@ -107,10 +83,11 @@ export default function OnboardingPage() {
               <p className="text-body text-text-primary font-medium">{user.organisation || '—'}</p>
             </div>
             <div className="border-t border-divider pt-lg">
-              <p className="text-label text-text-secondary">First zone</p>
-              <p className="text-body text-text-primary font-medium">Created after setup</p>
+              <p className="text-label text-text-secondary">What happens next</p>
+              <p className="text-body text-text-primary font-medium">Straight to your dashboard</p>
               <p className="text-caption text-text-muted mt-xs">
-                Your first zone starts collecting once you set its capture windows on the Schedule page.
+                Draw your first zone from there — it starts collecting once you set its capture windows on the
+                Schedule page.
               </p>
             </div>
           </aside>
