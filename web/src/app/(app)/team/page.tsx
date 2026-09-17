@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Dialog } from '@base-ui/react/dialog'
 import { Button } from '@/components/ui/Button'
-import { FormLabel, Input, Select } from '@/components/ui/Input'
+import { FormLabel, Input } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
 import { Alert } from '@/components/ui/Alert'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -100,17 +101,16 @@ export default function TeamPage() {
                       <span className="text-body text-text-primary">{ROLE_LABEL[member.role]}</span>
                     ) : (
                       <Select
+                        size="sm"
                         value={member.role}
-                        onChange={(e) => changeRole(member, e.target.value as MemberRole)}
-                        className="h-9 w-36 px-md"
+                        onValueChange={(v) => changeRole(member, v as MemberRole)}
+                        options={(Object.keys(ROLE_LABEL) as MemberRole[]).map((role) => ({
+                          value: role,
+                          label: ROLE_LABEL[role],
+                        }))}
+                        className="w-36"
                         aria-label={`Role for ${member.name}`}
-                      >
-                        {(Object.keys(ROLE_LABEL) as MemberRole[]).map((role) => (
-                          <option key={role} value={role}>
-                            {ROLE_LABEL[role]}
-                          </option>
-                        ))}
-                      </Select>
+                      />
                     )}
                   </Td>
                   <Td className="text-text-secondary">{member.zones}</Td>
@@ -242,10 +242,16 @@ function InviteDialog({
             </div>
             <div className="space-y-xs">
               <FormLabel htmlFor="invite-role">Role</FormLabel>
-              <Select id="invite-role" value={role} onChange={(e) => setRole(e.target.value as MemberRole)}>
-                <option value="viewer">Viewer — watch and download</option>
-                <option value="editor">Editor — change zones and schedules</option>
-              </Select>
+              <Select
+                id="invite-role"
+                value={role}
+                onValueChange={(v) => setRole(v as MemberRole)}
+                options={[
+                  { value: 'viewer', label: 'Viewer — watch and download' },
+                  { value: 'editor', label: 'Editor — change zones and schedules' },
+                ]}
+                modal={false}
+              />
             </div>
           </div>
           <div className="flex justify-end gap-sm mt-xl">

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Dialog } from '@base-ui/react/dialog'
 import { Button, buttonClass } from '@/components/ui/Button'
-import { Checkbox, FormLabel, Input, Select } from '@/components/ui/Input'
+import { Checkbox, FormLabel, Input } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
 import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
 import { ProgressBar } from '@/components/ui/ProgressBar'
@@ -66,12 +67,7 @@ export default function SchedulePage() {
   return (
     <div className="space-y-lg">
       <div className="flex flex-wrap items-end justify-between gap-md">
-        <div>
-          <p className="text-label text-text-secondary">
-            {PLAN_LABEL[plan]} plan · up to {limits.schedulesLimit} active windows · Asia/Jakarta GMT+7
-          </p>
-          <h1 className="text-page-title font-bold text-text-primary mt-xs">Collection windows</h1>
-        </div>
+        <h1 className="text-page-title font-bold text-text-primary">Collection windows</h1>
         <Button onClick={() => setAddOpen(true)} disabled={zones.length === 0}>
           Add window
         </Button>
@@ -97,14 +93,18 @@ export default function SchedulePage() {
           ) : (
             <>
               {/* Hour ruler */}
-              <div className="grid grid-cols-[160px_1fr] gap-md items-center">
+              <div className="grid grid-cols-[160px_1fr] gap-md items-end">
                 <span className="text-micro uppercase tracking-wide text-text-muted">Zone</span>
-                <div className="flex">
-                  {HOURS.map((hour) => (
-                    <span key={hour} className="flex-1 text-micro text-text-muted tabular-nums text-center">
-                      {hour % 2 === 1 ? String(hour).padStart(2, '0') : ''}
-                    </span>
-                  ))}
+                <div>
+                  {/* A schedule board can't be read without knowing which clock it's on. */}
+                  <p className="text-micro text-text-muted text-right mb-xs">Asia/Jakarta · GMT+7</p>
+                  <div className="flex">
+                    {HOURS.map((hour) => (
+                      <span key={hour} className="flex-1 text-micro text-text-muted tabular-nums text-center">
+                        {hour % 2 === 1 ? String(hour).padStart(2, '0') : ''}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -301,13 +301,13 @@ function WindowDialog({
 
             <div className="space-y-xs">
               <FormLabel htmlFor="window-zone">Zone</FormLabel>
-              <Select id="window-zone" value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
-                {zones.map((zone) => (
-                  <option key={zone.id} value={zone.id}>
-                    {zone.name}
-                  </option>
-                ))}
-              </Select>
+              <Select
+                id="window-zone"
+                value={zoneId}
+                onValueChange={setZoneId}
+                options={zones.map((zone) => ({ value: zone.id, label: zone.name }))}
+                modal={false}
+              />
             </div>
 
             <div className="space-y-xs">

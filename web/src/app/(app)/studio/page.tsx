@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { Input, FormLabel, Select } from '@/components/ui/Input'
+import { Input, FormLabel } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
 import { IconPause, IconPlay, IconRotate } from '@/components/ui/icons'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { buttonClass } from '@/components/ui/Button'
@@ -116,20 +117,15 @@ export default function StudioPage() {
   return (
     <div className="space-y-lg">
       <div className="flex flex-wrap items-end justify-between gap-md">
-        <div>
-          <p className="text-label text-text-secondary">
-            {zone?.name} · {frames.length} frames · 06:00–20:00
-          </p>
-          <h1 className="text-page-title font-bold text-text-primary mt-xs">Studio</h1>
-        </div>
+        <h1 className="text-page-title font-bold text-text-primary">Studio</h1>
         <div className="flex flex-wrap items-center gap-sm">
-          <Select value={zoneId} onChange={(e) => setZoneId(e.target.value)} className="h-11 w-56">
-            {zones.map((z) => (
-              <option key={z.id} value={z.id}>
-                {z.name}
-              </option>
-            ))}
-          </Select>
+          <Select
+            aria-label="Zone"
+            value={zoneId}
+            onValueChange={setZoneId}
+            options={zones.map((z) => ({ value: z.id, label: z.name }))}
+            className="w-56"
+          />
           {zone && <ManualCaptureButton zoneId={zone.id} zoneName={zone.name} />}
         </div>
       </div>
@@ -286,13 +282,15 @@ export default function StudioPage() {
 
           <div className="space-y-xs">
             <FormLabel htmlFor="overlay">Overlay</FormLabel>
-            <Select id="overlay" value={overlay} onChange={(e) => setOverlay(e.target.value as Overlay)}>
-              {(Object.keys(OVERLAY_LABEL) as Overlay[]).map((option) => (
-                <option key={option} value={option}>
-                  {OVERLAY_LABEL[option]}
-                </option>
-              ))}
-            </Select>
+            <Select
+              id="overlay"
+              value={overlay}
+              onValueChange={(v) => setOverlay(v as Overlay)}
+              options={(Object.keys(OVERLAY_LABEL) as Overlay[]).map((option) => ({
+                value: option,
+                label: OVERLAY_LABEL[option],
+              }))}
+            />
           </div>
 
           <div className="space-y-xs">
@@ -302,13 +300,12 @@ export default function StudioPage() {
 
           <div className="space-y-xs">
             <FormLabel htmlFor="position">Position</FormLabel>
-            <Select id="position" value={position} onChange={(e) => setPosition(e.target.value)}>
-              {POSITIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </Select>
+            <Select
+              id="position"
+              value={position}
+              onValueChange={setPosition}
+              options={POSITIONS.map((option) => ({ value: option, label: option }))}
+            />
           </div>
 
           <div className="space-y-xs">
