@@ -10,7 +10,6 @@ import { IconMapPin, IconPause, IconPlay, IconRotate } from '@/components/ui/ico
 import { EmptyState } from '@/components/shared/EmptyState'
 import { buttonClass } from '@/components/ui/Button'
 import { TrafficSchematic, TrafficLegend } from '@/components/shared/TrafficSchematic'
-import { ManualCaptureButton } from '@/features/captures/components/ManualCaptureButton'
 import { cn } from '@/lib/utils'
 import { PLAN_LIMITS } from '@/lib/constants'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
@@ -118,15 +117,18 @@ export default function StudioPage() {
     <div className="space-y-lg">
       <div className="flex flex-wrap items-center gap-md">
         <h1 className="text-page-title font-bold text-text-primary">Studio</h1>
-        {/* Sized to the zone name, bounded so a long one can't eat the row. */}
-        <Select
-          aria-label="Zone"
-          icon={<IconMapPin size={16} />}
-          value={zoneId}
-          onValueChange={setZoneId}
-          options={zones.map((z) => ({ value: z.id, label: z.name }))}
-          className="w-auto min-w-[11rem] max-w-[20rem]"
-        />
+        <div className="ml-auto flex items-center gap-sm">
+          <span className="text-label text-text-secondary">Zone</span>
+          {/* Sized to the zone name, bounded so a long one can't eat the row. */}
+          <Select
+            aria-label="Zone"
+            icon={<IconMapPin size={16} />}
+            value={zoneId}
+            onValueChange={setZoneId}
+            options={zones.map((z) => ({ value: z.id, label: z.name }))}
+            className="w-auto min-w-[11rem] max-w-[20rem]"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 laptop:grid-cols-[1fr_320px] gap-xl items-start">
@@ -259,12 +261,7 @@ export default function StudioPage() {
 
         {/* Animation panel */}
         <Card className="p-lg space-y-lg">
-          <div className="space-y-md">
-            <h2 className="text-heading-sm text-text-primary">Animation</h2>
-            {zone && (
-              <ManualCaptureButton zoneId={zone.id} zoneName={zone.name} variant="secondary" className="w-full" />
-            )}
-          </div>
+          <h2 className="text-heading-sm text-text-primary">Animation</h2>
 
           <div className="space-y-xs">
             <FormLabel>Speed</FormLabel>

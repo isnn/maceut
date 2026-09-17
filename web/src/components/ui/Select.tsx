@@ -82,7 +82,13 @@ export function Select({
               {icon}
             </span>
           )}
-          <BaseSelect.Value placeholder={<span className="text-text-muted">{placeholder}</span>} className="truncate text-left" />
+          <BaseSelect.Value className="truncate text-left">
+            {(selected) => {
+              const match = options.find((option) => option.value === selected)
+              if (!match) return <span className="text-text-muted">{placeholder}</span>
+              return match.label
+            }}
+          </BaseSelect.Value>
         </span>
         <BaseSelect.Icon className="shrink-0 text-text-muted">
           <IconChevronDown size={size === 'sm' ? 14 : 16} />
