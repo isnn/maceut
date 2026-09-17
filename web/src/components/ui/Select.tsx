@@ -20,7 +20,11 @@ interface SelectProps {
   disabled?: boolean
   /** `md` matches the 44px control height; `sm` is for table rows. */
   size?: 'md' | 'sm'
-  /** Mostly for width. */
+  /**
+   * Sets the width — there is no default, so every caller states it. A base
+   * `w-full` here would silently beat any numeric width passed in: Tailwind
+   * emits keyword utilities after numeric ones, and `cn()` is a plain join.
+   */
   className?: string
   id?: string
   title?: string
@@ -64,7 +68,7 @@ export function Select({
         title={title}
         aria-label={ariaLabel}
         className={cn(
-          'w-full inline-flex items-center justify-between gap-sm rounded-sm border border-border bg-canvas text-text-primary',
+          'inline-flex items-center justify-between gap-sm rounded-sm border border-border bg-canvas text-text-primary',
           'hover:bg-canvas-secondary data-[popup-open]:border-primary transition-colors',
           'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
           'disabled:opacity-60 disabled:cursor-not-allowed',

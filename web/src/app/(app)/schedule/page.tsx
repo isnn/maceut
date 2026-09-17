@@ -306,6 +306,7 @@ function WindowDialog({
                 value={zoneId}
                 onValueChange={setZoneId}
                 options={zones.map((zone) => ({ value: zone.id, label: zone.name }))}
+                className="w-full"
                 modal={false}
               />
             </div>

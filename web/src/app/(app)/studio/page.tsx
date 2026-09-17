@@ -118,19 +118,15 @@ export default function StudioPage() {
     <div className="space-y-lg">
       <div className="flex flex-wrap items-center gap-md">
         <h1 className="text-page-title font-bold text-text-primary">Studio</h1>
+        {/* Sized to the zone name, bounded so a long one can't eat the row. */}
         <Select
           aria-label="Zone"
           icon={<IconMapPin size={16} />}
           value={zoneId}
           onValueChange={setZoneId}
           options={zones.map((z) => ({ value: z.id, label: z.name }))}
-          className="w-56"
+          className="w-auto min-w-[11rem] max-w-[20rem]"
         />
-        {zone && (
-          <div className="ml-auto">
-            <ManualCaptureButton zoneId={zone.id} zoneName={zone.name} />
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 laptop:grid-cols-[1fr_320px] gap-xl items-start">
@@ -263,7 +259,12 @@ export default function StudioPage() {
 
         {/* Animation panel */}
         <Card className="p-lg space-y-lg">
-          <h2 className="text-heading-sm text-text-primary">Animation</h2>
+          <div className="space-y-md">
+            <h2 className="text-heading-sm text-text-primary">Animation</h2>
+            {zone && (
+              <ManualCaptureButton zoneId={zone.id} zoneName={zone.name} variant="secondary" className="w-full" />
+            )}
+          </div>
 
           <div className="space-y-xs">
             <FormLabel>Speed</FormLabel>
@@ -293,6 +294,7 @@ export default function StudioPage() {
                 value: option,
                 label: OVERLAY_LABEL[option],
               }))}
+              className="w-full"
             />
           </div>
 
@@ -308,6 +310,7 @@ export default function StudioPage() {
               value={position}
               onValueChange={setPosition}
               options={POSITIONS.map((option) => ({ value: option, label: option }))}
+              className="w-full"
             />
           </div>
 

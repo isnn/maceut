@@ -250,6 +250,7 @@ function InviteDialog({
                   { value: 'viewer', label: 'Viewer — watch and download' },
                   { value: 'editor', label: 'Editor — change zones and schedules' },
                 ]}
+                className="w-full"
                 modal={false}
               />
             </div>
