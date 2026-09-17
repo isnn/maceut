@@ -14,6 +14,8 @@ interface SelectProps {
   value: string
   onValueChange: (value: string) => void
   options: SelectOption[]
+  /** Leading glyph in the trigger, so the control says what it picks. */
+  icon?: React.ReactNode
   placeholder?: string
   disabled?: boolean
   /** `md` matches the 44px control height; `sm` is for table rows. */
@@ -45,6 +47,7 @@ export function Select({
   value,
   onValueChange,
   options,
+  icon,
   placeholder = 'Select…',
   disabled,
   size = 'md',
@@ -69,7 +72,14 @@ export function Select({
           className
         )}
       >
-        <BaseSelect.Value placeholder={<span className="text-text-muted">{placeholder}</span>} className="truncate text-left" />
+        <span className="flex items-center gap-sm min-w-0">
+          {icon && (
+            <span aria-hidden className="shrink-0 text-text-muted flex items-center">
+              {icon}
+            </span>
+          )}
+          <BaseSelect.Value placeholder={<span className="text-text-muted">{placeholder}</span>} className="truncate text-left" />
+        </span>
         <BaseSelect.Icon className="shrink-0 text-text-muted">
           <IconChevronDown size={size === 'sm' ? 14 : 16} />
         </BaseSelect.Icon>

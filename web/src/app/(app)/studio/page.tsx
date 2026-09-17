@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Input, FormLabel } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
-import { IconPause, IconPlay, IconRotate } from '@/components/ui/icons'
+import { IconMapPin, IconPause, IconPlay, IconRotate } from '@/components/ui/icons'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { buttonClass } from '@/components/ui/Button'
 import { TrafficSchematic, TrafficLegend } from '@/components/shared/TrafficSchematic'
@@ -116,18 +116,21 @@ export default function StudioPage() {
 
   return (
     <div className="space-y-lg">
-      <div className="flex flex-wrap items-end justify-between gap-md">
+      <div className="flex flex-wrap items-center gap-md">
         <h1 className="text-page-title font-bold text-text-primary">Studio</h1>
-        <div className="flex flex-wrap items-center gap-sm">
-          <Select
-            aria-label="Zone"
-            value={zoneId}
-            onValueChange={setZoneId}
-            options={zones.map((z) => ({ value: z.id, label: z.name }))}
-            className="w-56"
-          />
-          {zone && <ManualCaptureButton zoneId={zone.id} zoneName={zone.name} />}
-        </div>
+        <Select
+          aria-label="Zone"
+          icon={<IconMapPin size={16} />}
+          value={zoneId}
+          onValueChange={setZoneId}
+          options={zones.map((z) => ({ value: z.id, label: z.name }))}
+          className="w-56"
+        />
+        {zone && (
+          <div className="ml-auto">
+            <ManualCaptureButton zoneId={zone.id} zoneName={zone.name} />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 laptop:grid-cols-[1fr_320px] gap-xl items-start">

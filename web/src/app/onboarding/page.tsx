@@ -7,7 +7,6 @@ import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
 import { PLAN_LABEL } from '@/lib/constants'
 import * as authApi from '@/features/auth/api'
-import { homePathFor } from '@/features/auth/home-path'
 import type { Plan } from '@/features/auth/types'
 
 export default function OnboardingPage() {

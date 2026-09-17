@@ -67,7 +67,7 @@ export default function SchedulePage() {
   return (
     <div className="space-y-lg">
       <div className="flex flex-wrap items-end justify-between gap-md">
-        <h1 className="text-page-title font-bold text-text-primary">Collection windows</h1>
+        <h1 className="text-page-title font-bold text-text-primary">Schedule</h1>
         <Button onClick={() => setAddOpen(true)} disabled={zones.length === 0}>
           Add window
         </Button>
