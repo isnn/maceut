@@ -33,14 +33,14 @@ export function ZoneMapEditor({ points, onAddPoint, onUndo, onReset }: ZoneMapEd
       </MapCanvas>
       <div className="flex items-center justify-between">
         <p className="text-caption text-text-muted">
-          Klik di peta untuk menambah titik polygon. {points.length} titik ditambahkan
-          {points.length < 3 ? ' (minimal 3 titik).' : '.'}
+          Click the map to add polygon points. {points.length} placed
+          {points.length < 3 ? ' (3 minimum).' : '.'}
         </p>
         <div className="flex gap-sm">
-          <Button type="button" variant="secondary" className="h-9 px-md" onClick={onUndo} disabled={points.length === 0}>
+          <Button type="button" variant="secondary" size="sm" onClick={onUndo} disabled={points.length === 0}>
             Undo
           </Button>
-          <Button type="button" variant="secondary" className="h-9 px-md" onClick={onReset} disabled={points.length === 0}>
+          <Button type="button" variant="secondary" size="sm" onClick={onReset} disabled={points.length === 0}>
             Reset
           </Button>
         </div>
