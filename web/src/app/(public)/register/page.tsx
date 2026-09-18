@@ -3,8 +3,7 @@
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { PublicHeader } from '@/components/shared/PublicHeader'
-import { SignupSteps } from '@/components/shared/SignupSteps'
+import { Logo } from '@/components/ui/Logo'
 import { RegisterForm } from '@/features/auth/components/RegisterForm'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 
@@ -19,28 +18,27 @@ export default function RegisterPage() {
   if (loading || user) return null
 
   return (
-    <>
-      <PublicHeader
-        minimal
-        trailing={
-          <span className="text-body text-text-secondary">
-            Already have an account?{' '}
-            <Link href="/login" className="text-info no-underline hover:underline">
-              Log in
-            </Link>
-          </span>
-        }
-      />
-      <main className="flex-1 flex justify-center px-xl py-section">
-        <div className="w-full max-w-[34rem]">
-          <SignupSteps current={0} />
-          <h1 className="mt-xl text-page-title font-bold text-text-primary">Create your account</h1>
-          <p className="mt-xs text-body text-text-secondary mb-xl">
-            One account per agency workspace — invite your team afterwards. You&rsquo;ll pick a plan next.
-          </p>
+    /* No header chrome — the wordmark sits at the top of the form column. */
+    <main className="flex-1 bg-page flex justify-center px-xl py-section">
+      <div className="w-full max-w-[34rem]">
+        <Logo href="/" />
+
+        <h1 className="mt-xxl text-display text-text-primary">Create your account</h1>
+        <p className="mt-xs text-body text-text-secondary mb-xl">
+          One account per agency workspace — invite your team afterwards. You&rsquo;ll pick a plan next.
+        </p>
+
+        <div className="bg-card border border-border rounded-lg p-xl">
           <RegisterForm />
         </div>
-      </main>
-    </>
+
+        <p className="text-body text-text-secondary text-center mt-xl">
+          Already have an account?{' '}
+          <Link href="/login" className="text-info font-medium no-underline hover:underline">
+            Log in
+          </Link>
+        </p>
+      </div>
+    </main>
   )
 }
