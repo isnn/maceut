@@ -155,8 +155,6 @@ export function AppHeader() {
                       { href: '/profile', label: 'Profile & usage' },
                       { href: '/profile#billing', label: 'Billing & plan' },
                       { href: '/team', label: 'Workspace settings' },
-                      // Only entry point to the staff area; invisible to everyone else.
-                      ...(user.role === 'internal' ? [{ href: '/internal', label: 'Internal tools' }] : []),
                     ].map((item) => (
                       <Link
                         key={item.href}

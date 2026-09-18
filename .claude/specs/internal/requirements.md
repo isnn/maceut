@@ -11,6 +11,11 @@
 
 ## Konsep Role
 
+Aplikasi staf dan aplikasi pelanggan **terpisah total** — satu akun hanya melihat salah satunya.
+Tujuan ke mana user diarahkan setelah login ditentukan satu helper, `homePathFor(user)` di
+`features/auth/home-path.ts`, supaya enam titik redirect tidak lagi menentukan sendiri-sendiri.
+
+
 `role: 'user' | 'internal'` adalah field **platform-level** di record user — terpisah dari
 workspace/team role (`owner`/`editor`/`viewer`) yang masih out of scope MVP.
 
@@ -41,6 +46,11 @@ supaya **saya tahu berapa akun yang aktif, sebaran paket, dan apakah ada konfigu
 
 **Acceptance Criteria:**
 - [ ] Halaman `/internal` hanya bisa diakses akun ber-role `internal`; user biasa di-redirect ke `/dashboard`, yang belum login ke `/login?redirect=`
+- [ ] `/internal` adalah **home** untuk akun internal — login mendarat di sini, bukan `/dashboard`
+- [ ] Akun internal **tidak punya** halaman tenant: `/dashboard`, `/zones`, `/schedule`, `/studio`, `/team`, `/profile` semuanya redirect ke `/internal`
+- [ ] Akun internal melewati onboarding (tidak ada paket untuk dipilih) — `/onboarding` redirect ke `/internal`
+- [ ] Profil staf tetap ada di `/internal/profile` (shell internal, tab Account + Notifications saja) dan dibuka dari account menu, bukan dari nav
+- [ ] Tidak ada cross-link antara dua aplikasi: header tenant tidak punya "Internal tools", header internal tidak punya "Back to workspace"
 - [ ] Stat tile: total akun, jumlah user internal, zona yang mengumpulkan, estimasi MRR
 - [ ] Plan mix: bar proporsi Free/Standard/Premium + jumlah per tier
 - [ ] Daftar 8 signup terbaru dengan plan, role, dan tanggal daftar
