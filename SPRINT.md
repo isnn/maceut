@@ -37,7 +37,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | 🔴 | Setup api/: Dockerfile.dev + Dockerfile | deployment.md |
 | 🔴 | Setup api/.env dari .env.example | api/.env.example |
 | ✅ | Setup web/: Next.js + Tailwind (token dari design.md) + Base UI | design.md |
-| 🟡 | Setup web/: Dockerfile.dev + Dockerfile | deployment.md |
+| 🟡 | Setup web/: Dockerfile.dev ✅ + Dockerfile (production) 🔴 | deployment.md |
 | ✅ | Setup web/.env.local dari .env.example | web/.env.example |
 | 🔴 | Jalankan `docker compose up` — pastikan semua service start | deployment.md |
 | 🔴 | Setup Drizzle: drizzle.config.ts + schema.ts dasar (users, user_plans) | zone-management/tasks.md Phase 1 |
@@ -53,17 +53,24 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | 🔴 | API: POST /captures/manual + GET /captures/:id + unit test + swagger | zone-management/tasks.md Phase 3 |
 | 🔴 | Worker: capture.worker.ts (consume → road class filter → screenshot → upload) | zone-management/tasks.md Phase 3 |
 | ✅ | Frontend: tailwind.config.ts dengan token dari design.md | design.md |
-| 🟡 | Frontend: Login + Register pages | auth/tasks.md Phase 3 |
-| 🟡 | Frontend: Dashboard page (zone count, schedule count, CTA) | zone-management/tasks.md Phase 4 |
-| 🟡 | Frontend: Zone List Page + road class badge | zone-management/tasks.md Phase 4 |
-| 🟡 | Frontend: ZoneCreateStepper shell + progress indicator | zone-management/tasks.md Phase 4 |
-| 🟡 | Frontend: Step 1 — Pilih Area (Map Editor HERE Maps) | zone-management/tasks.md Phase 4 |
-| 🟡 | Frontend: Step 2 — Pilih Road Class + UpgradeModal | zone-management/tasks.md Phase 4, subscription/tasks.md |
+| ✅ | Frontend: Login + Register pages | auth/tasks.md Phase 3 |
+| ✅ | Frontend: Dashboard page (zone count, schedule count, CTA) | zone-management/tasks.md Phase 4 |
+| ✅ | Frontend: Zone List Page + road class badge | zone-management/tasks.md Phase 4 |
+| ✅ | Frontend: ZoneCreateStepper shell + progress indicator | zone-management/tasks.md Phase 4 |
+| ✅ | Frontend: Step 1 — Pilih Area (Map Editor HERE Maps) | zone-management/tasks.md Phase 4 |
+| ✅ | Frontend: Step 2 — Pilih Road Class + UpgradeModal | zone-management/tasks.md Phase 4, subscription/tasks.md |
 | 🔴 | Backend: HERE Traffic client + GET /traffic/preview | zone-management/tasks.md Phase 3 |
-| 🟡 | Frontend: MapCanvas (Leaflet + OSM) + TrafficPreviewPanel + StyleSelector | zone-management/tasks.md Phase 4 |
+| ✅ | Frontend: MapCanvas (Leaflet + OSM) + TrafficPreviewPanel + StyleSelector | zone-management/tasks.md Phase 4 |
 | 🔴 | Backend: internal render page (Playwright target) + update playwright-client.ts | zone-management/tasks.md Phase 3 |
-| 🟡 | Frontend: Step 3 — Review & Konfirmasi | zone-management/tasks.md Phase 4 |
-| 🟡 | Frontend: Manual Capture Button + StyleSelector modal + polling status | zone-management/tasks.md Phase 4 |
+| ✅ | Frontend: Step 3 — Review & Konfirmasi | zone-management/tasks.md Phase 4 |
+| ✅ | Frontend: Manual Capture Button + StyleSelector modal + polling status | zone-management/tasks.md Phase 4 |
+| ✅ | Frontend: Landing page publik (mockup 4a) | mockup turn 4 |
+| ✅ | Frontend: AppHeader top-nav + notification & profile dropdown (3g-3i) | mockup turn 3 |
+| ✅ | Frontend: Onboarding pilih paket (3p) | mockup turn 3 |
+| ✅ | Frontend: Halaman Jadwal + dialog tambah/ubah jendela (3j-3l) | mockup turn 3 |
+| ✅ | Frontend: Halaman Studio — pemutar frame + builder animasi (3m) | mockup turn 3 |
+| ✅ | Frontend: Halaman Tim — anggota + matriks peran (3n) | mockup turn 3 |
+| ✅ | Frontend: Halaman Profil & penggunaan (3o) | mockup turn 3 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -72,12 +79,15 @@ Status: 🔴 Not started · 🟡 In progress · ✅ Done
 ## NOT This Sprint
 
 Jangan implement meskipun ada di spec:
-- Schedule management (create, pause, resume, delete) → Sprint 2
 - Capture history page + filter → Sprint 2
-- Subscription + payment flow → Sprint 3
 - Branding config (logo upload) → Sprint 2
-- Usage dashboard widget → Sprint 2
+- Payment gateway / billing nyata → Sprint 3 (halaman Tagihan sekarang hanya simulasi ganti paket)
 - Production docker-compose.prod.yml deploy nyata → setelah MVP stabil di lokal
+
+⚠️ Diupdate 2026-09-07 — implementasi mockup turn 3/4 sudah membuat UI untuk beberapa item yang tadinya
+ditunda (schedule management, usage widget, plan display). Yang ada sekarang **hanya frontend dengan data
+dummy**; backend-nya (schedules API, /usage, enforcement BR-005/006) tetap belum dikerjakan dan masih 🔴.
+Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions This Sprint.
 
 ---
 
@@ -129,6 +139,19 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   pakai crypto.randomUUID) kalau belum di-test — sudah diperbaiki sekaligus.
   ⚠️ Kalau nanti pindah ke domain dengan HTTPS asli, `crypto.randomUUID()` native akan tersedia lagi — helper
   ini tetap aman dipakai (langsung pakai randomUUID native kalau ada, tidak perlu diubah lagi).
+
+[2026-09-07] Implementasi mockup turn 3 + turn 4 (19 layar) di web/ — semua jalan dengan data dummy.
+  Turn 4 (PR #2): landing page publik `/`, login split-panel + opsi SSO (disabled, di luar scope F-09),
+  sign up dengan nama/instansi/kekuatan password/pilih paket, onboarding pilih paket (3p).
+  Turn 3 (PR #3): AppHeader top-nav + dropdown notifikasi/profil, dashboard (kuota, zona, strip capture,
+  render, kesehatan koleksi), manajemen zona (filter/search/pause/hapus + paywall batas zona),
+  wizard zona full-page 3 langkah (gambar batas → kelas jalan + preview traffic → review), halaman Jadwal
+  (papan jendela per zona + dialog tambah/ubah/hapus), Studio (pemutar frame + scrubber + builder animasi),
+  Tim (anggota + matriks peran), Profil & penggunaan (meter kuota + ganti paket).
+  Mock API baru: schedules, studio (frame + render), team, notifications. Zona demo di-seed sesuai paket.
+  Routing berubah: `/` sekarang landing page, dashboard pindah ke `/dashboard`, route group `(dashboard)` → `(app)`.
+  Verified: `tsc --noEmit` bersih, `eslint` bersih, 11 route balas 200 di dev container.
+  NOT verified: klik-through interaktif di browser (belum ada tooling browser di sesi ini) — perlu review manual.
 
 ---
 
@@ -200,6 +223,20 @@ Format:
   Impact: BR-005/BR-006 (product.md), tech.md (error contract examples), subscription/requirements.md + tasks.md
     (getLimitsForPlan values), capture-schedule & zone-management spec text, web/src/lib/constants.ts PLAN_LIMITS,
     web/src/features/captures/api.ts (limit sekarang dihitung per-plan, bukan konstanta flat)
+
+[2026-09-07] Keputusan: Navigasi aplikasi pakai top-nav header (Dashboard · Zona · Jadwal · Studio · Tim),
+  bukan sidebar kiri w-64 seperti di design.md; Sidebar.tsx dihapus
+  Alasan: Semua artboard turn 3 memakai header horizontal; mengikuti mockup lebih penting daripada
+    mempertahankan pola sidebar yang belum pernah direview
+  Impact: design.md section Layout perlu diupdate (masih menyebut sidebar + `ml-64`), structure.md
+    folder frontend, components/shared/AppHeader.tsx menggantikan Sidebar.tsx
+
+[2026-09-07] Keputusan: Layar Studio (builder animasi dari frame) dan Tim (anggota + peran) diimplementasi
+  di frontend meskipun BELUM ada spec-nya
+  Alasan: Keduanya bagian dari mockup turn 3 yang diminta diimplementasi; dibangun dengan data dummy
+  Impact: product.md masih menandai team/role management sebagai out of scope MVP, dan tidak ada spec
+    sama sekali untuk Studio — keduanya butuh requirements + BR sebelum jadi fitur nyata. Sampai itu ada,
+    dua layar ini adalah prototipe UI, bukan fitur yang di-back backend.
 ```
 
 ---
