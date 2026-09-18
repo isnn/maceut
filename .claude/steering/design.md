@@ -364,6 +364,9 @@ Dark theme **hanya boleh digunakan** pada:
 - Halaman map visualization (`/captures/[id]/map`)
 - Komponen `MapVisualization`
 - Output gambar capture (Playwright)
+- **Panel foto di halaman `/login`** — foto full-bleed + scrim gelap, teks putih di atasnya.
+  Pengecualian yang disengaja (bukan drift): permukaan gelap di sini adalah fotonya sendiri,
+  bukan tema aplikasi. Sisa halaman auth tetap white-first.
 
 ```tsx
 // ✅ CORRECT — dark scope hanya di komponen map

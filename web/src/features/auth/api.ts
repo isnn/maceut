@@ -6,6 +6,7 @@
 import type { LoginInput, Plan, PlatformRole, RegisterInput, User } from './types'
 import { ApiError } from '@/types/api'
 import { generateId } from '@/lib/utils'
+import { isInternalByConfig } from './internal-access'
 
 interface MockUserRecord {
   id: string
@@ -45,13 +46,12 @@ function readUsers(): MockUserRecord[] {
     createdAt: u.createdAt ?? new Date().toISOString(),
   }))
 
-  // Someone has to be able to open /internal on a fresh install: if no account
-  // holds the role, the earliest-created one is promoted and the change stuck,
-  // so it stays stable across reads instead of drifting with the sort order.
-  if (records.length > 0 && !records.some((u) => u.role === 'internal')) {
-    const earliest = records.reduce((a, b) => (a.createdAt <= b.createdAt ? a : b))
-    earliest.role = 'internal'
-    writeUsers(records)
+  // Internal access comes from NEXT_PUBLIC_INTERNAL_EMAILS, so who can reach
+  // /internal is a deployment decision rather than an accident of who
+  // registered first. Config always wins; roles granted through the internal
+  // users table are kept for everyone else.
+  for (const record of records) {
+    if (isInternalByConfig(record.email)) record.role = 'internal'
   }
 
   return records
@@ -171,6 +171,13 @@ export async function setUserRole(userId: string, role: PlatformRole): Promise<U
     throw new ApiError({
       code: 'CANNOT_CHANGE_OWN_ROLE',
       message: 'You cannot change your own role — ask another internal user to do it.',
+    })
+  }
+  if (isInternalByConfig(target.email) && role !== 'internal') {
+    await delay(null)
+    throw new ApiError({
+      code: 'ROLE_SET_BY_CONFIG',
+      message: 'This account is listed in NEXT_PUBLIC_INTERNAL_EMAILS — remove it there to change the role.',
     })
   }
   if (target.role === 'internal' && role !== 'internal') {
