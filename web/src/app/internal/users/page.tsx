@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
 import { Button } from '@/components/ui/Button'
-import { Input, Select } from '@/components/ui/Input'
+import { Input } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
 import { Alert } from '@/components/ui/Alert'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -113,24 +114,27 @@ export default function InternalUsersPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-full tablet:w-80"
         />
-        <Select value={planFilter} onChange={(e) => setPlanFilter(e.target.value as Plan | 'all')} className="w-44" aria-label="Filter by plan">
-          <option value="all">All plans</option>
-          {PLAN_ORDER.map((plan) => (
-            <option key={plan} value={plan}>
-              {PLAN_LABEL[plan]}
-            </option>
-          ))}
-        </Select>
+        <Select
+          value={planFilter}
+          onValueChange={(v) => setPlanFilter(v as Plan | 'all')}
+          options={[
+            { value: 'all', label: 'All plans' },
+            ...PLAN_ORDER.map((plan) => ({ value: plan, label: PLAN_LABEL[plan] })),
+          ]}
+          className="w-44"
+          aria-label="Filter by plan"
+        />
         <Select
           value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value as PlatformRole | 'all')}
+          onValueChange={(v) => setRoleFilter(v as PlatformRole | 'all')}
+          options={[
+            { value: 'all', label: 'All roles' },
+            { value: 'internal', label: 'Internal' },
+            { value: 'user', label: 'User' },
+          ]}
           className="w-44"
           aria-label="Filter by role"
-        >
-          <option value="all">All roles</option>
-          <option value="internal">Internal</option>
-          <option value="user">User</option>
-        </Select>
+        />
       </div>
 
       {rows === null ? (
@@ -180,20 +184,17 @@ export default function InternalUsersPage() {
                     <Td className="text-text-secondary">{row.organisation || '—'}</Td>
                     <Td>
                       <Select
+                        size="sm"
                         value={row.plan}
-                        onChange={(e) => changePlan(row, e.target.value as Plan)}
-                        className="h-9 w-36 px-md"
+                        onValueChange={(v) => changePlan(row, v as Plan)}
+                        options={PLAN_ORDER.map((plan) => ({ value: plan, label: PLAN_LABEL[plan] }))}
+                        className="w-36"
                         aria-label={`Plan for ${row.fullName}`}
-                      >
-                        {PLAN_ORDER.map((plan) => (
-                          <option key={plan} value={plan}>
-                            {PLAN_LABEL[plan]}
-                          </option>
-                        ))}
-                      </Select>
+                      />
                     </Td>
                     <Td>
                       <Select
+                        size="sm"
                         value={row.role}
                         disabled={roleLocked}
                         title={
@@ -205,16 +206,14 @@ export default function InternalUsersPage() {
                                 ? 'The last internal account cannot be demoted'
                                 : undefined
                         }
-                        onChange={(e) => changeRole(row, e.target.value as PlatformRole)}
-                        className="h-9 w-32 px-md disabled:opacity-60 disabled:cursor-not-allowed"
+                        onValueChange={(v) => changeRole(row, v as PlatformRole)}
+                        options={(Object.keys(ROLE_LABEL) as PlatformRole[]).map((role) => ({
+                          value: role,
+                          label: ROLE_LABEL[role],
+                        }))}
+                        className="w-32"
                         aria-label={`Role for ${row.fullName}`}
-                      >
-                        {(Object.keys(ROLE_LABEL) as PlatformRole[]).map((role) => (
-                          <option key={role} value={role}>
-                            {ROLE_LABEL[role]}
-                          </option>
-                        ))}
-                      </Select>
+                      />
                       {byConfig && <p className="text-micro text-text-muted mt-xs">set by env</p>}
                     </Td>
                     <Td className="text-caption text-text-secondary whitespace-nowrap tabular-nums">

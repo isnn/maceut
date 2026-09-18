@@ -1,6 +1,6 @@
 'use client'
 
-import { InputHTMLAttributes, LabelHTMLAttributes, SelectHTMLAttributes, useState } from 'react'
+import { InputHTMLAttributes, LabelHTMLAttributes, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { IconEye, IconEyeOff } from './icons'
 
@@ -34,10 +34,6 @@ export function PasswordInput({ className, ...props }: Omit<InputHTMLAttributes<
       </button>
     </div>
   )
-}
-
-export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={cn(CONTROL, className)} {...props} />
 }
 
 export function Checkbox({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {

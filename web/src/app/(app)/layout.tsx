@@ -4,7 +4,6 @@ import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
-import { homePathFor } from '@/features/auth/home-path'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useCurrentUser()

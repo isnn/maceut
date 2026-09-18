@@ -14,14 +14,9 @@ import type { AccountUsage, InternalUserRow, PlatformStats } from './types'
 
 const SEEDED_KEY = 'maceut_mock_internal_seeded'
 const USAGE_KEY = 'maceut_mock_internal_usage'
-const MOCK_LATENCY_MS = 350
 
 /** Rupiah per month, used for the MRR estimate on the overview. */
 const PLAN_MONTHLY_IDR: Record<Plan, number> = { free: 0, standard: 490_000, premium: 1_900_000 }
-
-function delay<T>(value: T): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), MOCK_LATENCY_MS))
-}
 
 const DEMO_TENANTS: { fullName: string; organisation: string; email: string; plan: Plan; daysAgo: number }[] = [
   { fullName: 'Dewi Anggraini', organisation: 'Pemda Jakarta Selatan', email: 'dewi@jakselpemda.go.id', plan: 'premium', daysAgo: 141 },

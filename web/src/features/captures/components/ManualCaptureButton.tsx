@@ -12,7 +12,15 @@ import * as capturesApi from '../api'
 import type { Capture } from '../types'
 import { DEFAULT_STYLE, type CaptureStyleInput } from '@/features/zones/types'
 
-export function ManualCaptureButton({ zoneId, zoneName }: { zoneId: string; zoneName: string }) {
+interface ManualCaptureButtonProps {
+  zoneId: string
+  zoneName: string
+  /** The trigger's appearance — secondary where it sits beside a stronger action. */
+  variant?: 'primary' | 'secondary'
+  className?: string
+}
+
+export function ManualCaptureButton({ zoneId, zoneName, variant = 'primary', className }: ManualCaptureButtonProps) {
   const [open, setOpen] = useState(false)
   const [style, setStyle] = useState<CaptureStyleInput>({ ...DEFAULT_STYLE, title: zoneName })
   const [capture, setCapture] = useState<Capture | null>(null)
@@ -69,7 +77,7 @@ export function ManualCaptureButton({ zoneId, zoneName }: { zoneId: string; zone
 
   return (
     <>
-      <Button variant="primary" onClick={openModal}>
+      <Button variant={variant} className={className} onClick={openModal}>
         Capture now
       </Button>
 
