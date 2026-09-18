@@ -72,7 +72,8 @@ export async function register(input: RegisterInput): Promise<User> {
     password: input.password,
     fullName: input.fullName,
     organisation: input.organisation,
-    plan: input.plan,
+    // Placeholder until step 2 of sign-up; the onboarding guard forces that step.
+    plan: 'free',
     onboardingDone: false,
     createdAt: new Date().toISOString(),
   }
