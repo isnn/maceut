@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useEffect } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { PublicHeader } from '@/components/shared/PublicHeader'
 import { LoginForm } from '@/features/auth/components/LoginForm'
@@ -31,23 +32,49 @@ export default function LoginPage() {
       <LoginRedirectGuard>
         <PublicHeader minimal />
         <main className="flex-1 grid grid-cols-1 laptop:grid-cols-2">
-          <aside className="hidden laptop:flex flex-col justify-between bg-canvas-secondary border-r border-border p-section">
-            <div>
-              <p className="text-page-title font-bold text-text-primary max-w-[22ch] text-balance">
+          {/* Photographic panel — desktop only, so small screens don't pay for the image. */}
+          <aside className="relative hidden laptop:flex flex-col justify-between p-section overflow-hidden">
+            <Image
+              src="/login-freeway.jpg"
+              alt="Aerial photography of interlocking freeways with travelling cars"
+              fill
+              priority
+              sizes="50vw"
+              className="object-cover"
+            />
+            <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/45 to-black/20" />
+
+            <div className="relative">
+              <p className="text-page-title font-bold text-white max-w-[22ch] text-balance">
                 Every window you scheduled, captured and waiting.
               </p>
               <ul className="mt-xl space-y-md">
                 {VALUE_PROPS.map((prop) => (
-                  <li key={prop} className="flex items-start gap-sm text-body text-text-secondary">
-                    <IconCheck className="text-success-icon mt-[3px]" />
+                  <li key={prop} className="flex items-start gap-sm text-body text-white/85">
+                    <IconCheck className="text-white mt-[3px]" />
                     {prop}
                   </li>
                 ))}
               </ul>
             </div>
-            <p className="text-caption text-text-muted max-w-[36ch]">
-              Used by provincial and city road agencies across Java and Sumatra.
-            </p>
+
+            <div className="relative space-y-sm">
+              <p className="text-caption text-white/70 max-w-[36ch]">
+                Used by provincial and city road agencies across Java and Sumatra.
+              </p>
+              <p className="text-micro text-white/50">
+                Photo by{' '}
+                <a
+                  href="https://unsplash.com/@ed259"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="text-white/70 no-underline hover:underline"
+                >
+                  Ed 259
+                </a>{' '}
+                on Unsplash
+              </p>
+            </div>
           </aside>
 
           <div className="flex items-center justify-center p-xl">

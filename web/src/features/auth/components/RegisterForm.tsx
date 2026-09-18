@@ -5,18 +5,11 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Checkbox, FormLabel, Input } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
-import { PLAN_LABEL, PLAN_ORDER, PLAN_PRICE } from '@/lib/constants'
 import { ApiError } from '@/types/api'
-import type { Plan } from '../types'
 import * as authApi from '../api'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-const PLAN_SUMMARY: Record<Plan, string> = {
-  free: '1 zone · 10 captures / day',
-  standard: '5 zones · 50 captures / day',
-  premium: '25 zones · contact sales',
-}
 
 /** 0-3; drives the strength meter under the password field. */
 function passwordScore(value: string): number {
@@ -35,7 +28,6 @@ export function RegisterForm() {
   const [organisation, setOrganisation] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [plan, setPlan] = useState<Plan>('free')
   const [agreed, setAgreed] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
@@ -55,7 +47,7 @@ export function RegisterForm() {
     if (!clientValid) return
     setLoading(true)
     try {
-      await authApi.register({ fullName, organisation, email, password, plan })
+      await authApi.register({ fullName, organisation, email, password })
       router.push('/onboarding')
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
@@ -109,31 +101,6 @@ export function RegisterForm() {
         {passwordError && <p className="text-caption text-danger-text">{passwordError}</p>}
       </div>
 
-      <fieldset className="space-y-sm">
-        <legend className="text-label text-text-secondary font-medium mb-sm">Starting plan</legend>
-        <div className="grid grid-cols-1 tablet:grid-cols-3 gap-sm">
-          {PLAN_ORDER.map((option) => (
-            <label
-              key={option}
-              className={cn(
-                'cursor-pointer border rounded-md p-md transition-colors',
-                plan === option ? 'border-primary bg-primary-soft/40' : 'border-border hover:bg-canvas-secondary'
-              )}
-            >
-              <input
-                type="radio"
-                name="plan"
-                className="sr-only"
-                checked={plan === option}
-                onChange={() => setPlan(option)}
-              />
-              <span className="block text-label font-semibold text-text-primary">{PLAN_LABEL[option]}</span>
-              <span className="block text-micro text-text-muted mt-xs">{PLAN_SUMMARY[option]}</span>
-              <span className="block text-micro text-text-secondary mt-xs">{PLAN_PRICE[option].amount}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
 
       <label className="flex items-start gap-sm text-body text-text-secondary">
         <Checkbox checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-[2px] shrink-0" />
@@ -145,7 +112,7 @@ export function RegisterForm() {
       {agreedError && <p className="text-caption text-danger-text">{agreedError}</p>}
 
       <Button type="submit" disabled={loading} className="w-full">
-        {loading ? 'Creating account…' : 'Create account'}
+        {loading ? 'Creating account…' : 'Continue to plan'}
       </Button>
     </form>
   )

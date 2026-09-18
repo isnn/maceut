@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { PublicHeader } from '@/components/shared/PublicHeader'
+import { SignupSteps } from '@/components/shared/SignupSteps'
 import { RegisterForm } from '@/features/auth/components/RegisterForm'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 
@@ -32,9 +33,10 @@ export default function RegisterPage() {
       />
       <main className="flex-1 flex justify-center px-xl py-section">
         <div className="w-full max-w-[34rem]">
-          <h1 className="text-page-title font-bold text-text-primary">Create your account</h1>
+          <SignupSteps current={0} />
+          <h1 className="mt-xl text-page-title font-bold text-text-primary">Create your account</h1>
           <p className="mt-xs text-body text-text-secondary mb-xl">
-            One account per agency workspace — invite your team afterwards.
+            One account per agency workspace — invite your team afterwards. You&rsquo;ll pick a plan next.
           </p>
           <RegisterForm />
         </div>

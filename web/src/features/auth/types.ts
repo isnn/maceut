@@ -16,10 +16,10 @@ export interface LoginInput {
   password: string
 }
 
+/** Plan is not chosen here — it's picked in step 2 (/onboarding). */
 export interface RegisterInput {
   fullName: string
   organisation: string
   email: string
   password: string
-  plan: Plan
 }
