@@ -222,3 +222,11 @@ export function IconLock(props: IconProps) {
     </Svg>
   )
 }
+
+export function IconChevronDown(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </Svg>
+  )
+}

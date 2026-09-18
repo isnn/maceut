@@ -70,12 +70,7 @@ export default function ZonesPage() {
   return (
     <div className="space-y-lg">
       <div className="flex flex-wrap items-end justify-between gap-md">
-        <div>
-          <p className="text-label text-text-secondary">
-            Zone management · {zones?.length ?? 0} of {zonesLimit} zones
-          </p>
-          <h1 className="text-page-title font-bold text-text-primary mt-xs">Your zones</h1>
-        </div>
+        <h1 className="text-page-title font-bold text-text-primary">Your zones</h1>
         {atLimit ? (
           <Button onClick={() => setLimitOpen(true)}>New zone</Button>
         ) : (
