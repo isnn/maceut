@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/Button'
+import Link from 'next/link'
+import { Button, buttonClass } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { UsageMeter, AttributeRow } from '@/components/ui/UsageMeter'
 import { Checkbox } from '@/components/ui/Input'
@@ -150,14 +151,29 @@ export default function ProfilePage() {
       )}
 
       {tab === 'Account' && (
-        <Card className="p-lg">
-          <dl className="divide-y divide-divider">
-            <AttributeRow label="Full name" value={user.fullName || '—'} />
-            <AttributeRow label="Email" value={user.email} />
-            <AttributeRow label="Organisation" value={user.organisation || '—'} />
-            <AttributeRow label="Role" value="Owner" />
-          </dl>
-        </Card>
+        <div className="space-y-lg">
+          <Card className="p-lg">
+            <dl className="divide-y divide-divider">
+              <AttributeRow label="Full name" value={user.fullName || '—'} />
+              <AttributeRow label="Email" value={user.email} />
+              <AttributeRow label="Organisation" value={user.organisation || '—'} />
+              <AttributeRow label="Workspace role" value="Owner" />
+              <AttributeRow label="Platform role" value={user.role === 'internal' ? 'Internal (Maceut staff)' : 'Customer'} />
+            </dl>
+          </Card>
+
+          {user.role === 'internal' && (
+            <Card className="p-lg">
+              <h2 className="text-heading-sm text-text-primary">Internal access</h2>
+              <p className="text-body text-text-secondary mt-xs">
+                This account is configured for the staff area.
+              </p>
+              <Link href="/internal" className={cn(buttonClass('secondary'), 'mt-lg')}>
+                Open internal tools
+              </Link>
+            </Card>
+          )}
+        </div>
       )}
 
       {tab === 'Notifications' && (

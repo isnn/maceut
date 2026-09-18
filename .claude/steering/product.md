@@ -39,6 +39,21 @@ MVP menggunakan **single workspace** — tidak ada multi-tenant atau team role. 
 
 *Semua user bisa membuat zona polygon di area mana saja. Tier membatasi kedalaman data jalan yang bisa dipilih (road class) DAN volume penggunaan (active schedule & daily capture limit) — lihat BR-005, BR-006.*
 
+### Platform Administration (prototype)
+
+Ada field **platform-level** `role: 'user' | 'internal'` di record user — `internal` = staf Maceut,
+dipakai untuk gate area `/internal` (manajemen user + konfigurasi sistem). Siapa yang mendapatkannya
+ditentukan env `NEXT_PUBLIC_INTERNAL_EMAILS` (daftar email dipisah koma), bukan lewat pendaftaran.
+Ini **berbeda** dari
+workspace/team role (`owner`/`editor`/`viewer`) yang tetap out of scope MVP: yang satu operator
+platform, yang satu kolaborasi di dalam satu workspace.
+
+⚠️ Statusnya sama dengan layar Studio dan Tim: **prototipe frontend di atas data mock, belum ada
+spec resmi dan belum ada backend.** Gate `/internal` di frontend hanyalah UI-gating, BUKAN
+authorization — siapa pun bisa mengubah `role` lewat devtools. Enforcement asli wajib ada di
+middleware backend saat `api/` dibangun, dan setiap endpoint `/internal/*` harus cek ulang di server.
+Lihat `.claude/specs/internal/requirements.md`.
+
 ### Road Class Mapping (HERE Maps → OSM)
 
 | Tier | HERE Functional Class | OSM Highway Tag |
@@ -138,6 +153,11 @@ MVP menggunakan **single workspace** — tidak ada multi-tenant atau team role. 
 - Upgrade plan (Stripe atau payment gateway lokal) `📋`
 - Usage dashboard (captures hari ini, schedules aktif) `📋`
 - Invoice & billing history `❌`
+
+**Platform Administration** *(prototipe frontend, belum ada backend — lihat section Roles & Permissions)*
+- Internal overview: statistik user, plan mix, estimasi MRR `📋`
+- Manajemen user: ubah plan & platform role, lihat usage per akun `📋`
+- Manajemen konfigurasi sistem (env) dengan secret write-only `📋`
 
 **Out of scope MVP:**
 - Multi-tenant / organization workspace

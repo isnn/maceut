@@ -71,6 +71,12 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: Halaman Studio — pemutar frame + builder animasi (3m) | mockup turn 3 |
 | ✅ | Frontend: Halaman Tim — anggota + matriks peran (3n) | mockup turn 3 |
 | ✅ | Frontend: Halaman Profil & penggunaan (3o) | mockup turn 3 |
+| ✅ | Frontend: Alur daftar 2 langkah (detail → pilih paket → dashboard) | mockup 4c + 3p, revisi user |
+| ✅ | Frontend: Foto panel di halaman login (Unsplash, di-vendor ke public/) | permintaan user |
+| ✅ | Frontend: Platform role (`user`/`internal`) + guard BR-024/BR-025 | specs/internal/requirements.md |
+| ✅ | Frontend: /internal Overview — statistik platform (F-21) | specs/internal/requirements.md |
+| ✅ | Frontend: /internal Users — kelola plan & role + usage per akun (F-22) | specs/internal/requirements.md |
+| ✅ | Frontend: /internal Config — env sistem, secret write-only (F-23) | specs/internal/requirements.md |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -152,6 +158,20 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   Routing berubah: `/` sekarang landing page, dashboard pindah ke `/dashboard`, route group `(dashboard)` → `(app)`.
   Verified: `tsc --noEmit` bersih, `eslint` bersih, 11 route balas 200 di dev container.
   NOT verified: klik-through interaktif di browser (belum ada tooling browser di sesi ini) — perlu review manual.
+
+[2026-09-09] Area /internal (manajemen SaaS) + rework alur daftar + foto login — semua masih data dummy.
+  Alur daftar dipecah jadi 2 langkah nyata: /register (nama, instansi, email, password) → /onboarding
+  (pilih paket) → /dashboard. Plan picker dihapus dari form daftar, step "First zone" yang tidak melakukan
+  apa-apa dihapus dari onboarding, dan kedua halaman memakai indikator langkah yang sama (SignupSteps).
+  Halaman /login memakai foto udara jalan tol (Ed 259, Unsplash License) yang di-vendor ke web/public/
+  supaya tidak bergantung host pihak ketiga saat runtime.
+  Area /internal: role platform baru `user`/`internal` di record user (beda dari team role workspace),
+  gate + header sendiri, Overview (statistik, plan mix, estimasi MRR), Users (search/filter, ubah plan &
+  role inline, konfirmasi downgrade, drawer usage), Config (katalog env, secret write-only, grup
+  infrastruktur read-only). 24 demo tenant di-seed ke tabel user yang sama, ditandai chip "demo";
+  hanya akun yang sedang login yang usage-nya live.
+  Verified: `tsc --noEmit` bersih, `eslint` bersih, 14 route balas 200 di dev container.
+  NOT verified: klik-through interaktif di browser — perlu review manual.
 
 ---
 
@@ -237,6 +257,23 @@ Format:
   Impact: product.md masih menandai team/role management sebagai out of scope MVP, dan tidak ada spec
     sama sekali untuk Studio — keduanya butuh requirements + BR sebelum jadi fitur nyata. Sampai itu ada,
     dua layar ini adalah prototipe UI, bukan fitur yang di-back backend.
+
+[2026-09-09] Keputusan: Area manajemen SaaS ada di `/internal` dengan role platform `user` | `internal`,
+  terpisah dari workspace/team role (owner/editor/viewer) yang tetap out of scope MVP
+  Alasan: `internal` adalah operator platform lintas akun, bukan kolaborasi dalam satu workspace —
+    dua model izin yang berbeda; field di record user juga memetakan langsung ke kolom `users.role`
+    saat backend dibangun, tidak seperti daftar email hardcoded
+  Impact: product.md (section Platform Administration baru + Feature Status), specs/internal/ baru
+    (F-21..F-23, BR-024..BR-026), features/auth + features/internal di web/
+  ⚠️ Gate di frontend HANYA UI-gating, bukan authorization — role bisa diubah lewat devtools.
+    Enforcement asli wajib di middleware backend saat api/ dibangun.
+
+[2026-09-09] Keputusan: Secret di layar konfigurasi bersifat write-only, termasuk di mock
+  Alasan: menyimpan plaintext di localStorage akan membuat kontrak UI salah sejak awal; menyimpan hanya
+    { isSet, last4, updatedAt, updatedBy } membuat mock dan backend punya bentuk data identik
+  Impact: features/internal/config-api.ts, BR-026 di specs/internal/requirements.md
+  ⚠️ Belum ada keputusan arsitektur soal config lewat UI (override DB vs read-only mirror) —
+    butuh ADR di tech.md sebelum backend dibuat
 ```
 
 ---

@@ -13,6 +13,7 @@ import { formatDate } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import * as internalApi from '@/features/internal/api'
+import { isInternalByConfig } from '@/features/auth/internal-access'
 import type { InternalUserRow } from '@/features/internal/types'
 import type { Plan, PlatformRole } from '@/features/auth/types'
 
@@ -152,8 +153,9 @@ export default function InternalUsersPage() {
             </thead>
             <tbody>
               {visible.map((row) => {
+                const byConfig = isInternalByConfig(row.email)
                 const isLastInternal = row.role === 'internal' && internalCount <= 1
-                const roleLocked = row.isYou || isLastInternal
+                const roleLocked = row.isYou || isLastInternal || byConfig
                 return (
                   <tr key={row.id} className="hover:bg-canvas-secondary/60 transition-colors">
                     <Td>
@@ -195,11 +197,13 @@ export default function InternalUsersPage() {
                         value={row.role}
                         disabled={roleLocked}
                         title={
-                          row.isYou
-                            ? 'You cannot change your own role'
-                            : isLastInternal
-                              ? 'The last internal account cannot be demoted'
-                              : undefined
+                          byConfig
+                            ? 'Granted by NEXT_PUBLIC_INTERNAL_EMAILS — change it there'
+                            : row.isYou
+                              ? 'You cannot change your own role'
+                              : isLastInternal
+                                ? 'The last internal account cannot be demoted'
+                                : undefined
                         }
                         onChange={(e) => changeRole(row, e.target.value as PlatformRole)}
                         className="h-9 w-32 px-md disabled:opacity-60 disabled:cursor-not-allowed"
@@ -211,6 +215,7 @@ export default function InternalUsersPage() {
                           </option>
                         ))}
                       </Select>
+                      {byConfig && <p className="text-micro text-text-muted mt-xs">set by env</p>}
                     </Td>
                     <Td className="text-caption text-text-secondary whitespace-nowrap tabular-nums">
                       {row.usage.zonesCount}/{row.usage.zonesLimit} zones ·{' '}
