@@ -278,7 +278,7 @@
 ## Phase 5: Integration & Edge Cases
 
 - [ ] Test manual: `docker compose up` → create zone → capture sekarang → download PNG
-- [ ] Test daily limit: trigger 100 captures → verify 101st di-skip dengan status `skipped_limit`
+- [ ] Test daily limit: trigger captures hingga limit plan aktif (Free=10) → verify capture berikutnya di-skip dengan status `skipped_limit`
 - [ ] Test plan restriction: login sebagai user Free → capture hanya menampilkan jalan nasional (FC1-FC2)
 - [ ] Test plan restriction: user Standard → capture menampilkan nasional + provinsi (FC1-FC3)
 - [ ] Test stepper: user Free pilih road class "Semua Jalan" di step 2 → upgrade popup muncul, tidak bisa lanjut ke step 3

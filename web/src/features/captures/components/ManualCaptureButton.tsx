@@ -76,7 +76,7 @@ export function ManualCaptureButton({ zoneId, zoneName }: { zoneId: string; zone
       <Dialog.Root open={open} onOpenChange={(next) => !next && setOpen(false)}>
         <Dialog.Portal>
           <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
-          <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-card border border-border rounded-lg p-xl shadow-elevation-3">
+          <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[28rem] bg-card border border-border rounded-lg p-xl shadow-elevation-3">
             <Dialog.Title className="text-section-title text-text-primary mb-lg">
               Capture — {zoneName}
             </Dialog.Title>
@@ -124,7 +124,7 @@ export function ManualCaptureButton({ zoneId, zoneName }: { zoneId: string; zone
               <div className="space-y-md">
                 <Alert variant="warning">
                   {capture!.status === 'skipped_limit'
-                    ? 'Batas 100 captures/hari tercapai.'
+                    ? 'Batas captures harian plan Anda tercapai.'
                     : capture!.errorMessage ?? 'Capture gagal diproses.'}
                 </Alert>
                 <div className="flex justify-end">

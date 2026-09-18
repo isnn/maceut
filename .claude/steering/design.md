@@ -269,7 +269,7 @@ Gunakan border terlebih dahulu. Shadow hanya untuk floating/modal.
 ```tsx
 <div className="bg-warning-bg text-warning-text rounded-md p-lg flex items-start gap-sm">
   <AlertIcon className="text-warning-icon mt-0.5 shrink-0" />
-  <span className="text-body">Batas 100 captures/hari tercapai.</span>
+  <span className="text-body">Batas captures/hari tercapai.</span>
 </div>
 ```
 
@@ -307,7 +307,7 @@ Gunakan border terlebih dahulu. Shadow hanya untuk floating/modal.
 ```tsx
 <div className="flex justify-between items-center text-body">
   <span className="text-text-secondary">Captures hari ini</span>
-  <span className="font-semibold text-text-primary">45 / 100</span>
+  <span className="font-semibold text-text-primary">7 / 10</span>
 </div>
 <div className="border-t border-divider my-md" />
 ```

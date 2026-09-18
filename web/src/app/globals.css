@@ -9,3 +9,10 @@
 body {
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
+
+/* Dark basemap filter applied once to the whole tile pane (not per-tile) — Leaflet's
+   mix-blend-mode: plus-lighter on .leaflet-tile (Chromium anti-seam hack) otherwise
+   blends adjacent inverted/hue-rotated tiles together, producing visible seams. */
+.maceut-map-dark .leaflet-tile-pane {
+  filter: brightness(0.7) invert(0.92) contrast(0.85) hue-rotate(180deg) saturate(0.6);
+}

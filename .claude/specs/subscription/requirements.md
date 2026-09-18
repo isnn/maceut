@@ -12,7 +12,7 @@ supaya **saya tahu seberapa dekat dengan batas limit sebelum terkena throttle**.
 
 **Acceptance Criteria:**
 - [ ] Widget usage tampil di halaman dashboard utama (`/`)
-- [ ] Menampilkan: captures hari ini (X / 10), schedules aktif (X / 10), dan nama plan saat ini
+- [ ] Menampilkan: captures hari ini (X / capturesLimit), schedules aktif (X / schedulesLimit) sesuai limit plan aktif, dan nama plan saat ini
 - [ ] Progress bar ditampilkan untuk masing-masing limit
 - [ ] Warning state ditampilkan (warna oranye) saat usage ≥ 80% dari limit
 - [ ] Critical state ditampilkan (warna merah) saat usage ≥ 100% (limit tercapai)
@@ -20,7 +20,7 @@ supaya **saya tahu seberapa dekat dengan batas limit sebelum terkena throttle**.
 
 **Edge Cases:**
 - Captures hari ini = 0 → progress bar kosong, bukan error
-- Limit tercapai (100 captures) → tampilkan "Batas tercapai. Reset pukul 00:00 WIB" dengan estimasi waktu reset
+- Limit tercapai (sesuai capturesLimit plan aktif) → tampilkan "Batas tercapai. Reset pukul 00:00 WIB" dengan estimasi waktu reset
 - API `GET /usage` gagal → tampilkan data terakhir yang di-cache, bukan crash widget
 
 **Out of Scope (fase ini):**
@@ -65,8 +65,8 @@ Sebagai **sistem**, saya perlu **memastikan user tidak melampaui batas limit pla
 supaya **business rules ditegakkan secara konsisten di semua entry point**.
 
 **Acceptance Criteria:**
-- [ ] Daily capture limit (10/hari) di-enforce di `CaptureService.TriggerManual` dan `CaptureService.TriggerScheduled` (BR-006, BR-007)
-- [ ] Active schedule limit (10) di-enforce di `ScheduleService.CreateSchedule` dan `ScheduleService.ResumeSchedule` (BR-005, BR-007)
+- [ ] Daily capture limit (sesuai plan — Free 10, Standard 50, Premium 100) di-enforce di `CaptureService.TriggerManual` dan `CaptureService.TriggerScheduled` (BR-006, BR-007)
+- [ ] Active schedule limit (sesuai plan — Free 10, Standard 20, Premium 50) di-enforce di `ScheduleService.CreateSchedule` dan `ScheduleService.ResumeSchedule` (BR-005, BR-007)
 - [ ] Road class filter di-enforce di `ZoneService.GetRoadClassFilter(plan)` — hasil filter dikirim ke Playwright sebagai konfigurasi layer HERE Maps (BR-001..003)
 - [ ] Capture yang di-skip karena limit dicatat dengan status `skipped_limit` (BR-008)
 - [ ] Semua enforcement dilakukan di service layer, bukan handler atau middleware (BR-007)

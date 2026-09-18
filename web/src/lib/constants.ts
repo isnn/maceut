@@ -1,7 +1,7 @@
 export const PLAN_LIMITS = {
-  free: { maxRoadClass: 'nasional', schedulesLimit: 10, capturesLimit: 100 },
-  standard: { maxRoadClass: 'nasional_provinsi', schedulesLimit: 10, capturesLimit: 100 },
-  premium: { maxRoadClass: 'semua', schedulesLimit: 10, capturesLimit: 100 },
+  free: { maxRoadClass: 'nasional', schedulesLimit: 10, capturesLimit: 10 },
+  standard: { maxRoadClass: 'nasional_provinsi', schedulesLimit: 20, capturesLimit: 50 },
+  premium: { maxRoadClass: 'semua', schedulesLimit: 50, capturesLimit: 100 },
 } as const
 
 export const ROAD_CLASS_LABEL: Record<string, string> = {

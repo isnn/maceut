@@ -166,7 +166,7 @@ maceut/
 | Backend TS file | kebab-case | `zone.repository.ts`, `plan.service.ts` |
 | Backend class / interface | PascalCase | `class ZoneService`, `interface CreateZoneInput` |
 | Backend function / variable | camelCase | `async function createZone(...)` |
-| Backend constant | SCREAMING_SNAKE | `const MAX_DAILY_CAPTURES = 100` |
+| Backend constant | SCREAMING_SNAKE | `const MAX_LOGO_SIZE_MB = 2` |
 | Next.js component file | PascalCase | `ZoneCard.tsx` |
 | Next.js hook | camelCase + use prefix | `useZones.ts` |
 | Next.js non-component | kebab-case | `api-client.ts` |
@@ -263,11 +263,12 @@ export async function createZone(...) {
 // ✅ CORRECT — enforce di service layer (BR-007)
 // src/services/capture.service.ts
 import * as captureRepo from '../repositories/capture.repository'
+import * as planService from './plan.service'
 import { PlanLimitExceededError } from '../errors'
 
 export async function triggerManual(userId: string, zoneId: string) {
-  const count = await captureRepo.countTodayByUserId(userId)
-  if (count >= MAX_DAILY_CAPTURES) {
+  const { current, limit, exceeded } = await planService.checkDailyCaptureLimit(userId) // limit varies by plan (BR-006)
+  if (exceeded) {
     throw new PlanLimitExceededError()  // ditangkap error-handler → 429 PLAN_LIMIT_EXCEEDED
   }
   // ... lanjut buat capture record

@@ -303,7 +303,7 @@ updated_at    timestamptz
 { "success": true, "data": [...], "meta": { "total": 100, "page": 1, "limit": 20, "total_pages": 5 } }
 
 // Error
-{ "success": false, "error": { "code": "PLAN_LIMIT_EXCEEDED", "message": "Anda telah mencapai batas 100 captures hari ini.", "details": {} } }
+{ "success": false, "error": { "code": "PLAN_LIMIT_EXCEEDED", "message": "Anda telah mencapai batas 10 captures hari ini.", "details": {} } }
 ```
 
 ### Error Codes
@@ -314,8 +314,8 @@ updated_at    timestamptz
 | `ROAD_CLASS_NOT_ALLOWED` | 403 | Road class yang dipilih saat create zona melebihi batas plan (BR-021) |
 | `NOT_FOUND` | 404 | Zone / Schedule / Capture tidak ditemukan |
 | `VALIDATION_ERROR` | 422 | Input tidak valid (field, format) |
-| `PLAN_LIMIT_EXCEEDED` | 429 | Daily capture limit tercapai (BR-006) |
-| `SCHEDULE_LIMIT_EXCEEDED` | 422 | Max 10 active schedules tercapai (BR-005) |
+| `PLAN_LIMIT_EXCEEDED` | 429 | Daily capture limit plan aktif tercapai (BR-006) |
+| `SCHEDULE_LIMIT_EXCEEDED` | 422 | Max active schedules plan aktif tercapai (BR-005) |
 | `ZONE_NAME_TAKEN` | 422 | Nama zone sudah digunakan user ini (BR-015) |
 | `CAPTURE_FAILED` | 500 | Playwright render error atau R2 upload error |
 
@@ -384,8 +384,8 @@ GET    /usage                 GET    /plans
     "plan": "free",
     "zonesCount": 3,
     "schedulesActiveCount": 2,
-    "capturesToday": 12,
-    "capturesLimit": 100,
+    "capturesToday": 7,
+    "capturesLimit": 10,
     "schedulesLimit": 10
   }
 }

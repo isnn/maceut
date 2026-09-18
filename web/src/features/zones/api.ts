@@ -3,6 +3,7 @@
 
 import { ApiError } from '@/types/api'
 import { PLAN_LIMITS } from '@/lib/constants'
+import { generateId } from '@/lib/utils'
 import type { Plan } from '@/features/auth/types'
 import type { CreateZoneInput, RoadClass, Zone } from './types'
 
@@ -47,7 +48,7 @@ export async function createZone(input: CreateZoneInput, plan: Plan): Promise<Zo
   }
 
   const zone: Zone = {
-    id: crypto.randomUUID(),
+    id: generateId(),
     name: input.name,
     geometry: input.geometry,
     roadClass: input.roadClass,

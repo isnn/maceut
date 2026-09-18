@@ -27,6 +27,9 @@
   - [ ] `RoadClass` union type (`'nasional' | 'nasional_provinsi' | 'semua'`)
   - [ ] `PlanLimits` interface: `maxActiveSchedules`, `maxDailyCaptures`, `maxRoadClass`
   - [ ] `getLimitsForPlan(plan: Plan): PlanLimits` — single source of truth untuk semua limit (konstanta, bukan DB)
+    - Free → `{ maxActiveSchedules: 10, maxDailyCaptures: 10 }`
+    - Standard → `{ maxActiveSchedules: 20, maxDailyCaptures: 50 }`
+    - Premium → `{ maxActiveSchedules: 50, maxDailyCaptures: 100 }`
   - [ ] `ROAD_CLASS_ORDER: RoadClass[]` — `['nasional', 'nasional_provinsi', 'semua']` untuk perbandingan urutan (dipakai BR-021, BR-022)
 
 - [ ] **Service: plan.service.ts** — `src/services/plan.service.ts`
@@ -72,8 +75,8 @@
 
 - [ ] **Usage Widget** — `features/subscription/components/UsageWidget.tsx`
   - [ ] Fetch `GET /usage` via `features/subscription/api.ts`
-  - [ ] Progress bar: captures hari ini (X/100)
-  - [ ] Progress bar: schedules aktif (X/10)
+  - [ ] Progress bar: captures hari ini (X/capturesLimit sesuai plan)
+  - [ ] Progress bar: schedules aktif (X/schedulesLimit sesuai plan)
   - [ ] Plan badge (Free / Standard / Premium)
   - [ ] Warning state ≥ 80%, critical state = 100%
   - [ ] Auto-refresh setiap 30 detik (`setInterval` + `clearInterval` on unmount)
@@ -95,8 +98,8 @@
   - [ ] Isi: judul "Fitur ini butuh plan lebih tinggi", deskripsi singkat, tombol "Lihat Plan" (→ `/settings/plans`) dan "Tutup"
 
 - [ ] **Limit Exceeded State** — di ManualCaptureButton dan ScheduleCreateDrawer
-  - [ ] ManualCapture: jika `captures_today >= 100` → disable tombol + pesan "Batas hari ini tercapai. Reset 00:00 WIB"
-  - [ ] ScheduleCreate: jika `schedules_active >= 10` → disable tombol "Buat Schedule" + tooltip
+  - [ ] ManualCapture: jika `captures_today >= capturesLimit` (plan aktif) → disable tombol + pesan "Batas hari ini tercapai. Reset 00:00 WIB"
+  - [ ] ScheduleCreate: jika `schedules_active >= schedulesLimit` (plan aktif) → disable tombol "Buat Schedule" + tooltip
 
 ---
 
@@ -115,6 +118,14 @@
 
 ```
 [2026-05-31] Keputusan: Daily limit dihitung per kalender hari WIB (Asia/Jakarta), bukan per 24 jam rolling
-  Alasan: Lebih intuitif bagi user — "100 captures per hari" berarti reset tengah malam WIB
+  Alasan: Lebih intuitif bagi user — "N captures per hari" (sesuai plan) berarti reset tengah malam WIB
   Trade-off: Query perlu konversi timezone di PostgreSQL: DATE(created_at AT TIME ZONE 'Asia/Jakarta')
+
+[2026-09-05] Keputusan: Limit tidak lagi flat di semua tier — Max Active Schedules Free/Standard/Premium = 10/20/50,
+  Daily Capture Limit Free/Standard/Premium = 10/50/100
+  Alasan: Sebelumnya limit identik di semua tier (hanya road class yang membedakan plan) — volume limit sekarang jadi
+    diferensiator upgrade yang nyata
+  Impact: BR-005, BR-006 (product.md), `getLimitsForPlan` (plan.service.ts spec di atas), semua contoh teks/angka di
+    zone-management & capture-schedule spec, `web/src/lib/constants.ts` PLAN_LIMITS, `web/src/features/captures/api.ts`
+    (limit sekarang per-plan bukan konstanta flat)
 ```

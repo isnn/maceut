@@ -15,7 +15,7 @@ export function UpgradeModal({ open, onClose, requiredPlan }: UpgradeModalProps)
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
-        <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-card border border-border rounded-lg p-xl shadow-elevation-3">
+        <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[24rem] bg-card border border-border rounded-lg p-xl shadow-elevation-3">
           <Dialog.Title className="text-section-title text-text-primary mb-sm">Upgrade plan diperlukan</Dialog.Title>
           <Dialog.Description className="text-body text-text-secondary mb-lg">
             Road class ini memerlukan plan <span className="font-semibold capitalize">{requiredPlan}</span> atau lebih

@@ -5,6 +5,7 @@
 
 import type { LoginInput, Plan, RegisterInput, User } from './types'
 import { ApiError } from '@/types/api'
+import { generateId } from '@/lib/utils'
 
 interface MockUserRecord {
   id: string
@@ -43,7 +44,7 @@ export async function register(input: RegisterInput): Promise<User> {
     throw new ApiError({ code: 'EMAIL_ALREADY_TAKEN', message: 'Email sudah terdaftar.' })
   }
   const record: MockUserRecord = {
-    id: crypto.randomUUID(),
+    id: generateId(),
     email: input.email,
     password: input.password,
     plan: 'free',

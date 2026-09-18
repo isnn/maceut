@@ -32,12 +32,12 @@ MVP menggunakan **single workspace** — tidak ada multi-tenant atau team role. 
 | Road class: Nasional | ✅ | ✅ | ✅ |
 | Road class: Provinsi | ❌ | ✅ | ✅ |
 | Road class: Kota / Lokal | ❌ | ❌ | ✅ |
-| Max Active Schedules | 10 | 10 | 10 |
-| Daily Capture Limit | 100 | 100 | 100 |
+| Max Active Schedules | 10 | 20 | 50 |
+| Daily Capture Limit | 10 | 50 | 100 |
 | Export PNG/JPG | ✅ | ✅ | ✅ |
 | Custom Branding (logo + nama) | ✅ | ✅ | ✅ |
 
-*Semua user bisa membuat zona polygon di area mana saja. Perbedaan tier hanya pada kedalaman data jalan yang di-render di dalam zona tersebut.*
+*Semua user bisa membuat zona polygon di area mana saja. Tier membatasi kedalaman data jalan yang bisa dipilih (road class) DAN volume penggunaan (active schedule & daily capture limit) — lihat BR-005, BR-006.*
 
 ### Road Class Mapping (HERE Maps → OSM)
 
@@ -69,8 +69,8 @@ MVP menggunakan **single workspace** — tidak ada multi-tenant atau team role. 
 - BR-023: Style (skema warna overlay + teks title + tampilan timestamp) dipilih **setiap kali** sebelum preview atau trigger manual capture — bersifat ephemeral, **tidak disimpan** sebagai profil per zona maupun per user. Untuk **scheduled capture** (trigger otomatis tanpa interaksi user), sistem menggunakan style preset **"Default"**. Setiap record capture tetap menyimpan snapshot style yang dipakai (`style_used`) untuk keperluan histori, bukan untuk dipakai ulang otomatis.
 
 **Schedule & Capture Limits**
-- BR-005: Setiap user maksimal memiliki 10 active schedule secara bersamaan. Schedule `paused` atau `deleted` tidak dihitung.
-- BR-006: Daily capture limit per user adalah 100 captures/hari. Dihitung per kalender hari (WIB UTC+7).
+- BR-005: Batas active schedule bersamaan per user sesuai plan: Free 10, Standard 20, Premium 50. Schedule `paused` atau `deleted` tidak dihitung.
+- BR-006: Daily capture limit per user sesuai plan: Free 10, Standard 50, Premium 100 captures/hari. Dihitung per kalender hari (WIB UTC+7).
 - BR-007: Enforcement limit dilakukan di **service layer** — handler tidak boleh melakukan validasi limit sendiri.
 - BR-008: Jika capture gagal karena limit tercapai, job di-drop (bukan di-retry) dan dicatat di capture history dengan status `skipped_limit`.
 

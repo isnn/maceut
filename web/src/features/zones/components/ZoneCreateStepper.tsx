@@ -140,7 +140,7 @@ export function ZoneCreateStepper({ open, onClose, onCreated, existingZoneNames,
         <Dialog.Root open onOpenChange={(next) => !next && setConfirmExit(false)}>
           <Dialog.Portal>
             <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
-            <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-card border border-border rounded-lg p-xl shadow-elevation-3">
+            <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[24rem] bg-card border border-border rounded-lg p-xl shadow-elevation-3">
               <Dialog.Title className="text-section-title text-text-primary mb-sm">Yakin keluar?</Dialog.Title>
               <Dialog.Description className="text-body text-text-secondary mb-lg">
                 Progress akan hilang jika Anda keluar sekarang.
