@@ -16,3 +16,21 @@ body {
 .maceut-map-dark .leaflet-tile-pane {
   filter: brightness(0.7) invert(0.92) contrast(0.85) hue-rotate(180deg) saturate(0.6);
 }
+
+/* Leaflet's default zoom buttons sit on the dark basemap, so give them the
+   app's surface tokens instead of the library's white-on-white defaults. */
+.maceut-map-dark .leaflet-control-zoom {
+  border: none;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+}
+
+.maceut-map-dark .leaflet-control-zoom a {
+  background: #1b1a23;
+  color: #f1f0f6;
+  border-color: #33323f;
+}
+
+.maceut-map-dark .leaflet-control-zoom a:hover {
+  background: #262531;
+  color: #ffffff;
+}

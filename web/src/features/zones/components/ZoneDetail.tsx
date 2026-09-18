@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { FormLabel, Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
 import { RoadClassBadge, ZoneStatusPill } from '@/components/ui/Badge'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { IconArrowLeft } from '@/components/ui/icons'
 import { cn, formatDate } from '@/lib/utils'
 import { PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
@@ -16,13 +17,17 @@ import { ApiError } from '@/types/api'
 import { MapCanvas } from './MapCanvas'
 import { RoadClassPicker, ROAD_CLASS_ORDER } from './RoadClassPicker'
 import * as zonesApi from '../api'
+import * as schedulesApi from '@/features/schedules/api'
+import { DAY_LABEL, INTERVAL_LABEL, framesPerDay, type CaptureWindow } from '@/features/schedules/types'
 import type { RoadClass, Zone } from '../types'
 import type { Plan } from '@/features/auth/types'
 
 export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [zone, setZone] = useState<Zone | null>(null)
   const [siblings, setSiblings] = useState<Zone[]>([])
+  const [windows, setWindows] = useState<CaptureWindow[]>([])
   const [notFound, setNotFound] = useState(false)
 
   const [editing, setEditing] = useState(false)
@@ -35,23 +40,34 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
   const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(async () => {
-    const [found, all] = await Promise.all([
+    const [found, all, allWindows] = await Promise.all([
       zonesApi.getZone(zoneId).catch(() => null),
       zonesApi.getZones(plan),
+      schedulesApi.getWindows(plan),
     ])
-    return { found, siblings: all.filter((z) => z.id !== zoneId) }
+    return {
+      found,
+      siblings: all.filter((z) => z.id !== zoneId),
+      windows: allWindows.filter((w) => w.zoneId === zoneId),
+    }
   }, [zoneId, plan])
 
-  const apply = useCallback((data: { found: Zone | null; siblings: Zone[] }) => {
-    if (!data.found) {
-      setNotFound(true)
-      return
-    }
-    setZone(data.found)
-    setSiblings(data.siblings)
-    setName(data.found.name)
-    setRoadClass(data.found.roadClass)
-  }, [])
+  const apply = useCallback(
+    (data: { found: Zone | null; siblings: Zone[]; windows: CaptureWindow[] }) => {
+      if (!data.found) {
+        setNotFound(true)
+        return
+      }
+      setZone(data.found)
+      setSiblings(data.siblings)
+      setWindows(data.windows)
+      setName(data.found.name)
+      setRoadClass(data.found.roadClass)
+      // The list's Edit action deep-links straight into edit mode.
+      if (searchParams.get('edit') === '1') setEditing(true)
+    },
+    [searchParams]
+  )
 
   useEffect(() => {
     load().then(apply)
@@ -215,6 +231,96 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
           )}
         </div>
       </div>
+
+      {/* The windows that actually make this zone collect — without them a zone
+          sits idle, which is invisible from its attributes alone. */}
+      <section className="space-y-md">
+        <div className="flex flex-wrap items-center justify-between gap-md">
+          <h2 className="text-section-title text-text-primary">Capture windows</h2>
+          <Link href="/schedule" className="text-body text-info no-underline hover:underline">
+            Manage on Schedule
+          </Link>
+        </div>
+
+        {windows.length === 0 ? (
+          <div className="bg-card border border-border rounded-lg p-lg">
+            <p className="text-body text-text-secondary">
+              No capture windows yet — this zone stays idle until one is set.
+            </p>
+            <Link href="/schedule" className={cn(buttonClass('secondary'), 'mt-md')}>
+              Set a window
+            </Link>
+          </div>
+        ) : (
+          <TableWrap>
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Window</Th>
+                  <Th>Hours</Th>
+                  <Th>Interval</Th>
+                  <Th>Days</Th>
+                  <Th className="text-right">Frames / day</Th>
+                  <Th>Status</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {windows.map((w) => (
+                  <tr key={w.id} className="hover:bg-canvas-secondary/60 transition-colors">
+                    <Td>
+                      <p className="font-semibold text-text-primary">{w.label}</p>
+                      <p className="text-caption text-text-muted mt-xs tabular-nums">
+                        {w.capturedFrames} frames captured
+                      </p>
+                    </Td>
+                    <Td className="tabular-nums text-text-secondary">
+                      {w.start}–{w.end}
+                    </Td>
+                    <Td className="text-text-secondary">{INTERVAL_LABEL[w.interval]}</Td>
+                    <Td>
+                      <span className="flex gap-xs">
+                        {DAY_LABEL.map((label, index) => (
+                          <span
+                            key={`${w.id}-${index}`}
+                            title={w.days.includes(index) ? 'Collecting' : 'Not collecting'}
+                            className={cn(
+                              'w-5 h-5 rounded-xs text-micro flex items-center justify-center',
+                              w.days.includes(index)
+                                ? 'bg-primary-soft text-[#5A35F3] font-semibold'
+                                : 'bg-canvas-secondary text-text-muted'
+                            )}
+                          >
+                            {label}
+                          </span>
+                        ))}
+                      </span>
+                    </Td>
+                    <Td className="text-right tabular-nums">{framesPerDay(w)}</Td>
+                    <Td>
+                      <span
+                        className={cn(
+                          'text-micro font-semibold rounded-xs px-sm py-xs whitespace-nowrap',
+                          w.active
+                            ? 'bg-success-bg text-success-text'
+                            : 'bg-canvas-secondary text-text-muted border border-border'
+                        )}
+                      >
+                        {w.active ? 'Active' : 'Paused'}
+                      </span>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </TableWrap>
+        )}
+
+        {zone.status === 'paused' && windows.length > 0 && (
+          <Alert variant="warning">
+            This zone is paused, so none of its windows are collecting — resume it to start again.
+          </Alert>
+        )}
+      </section>
 
       <ConfirmDialog
         open={confirmDelete}

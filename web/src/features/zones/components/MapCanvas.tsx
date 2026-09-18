@@ -16,7 +16,13 @@ function toLatLngs(geometry: ZoneGeometry): LatLngExpression[] {
 interface MapCanvasProps {
   polygon?: ZoneGeometry | LatLngExpression[]
   trafficGeoJSON?: TrafficPreview
+  /** Enables the drawing surface; zoom and pan are always on. */
   interactive?: boolean
+  /**
+   * Wheel zoom is off by default on read-only maps so scrolling the page past
+   * one doesn't hijack the scroll.
+   */
+  scrollWheelZoom?: boolean
   center?: LatLngExpression
   zoom?: number
   className?: string
@@ -27,6 +33,7 @@ export function MapCanvas({
   polygon,
   trafficGeoJSON,
   interactive = false,
+  scrollWheelZoom,
   center,
   zoom = 15,
   className,
@@ -40,10 +47,13 @@ export function MapCanvas({
       <MapContainer
         center={mapCenter}
         zoom={zoom}
-        scrollWheelZoom={interactive}
-        dragging={interactive}
-        doubleClickZoom={interactive}
-        zoomControl={interactive}
+        // Zoom and pan are available on every map, including read-only previews:
+        // a boundary you can't zoom into tells you very little about the roads
+        // it covers. `interactive` still gates click-to-draw, via ZoneMapEditor.
+        scrollWheelZoom={scrollWheelZoom ?? interactive}
+        dragging
+        doubleClickZoom
+        zoomControl
         style={{ height: '100%', width: '100%', background: '#0a0a0a' }}
       >
         <TileLayer url={OSM_TILE_URL} attribution={OSM_ATTRIBUTION} />

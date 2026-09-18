@@ -2,20 +2,45 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Dialog } from '@base-ui/react/dialog'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
 import { RoadClassBadge, ZoneStatusPill } from '@/components/ui/Badge'
-import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
+import { SortableTh, Table, TableWrap, Td, Th, type SortDirection } from '@/components/ui/Table'
+import { ActionMenu } from '@/components/ui/ActionMenu'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { cn, formatDate } from '@/lib/utils'
-import { PLAN_LABEL, PLAN_LIMITS } from '@/lib/constants'
+import { PLAN_LABEL, PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
 import * as zonesApi from '@/features/zones/api'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
-import type { Zone } from '@/features/zones/types'
+import { ROAD_CLASS_ORDER } from '@/features/zones/components/RoadClassPicker'
+import type { RoadClass, Zone } from '@/features/zones/types'
 
 type Filter = 'all' | 'collecting' | 'paused'
+type SortKey = 'name' | 'area' | 'roads' | 'cadence' | 'status' | 'created'
+type Sort = { key: SortKey; direction: SortDirection } | null
+
+const SORT_LABEL: Record<SortKey, string> = {
+  name: 'name',
+  area: 'area',
+  roads: 'roads',
+  cadence: 'capture',
+  status: 'status',
+  created: 'date created',
+}
+
+/** Text sorts read best ascending; quantities read best largest-first. */
+const DEFAULT_DIRECTION: Record<SortKey, SortDirection> = {
+  name: 'asc',
+  area: 'desc',
+  roads: 'desc',
+  cadence: 'asc',
+  status: 'asc',
+  created: 'desc',
+}
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -24,10 +49,13 @@ const FILTERS: { id: Filter; label: string }[] = [
 ]
 
 export default function ZonesPage() {
+  const router = useRouter()
   const { user } = useCurrentUser()
   const [zones, setZones] = useState<Zone[] | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
+  const [roadClassFilter, setRoadClassFilter] = useState<RoadClass | 'all'>('all')
+  const [sort, setSort] = useState<Sort>(null)
   const [pendingDelete, setPendingDelete] = useState<Zone | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [limitOpen, setLimitOpen] = useState(false)
@@ -44,12 +72,47 @@ export default function ZonesPage() {
 
   const visible = useMemo(() => {
     if (!zones) return []
-    return zones.filter((zone) => {
-      const matchesFilter = filter === 'all' || zone.status === filter
+    const matched = zones.filter((zone) => {
+      const matchesStatus = filter === 'all' || zone.status === filter
+      const matchesClass = roadClassFilter === 'all' || zone.roadClass === roadClassFilter
       const matchesSearch = zone.name.toLowerCase().includes(search.trim().toLowerCase())
-      return matchesFilter && matchesSearch
+      return matchesStatus && matchesClass && matchesSearch
     })
-  }, [zones, filter, search])
+
+    // Unsorted means newest first, so the list has a sensible order before
+    // anyone touches a header.
+    if (!sort) return [...matched].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+
+    // Sorted copy — `zones` is the fetched list and shouldn't be mutated.
+    const factor = sort.direction === 'asc' ? 1 : -1
+    return [...matched].sort((a, b) => {
+      switch (sort.key) {
+        case 'area':
+          return (a.areaKm2 - b.areaKm2) * factor
+        case 'roads':
+          return (a.roadsCount - b.roadsCount) * factor
+        case 'cadence':
+          return a.cadence.localeCompare(b.cadence) * factor
+        case 'status':
+          return a.status.localeCompare(b.status) * factor
+        case 'created':
+          return (a.createdAt < b.createdAt ? -1 : 1) * factor
+        default:
+          return a.name.localeCompare(b.name) * factor
+      }
+    })
+  }, [zones, filter, roadClassFilter, search, sort])
+
+  function toggleSort(key: SortKey) {
+    setSort((current) => {
+      if (current?.key !== key) return { key, direction: DEFAULT_DIRECTION[key] }
+      // Cycle: default direction → reversed → unsorted.
+      if (current.direction === DEFAULT_DIRECTION[key]) {
+        return { key, direction: DEFAULT_DIRECTION[key] === 'asc' ? 'desc' : 'asc' }
+      }
+      return null
+    })
+  }
 
   const atLimit = (zones?.length ?? 0) >= zonesLimit
 
@@ -103,7 +166,17 @@ export default function ZonesPage() {
           placeholder="Search zones…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="h-11 w-full tablet:w-64"
+          className="h-11 w-full tablet:w-56"
+        />
+        <Select
+          value={roadClassFilter}
+          onValueChange={(v) => setRoadClassFilter(v as RoadClass | 'all')}
+          options={[
+            { value: 'all', label: 'All road classes' },
+            ...ROAD_CLASS_ORDER.map((rc) => ({ value: rc, label: ROAD_CLASS_LABEL[rc] })),
+          ]}
+          className="w-52"
+          aria-label="Filter by road class"
         />
       </div>
 
@@ -134,12 +207,35 @@ export default function ZonesPage() {
             <Table>
               <thead>
                 <tr>
-                  <Th>Zone</Th>
+                  <SortableTh active={sort?.key === 'name'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('name')}>
+                    Zone
+                  </SortableTh>
                   <Th>Road classes</Th>
-                  <Th className="text-right">Roads</Th>
-                  <Th className="text-right">Length</Th>
-                  <Th>Capture</Th>
-                  <Th>Status</Th>
+                  <SortableTh
+                    className="text-right"
+                    active={sort?.key === 'area'}
+                    direction={sort?.direction ?? 'desc'}
+                    onSort={() => toggleSort('area')}
+                  >
+                    Area
+                  </SortableTh>
+                  <SortableTh
+                    className="text-right"
+                    active={sort?.key === 'roads'}
+                    direction={sort?.direction ?? 'desc'}
+                    onSort={() => toggleSort('roads')}
+                  >
+                    Roads
+                  </SortableTh>
+                  <SortableTh active={sort?.key === 'cadence'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('cadence')}>
+                    Capture
+                  </SortableTh>
+                  <SortableTh active={sort?.key === 'status'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('status')}>
+                    Status
+                  </SortableTh>
+                  <SortableTh active={sort?.key === 'created'} direction={sort?.direction ?? 'desc'} onSort={() => toggleSort('created')}>
+                    Created
+                  </SortableTh>
                   <Th className="text-right">Actions</Th>
                 </tr>
               </thead>
@@ -153,33 +249,32 @@ export default function ZonesPage() {
                       >
                         {zone.name}
                       </Link>
-                      <p className="text-caption text-text-muted mt-xs">Created {formatDate(zone.createdAt)}</p>
                     </Td>
                     <Td>
                       <RoadClassBadge roadClass={zone.roadClass} />
                     </Td>
+                    <Td className="text-right tabular-nums">{zone.areaKm2} km²</Td>
                     <Td className="text-right tabular-nums">{zone.roadsCount}</Td>
-                    <Td className="text-right tabular-nums">{zone.lengthKm} km</Td>
                     <Td className="text-text-secondary">{zone.cadence}</Td>
                     <Td>
                       <ZoneStatusPill status={zone.status} />
                     </Td>
+                    <Td className="text-text-secondary whitespace-nowrap">{formatDate(zone.createdAt)}</Td>
                     <Td className="text-right whitespace-nowrap">
-                      <Link href={`/zones/${zone.id}`} className="text-label text-info no-underline hover:underline">
-                        Edit
-                      </Link>
-                      <button
-                        onClick={() => toggleStatus(zone)}
-                        className="ml-md text-label text-text-secondary hover:text-text-primary transition-colors"
-                      >
-                        {zone.status === 'collecting' ? 'Pause' : 'Resume'}
-                      </button>
-                      <button
-                        onClick={() => setPendingDelete(zone)}
-                        className="ml-md text-label text-danger-text hover:underline"
-                      >
-                        Delete
-                      </button>
+                      <div className="flex justify-end">
+                        <ActionMenu
+                          label={`Actions for ${zone.name}`}
+                          items={[
+                            { label: 'View details', onSelect: () => router.push(`/zones/${zone.id}`) },
+                            { label: 'Edit zone', onSelect: () => router.push(`/zones/${zone.id}?edit=1`) },
+                            {
+                              label: zone.status === 'collecting' ? 'Pause collecting' : 'Resume collecting',
+                              onSelect: () => toggleStatus(zone),
+                            },
+                            { label: 'Delete zone', destructive: true, onSelect: () => setPendingDelete(zone) },
+                          ]}
+                        />
+                      </div>
                     </Td>
                   </tr>
                 ))}
@@ -187,8 +282,17 @@ export default function ZonesPage() {
             </Table>
           </TableWrap>
           <div className="flex items-center justify-between text-caption text-text-muted">
-            <span>
+            <span className="flex items-center gap-sm">
               Showing {visible.length} of {zones.length} zones
+              {sort && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>sorted by {SORT_LABEL[sort.key]}</span>
+                  <button onClick={() => setSort(null)} className="text-info hover:underline">
+                    Clear
+                  </button>
+                </>
+              )}
             </span>
             <span>
               Deleting a zone keeps its captures and animations for 30 days, then removes them.
