@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { ProgressBar } from '@/components/ui/ProgressBar'
+import { UsageMeter, AttributeRow } from '@/components/ui/UsageMeter'
 import { Checkbox } from '@/components/ui/Input'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { cn } from '@/lib/utils'
@@ -181,27 +181,4 @@ export default function ProfilePage() {
   )
 }
 
-function UsageMeter({ label, value, max, unit = '' }: { label: string; value: number; max: number; unit?: string }) {
-  return (
-    <div>
-      <div className="flex items-baseline justify-between gap-sm">
-        <span className="text-label text-text-secondary">{label}</span>
-        <span className="text-body font-semibold text-text-primary tabular-nums">
-          {value}
-          {unit} / {max}
-          {unit}
-        </span>
-      </div>
-      <ProgressBar value={value} max={max} className="mt-sm" />
-    </div>
-  )
-}
 
-function AttributeRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-md py-md first:pt-0 last:pb-0">
-      <dt className="text-body text-text-secondary">{label}</dt>
-      <dd className="text-body font-semibold text-text-primary">{value}</dd>
-    </div>
-  )
-}
