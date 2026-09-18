@@ -127,7 +127,8 @@ Lihat `.claude/specs/internal/requirements.md`.
 - Step 2: Preview traffic ringan di browser (Leaflet + HERE Traffic overlay) `📋`
 - Step 2: Style selector — pilih preset warna + edit title + toggle timestamp `📋`
 - Step 3: Review & konfirmasi sebelum submit `📋`
-- Edit nama zona `📋`
+- Halaman detail zona (`/zones/[id]`) — peta batas + atribut zona `📋`
+- Edit zona: nama + kelas jalan (inline di halaman detail, BR-028..BR-030) `📋`
 - Hapus zona `📋`
 - Import zone dari file (GeoJSON, KML) `❌`
 

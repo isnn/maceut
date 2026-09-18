@@ -168,14 +168,56 @@ export async function createZone(input: CreateZoneInput, plan: Plan): Promise<Zo
   return delay(zone)
 }
 
-export async function updateZone(id: string, patch: Partial<Pick<Zone, 'name' | 'status' | 'roadClass'>>): Promise<Zone> {
+/**
+ * Rules live here rather than in the page, per BR-007. A plain merge would let
+ * an edit bypass everything `createZone` enforces and leave the derived road
+ * figures describing a class the zone no longer has.
+ */
+export async function updateZone(
+  id: string,
+  patch: Partial<Pick<Zone, 'name' | 'status' | 'roadClass'>>,
+  plan?: Plan
+): Promise<Zone> {
   const zones = readZones()
   const zone = zones.find((z) => z.id === id)
   if (!zone) {
     await delay(null)
     throw new ApiError({ code: 'NOT_FOUND', message: 'Zone not found.' })
   }
-  const updated = { ...zone, ...patch }
+
+  // BR-015, excluding this zone — renaming something to its own name is a no-op,
+  // not a collision.
+  const nextName = patch.name?.trim()
+  if (nextName && nextName.toLowerCase() !== zone.name.toLowerCase()) {
+    if (zones.some((z) => z.id !== id && z.name.toLowerCase() === nextName.toLowerCase())) {
+      await delay(null)
+      throw new ApiError({ code: 'ZONE_NAME_TAKEN', message: 'That zone name is already taken.' })
+    }
+  }
+
+  // BR-021 again — otherwise editing is a way around the limit the wizard enforces.
+  if (patch.roadClass && plan) {
+    const maxRoadClass = PLAN_LIMITS[plan].maxRoadClass
+    if (ROAD_CLASS_ORDER.indexOf(patch.roadClass) > ROAD_CLASS_ORDER.indexOf(maxRoadClass)) {
+      await delay(null)
+      throw new ApiError({
+        code: 'ROAD_CLASS_NOT_ALLOWED',
+        message: 'This road class requires a plan upgrade.',
+        details: { requiredPlan: maxRoadClass },
+      })
+    }
+  }
+
+  const updated: Zone = { ...zone, ...patch, ...(nextName ? { name: nextName } : {}) }
+
+  // A different class collects a different set of roads; the boundary is
+  // unchanged, so areaKm2 stays as it was.
+  if (patch.roadClass && patch.roadClass !== zone.roadClass) {
+    const matched = matchRoads(zone.geometry, patch.roadClass)
+    updated.roadsCount = matched.length
+    updated.lengthKm = Number(matched.reduce((sum, r) => sum + r.lengthKm, 0).toFixed(1))
+  }
+
   writeZones(zones.map((z) => (z.id === id ? updated : z)))
   return delay(updated)
 }
