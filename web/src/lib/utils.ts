@@ -35,6 +35,12 @@ export function formatTimestampWIB(date: Date | string): string {
   return `${formatted} WIB`
 }
 
+/** Short date for table rows, e.g. "22 Jul". */
+export function formatDate(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date
+  return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' }).format(d)
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`

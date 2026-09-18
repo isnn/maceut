@@ -57,7 +57,7 @@ export async function triggerManual(zoneId: string, style: CaptureStyleInput): P
     await delay(null)
     throw new ApiError({
       code: 'PLAN_LIMIT_EXCEEDED',
-      message: `Anda telah mencapai batas ${capturesLimit} captures hari ini.`,
+      message: `You have reached your limit of ${capturesLimit} captures today.`,
     })
   }
 
@@ -81,7 +81,7 @@ export async function getCapture(id: string): Promise<Capture> {
   const capture = readCaptures().find((c) => c.id === id)
   if (!capture) {
     await delay(null)
-    throw new ApiError({ code: 'NOT_FOUND', message: 'Capture tidak ditemukan.' })
+    throw new ApiError({ code: 'NOT_FOUND', message: 'Capture not found.' })
   }
   return delay(capture, 150)
 }
