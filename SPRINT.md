@@ -77,6 +77,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: /internal Overview — statistik platform (F-21) | specs/internal/requirements.md |
 | ✅ | Frontend: /internal Users — kelola plan & role + usage per akun (F-22) | specs/internal/requirements.md |
 | ✅ | Frontend: /internal Config — env sistem, secret write-only (F-23) | specs/internal/requirements.md |
+| ✅ | Frontend: Halaman detail zona + edit nama & kelas jalan (F-24) | specs/zone-management/requirements.md |
 | ✅ | Frontend: /internal jadi aplikasi terpisah (staf tidak punya halaman tenant) | specs/internal/requirements.md |
 | ✅ | Frontend: rework halaman login & register (tanpa header, show/hide password) | permintaan user |
 
@@ -190,6 +191,18 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   Verified: `tsc --noEmit` bersih, `eslint` bersih, 15 route balas 200.
   NOT verified: klik-through interaktif di browser — perlu review manual.
 
+[2026-09-18] Halaman detail zona `/zones/[id]` + edit inline (F-24) — route dinamis pertama di app ini.
+  Menampilkan peta batas (read-only), kelas jalan, status, luas, jumlah ruas, panjang, cadence, tanggal dibuat;
+  tombol Edit mengubah nama + kelas jalan di tempat, plus Pause/Resume dan Delete. Nama zona & aksi "Edit" di
+  tabel `/zones` sekarang menuju halaman ini — sebelumnya "Edit" mengarah ke `/schedule` tanpa id sama sekali.
+  Tiga bug di `updateZone` diperbaiki sekalian, karena edit-lah yang membuatnya bisa dijangkau user:
+  (1) ganti kelas jalan tidak meng-update `roadsCount`/`lengthKm` — zona mengklaim mengumpulkan ruas yang
+  sudah tidak dikumpulkan, (2) tidak ada cek BR-015 saat update (padahal create punya, dan schema asli
+  UNIQUE(user_id,name)), (3) tidak ada cek BR-021 saat update — edit jadi jalan pintas melewati batas plan.
+  `RoadClassPicker` diekstrak dari ZoneWizard supaya wizard dan form edit memakai kontrol yang sama persis.
+  Verified: `tsc --noEmit` bersih, `eslint` bersih, route `/zones/[id]` balas 200.
+  NOT verified: klik-through interaktif di browser — perlu review manual.
+
 ---
 
 ## Decisions This Sprint
@@ -300,6 +313,16 @@ Format:
     setelah login, ProfileView diekstrak agar dipakai dua shell, kedua header kehilangan cross-link
   ⚠️ Konsekuensi: staf tidak bisa lagi melihat tampilan pelanggan sama sekali. Kalau nanti dibutuhkan
     untuk support/QA, jawabannya impersonation read-only, bukan mengembalikan link-nya
+
+[2026-09-18] Keputusan: kelas jalan boleh diubah setelah zona dibuat (BR-029), memperluas BR-020 yang hanya
+  menyebut pemilihan saat pembuatan
+  Alasan: satu-satunya alternatif adalah menghapus lalu membuat ulang zona — kehilangan riwayat capture hanya
+    karena ingin kedalaman data berbeda; batas area tetap tidak bisa diubah karena menggambar ulang batas
+    efektifnya zona yang berbeda
+  Impact: BR-028..BR-030 baru di specs/zone-management/requirements.md (F-24), `updateZone` sekarang
+    meng-enforce BR-015 & BR-021 dan meng-derive ulang roadsCount/lengthKm, product.md Feature Status diperluas
+    dari "Edit nama zona" ke nama + kelas jalan
+  Catatan: frame yang sudah ter-capture TIDAK berubah — hasilnya tetap sesuai kelas saat capture berjalan
 ```
 
 ---

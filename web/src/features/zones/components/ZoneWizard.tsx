@@ -7,31 +7,20 @@ import { Button } from '@/components/ui/Button'
 import { FormLabel, Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
 import { RoadClassBadge } from '@/components/ui/Badge'
-import { UpgradeModal } from '@/components/ui/UpgradeModal'
 import { cn } from '@/lib/utils'
 import { IconCheck } from '@/components/ui/icons'
 import { PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import { MapCanvas } from './MapCanvas'
 import { ZoneMapEditor, pointsToGeometry } from './ZoneMapEditor'
+import { RoadClassPicker } from './RoadClassPicker'
 import * as zonesApi from '../api'
 import type { MatchedRoad, RoadClass, Zone } from '../types'
 import type { Plan } from '@/features/auth/types'
 
 const STEPS = ['Boundary', 'Road class', 'Review']
-const ROAD_CLASS_ORDER: RoadClass[] = ['nasional', 'nasional_provinsi', 'semua']
 
-const ROAD_CLASS_DESCRIPTION: Record<RoadClass, string> = {
-  nasional: 'Motorways and inter-city trunk roads',
-  nasional_provinsi: 'Adds provincial arterials',
-  semua: 'Adds city and local streets',
-}
 
-const REQUIRED_PLAN_LABEL: Record<RoadClass, string> = {
-  nasional: 'Free',
-  nasional_provinsi: 'Standard',
-  semua: 'Premium',
-}
 
 export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones: Zone[] }) {
   const router = useRouter()
@@ -42,12 +31,10 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
   const [mode, setMode] = useState<'draw' | 'import'>('draw')
   const [withTraffic, setWithTraffic] = useState(true)
   const [traffic, setTraffic] = useState<zonesApi.TrafficPreview | null>(null)
-  const [upgradeFor, setUpgradeFor] = useState<RoadClass | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const geometry = pointsToGeometry(points)
-  const maxRoadClass = PLAN_LIMITS[plan].maxRoadClass
   const nameTaken = name.trim() !== '' && existingZones.some((z) => z.name.toLowerCase() === name.trim().toLowerCase())
   const area = geometry ? zonesApi.areaKm2(geometry) : 0
 
@@ -57,16 +44,6 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
   )
   const matchedLength = Number(matched.reduce((sum, r) => sum + r.lengthKm, 0).toFixed(1))
 
-  // Road counts per class, used for the per-option readouts in step 2.
-  const perClass = useMemo(() => {
-    if (!geometry) return { nasional: [], provinsi: [], kota: [] } as Record<string, MatchedRoad[]>
-    const all = zonesApi.matchRoads(geometry, 'semua')
-    return {
-      nasional: all.filter((r) => r.roadClass === 'nasional'),
-      provinsi: all.filter((r) => r.roadClass === 'provinsi'),
-      kota: all.filter((r) => r.roadClass === 'kota'),
-    }
-  }, [geometry])
 
   useEffect(() => {
     if (step !== 1 || !geometry || !withTraffic) return
@@ -79,13 +56,6 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
       .catch(() => setTraffic(null))
   }, [step, geometry, withTraffic])
 
-  function pickRoadClass(next: RoadClass) {
-    if (ROAD_CLASS_ORDER.indexOf(next) > ROAD_CLASS_ORDER.indexOf(maxRoadClass)) {
-      setUpgradeFor(next)
-      return
-    }
-    setRoadClass(next)
-  }
 
   async function submit() {
     if (!geometry || !roadClass) return
@@ -270,7 +240,7 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
             <RailRow label="Area drawn" value={points.length >= 3 ? `${area} km² · ${points.length} points` : '—'} />
             <RailRow
               label="Roads inside"
-              value={roadClass ? `${matched.length} · ${matchedLength} km` : `${perClass.nasional.length + perClass.provinsi.length} detected`}
+              value={roadClass ? `${matched.length} · ${matchedLength} km` : '—'}
             />
             {roadClass && <RailRow label="Road class" value={ROAD_CLASS_LABEL[roadClass]} />}
             {step === 2 && <RailRow label="Zone slot" value={`${existingZones.length + 1} of ${PLAN_LIMITS[plan].zonesLimit}`} />}
@@ -284,44 +254,8 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
           )}
 
           {step === 1 && (
-            <div className="space-y-sm border-t border-divider pt-lg">
-              <p className="text-label text-text-secondary">
-                Road class · {ROAD_CLASS_ORDER.indexOf(maxRoadClass) + 1} of 3 on your plan
-              </p>
-              {ROAD_CLASS_ORDER.map((option) => {
-                const locked = ROAD_CLASS_ORDER.indexOf(option) > ROAD_CLASS_ORDER.indexOf(maxRoadClass)
-                const roads =
-                  option === 'nasional'
-                    ? perClass.nasional
-                    : option === 'nasional_provinsi'
-                      ? [...perClass.nasional, ...perClass.provinsi]
-                      : [...perClass.nasional, ...perClass.provinsi, ...perClass.kota]
-                const km = Number(roads.reduce((sum, r) => sum + r.lengthKm, 0).toFixed(1))
-                return (
-                  <button
-                    key={option}
-                    onClick={() => pickRoadClass(option)}
-                    className={cn(
-                      'w-full text-left border rounded-md p-md transition-colors',
-                      roadClass === option ? 'border-primary bg-primary-soft/40' : 'border-border hover:bg-canvas-secondary',
-                      locked && 'opacity-70'
-                    )}
-                  >
-                    <span className="flex items-center justify-between gap-sm">
-                      <span className="text-label font-semibold text-text-primary">{ROAD_CLASS_LABEL[option]}</span>
-                      {locked && (
-                        <span className="text-micro font-semibold bg-warning-bg text-warning-text rounded-xs px-sm py-xs">
-                          {REQUIRED_PLAN_LABEL[option]}
-                        </span>
-                      )}
-                    </span>
-                    <span className="block text-micro text-text-muted mt-xs">{ROAD_CLASS_DESCRIPTION[option]}</span>
-                    <span className="block text-micro text-text-secondary mt-xs tabular-nums">
-                      {roads.length} roads · {km} km
-                    </span>
-                  </button>
-                )
-              })}
+            <div className="border-t border-divider pt-lg space-y-sm">
+              <RoadClassPicker value={roadClass} onChange={setRoadClass} geometry={geometry!} plan={plan} />
               <p className="text-caption text-text-secondary pt-sm">
                 Capture times are set separately on the <span className="font-medium text-text-primary">Schedule</span> page.
               </p>
@@ -370,11 +304,6 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
         </div>
       </div>
 
-      <UpgradeModal
-        open={upgradeFor !== null}
-        onClose={() => setUpgradeFor(null)}
-        requiredPlan={upgradeFor ? REQUIRED_PLAN_LABEL[upgradeFor] : ''}
-      />
     </div>
   )
 }

@@ -200,6 +200,42 @@ supaya **saya yakin tidak ada kesalahan sebelum data tersimpan**.
 
 ---
 
+## F-24 · Zone Detail & Edit
+
+**User Story:**
+Sebagai **user**, saya ingin **membuka satu zona untuk melihat detailnya dan mengubah nama serta kelas jalannya**,
+supaya **saya tidak perlu menghapus dan membuat ulang zona hanya karena salah nama atau butuh kedalaman data berbeda**.
+
+**Acceptance Criteria:**
+- [ ] Halaman `/zones/[id]` menampilkan: peta batas zona (read-only), nama, badge kelas jalan, status, luas area, jumlah ruas, total panjang, cadence, tanggal dibuat
+- [ ] Nama zona di tabel `/zones` dan aksi "Edit" keduanya menuju halaman ini
+- [ ] Tombol **Edit** mengubah nama dan kelas jalan menjadi editable **di halaman yang sama** (bukan dialog, bukan route terpisah), dengan Save / Cancel
+- [ ] Picker kelas jalan yang dipakai identik dengan yang ada di wizard pembuatan (komponen yang sama) — termasuk penguncian sesuai plan dan popup upgrade (BR-021)
+- [ ] Batas area **tidak** bisa diubah dari sini; menggambar ulang batas = zona baru
+- [ ] Aksi Pause/Resume dan Delete tersedia; delete pakai konfirmasi lalu kembali ke `/zones`
+- [ ] Zona yang tidak ditemukan (URL salah / sudah dihapus) menampilkan empty state dengan link kembali, bukan crash
+- [ ] Jika kelas jalan tersimpan melebihi batas plan aktif (kasus downgrade, BR-022), badge diberi keterangan bahwa capture dibatasi ke kelas maksimal plan
+
+**Business Rules:**
+- BR-028: Mengubah nama zona tetap tunduk pada BR-015 (unik per user, case-insensitive), **kecuali terhadap dirinya sendiri** — menyimpan nama yang sama dengan nama zona itu sendiri bukan duplikat dan harus diterima.
+- BR-029: Kelas jalan **boleh diubah setelah zona dibuat** (memperluas BR-020 yang hanya menyebut pemilihan saat pembuatan). Saat berubah, daftar ruas jalan yang dikumpulkan (`roadsCount`, `lengthKm`) **wajib di-derive ulang**; luas area tidak berubah karena batas tidak berubah. Frame/capture yang sudah terlanjur diambil **tidak** berubah — hasilnya tetap sesuai kelas yang berlaku saat capture berjalan.
+- BR-030: Validasi kelas jalan vs plan (BR-021) berlaku sama untuk update, bukan hanya create — kalau tidak, edit jadi jalan pintas melewati batas plan. Enforcement di service layer (BR-007), UI hanya lapis kedua.
+
+**Edge Cases:**
+- Simpan tanpa mengubah apa pun (nama sama persis) → berhasil, bukan error duplikat
+- Ganti nama ke nama zona lain → `ZONE_NAME_TAKEN`, inline error di field, tidak ada yang tertulis
+- User plan Free memilih kelas terkunci → popup upgrade, pilihan tidak tersimpan
+- Zona dihapus di tab lain lalu Save ditekan di tab ini → `NOT_FOUND` ditampilkan sebagai alert
+- Zona sedang `collecting` saat kelas diubah → tidak diblokir; jendela capture berikutnya memakai kelas baru
+
+**Out of Scope (fase ini):**
+- Mengubah batas area (menggambar ulang polygon)
+- Manual capture dari halaman ini (F-04 menyebut halaman detail zona sebagai tempatnya — menyusul)
+- Daftar jendela capture, frame terbaru, atau daftar ruas jalan hasil match di halaman ini
+- Riwayat perubahan zona / audit log
+
+---
+
 ## F-04 · Manual Capture
 
 **User Story:**
