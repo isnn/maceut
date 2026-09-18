@@ -3,7 +3,7 @@
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
-import { Checkbox, FormLabel, Input } from '@/components/ui/Input'
+import { Checkbox, FormLabel, Input, PasswordInput } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
 import { ApiError } from '@/types/api'
 import * as authApi from '../api'
@@ -83,7 +83,7 @@ export function RegisterForm() {
 
       <div className="space-y-xs">
         <FormLabel htmlFor="password">Password</FormLabel>
-        <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <PasswordInput id="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         <div className="flex items-center gap-sm">
           <div className="flex gap-xs flex-1">
             {[0, 1, 2].map((i) => (
