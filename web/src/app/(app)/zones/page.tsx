@@ -20,8 +20,17 @@ import { ROAD_CLASS_ORDER } from '@/features/zones/components/RoadClassPicker'
 import type { RoadClass, Zone } from '@/features/zones/types'
 
 type Filter = 'all' | 'collecting' | 'paused'
-type SortKey = 'name' | 'area' | 'roads' | 'cadence' | 'status'
+type SortKey = 'name' | 'area' | 'roads' | 'cadence' | 'status' | 'created'
 type Sort = { key: SortKey; direction: SortDirection } | null
+
+const SORT_LABEL: Record<SortKey, string> = {
+  name: 'name',
+  area: 'area',
+  roads: 'roads',
+  cadence: 'capture',
+  status: 'status',
+  created: 'date created',
+}
 
 /** Text sorts read best ascending; quantities read best largest-first. */
 const DEFAULT_DIRECTION: Record<SortKey, SortDirection> = {
@@ -30,6 +39,7 @@ const DEFAULT_DIRECTION: Record<SortKey, SortDirection> = {
   roads: 'desc',
   cadence: 'asc',
   status: 'asc',
+  created: 'desc',
 }
 
 const FILTERS: { id: Filter; label: string }[] = [
@@ -85,6 +95,8 @@ export default function ZonesPage() {
           return a.cadence.localeCompare(b.cadence) * factor
         case 'status':
           return a.status.localeCompare(b.status) * factor
+        case 'created':
+          return (a.createdAt < b.createdAt ? -1 : 1) * factor
         default:
           return a.name.localeCompare(b.name) * factor
       }
@@ -92,11 +104,14 @@ export default function ZonesPage() {
   }, [zones, filter, roadClassFilter, search, sort])
 
   function toggleSort(key: SortKey) {
-    setSort((current) =>
-      current?.key === key
-        ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
-        : { key, direction: DEFAULT_DIRECTION[key] }
-    )
+    setSort((current) => {
+      if (current?.key !== key) return { key, direction: DEFAULT_DIRECTION[key] }
+      // Cycle: default direction → reversed → unsorted.
+      if (current.direction === DEFAULT_DIRECTION[key]) {
+        return { key, direction: DEFAULT_DIRECTION[key] === 'asc' ? 'desc' : 'asc' }
+      }
+      return null
+    })
   }
 
   const atLimit = (zones?.length ?? 0) >= zonesLimit
@@ -218,6 +233,9 @@ export default function ZonesPage() {
                   <SortableTh active={sort?.key === 'status'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('status')}>
                     Status
                   </SortableTh>
+                  <SortableTh active={sort?.key === 'created'} direction={sort?.direction ?? 'desc'} onSort={() => toggleSort('created')}>
+                    Created
+                  </SortableTh>
                   <Th className="text-right">Actions</Th>
                 </tr>
               </thead>
@@ -231,7 +249,6 @@ export default function ZonesPage() {
                       >
                         {zone.name}
                       </Link>
-                      <p className="text-caption text-text-muted mt-xs">Created {formatDate(zone.createdAt)}</p>
                     </Td>
                     <Td>
                       <RoadClassBadge roadClass={zone.roadClass} />
@@ -242,6 +259,7 @@ export default function ZonesPage() {
                     <Td>
                       <ZoneStatusPill status={zone.status} />
                     </Td>
+                    <Td className="text-text-secondary whitespace-nowrap">{formatDate(zone.createdAt)}</Td>
                     <Td className="text-right whitespace-nowrap">
                       <div className="flex justify-end">
                         <ActionMenu
@@ -264,8 +282,17 @@ export default function ZonesPage() {
             </Table>
           </TableWrap>
           <div className="flex items-center justify-between text-caption text-text-muted">
-            <span>
+            <span className="flex items-center gap-sm">
               Showing {visible.length} of {zones.length} zones
+              {sort && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>sorted by {SORT_LABEL[sort.key]}</span>
+                  <button onClick={() => setSort(null)} className="text-info hover:underline">
+                    Clear
+                  </button>
+                </>
+              )}
             </span>
             <span>
               Deleting a zone keeps its captures and animations for 30 days, then removes them.
