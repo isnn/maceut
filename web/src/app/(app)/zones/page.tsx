@@ -147,7 +147,12 @@ export default function ZonesPage() {
                 {visible.map((zone) => (
                   <tr key={zone.id} className="hover:bg-canvas-secondary/60 transition-colors">
                     <Td>
-                      <p className="font-semibold text-text-primary">{zone.name}</p>
+                      <Link
+                        href={`/zones/${zone.id}`}
+                        className="font-semibold text-text-primary no-underline hover:text-primary transition-colors"
+                      >
+                        {zone.name}
+                      </Link>
                       <p className="text-caption text-text-muted mt-xs">Created {formatDate(zone.createdAt)}</p>
                     </Td>
                     <Td>
@@ -160,7 +165,7 @@ export default function ZonesPage() {
                       <ZoneStatusPill status={zone.status} />
                     </Td>
                     <Td className="text-right whitespace-nowrap">
-                      <Link href="/schedule" className="text-label text-info no-underline hover:underline">
+                      <Link href={`/zones/${zone.id}`} className="text-label text-info no-underline hover:underline">
                         Edit
                       </Link>
                       <button
