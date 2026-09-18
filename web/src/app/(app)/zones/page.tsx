@@ -5,17 +5,28 @@ import Link from 'next/link'
 import { Dialog } from '@base-ui/react/dialog'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
 import { RoadClassBadge, ZoneStatusPill } from '@/components/ui/Badge'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { cn, formatDate } from '@/lib/utils'
-import { PLAN_LABEL, PLAN_LIMITS } from '@/lib/constants'
+import { PLAN_LABEL, PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
 import * as zonesApi from '@/features/zones/api'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
-import type { Zone } from '@/features/zones/types'
+import { ROAD_CLASS_ORDER } from '@/features/zones/components/RoadClassPicker'
+import type { RoadClass, Zone } from '@/features/zones/types'
 
 type Filter = 'all' | 'collecting' | 'paused'
+type SortKey = 'newest' | 'oldest' | 'name' | 'area' | 'roads'
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'name', label: 'Name A–Z' },
+  { value: 'area', label: 'Largest area' },
+  { value: 'roads', label: 'Most roads' },
+]
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -28,6 +39,8 @@ export default function ZonesPage() {
   const [zones, setZones] = useState<Zone[] | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
+  const [roadClassFilter, setRoadClassFilter] = useState<RoadClass | 'all'>('all')
+  const [sort, setSort] = useState<SortKey>('newest')
   const [pendingDelete, setPendingDelete] = useState<Zone | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [limitOpen, setLimitOpen] = useState(false)
@@ -44,12 +57,29 @@ export default function ZonesPage() {
 
   const visible = useMemo(() => {
     if (!zones) return []
-    return zones.filter((zone) => {
-      const matchesFilter = filter === 'all' || zone.status === filter
+    const matched = zones.filter((zone) => {
+      const matchesStatus = filter === 'all' || zone.status === filter
+      const matchesClass = roadClassFilter === 'all' || zone.roadClass === roadClassFilter
       const matchesSearch = zone.name.toLowerCase().includes(search.trim().toLowerCase())
-      return matchesFilter && matchesSearch
+      return matchesStatus && matchesClass && matchesSearch
     })
-  }, [zones, filter, search])
+
+    // Sorted copy — `zones` is the fetched list and shouldn't be mutated.
+    return [...matched].sort((a, b) => {
+      switch (sort) {
+        case 'oldest':
+          return a.createdAt < b.createdAt ? -1 : 1
+        case 'name':
+          return a.name.localeCompare(b.name)
+        case 'area':
+          return b.areaKm2 - a.areaKm2
+        case 'roads':
+          return b.roadsCount - a.roadsCount
+        default:
+          return a.createdAt < b.createdAt ? 1 : -1
+      }
+    })
+  }, [zones, filter, roadClassFilter, search, sort])
 
   const atLimit = (zones?.length ?? 0) >= zonesLimit
 
@@ -103,7 +133,24 @@ export default function ZonesPage() {
           placeholder="Search zones…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="h-11 w-full tablet:w-64"
+          className="h-11 w-full tablet:w-56"
+        />
+        <Select
+          value={roadClassFilter}
+          onValueChange={(v) => setRoadClassFilter(v as RoadClass | 'all')}
+          options={[
+            { value: 'all', label: 'All road classes' },
+            ...ROAD_CLASS_ORDER.map((rc) => ({ value: rc, label: ROAD_CLASS_LABEL[rc] })),
+          ]}
+          className="w-52"
+          aria-label="Filter by road class"
+        />
+        <Select
+          value={sort}
+          onValueChange={(v) => setSort(v as SortKey)}
+          options={SORT_OPTIONS}
+          className="w-44"
+          aria-label="Sort zones"
         />
       </div>
 
@@ -136,8 +183,8 @@ export default function ZonesPage() {
                 <tr>
                   <Th>Zone</Th>
                   <Th>Road classes</Th>
+                  <Th className="text-right">Area</Th>
                   <Th className="text-right">Roads</Th>
-                  <Th className="text-right">Length</Th>
                   <Th>Capture</Th>
                   <Th>Status</Th>
                   <Th className="text-right">Actions</Th>
@@ -158,14 +205,20 @@ export default function ZonesPage() {
                     <Td>
                       <RoadClassBadge roadClass={zone.roadClass} />
                     </Td>
+                    <Td className="text-right tabular-nums">{zone.areaKm2} km²</Td>
                     <Td className="text-right tabular-nums">{zone.roadsCount}</Td>
-                    <Td className="text-right tabular-nums">{zone.lengthKm} km</Td>
                     <Td className="text-text-secondary">{zone.cadence}</Td>
                     <Td>
                       <ZoneStatusPill status={zone.status} />
                     </Td>
                     <Td className="text-right whitespace-nowrap">
                       <Link href={`/zones/${zone.id}`} className="text-label text-info no-underline hover:underline">
+                        View
+                      </Link>
+                      <Link
+                        href={`/zones/${zone.id}?edit=1`}
+                        className="ml-md text-label text-text-secondary hover:text-text-primary no-underline transition-colors"
+                      >
                         Edit
                       </Link>
                       <button
