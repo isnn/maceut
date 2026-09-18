@@ -230,3 +230,31 @@ export function IconChevronDown(props: IconProps) {
     </Svg>
   )
 }
+
+export function IconDotsVertical(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="5" r="1" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="12" cy="19" r="1" />
+    </Svg>
+  )
+}
+
+export function IconArrowUp(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 19V5" />
+      <path d="m5 12 7-7 7 7" />
+    </Svg>
+  )
+}
+
+export function IconArrowDown(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 5v14" />
+      <path d="m19 12-7 7-7-7" />
+    </Svg>
+  )
+}
