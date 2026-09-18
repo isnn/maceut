@@ -77,6 +77,8 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: /internal Overview — statistik platform (F-21) | specs/internal/requirements.md |
 | ✅ | Frontend: /internal Users — kelola plan & role + usage per akun (F-22) | specs/internal/requirements.md |
 | ✅ | Frontend: /internal Config — env sistem, secret write-only (F-23) | specs/internal/requirements.md |
+| ✅ | Frontend: /internal jadi aplikasi terpisah (staf tidak punya halaman tenant) | specs/internal/requirements.md |
+| ✅ | Frontend: rework halaman login & register (tanpa header, show/hide password) | permintaan user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -171,6 +173,21 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   infrastruktur read-only). 24 demo tenant di-seed ke tabel user yang sama, ditandai chip "demo";
   hanya akun yang sedang login yang usage-nya live.
   Verified: `tsc --noEmit` bersih, `eslint` bersih, 14 route balas 200 di dev container.
+  NOT verified: klik-through interaktif di browser — perlu review manual.
+
+[2026-09-09] Pemisahan aplikasi staf & pelanggan + rework halaman auth.
+  Akun internal sekarang TIDAK punya Dashboard/Zones/Schedule/Studio/Team — semuanya redirect ke
+  `/internal`, yang jadi home mereka setelah login. Onboarding dilewati (tidak ada paket untuk staf).
+  Profil staf pindah ke `/internal/profile` (tab Account + Notifications saja) lewat ekstraksi
+  `features/profile/components/ProfileView.tsx` yang dipakai dua shell. Cross-link dua arah dihapus:
+  "Internal tools" di AppHeader dan "Back to workspace" di InternalHeader.
+  Enam titik redirect yang tadinya hardcode `/dashboard` diganti satu helper `homePathFor(user)` —
+  ini persis sumber bug redirect di ronde sebelumnya.
+  Halaman auth: header dihapus total (wordmark duduk di atas foto pada login, di atas kolom form pada
+  register), kolom foto dipersempit ke 38% dan full-bleed, form masuk card, `PasswordInput` baru dengan
+  toggle show/hide (tetap bisa diakses keyboard), indikator langkah (SignupSteps) dihapus dari kedua
+  halaman lalu filenya dihapus.
+  Verified: `tsc --noEmit` bersih, `eslint` bersih, 15 route balas 200.
   NOT verified: klik-through interaktif di browser — perlu review manual.
 
 ---
@@ -274,6 +291,15 @@ Format:
   Impact: features/internal/config-api.ts, BR-026 di specs/internal/requirements.md
   ⚠️ Belum ada keputusan arsitektur soal config lewat UI (override DB vs read-only mirror) —
     butuh ADR di tech.md sebelum backend dibuat
+
+[2026-09-09] Keputusan: aplikasi staf (`/internal`) dan aplikasi pelanggan terpisah total —
+  satu akun hanya melihat salah satunya, tanpa cross-link
+  Alasan: staf Maceut bukan pelanggan; memberi mereka Dashboard/Zones/Schedule/Studio/Team milik
+    workspace sendiri membuat dua peran tercampur dan tidak jelas mana yang sedang dipakai
+  Impact: `(app)/layout.tsx` menolak role internal, `homePathFor()` jadi satu-satunya penentu tujuan
+    setelah login, ProfileView diekstrak agar dipakai dua shell, kedua header kehilangan cross-link
+  ⚠️ Konsekuensi: staf tidak bisa lagi melihat tampilan pelanggan sama sekali. Kalau nanti dibutuhkan
+    untuk support/QA, jawabannya impersonation read-only, bukan mengembalikan link-nya
 ```
 
 ---

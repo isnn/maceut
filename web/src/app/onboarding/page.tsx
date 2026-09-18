@@ -7,6 +7,7 @@ import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
 import { PLAN_LABEL } from '@/lib/constants'
 import * as authApi from '@/features/auth/api'
+import { homePathFor } from '@/features/auth/home-path'
 import type { Plan } from '@/features/auth/types'
 
 export default function OnboardingPage() {
@@ -16,10 +17,13 @@ export default function OnboardingPage() {
   const [pendingPlan, setPendingPlan] = useState<Plan | null>(null)
 
   useEffect(() => {
-    if (!loading && !user) router.replace('/login')
+    if (loading) return
+    if (!user) router.replace('/login')
+    // Staff accounts aren't customers — there's no plan for them to choose.
+    else if (user.role === 'internal') router.replace('/internal')
   }, [loading, user, router])
 
-  if (loading || !user) return null
+  if (loading || !user || user.role === 'internal') return null
 
   // The plan chosen at sign-up is pre-selected; picking a card commits it.
   const plan: Plan = pendingPlan ?? user.plan
