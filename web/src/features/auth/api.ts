@@ -3,7 +3,7 @@
 // Mock persists a fake user table + session in localStorage so the
 // register -> onboarding -> dashboard flow is demoable end-to-end without a backend.
 
-import type { LoginInput, Plan, RegisterInput, User } from './types'
+import type { LoginInput, Plan, PlatformRole, RegisterInput, User } from './types'
 import { ApiError } from '@/types/api'
 import { generateId } from '@/lib/utils'
 
@@ -14,6 +14,7 @@ interface MockUserRecord {
   fullName: string
   organisation: string
   plan: Plan
+  role: PlatformRole
   onboardingDone: boolean
   createdAt: string
 }
@@ -32,16 +33,28 @@ function readUsers(): MockUserRecord[] {
   if (!raw) return []
   const parsed = JSON.parse(raw) as Partial<MockUserRecord>[]
   // Records created before the turn 3/4 screens lack the newer fields.
-  return parsed.map((u) => ({
+  const records: MockUserRecord[] = parsed.map((u) => ({
     id: u.id!,
     email: u.email!,
     password: u.password!,
     fullName: u.fullName ?? u.email!.split('@')[0],
     organisation: u.organisation ?? '',
     plan: u.plan ?? 'free',
+    role: u.role ?? 'user',
     onboardingDone: u.onboardingDone ?? true,
     createdAt: u.createdAt ?? new Date().toISOString(),
   }))
+
+  // Someone has to be able to open /internal on a fresh install: if no account
+  // holds the role, the earliest-created one is promoted and the change stuck,
+  // so it stays stable across reads instead of drifting with the sort order.
+  if (records.length > 0 && !records.some((u) => u.role === 'internal')) {
+    const earliest = records.reduce((a, b) => (a.createdAt <= b.createdAt ? a : b))
+    earliest.role = 'internal'
+    writeUsers(records)
+  }
+
+  return records
 }
 
 function writeUsers(users: MockUserRecord[]) {
@@ -55,6 +68,7 @@ function toPublicUser(record: MockUserRecord): User {
     fullName: record.fullName,
     organisation: record.organisation,
     plan: record.plan,
+    role: record.role,
     onboardingDone: record.onboardingDone,
     createdAt: record.createdAt,
   }
@@ -74,6 +88,7 @@ export async function register(input: RegisterInput): Promise<User> {
     organisation: input.organisation,
     // Placeholder until step 2 of sign-up; the onboarding guard forces that step.
     plan: 'free',
+    role: 'user',
     onboardingDone: false,
     createdAt: new Date().toISOString(),
   }
@@ -126,4 +141,85 @@ async function patchCurrentUser(patch: Partial<MockUserRecord>): Promise<User> {
   const updated = { ...record, ...patch }
   writeUsers(users.map((u) => (u.id === updated.id ? updated : u)))
   return delay(toPublicUser(updated))
+}
+
+// --- Platform directory (used by /internal) ------------------------------------
+// Guards live here rather than in the pages, matching the repo's rule that
+// business rules are enforced in the service layer, never the caller (BR-007).
+
+export interface SeedUserInput {
+  fullName: string
+  organisation: string
+  email: string
+  plan: Plan
+  createdAt: string
+}
+
+export async function listUsers(): Promise<User[]> {
+  return delay(readUsers().map(toPublicUser))
+}
+
+export async function setUserRole(userId: string, role: PlatformRole): Promise<User> {
+  const users = readUsers()
+  const target = users.find((u) => u.id === userId)
+  if (!target) {
+    await delay(null)
+    throw new ApiError({ code: 'NOT_FOUND', message: 'Account not found.' })
+  }
+  if (userId === window.localStorage.getItem(SESSION_KEY)) {
+    await delay(null)
+    throw new ApiError({
+      code: 'CANNOT_CHANGE_OWN_ROLE',
+      message: 'You cannot change your own role — ask another internal user to do it.',
+    })
+  }
+  if (target.role === 'internal' && role !== 'internal') {
+    const othersInternal = users.filter((u) => u.role === 'internal' && u.id !== userId).length
+    if (othersInternal === 0) {
+      await delay(null)
+      throw new ApiError({
+        code: 'LAST_INTERNAL',
+        message: 'This is the last internal account — promote someone else before demoting it.',
+      })
+    }
+  }
+  const updated = { ...target, role }
+  writeUsers(users.map((u) => (u.id === userId ? updated : u)))
+  return delay(toPublicUser(updated))
+}
+
+export async function setUserPlan(userId: string, plan: Plan): Promise<User> {
+  const users = readUsers()
+  const target = users.find((u) => u.id === userId)
+  if (!target) {
+    await delay(null)
+    throw new ApiError({ code: 'NOT_FOUND', message: 'Account not found.' })
+  }
+  const updated = { ...target, plan }
+  writeUsers(users.map((u) => (u.id === userId ? updated : u)))
+  return delay(toPublicUser(updated))
+}
+
+/**
+ * Appends demo tenants to the same table real accounts live in, so the
+ * directory and auth never disagree. Existing rows are never touched.
+ */
+export async function seedUsers(inputs: SeedUserInput[]): Promise<void> {
+  const users = readUsers()
+  const existing = new Set(users.map((u) => u.email.toLowerCase()))
+  const seeded: MockUserRecord[] = inputs
+    .filter((input) => !existing.has(input.email.toLowerCase()))
+    .map((input) => ({
+      id: generateId(),
+      email: input.email,
+      password: generateId(),
+      fullName: input.fullName,
+      organisation: input.organisation,
+      plan: input.plan,
+      role: 'user',
+      onboardingDone: true,
+      createdAt: input.createdAt,
+    }))
+  if (seeded.length > 0) writeUsers([...users, ...seeded])
+  await delay(null)
 }
