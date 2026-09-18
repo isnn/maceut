@@ -1,6 +1,6 @@
 'use client'
 
-import { FormLabel, Input } from './Input'
+import { Checkbox, FormLabel, Input } from './Input'
 import { cn } from '@/lib/utils'
 import { STYLE_PRESETS, type CaptureStyleInput } from '@/features/zones/types'
 
@@ -13,7 +13,7 @@ export function StyleSelector({ value, onChange }: StyleSelectorProps) {
   return (
     <div className="space-y-lg">
       <div>
-        <FormLabel className="block mb-sm">Pilih Style</FormLabel>
+        <FormLabel className="block mb-sm">Style preset</FormLabel>
         <div className="grid grid-cols-2 tablet:grid-cols-4 gap-sm">
           {STYLE_PRESETS.map((preset) => {
             const active = value.presetId === preset.id
@@ -24,7 +24,7 @@ export function StyleSelector({ value, onChange }: StyleSelectorProps) {
                 onClick={() => onChange({ ...value, presetId: preset.id })}
                 className={cn(
                   'rounded-md border p-sm text-left transition-colors',
-                  active ? 'border-primary ring-2 ring-primary-soft' : 'border-border hover:bg-canvas-secondary'
+                  active ? 'border-primary bg-primary-soft/40' : 'border-border hover:bg-canvas-secondary'
                 )}
               >
                 <div
@@ -44,13 +44,11 @@ export function StyleSelector({ value, onChange }: StyleSelectorProps) {
       </div>
 
       <label className="flex items-center gap-sm">
-        <input
-          type="checkbox"
-          className="w-5 h-5 rounded-xs border-border text-primary focus:ring-primary focus:ring-2"
+        <Checkbox
           checked={value.showTimestamp}
           onChange={(e) => onChange({ ...value, showTimestamp: e.target.checked })}
         />
-        <span className="text-label text-text-secondary">Tampilkan Timestamp</span>
+        <span className="text-label text-text-secondary">Show timestamp</span>
       </label>
     </div>
   )

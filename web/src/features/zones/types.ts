@@ -1,5 +1,8 @@
 export type RoadClass = 'nasional' | 'nasional_provinsi' | 'semua'
 
+/** Whether the zone's windows are running (3f status column). */
+export type ZoneStatus = 'collecting' | 'paused'
+
 export interface ZoneGeometry {
   type: 'Polygon'
   coordinates: number[][][]
@@ -10,6 +13,13 @@ export interface Zone {
   name: string
   geometry: ZoneGeometry
   roadClass: RoadClass
+  status: ZoneStatus
+  /** Derived from the drawn boundary — shown in the wizard and zone table. */
+  areaKm2: number
+  roadsCount: number
+  lengthKm: number
+  /** Human label for the zone's cadence, e.g. "Per jam" (set on Schedule). */
+  cadence: string
   createdAt: string
 }
 
@@ -17,6 +27,13 @@ export interface CreateZoneInput {
   name: string
   geometry: ZoneGeometry
   roadClass: RoadClass
+}
+
+/** Road segments matched inside the boundary, grouped by class (3c). */
+export interface MatchedRoad {
+  name: string
+  roadClass: Exclude<RoadClass, 'nasional_provinsi' | 'semua'> | 'provinsi' | 'kota'
+  lengthKm: number
 }
 
 export interface StylePreset {
