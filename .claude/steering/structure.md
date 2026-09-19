@@ -344,6 +344,26 @@ await db.execute(sql`
 
 ---
 
+## Git Branch & PR Naming
+
+```
+<type>/<nama-kebab-case>
+
+Types: feat · fix · refactor · docs · test · chore · perf   (sama persis dengan type commit)
+
+Contoh:
+feat/schedule-management
+feat/capture-pipeline
+fix/session-expiry-timezone
+refactor/zone-repository
+docs/api-contract
+chore/db-conventions
+```
+
+Daftar type-nya sengaja SAMA dengan type commit di bawah — satu kosakata untuk branch,
+PR, dan commit. Menggunakan dua daftar berbeda berarti setiap orang harus mengingat
+mana yang berlaku di mana, dan itu biaya tanpa manfaat.
+
 ## Git Commit Format
 
 ```
@@ -358,3 +378,7 @@ feat(capture): implement Playwright screenshot with branding overlay
 fix(scheduler): handle cron job not loading after server restart
 chore(infra): add R2 client with presigned URL support
 ```
+
+Catatan: daftar type COMMIT tetap tujuh. Commit dibaca satu per satu saat menelusuri
+riwayat sebuah file, di mana membedakan `docs` dari `refactor` dari `test` memang
+berguna. Branch dibaca sebagai daftar. Dua audiens berbeda, dua tingkat kedetailan.

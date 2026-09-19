@@ -49,6 +49,9 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Middleware: auth (sesi Better Auth) + plan-check + internalOnly + error-handler | auth/tasks.md Phase 2 |
 | ✅ | Backend: GET /me + POST /me/onboarding (plan + onboardingDone) | auth/tasks.md Phase 2 |
 | ✅ | Backend: /internal/users + /internal/stats (F-21, F-22) + guard role | specs/internal/requirements.md |
+| ✅ | Konvensi DB: semua kolom waktu `timestamptz` + guard test | CLAUDE.md |
+| ✅ | docs/database/schema.dbml — ERD wajib ikut ter-update saat schema berubah | CLAUDE.md |
+| 🔴 | Produksi: ganti kredensial RabbitMQ `guest:guest` di docker-compose.prod.yml | deployment.md |
 | 🔴 | Middleware: rate-limit (belum ada; /internal tanpa proteksi, Better Auth hanya melindungi route-nya sendiri) | structure.md |
 | 🔴 | **BE-12** Frontend: /internal Config jadi read-only sesuai ADR-018 | specs/internal/requirements.md |
 | ✅ | Frontend: ganti mock `features/auth/api.ts` → `/api/auth/*` + GET /me (fetch langsung, tanpa dependency baru) | auth/tasks.md Phase 3 |
@@ -413,6 +416,73 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   dasar tiering kelas jalan Free/Standard/Premium (BR-022). env:check akan melaporkannya otomatis.
   Catatan lain: AWS SDK memperingatkan Node >=22 mulai Januari 2027; image kita node:20-alpine.
   Belum mendesak, satu baris di Dockerfile.
+
+[2026-09-19] Dua aturan proyek baru + perbaikan yang diperlukan untuk memenuhinya.
+  Aturan 1 — SEMUA kolom waktu wajib `timestamptz`. Saat diperiksa, 12 dari 17 kolom waktu
+  ternyata `timestamp WITHOUT time zone`: seluruh tabel Better Auth (user, session, account,
+  verification). CLI Better Auth memang meng-emit `timestamp(...)` polos. Tabel buatan sendiri
+  (user_plans, zones) sudah benar.
+  Kenapa ini penting: nilai tanpa offset berarti apa pun yang diasumsikan proses pembaca. Selama
+  semua container UTC hasilnya kebetulan benar; begitu ada satu yang tidak, jamnya meleset TANPA
+  error — dan `session.expires_at` yang menentukan kapan login berakhir adalah tempat terburuk
+  untuk menemukannya.
+  Migration 0004 mengonversi ke-12 kolom. ⚠️ Klausa `USING x AT TIME ZONE 'UTC'` ditambahkan
+  MANUAL — drizzle-kit meng-generate ALTER tanpa USING, yang membuat Postgres menafsirkan nilai
+  naif memakai TimeZone SESI. Jadi migration yang sama menghasilkan data berbeda tergantung siapa
+  yang menjalankan: benar di Etc/UTC, meleset 7 jam di Asia/Jakarta. Diverifikasi sebelum & sesudah:
+  instant-nya identik (01:03:45.676 → 01:03:45.676+00, WIB 08:03) dan sesi lama tetap valid.
+  Guard: `src/config/schema-timezone.test.ts` memindai sumber schema dan GAGAL kalau ada
+  `timestamp(...)` tanpa withTimezone. Sengaja memindai SUMBER, bukan database — cara aturan ini
+  jebol dalam praktik adalah menjalankan ulang `@better-auth/cli generate`, yang menulis ulang
+  auth-schema.ts dan membuang withTimezone setiap kali. Test ini menangkapnya sebelum migration
+  sempat dibuat. Ada juga test yang menguji regex-nya sendiri supaya tidak diam-diam berhenti cocok.
+  Aturan 2 — `docs/database/schema.dbml` (folder baru) wajib ikut ter-update di commit yang SAMA
+  saat schema berubah. Alasannya: ERD basi lebih buruk daripada tidak ada ERD, karena tidak ada
+  yang curiga pada diagram — orang pertama yang merencanakan berdasarkan itu merencanakan untuk
+  schema yang tidak ada. DBML ditulis tangan; `drizzle-dbml-generator` bisa menghilangkan risiko
+  drift tapi butuh dependency baru DAN tetap tidak bisa mengekspresikan kolom PostGIS maupun
+  functional unique index pada lower(email) — keduanya tetap harus ditambahkan manual. Dicatat di
+  docs/database/README.md untuk ditinjau ulang kalau schema tumbuh lebih cepat dari disiplinnya.
+  Verified: 0 kolom naif tersisa (17/17 timestamptz), 115 test hijau, tsc & eslint bersih,
+  /health ok, sesi lama masih valid dan sign-in baru berhasil.
+
+[2026-09-19] `api/..env.swp` dihapus dari riwayat git + audit kredensial menyeluruh.
+  File itu adalah swap file NANO untuk `api/.env`, ikut ter-commit oleh `git add -A` milik saya
+  saat user sedang mengedit .env untuk memasukkan kunci. Blob-nya diperiksa lebih dulu: 1024 byte,
+  HANYA header nano (versi editor, username, hostname, nama file) — tidak ada isi buffer, tidak ada
+  kredensial. Jadi tidak ada yang bocor. Tetap dihapus atas permintaan user.
+  Cara menghapus: `git filter-branch --index-filter` pada rentang feat/api-r2-here-clients..
+  feat/api-zones, lalu feat/db-conventions di-rebase ke atasnya. Diverifikasi ketat:
+  (1) diff antara tip lama dan baru feat/api-zones HANYA `D api/..env.swp` — tidak ada perubahan isi;
+  (2) tree hash tip feat/db-conventions IDENTIK sebelum & sesudah (985bd259...), membuktikan tidak
+      ada konten yang berubah sama sekali;
+  (3) tiga commit pertama mempertahankan SHA aslinya (ff68eb1, da40ab3, 5c765dc) — hanya dua commit
+      yang memang memuat blob itu yang ditulis ulang;
+  (4) 115 test tetap hijau, tsc & eslint bersih setelah rewrite.
+  Force-push memakai `--force-with-lease` (menolak kalau remote bergerak tak terduga). Keempat PR
+  (#34-#37) tetap utuh dengan base yang benar. Blob hilang dari 6 remote branch dan dari object
+  store lokal setelah tag backup dihapus + gc.
+  Audit: `scripts/audit-secrets.sh` (baru) membaca nilai asli dari file env lalu mencari SETIAP
+  nilai di seluruh commit di semua ref. Nilainya TIDAK PERNAH dicetak — hanya nama key, panjang,
+  4 karakter terakhir, dan verdict. Hasil: HERE_API_KEY, keempat R2_*, JWT_SECRET, DB_PASSWORD
+  semuanya CLEAN; .env/api/.env/web/.env.local tidak pernah ter-commit sama sekali.
+  Satu false positive diperbaiki di script: RABBITMQ_URL cocok karena namanya mengandung "URL",
+  padahal nilainya `amqp://guest:guest@rabbitmq:5672/` — persis sama dengan .env.example. Script
+  sekarang membandingkan dengan .env.example dan menandainya sebagai default, bukan rahasia.
+  ⚠️ Catatan terpisah yang ditemukan dari situ: `guest:guest` adalah kredensial RabbitMQ sungguhan
+  di docker-compose. Aman untuk dev (RabbitMQ menolak `guest` dari non-loopback) tapi TIDAK boleh
+  ikut ke produksi. Ditambahkan sebagai task.
+  Pencegahan: pola swap/backup editor (*.swp, .*.swp, *.swo, *~, *.bak, .#*) masuk .gitignore.
+
+[2026-09-19] Aturan penamaan branch & judul PR: `<type>/<nama-kebab-case>`.
+  Type-nya SAMA PERSIS dengan type commit yang sudah ada di structure.md:
+  feat · fix · refactor · docs · test · chore · perf. Contoh `feat/schedule-management`.
+  (Versi pertama aturan ini sempat membatasi ke tiga type saja — feat/fix/chore — lalu diluruskan:
+  dua daftar berbeda berarti setiap orang harus mengingat mana yang berlaku di mana, biaya tanpa
+  manfaat. Satu kosakata untuk branch, PR, dan commit.)
+  Dicatat di CLAUDE.md (Key Conventions + AI Rules) dan structure.md.
+  Semua branch aktif sudah patuh. Yang tidak patuh hanya sisa mati dari pemulihan squash-merge
+  September lalu (`land/*`, `final-state`) — sudah ter-merge ke main, aman dihapus.
 
 ---
 
