@@ -297,6 +297,7 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   direktori staf menampilkan 3 akun asli; 15 route web balas 200; tsc bersih di api/ dan web/.
   Mock yang MASIH mock: zones, captures, schedules, studio, team, dashboard — keduanya yang memanggil
   `getMe()` (dashboard, captures) sekarang justru memakai plan asli, jadi batas paketnya ikut nyata.
+  PR: #34 (feat/api-scaffold-env) — mencakup BE-01..BE-06, modul auth, user management, dan integrasi FE.
 
 ---
 
