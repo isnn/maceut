@@ -35,10 +35,12 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
-    // F-08's rule. The ceiling is bcrypt/scrypt's, not a policy choice: anything past
-    // it would be silently ignored while appearing to count.
-    minPasswordLength: 8,
-    maxPasswordLength: 72,
+    minPasswordLength: 8, // F-08.
+    // Better Auth hashes with scrypt, which has no input-length limit — so unlike
+    // bcrypt's 72 bytes this is policy, not a technical ceiling. It exists only so a
+    // megabyte-long password cannot burn CPU in the KDF, and is set well clear of any
+    // real passphrase.
+    maxPasswordLength: 128,
     autoSignIn: true, // F-08: registering signs you in.
   },
 

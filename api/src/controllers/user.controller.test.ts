@@ -26,7 +26,7 @@ vi.mock('../repositories/user.repository', () => ({
   setPlan: vi.fn(),
   ensurePlan: vi.fn(),
   listWithPlans: vi.fn(),
-  countByRole: vi.fn(),
+  countInternal: vi.fn(),
 }))
 vi.mock('../lib/internal-access', () => ({
   isInternalByConfig: vi.fn(() => false),
@@ -176,6 +176,22 @@ describe('GET /internal/users', () => {
     )
   })
 
+  it('hands the config list to the query so the role filter matches what rows display', async () => {
+    signedInAs(STAFF_ID)
+    staffLookups()
+    vi.mocked(internalAccess.configuredInternalEmails).mockReturnValue(['ops@maceut.id'])
+    vi.mocked(userRepo.listWithPlans).mockResolvedValue({ rows: [], total: 0 })
+
+    await request(app).get('/internal/users?role=internal')
+
+    // Filtering on the stored column alone made the list contradict itself: an
+    // address newly added to INTERNAL_EMAILS rendered as `internal` but was returned
+    // by ?role=user and missing from ?role=internal, until that person next signed in.
+    expect(userRepo.listWithPlans).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'internal', internalEmails: ['ops@maceut.id'] }),
+    )
+  })
+
   it('caps limit so one request cannot ask for every row', async () => {
     signedInAs(STAFF_ID)
     staffLookups()
@@ -265,7 +281,7 @@ describe('PATCH /internal/users/:id/role', () => {
     vi.mocked(userRepo.findById).mockImplementation(async (id: string) =>
       id === STAFF_ID ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal' }) : row({ role: 'internal' }),
     )
-    vi.mocked(userRepo.countByRole).mockResolvedValue(1)
+    vi.mocked(userRepo.countInternal).mockResolvedValue(1)
 
     const res = await request(app).patch(`/internal/users/${TARGET_ID}/role`).send({ role: 'user' })
 
@@ -281,7 +297,7 @@ describe('PATCH /internal/users/:id/role', () => {
     vi.mocked(userRepo.findById).mockImplementation(async (id: string) =>
       id === STAFF_ID ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal' }) : row({ role: 'internal' }),
     )
-    vi.mocked(userRepo.countByRole).mockResolvedValue(3)
+    vi.mocked(userRepo.countInternal).mockResolvedValue(3)
     vi.mocked(userRepo.updateUser).mockResolvedValue(undefined)
     vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(row({ role: 'user' }))
 
@@ -300,7 +316,7 @@ describe('GET /internal/stats', () => {
       rows: [row({ plan: 'free' }), row({ plan: 'premium' }), row({ plan: 'premium' })],
       total: 3,
     })
-    vi.mocked(userRepo.countByRole).mockResolvedValue(2)
+    vi.mocked(userRepo.countInternal).mockResolvedValue(2)
 
     const res = await request(app).get('/internal/stats')
 

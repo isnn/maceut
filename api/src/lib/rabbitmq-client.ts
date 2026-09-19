@@ -30,6 +30,17 @@ export async function getChannel(): Promise<amqp.Channel> {
   })
 
   const ch = await conn.createChannel()
+
+  // A channel can die on its own — a 404 from checkQueue against a deleted queue
+  // closes it. In practice that error also propagates to the connection, whose close
+  // handler above clears the cache, so recovery happens either way; this makes it not
+  // depend on that propagation. Without one of the two, the dead channel stays cached
+  // and every later publish fails forever.
+  ch.on('error', (err: Error) => console.error('[rabbitmq] channel error:', err.message))
+  ch.on('close', () => {
+    channel = null
+  })
+
   await assertTopology(ch)
 
   connection = conn

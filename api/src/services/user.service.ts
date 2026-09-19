@@ -104,6 +104,8 @@ export async function listUsers(params: ListUsersParams): Promise<ListUsersResul
     search: params.search,
     plan: params.plan,
     role: params.role,
+    // Passed through so the SQL filter agrees with the role each row renders with.
+    internalEmails: configuredInternalEmails(),
     limit: params.limit,
     offset: (params.page - 1) * params.limit,
     sort: params.sort,
@@ -152,9 +154,10 @@ export async function changeRole(actorId: string, targetUserId: string, role: Pl
     )
   }
 
-  // 3. Never remove the last internal account.
-  if (target.role === 'internal' && role !== 'internal') {
-    if ((await userRepo.countByRole('internal')) <= 1) {
+  // 3. Never remove the last internal account. Uses the resolved role, not the
+  //    cached column, so the count and the check agree on who counts as staff.
+  if (resolveRole(target.email, (target.role ?? 'user') as PlatformRole) === 'internal' && role !== 'internal') {
+    if ((await userRepo.countInternal(configuredInternalEmails())) <= 1) {
       throw new ValidationError(
         'Ini satu-satunya akun internal yang tersisa — sistem tidak boleh kehilangan semua akses staf.',
       )
@@ -174,7 +177,11 @@ export async function getPlatformStats(): Promise<{
 }> {
   // One page large enough to aggregate over. Fine at this scale; when it stops being
   // fine the answer is a SQL GROUP BY in the repository, not a bigger page.
-  const { rows, total } = await userRepo.listWithPlans({ limit: 10_000, offset: 0 })
+  const { rows, total } = await userRepo.listWithPlans({
+    internalEmails: configuredInternalEmails(),
+    limit: 10_000,
+    offset: 0,
+  })
 
   const planMix: Record<Plan, number> = { free: 0, standard: 0, premium: 0 }
   let estimatedSeats = 0
@@ -185,7 +192,7 @@ export async function getPlatformStats(): Promise<{
 
   return {
     totalUsers: total,
-    internalUsers: await userRepo.countByRole('internal'),
+    internalUsers: await userRepo.countInternal(configuredInternalEmails()),
     planMix,
     estimatedSeats,
   }
