@@ -49,9 +49,18 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Middleware: auth (sesi Better Auth) + plan-check + internalOnly + error-handler | auth/tasks.md Phase 2 |
 | ✅ | Backend: GET /me + POST /me/onboarding (plan + onboardingDone) | auth/tasks.md Phase 2 |
 | ✅ | Backend: /internal/users + /internal/stats (F-21, F-22) + guard role | specs/internal/requirements.md |
+| 🔴 | Middleware: rate-limit (belum ada; /internal tanpa proteksi, Better Auth hanya melindungi route-nya sendiri) | structure.md |
+| 🔴 | **BE-12** Frontend: /internal Config jadi read-only sesuai ADR-018 | specs/internal/requirements.md |
+| 🔴 | Frontend: ganti mock `features/auth/api.ts` → Better Auth client (`/api/auth/*`) + GET /me | auth/tasks.md Phase 3 |
+| 🔴 | Frontend: ganti mock `features/internal/api.ts` → GET /internal/users, /internal/stats | specs/internal/requirements.md |
 | 🔴 | API: GET /zones + POST /zones (Drizzle + PostGIS raw) + unit test + swagger | zone-management/tasks.md Phase 2 |
 | 🔴 | API: DELETE /zones/:id + unit test + swagger | zone-management/tasks.md Phase 2 |
-| 🔴 | Lib: RabbitMQ client + R2 client + Playwright client | zone-management/tasks.md Phase 3 |
+| ✅ | Lib: RabbitMQ client (connect, assert queue + dead-letter, publish) | zone-management/tasks.md Phase 3 |
+| 🔴 | **BE-07** Lib: R2 client (upload, presigned URL, headBucket) | zone-management/tasks.md Phase 3 |
+| 🔴 | **BE-08** Lib: HERE Traffic client (getTrafficFlow → GeoJSON, BR-017/BR-022) | zone-management/tasks.md Phase 3 |
+| 🔴 | **BE-09** Script: `npm run env:check` — bukti Postgres/MQ/R2/HERE tersambung | plan BE-09 |
+| 🔴 | **BE-10** Verifikasi kredensial HERE + R2 live (menunggu 6 nilai di api/.env) | plan BE-10 |
+| 🔴 | Lib: Playwright client (screenshot internal render page) | zone-management/tasks.md Phase 3 |
 | 🔴 | API: POST /captures/manual + GET /captures/:id + unit test + swagger | zone-management/tasks.md Phase 3 |
 | 🔴 | Worker: capture.worker.ts (consume → road class filter → screenshot → upload) | zone-management/tasks.md Phase 3 |
 | ✅ | Frontend: tailwind.config.ts dengan token dari design.md | design.md |
@@ -240,6 +249,28 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   dikunci INTERNAL_EMAILS tidak bisa diturunkan, non-staf dapat 403. 46 unit test hijau,
   tsc & eslint bersih, /health 200 dengan PostgreSQL 16.4 + PostGIS 3.4.3 + 2 queue.
   BELUM: klien R2 & HERE (BE-07/BE-08), env:check (BE-09), verifikasi kredensial live (BE-10).
+
+[2026-09-19] Review modul auth & user management terhadap stack yang berjalan — 4 bug ditemukan & diperbaiki.
+  Yang utama: `/internal/users` memfilter berdasarkan KOLOM `role`, padahal setiap baris menampilkan role
+  hasil resolve dari INTERNAL_EMAILS. Keduanya berbeda untuk email yang baru ditambahkan ke config dan
+  akunnya belum sign-in lagi — tidak ada yang menulis kolom itu sampai saat itu. Direproduksi: baris
+  tampil `internal`, tapi HILANG dari `?role=internal` dan MUNCUL di `?role=user` dengan label internal.
+  `/internal/stats` salah hitung internalUsers dengan sebab yang sama, dan guard "akun internal terakhir"
+  bergantung pada angka itu — jadi secara prinsip bisa mengizinkan demosi yang seharusnya ditolak.
+  Perbaikan: daftar email config didorong ke query, filter jadi "kolom OR config" persis seperti
+  resolveRole(). Dilakukan di SQL, bukan setelah fetch, supaya pagination & total tetap benar.
+  Tiga lainnya: (1) search tidak meng-escape wildcard LIKE — cari `%` mengembalikan SEMUA akun, `_`
+  cocok dengan karakter apa pun; (2) maxPasswordLength 72 dengan komentar menyebut batas bcrypt, padahal
+  Better Auth memakai scrypt yang tidak punya batas itu — dinaikkan ke 128 dan komentarnya diperbaiki;
+  (3) cache channel RabbitMQ sekarang dibersihkan saat channel close, bukan hanya connection close.
+  bcryptjs & jsonwebtoken dihapus (tidak terpakai sejak pindah ke Better Auth).
+  Diperiksa dan ternyata SUDAH benar, jadi tidak diubah: email case-insensitive (Better Auth
+  menormalkan, index lower() menjawab 422 bukan 500), akun dihapus tapi sesi masih hidup (401, baris
+  session ikut cascade), id tidak dikenal (404). Dugaan awal bahwa klien RabbitMQ akan macet permanen
+  setelah queue dihapus TERBANTAH saat diuji — sudah pulih sendiri karena error channel merambat ke
+  connection close.
+  BELUM diperbaiki, dicatat saja: tidak ada rate-limit di route /internal (structure.md menyebutnya).
+  47 test hijau, tsc & eslint bersih di api/ dan web/.
 
 ---
 
