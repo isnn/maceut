@@ -346,27 +346,23 @@ await db.execute(sql`
 
 ## Git Branch & PR Naming
 
-Branch name dan judul PR HANYA boleh memakai tiga prefix:
-
 ```
 <type>/<nama-kebab-case>
 
-feat   → fitur baru
-fix    → perbaikan bug
-chore  → selain keduanya (konvensi, infra, docs, refactor, test, dependency, security)
+Types: feat · fix · refactor · docs · test · chore · perf   (sama persis dengan type commit)
 
 Contoh:
 feat/schedule-management
 feat/capture-pipeline
 fix/session-expiry-timezone
+refactor/zone-repository
+docs/api-contract
 chore/db-conventions
 ```
 
-Sengaja hanya tiga, bukan tujuh seperti daftar type commit di bawah. Nama branch
-dibaca sekilas di daftar PR untuk menjawab satu pertanyaan saja — "ini menambah
-sesuatu, memperbaiki sesuatu, atau bukan keduanya?" Pilihan yang lebih halus
-(`refactor` vs `chore` vs `perf`) memindahkan waktu ke perdebatan kategori tanpa
-membuat daftar PR lebih mudah dibaca.
+Daftar type-nya sengaja SAMA dengan type commit di bawah — satu kosakata untuk branch,
+PR, dan commit. Menggunakan dua daftar berbeda berarti setiap orang harus mengingat
+mana yang berlaku di mana, dan itu biaya tanpa manfaat.
 
 ## Git Commit Format
 
