@@ -57,6 +57,18 @@ cp web/.env.example web/.env.local   # Setup frontend env
 - Limit enforce di service layer, bukan controller (BR-007)
 - Capture file path di R2: `captures/{user_id}/{YYYY}/{MM}/{capture_id}.png`
 - PostGIS polygon zone disimpan sebagai `geometry(Polygon, 4326)` — selalu WGS84
+- **Semua kolom waktu WAJIB `timestamptz`** (`timestamp('x', { withTimezone: true })` di Drizzle).
+  `timestamp` polos tidak menyimpan offset, jadi nilainya berarti apa pun yang diasumsikan proses
+  pembaca — aman selama semua container UTC, diam-diam salah begitu ada satu yang tidak, dan
+  gagalnya tak terlihat: tidak ada error, cuma jam yang meleset. Simpan instant; WIB adalah urusan
+  query/tampilan (`AT TIME ZONE 'Asia/Jakarta'`), bukan urusan penyimpanan.
+  Dijaga otomatis oleh `api/src/config/schema-timezone.test.ts`.
+  ⚠️ `npx @better-auth/cli generate` MENGHAPUS `withTimezone` setiap kali dijalankan — pasang lagi.
+- **Setiap perubahan schema WAJIB ikut meng-update `docs/database/schema.dbml` di commit yang sama.**
+  Bukan commit berikutnya. ERD yang basi lebih buruk daripada tidak ada ERD: tidak ada yang curiga
+  pada diagram, jadi orang pertama yang merencanakan berdasarkan itu merencanakan untuk schema yang
+  tidak ada. Sertakan tabel/kolom baru & terhapus, perubahan tipe/nullability, index & constraint
+  baru, dan baris `Last updated`. Lihat `docs/database/README.md`.
 - Subscription tier check wajib ada di setiap endpoint yang berkaitan zona & schedule
 - UI components wajib berbasis Base UI — jangan buat custom dari scratch
 - Dark theme HANYA untuk halaman map visualization & export — dashboard tetap white-first
@@ -153,6 +165,8 @@ Jangan pindah ke task berikutnya sebelum task aktif di-tandai ✅ dan test pass.
 DO   → Baca SPRINT.md sebelum mulai. Tanya jika ada ambiguitas.
 DO   → Enforce plan limit di service layer, referensikan BR-007.
 DO   → Simpan polygon sebagai PostGIS geometry, bukan JSON biasa.
+DO   → Pakai `timestamptz` untuk SEMUA kolom waktu — tidak pernah `timestamp` polos.
+DO   → Update docs/database/schema.dbml di commit yang sama saat schema berubah.
 DO   → Tulis Swagger JSDoc annotation di setiap route baru.
 DO   → Tulis unit test untuk setiap endpoint baru.
 DO   → Baca .env.example sebelum menggunakan config value.

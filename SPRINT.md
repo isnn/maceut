@@ -49,6 +49,8 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Middleware: auth (sesi Better Auth) + plan-check + internalOnly + error-handler | auth/tasks.md Phase 2 |
 | ✅ | Backend: GET /me + POST /me/onboarding (plan + onboardingDone) | auth/tasks.md Phase 2 |
 | ✅ | Backend: /internal/users + /internal/stats (F-21, F-22) + guard role | specs/internal/requirements.md |
+| ✅ | Konvensi DB: semua kolom waktu `timestamptz` + guard test | CLAUDE.md |
+| ✅ | docs/database/schema.dbml — ERD wajib ikut ter-update saat schema berubah | CLAUDE.md |
 | 🔴 | Middleware: rate-limit (belum ada; /internal tanpa proteksi, Better Auth hanya melindungi route-nya sendiri) | structure.md |
 | 🔴 | **BE-12** Frontend: /internal Config jadi read-only sesuai ADR-018 | specs/internal/requirements.md |
 | ✅ | Frontend: ganti mock `features/auth/api.ts` → `/api/auth/*` + GET /me (fetch langsung, tanpa dependency baru) | auth/tasks.md Phase 3 |
@@ -413,6 +415,35 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   dasar tiering kelas jalan Free/Standard/Premium (BR-022). env:check akan melaporkannya otomatis.
   Catatan lain: AWS SDK memperingatkan Node >=22 mulai Januari 2027; image kita node:20-alpine.
   Belum mendesak, satu baris di Dockerfile.
+
+[2026-09-19] Dua aturan proyek baru + perbaikan yang diperlukan untuk memenuhinya.
+  Aturan 1 — SEMUA kolom waktu wajib `timestamptz`. Saat diperiksa, 12 dari 17 kolom waktu
+  ternyata `timestamp WITHOUT time zone`: seluruh tabel Better Auth (user, session, account,
+  verification). CLI Better Auth memang meng-emit `timestamp(...)` polos. Tabel buatan sendiri
+  (user_plans, zones) sudah benar.
+  Kenapa ini penting: nilai tanpa offset berarti apa pun yang diasumsikan proses pembaca. Selama
+  semua container UTC hasilnya kebetulan benar; begitu ada satu yang tidak, jamnya meleset TANPA
+  error — dan `session.expires_at` yang menentukan kapan login berakhir adalah tempat terburuk
+  untuk menemukannya.
+  Migration 0004 mengonversi ke-12 kolom. ⚠️ Klausa `USING x AT TIME ZONE 'UTC'` ditambahkan
+  MANUAL — drizzle-kit meng-generate ALTER tanpa USING, yang membuat Postgres menafsirkan nilai
+  naif memakai TimeZone SESI. Jadi migration yang sama menghasilkan data berbeda tergantung siapa
+  yang menjalankan: benar di Etc/UTC, meleset 7 jam di Asia/Jakarta. Diverifikasi sebelum & sesudah:
+  instant-nya identik (01:03:45.676 → 01:03:45.676+00, WIB 08:03) dan sesi lama tetap valid.
+  Guard: `src/config/schema-timezone.test.ts` memindai sumber schema dan GAGAL kalau ada
+  `timestamp(...)` tanpa withTimezone. Sengaja memindai SUMBER, bukan database — cara aturan ini
+  jebol dalam praktik adalah menjalankan ulang `@better-auth/cli generate`, yang menulis ulang
+  auth-schema.ts dan membuang withTimezone setiap kali. Test ini menangkapnya sebelum migration
+  sempat dibuat. Ada juga test yang menguji regex-nya sendiri supaya tidak diam-diam berhenti cocok.
+  Aturan 2 — `docs/database/schema.dbml` (folder baru) wajib ikut ter-update di commit yang SAMA
+  saat schema berubah. Alasannya: ERD basi lebih buruk daripada tidak ada ERD, karena tidak ada
+  yang curiga pada diagram — orang pertama yang merencanakan berdasarkan itu merencanakan untuk
+  schema yang tidak ada. DBML ditulis tangan; `drizzle-dbml-generator` bisa menghilangkan risiko
+  drift tapi butuh dependency baru DAN tetap tidak bisa mengekspresikan kolom PostGIS maupun
+  functional unique index pada lower(email) — keduanya tetap harus ditambahkan manual. Dicatat di
+  docs/database/README.md untuk ditinjau ulang kalau schema tumbuh lebih cepat dari disiplinnya.
+  Verified: 0 kolom naif tersisa (17/17 timestamptz), 115 test hijau, tsc & eslint bersih,
+  /health ok, sesi lama masih valid dan sign-in baru berhasil.
 
 ---
 
