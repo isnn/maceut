@@ -172,13 +172,17 @@ export function redactUrl(url: string): string {
  * cheaper, since HERE returns less.
  */
 export async function getTrafficFlow(bbox: BBox, opts: TrafficFlowOptions = {}): Promise<TrafficCollection> {
+  // Validate the caller's input first. Answering "HERE is not configured" to a
+  // malformed bbox reports our deployment problem instead of their request problem,
+  // and the request would still be wrong once HERE was configured.
+  validateBBox(bbox)
+
   if (!isHereConfigured()) {
     throw new UpstreamError(
       'HERE',
       'not configured — set HERE_API_KEY in api/.env, then restart. Run `npm run env:check` to verify.',
     )
   }
-  validateBBox(bbox)
 
   const url = buildFlowUrl(bbox, opts)
 

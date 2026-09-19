@@ -63,7 +63,9 @@ export default function ZonesPage() {
   const plan = user?.plan ?? 'free'
   const zonesLimit = PLAN_LIMITS[plan].zonesLimit
 
-  const load = useCallback(() => zonesApi.getZones(plan), [plan])
+  // No dependency: the server scopes the list to the session, so a plan change
+  // does not change which zones come back.
+  const load = useCallback(() => zonesApi.getZones(), [])
   const refetch = useCallback(() => load().then(setZones), [load])
 
   useEffect(() => {
@@ -90,6 +92,11 @@ export default function ZonesPage() {
         case 'area':
           return (a.areaKm2 - b.areaKm2) * factor
         case 'roads':
+          // Unknown counts sort last in either direction rather than as zero — a zone
+          // whose roads HERE has not reported is not a zone with no roads.
+          if (a.roadsCount === null && b.roadsCount === null) return 0
+          if (a.roadsCount === null) return 1
+          if (b.roadsCount === null) return -1
           return (a.roadsCount - b.roadsCount) * factor
         case 'cadence':
           return a.cadence.localeCompare(b.cadence) * factor
@@ -254,7 +261,7 @@ export default function ZonesPage() {
                       <RoadClassBadge roadClass={zone.roadClass} />
                     </Td>
                     <Td className="text-right tabular-nums">{zone.areaKm2} km²</Td>
-                    <Td className="text-right tabular-nums">{zone.roadsCount}</Td>
+                    <Td className="text-right tabular-nums">{zone.roadsCount ?? '—'}</Td>
                     <Td className="text-text-secondary">{zone.cadence}</Td>
                     <Td>
                       <ZoneStatusPill status={zone.status} />

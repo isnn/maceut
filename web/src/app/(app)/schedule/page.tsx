@@ -46,9 +46,10 @@ export default function SchedulePage() {
   const limits = PLAN_LIMITS[plan]
 
   const load = useCallback(async () => {
-    const nextZones = await zonesApi.getZones(plan)
-    return { zones: nextZones, windows: await schedulesApi.getWindows(plan) }
-  }, [plan])
+    const nextZones = await zonesApi.getZones()
+    return { zones: nextZones, windows: await schedulesApi.getWindows() }
+    // No dependency: both are scoped to the session server-side.
+  }, [])
 
   const apply = useCallback((data: { zones: Zone[]; windows: CaptureWindow[] }) => {
     setZones(data.zones)

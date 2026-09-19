@@ -43,7 +43,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Setup Drizzle: drizzle.config.ts + schema.ts dasar (user, user_plans) | zone-management/tasks.md Phase 1 |
 | ✅ | Setup PostGIS extension + generate & jalankan migration awal | zone-management/tasks.md Phase 1 |
 | ✅ | Setup Swagger: swagger-jsdoc + swagger-ui-express di /api-docs | auth/tasks.md Phase 2 |
-| 🔴 | Migration: zones, branding_configs, captures | zone-management/tasks.md Phase 1, 3 |
+| 🟡 | Migration: zones ✅ · branding_configs 🔴 · captures 🔴 | zone-management/tasks.md Phase 1, 3 |
 | ✅ | Auth: register via Better Auth `/api/auth/sign-up/email` + GET /me + unit test + swagger | auth/tasks.md Phase 2 |
 | ✅ | Auth: login/logout via Better Auth `/api/auth/sign-in\|sign-out` + unit test | auth/tasks.md Phase 2 |
 | ✅ | Middleware: auth (sesi Better Auth) + plan-check + internalOnly + error-handler | auth/tasks.md Phase 2 |
@@ -55,8 +55,8 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: ganti mock `features/internal/api.ts` → GET /internal/users, /internal/stats | specs/internal/requirements.md |
 | 🔴 | Backend: gate pembayaran untuk PATCH /me/plan (sekarang siapa pun bisa naik paket gratis) | Sprint 3 billing |
 | 🔴 | Backend: kirim flag `roleLockedByConfig` per user supaya UI tidak perlu NEXT_PUBLIC_INTERNAL_EMAILS | specs/internal/requirements.md |
-| 🔴 | API: GET /zones + POST /zones (Drizzle + PostGIS raw) + unit test + swagger | zone-management/tasks.md Phase 2 |
-| 🔴 | API: DELETE /zones/:id + unit test + swagger | zone-management/tasks.md Phase 2 |
+| ✅ | API: GET /zones + POST /zones (Drizzle + PostGIS raw) + unit test + swagger | zone-management/tasks.md Phase 2 |
+| ✅ | API: GET/PATCH/DELETE /zones/:id + unit test + swagger (F-24, BR-028..030) | zone-management/tasks.md Phase 2 |
 | ✅ | Lib: RabbitMQ client (connect, assert queue + dead-letter, publish) | zone-management/tasks.md Phase 3 |
 | ✅ | **BE-07** Lib: R2 client (upload/download/presign/delete, path BR-011) | zone-management/tasks.md Phase 3 |
 | ✅ | **BE-08** Lib: HERE Traffic client (getTrafficFlow → GeoJSON, BR-017/BR-022) | zone-management/tasks.md Phase 3 |
@@ -72,7 +72,9 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: ZoneCreateStepper shell + progress indicator | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: Step 1 — Pilih Area (Map Editor HERE Maps) | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: Step 2 — Pilih Road Class + UpgradeModal | zone-management/tasks.md Phase 4, subscription/tasks.md |
-| 🔴 | Backend: HERE Traffic client + GET /traffic/preview | zone-management/tasks.md Phase 3 |
+| ✅ | Backend: HERE Traffic client + GET /traffic/preview | zone-management/tasks.md Phase 3 |
+| ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
+| 🔴 | Frontend: hitung ruas per kelas di RoadClassPicker dari /traffic/preview (kini masih katalog lokal) | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: MapCanvas (Leaflet + OSM) + TrafficPreviewPanel + StyleSelector | zone-management/tasks.md Phase 4 |
 | 🔴 | Backend: internal render page (Playwright target) + update playwright-client.ts | zone-management/tasks.md Phase 3 |
 | ✅ | Frontend: Step 3 — Review & Konfirmasi | zone-management/tasks.md Phase 4 |
@@ -332,6 +334,39 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   Verified: 74 test hijau, tsc & eslint bersih; env:check keluar 0 dengan R2+HERE SKIP; jalur gagal
   diuji dengan DB_HOST salah dan DB_PASSWORD salah — keduanya memunculkan hint yang tepat, exit 1.
   BELUM: BE-10 (verifikasi kredensial live) menunggu 6 nilai di api/.env.
+
+[2026-09-19] Zone management backend + frontend disambungkan. Modul zona tidak lagi memakai mock.
+  Schema: tabel `zones` (migration 0002) + kolom PostGIS `geometry(Polygon,4326)` & index GIST
+  lewat SQL mentah (0003) — tidak dideklarasikan di drizzle/schema.ts karena tidak ada tipe
+  Drizzle-nya, dan mendeklarasikannya sebagai tipe lain akan membuat `drizzle-kit generate`
+  berikutnya mencoba meng-alter/menghapusnya (ADR-011).
+  `areaKm2` TIDAK disimpan — dihitung saat dibaca dengan ST_Area(geography(geometry))/1e6.
+  Cast ke `geography` itu yang membuat hasilnya meter persegi, bukan derajat persegi yang tidak
+  bermakna sebagai luas. Diverifikasi live: 0.01°×0.01° di 7.8°LS = 1.22 km² (cocok dengan hitungan
+  manual 1.11 × 1.10 km).
+  `roadsCount`/`lengthKm` NULLABLE dan diturunkan dari HERE saat create/ganti kelas jalan. Null =
+  "belum diketahui" (HERE belum dikonfigurasi), dirender "—". Nol akan berarti "tidak ada ruas yang
+  cocok" — pernyataan berbeda. Kegagalan HERE TIDAK memblokir pembuatan zona: batas wilayah adalah
+  hasil kerja user, angka ruas hanya pelengkap.
+  Endpoint: GET/POST /zones, GET/PATCH/DELETE /zones/:id, GET /traffic/preview (proxy HERE supaya
+  key tidak pernah sampai ke browser, dan cap kelas jalan diterapkan di server sehingga tidak bisa
+  diakali lewat devtools).
+  Bug ditemukan saat menulis test: `getTrafficFlow` memeriksa konfigurasi HERE SEBELUM memvalidasi
+  bbox, jadi bbox ngawur dijawab "HERE belum dikonfigurasi" — melaporkan masalah deployment kita
+  alih-alih masalah request mereka. Urutannya dibalik.
+  Frontend: `features/zones/api.ts` memanggil API asli. Parameter `plan` dihapus dari getZones/
+  createZone/updateZone/getWindows — server membaca plan dari sesi, satu-satunya salinan yang bisa
+  dipercaya; mengirimnya dari client hanya dekoratif dan bisa dipalsukan.
+  ⚠️ SATU data karangan tersisa di modul ini: `matchRoads` di RoadClassPicker masih katalog lokal
+  yang MENGABAIKAN geometry — nama jalan yang sama di mana pun zonanya. Dipertahankan karena
+  menghapusnya membuat picker tidak punya apa pun untuk ditampilkan saat user memilih. Angka
+  TERSIMPAN pada zona sudah nyata (dari server, null kalau belum diketahui). Ditandai sebagai task.
+  Verified live: create zona (PostGIS insert, area 1.22 km²), BR-015 nama duplikat termasuk beda
+  kapitalisasi, BR-013 polygon tidak tertutup, rename ke nama sendiri berhasil, pause, patch kosong
+  ditolak, zona milik user lain 403, batas zona paket free, BR-021 saat create DAN saat edit
+  (menaikkan nasional→semua di akun free ditolak), BR-022 zona `semua` SELAMAT saat paket
+  diturunkan (kelas tersimpan tidak berubah), delete. 102 unit test hijau, tsc & eslint bersih,
+  11 route web balas 200.
 
 ---
 

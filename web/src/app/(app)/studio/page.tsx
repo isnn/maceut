@@ -53,7 +53,7 @@ export default function StudioPage() {
 
   useEffect(() => {
     if (!user) return
-    zonesApi.getZones(user.plan).then((next) => {
+    zonesApi.getZones().then((next) => {
       setZones(next)
       if (next[0]) {
         setZoneId(next[0].id)

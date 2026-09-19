@@ -42,15 +42,15 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
   const load = useCallback(async () => {
     const [found, all, allWindows] = await Promise.all([
       zonesApi.getZone(zoneId).catch(() => null),
-      zonesApi.getZones(plan),
-      schedulesApi.getWindows(plan),
+      zonesApi.getZones(),
+      schedulesApi.getWindows(),
     ])
     return {
       found,
       siblings: all.filter((z) => z.id !== zoneId),
       windows: allWindows.filter((w) => w.zoneId === zoneId),
     }
-  }, [zoneId, plan])
+  }, [zoneId])
 
   const apply = useCallback(
     (data: { found: Zone | null; siblings: Zone[]; windows: CaptureWindow[] }) => {
@@ -110,7 +110,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
     setSaving(true)
     setError(null)
     try {
-      const updated = await zonesApi.updateZone(zone!.id, { name: name.trim(), roadClass }, plan)
+      const updated = await zonesApi.updateZone(zone!.id, { name: name.trim(), roadClass })
       setZone(updated)
       setEditing(false)
     } catch (err) {
@@ -218,8 +218,8 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                   </span>
                 </Row>
                 <Row label="Area">{zone.areaKm2} km²</Row>
-                <Row label="Roads collected">{zone.roadsCount}</Row>
-                <Row label="Total length">{zone.lengthKm} km</Row>
+                <Row label="Roads collected">{zone.roadsCount ?? '—'}</Row>
+                <Row label="Total length">{zone.lengthKm === null ? '—' : `${zone.lengthKm} km`}</Row>
                 <Row label="Capture cadence">{zone.cadence}</Row>
                 <Row label="Created">{formatDate(zone.createdAt)}</Row>
               </dl>
