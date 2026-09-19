@@ -48,8 +48,25 @@ export async function checkDb(): Promise<DbHealth> {
       postgis,
     }
   } catch (err) {
-    return { connected: false, error: err instanceof Error ? err.message : String(err) }
+    return { connected: false, error: describeDbError(err) }
   }
+}
+
+/**
+ * Pulls the real cause out of a Drizzle error.
+ *
+ * Drizzle wraps driver failures as "Failed query: SELECT ...\nparams:", which says
+ * nothing about *why* — the useful part (ENOTFOUND, password authentication failed)
+ * is on `.cause`. Reporting the wrapper instead means /health and env:check both show
+ * an error nobody can act on, and env:check's hints never match.
+ */
+function describeDbError(err: unknown): string {
+  const cause = (err as { cause?: unknown })?.cause
+  const real = cause instanceof Error ? cause : err instanceof Error ? err : null
+  const message = real ? real.message : String(err)
+
+  // Collapse newlines so callers can print one line per check.
+  return message.replace(/\s*\n\s*/g, ' ').trim()
 }
 
 export async function closeDb(): Promise<void> {

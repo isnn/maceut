@@ -58,9 +58,9 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | 🔴 | API: GET /zones + POST /zones (Drizzle + PostGIS raw) + unit test + swagger | zone-management/tasks.md Phase 2 |
 | 🔴 | API: DELETE /zones/:id + unit test + swagger | zone-management/tasks.md Phase 2 |
 | ✅ | Lib: RabbitMQ client (connect, assert queue + dead-letter, publish) | zone-management/tasks.md Phase 3 |
-| 🔴 | **BE-07** Lib: R2 client (upload, presigned URL, headBucket) | zone-management/tasks.md Phase 3 |
-| 🔴 | **BE-08** Lib: HERE Traffic client (getTrafficFlow → GeoJSON, BR-017/BR-022) | zone-management/tasks.md Phase 3 |
-| 🔴 | **BE-09** Script: `npm run env:check` — bukti Postgres/MQ/R2/HERE tersambung | plan BE-09 |
+| ✅ | **BE-07** Lib: R2 client (upload/download/presign/delete, path BR-011) | zone-management/tasks.md Phase 3 |
+| ✅ | **BE-08** Lib: HERE Traffic client (getTrafficFlow → GeoJSON, BR-017/BR-022) | zone-management/tasks.md Phase 3 |
+| ✅ | **BE-09** Script: `npm run env:check` — bukti Postgres/MQ/R2/HERE tersambung | plan BE-09 |
 | 🔴 | **BE-10** Verifikasi kredensial HERE + R2 live (menunggu 6 nilai di api/.env) | plan BE-10 |
 | 🔴 | Lib: Playwright client (screenshot internal render page) | zone-management/tasks.md Phase 3 |
 | 🔴 | API: POST /captures/manual + GET /captures/:id + unit test + swagger | zone-management/tasks.md Phase 3 |
@@ -298,6 +298,40 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   Mock yang MASIH mock: zones, captures, schedules, studio, team, dashboard — keduanya yang memanggil
   `getMe()` (dashboard, captures) sekarang justru memakai plan asli, jadi batas paketnya ikut nyata.
   PR: #34 (feat/api-scaffold-env) — mencakup BE-01..BE-06, modul auth, user management, dan integrasi FE.
+
+[2026-09-19] BE-07/08/09: klien R2, klien HERE Traffic, dan `npm run env:check`.
+  R2 (`src/lib/r2-client.ts`): upload/download/presign/delete + headBucket, path BR-011
+  `captures/{user_id}/{YYYY}/{MM}/{id}.png` memakai UTC supaya key tidak bergeser mengikuti
+  timezone server. Tiga setelan WAJIB untuk R2 dan masing-masing gagal tanpa menyebut dirinya:
+  `region:'auto'` (SDK menolak menandatangani tanpa region), `forcePathStyle:true` (gaya
+  virtual-host default menuju {bucket}.{account}.r2... yang tidak dilayani R2 — gejalanya 404
+  seolah bucket salah), dan `requestChecksumCalculation:'WHEN_REQUIRED'` (SDK baru menambah header
+  flexible-checksum yang ditolak R2 — gejalanya HANYA PUT yang gagal, semua baca normal).
+  Error SDK dipetakan ke tindakan: AccessDenied → token kemungkinan Object Read only.
+  HERE (`src/lib/here-traffic-client.ts`): output persis GeoJSON yang sudah dirender peta
+  (`{ trafficState, color }`) dengan warna identik dengan web/src/lib/constants.ts, jadi menukar
+  mock frontend nanti tidak mengubah komponen apa pun. Ambang jamFactor: <4 normal, 4-6 slow,
+  6-8 heavy, >=8 congested — ⚠️ BR-017 hanya menyebut empat state + warna, TIDAK mendefinisikan
+  titik potongnya; angka ini keputusan teknis dan perlu konfirmasi produk.
+  Filter functional class dilakukan LOKAL secara default, bukan lewat parameter HERE: parameter
+  yang tidak didukung menggagalkan seluruh request (400) alih-alih menurun anggun, dan memfilter
+  lokal memungkinkan responsnya diperiksa. Segmen yang FC-nya tidak dilaporkan TETAP disertakan —
+  membuangnya akan mengosongkan peta untuk semua akun Free/Standard kalau HERE berhenti mengirim
+  field itu (gagal jadi "tanpa tiering", bukan "tanpa traffic").
+  env:check (`scripts/env-check.ts`): satu perintah membuktikan Config/Postgres+PostGIS/RabbitMQ/
+  R2/HERE. TIDAK PERNAH mencetak nilai secret — hanya `set (…4 karakter terakhir)`. R2 diuji
+  round-trip penuh put→get→presign→delete, karena headBucket saja LOLOS dengan token Object Read
+  only lalu gagal saat upload. Integrasi yang belum dikonfigurasi dilaporkan SKIP, bukan FAIL.
+  Saat kunci HERE masuk, script ini sekaligus menjawab pertanyaan terbuka BR-022: apakah respons
+  v7 membawa functional class per segmen (dasar tiering Free/Standard/Premium), dan apakah
+  parameter filter upstream diterima.
+  Bug ditemukan saat menguji jalur gagal: `checkDb` melaporkan pembungkus Drizzle
+  ("Failed query: SELECT version()") bukan sebab sebenarnya, sehingga /health dan env:check
+  menampilkan error yang tidak bisa ditindaklanjuti dan semua hint tidak pernah cocok. Sekarang
+  `.cause` di-unwrap dan newline diratakan.
+  Verified: 74 test hijau, tsc & eslint bersih; env:check keluar 0 dengan R2+HERE SKIP; jalur gagal
+  diuji dengan DB_HOST salah dan DB_PASSWORD salah — keduanya memunculkan hint yang tepat, exit 1.
+  BELUM: BE-10 (verifikasi kredensial live) menunggu 6 nilai di api/.env.
 
 ---
 
