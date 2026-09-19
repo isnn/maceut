@@ -61,7 +61,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **BE-07** Lib: R2 client (upload/download/presign/delete, path BR-011) | zone-management/tasks.md Phase 3 |
 | ✅ | **BE-08** Lib: HERE Traffic client (getTrafficFlow → GeoJSON, BR-017/BR-022) | zone-management/tasks.md Phase 3 |
 | ✅ | **BE-09** Script: `npm run env:check` — bukti Postgres/MQ/R2/HERE tersambung | plan BE-09 |
-| 🔴 | **BE-10** Verifikasi kredensial HERE + R2 live (menunggu 6 nilai di api/.env) | plan BE-10 |
+| 🟡 | **BE-10** Verifikasi kredensial live — R2 ✅ lulus round-trip penuh · HERE 🔴 401 (key ditolak, lihat Progress Log) | plan BE-10 |
 | 🔴 | Lib: Playwright client (screenshot internal render page) | zone-management/tasks.md Phase 3 |
 | 🔴 | API: POST /captures/manual + GET /captures/:id + unit test + swagger | zone-management/tasks.md Phase 3 |
 | 🔴 | Worker: capture.worker.ts (consume → road class filter → screenshot → upload) | zone-management/tasks.md Phase 3 |
@@ -390,6 +390,29 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   menimpa, semua penolakan bekerja; env:check membaca nilai baru TANPA restart container dan
   melaporkan key HERE palsu sebagai "HTTP 401 — wrong, or Traffic not enabled"; override -e tetap
   berfungsi. 111 test hijau, tsc & eslint bersih.
+
+[2026-09-19] BE-10 dijalankan dengan kredensial asli. R2 LULUS, HERE masih 401.
+  R2: `bucket "maceut" · put → get → presign → delete OK`. Round-trip penuh berhasil, artinya token
+  benar-benar "Object Read & Write" — jebakan yang paling dikhawatirkan (token read-only LOLOS cek
+  bucket lalu gagal di setiap upload) tidak terjadi.
+  Temuan yang menjawab pertanyaan terbuka ADR-008: bucket bersifat PRIVATE (public URL tidak
+  menyajikan objek) sementara presigned URL BERFUNGSI. Jadi capture akan dikirim ke browser lewat
+  presigned URL, bukan URL publik/CDN. R2_PUBLIC_URL dibiarkan kosong.
+  HERE: 401 `"The request is not from an authorized source."` Diprobe dengan produk HERE lain
+  (Geocode v1) memakai key yang sama → 401 IDENTIK. Ini MENYINGKIRKAN dugaan "produk Traffic belum
+  aktif": kalau itu penyebabnya, Geocode akan berhasil. Jadi masalahnya di key/app-nya sendiri.
+  Panjang key 43 karakter (format HERE benar), jadi bukan salah paste.
+  Dugaan utama: key punya pembatasan domain/referrer. Request dari server tidak mengirim header
+  Referer sama sekali, sehingga key yang dibatasi ke sebuah website TIDAK AKAN PERNAH bisa dipakai
+  dari backend. Urutan periksa: app Active → key tanpa pembatasan domain/IP → produk Traffic aktif →
+  key baru butuh beberapa menit untuk propagasi.
+  Pesan error diperbaiki: sebelumnya berbunyi "wrong, or Traffic is not enabled" — yang justru
+  mengarahkan orang memeriksa satu-satunya hal yang terbukti BUKAN penyebabnya. Sekarang
+  `error_description` milik HERE ikut ditampilkan beserta urutan pemeriksaan di atas.
+  MASIH TERBUKA sampai HERE jalan: apakah respons flow v7 membawa functional class per segmen —
+  dasar tiering kelas jalan Free/Standard/Premium (BR-022). env:check akan melaporkannya otomatis.
+  Catatan lain: AWS SDK memperingatkan Node >=22 mulai Januari 2027; image kita node:20-alpine.
+  Belum mendesak, satu baris di Dockerfile.
 
 ---
 
