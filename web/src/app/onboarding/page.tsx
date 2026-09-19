@@ -29,8 +29,9 @@ export default function OnboardingPage() {
 
   async function choosePlan(next: Plan) {
     setPendingPlan(next)
-    await authApi.updatePlan(next)
-    await authApi.completeOnboarding()
+    // One call: the server stores the plan and marks onboarding done together, so a
+    // failure between the two cannot leave an account with a plan but no onboarding.
+    await authApi.completeOnboarding(next)
     router.push('/dashboard')
   }
 

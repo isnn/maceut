@@ -51,8 +51,10 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Backend: /internal/users + /internal/stats (F-21, F-22) + guard role | specs/internal/requirements.md |
 | 🔴 | Middleware: rate-limit (belum ada; /internal tanpa proteksi, Better Auth hanya melindungi route-nya sendiri) | structure.md |
 | 🔴 | **BE-12** Frontend: /internal Config jadi read-only sesuai ADR-018 | specs/internal/requirements.md |
-| 🔴 | Frontend: ganti mock `features/auth/api.ts` → Better Auth client (`/api/auth/*`) + GET /me | auth/tasks.md Phase 3 |
-| 🔴 | Frontend: ganti mock `features/internal/api.ts` → GET /internal/users, /internal/stats | specs/internal/requirements.md |
+| ✅ | Frontend: ganti mock `features/auth/api.ts` → `/api/auth/*` + GET /me (fetch langsung, tanpa dependency baru) | auth/tasks.md Phase 3 |
+| ✅ | Frontend: ganti mock `features/internal/api.ts` → GET /internal/users, /internal/stats | specs/internal/requirements.md |
+| 🔴 | Backend: gate pembayaran untuk PATCH /me/plan (sekarang siapa pun bisa naik paket gratis) | Sprint 3 billing |
+| 🔴 | Backend: kirim flag `roleLockedByConfig` per user supaya UI tidak perlu NEXT_PUBLIC_INTERNAL_EMAILS | specs/internal/requirements.md |
 | 🔴 | API: GET /zones + POST /zones (Drizzle + PostGIS raw) + unit test + swagger | zone-management/tasks.md Phase 2 |
 | 🔴 | API: DELETE /zones/:id + unit test + swagger | zone-management/tasks.md Phase 2 |
 | ✅ | Lib: RabbitMQ client (connect, assert queue + dead-letter, publish) | zone-management/tasks.md Phase 3 |
@@ -271,6 +273,30 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   connection close.
   BELUM diperbaiki, dicatat saja: tidak ada rate-limit di route /internal (structure.md menyebutnya).
   47 test hijau, tsc & eslint bersih di api/ dan web/.
+
+[2026-09-19] Frontend disambungkan ke API asli — modul auth & /internal tidak lagi memakai mock.
+  `features/auth/api.ts`: register/login/logout memanggil Better Auth di `/api/auth/*`, lalu `GET /me`
+  untuk mengambil pandangan aplikasi atas user (plan, role, onboarding) — dua panggilan, karena Better
+  Auth tidak tahu soal tabel kita. Dipanggil dengan fetch biasa, BUKAN package client `better-auth`:
+  cuma empat POST JSON, dan menambah dependency di web/ butuh persetujuan (aturan CLAUDE.md).
+  `features/internal/api.ts`: memanggil GET /internal/users (paginated) + GET /internal/stats.
+  24 demo tenant DIHAPUS. Dulu ada supaya layar /internal tidak kosong sebelum backend ada; sekarang
+  direktori menampilkan akun yang benar-benar ada. Layar jadi sepi, tapi itu kenyataannya.
+  Angka usage per akun juga dihapus, bukan diganti 0: tabel zones/captures/storage belum ada, jadi
+  hitungannya `null` dan dirender "—". `0` akan terbaca sebagai "belum dipakai" — klaim yang tidak
+  bisa kita buat. `AccountUsage`/`PlatformStats` counts jadi `number | null`, `UsageMeter` menerima null.
+  Ini sekaligus menutup dua "Known limitations" di CHANGELOG (backend tidak ada; angka agregat dikarang).
+  Endpoint baru: PATCH /me/plan untuk tombol ganti paket di halaman Profil.
+  ⚠️ BELUM ada gate pembayaran — akun mana pun bisa memberi dirinya batas premium gratis. Di mock hal
+  ini tidak berarti apa-apa; dengan backend asli ini jadi celah nyata. Ditandai di service, controller,
+  Swagger, dan ditambahkan sebagai task Sprint 3.
+  Env: NEXT_PUBLIC_API_BASE_URL + APP_BASE_URL dipindah dari localhost ke IP publik VPS — `localhost`
+  di browser pengunjung menunjuk ke mesin mereka sendiri, bukan server.
+  Verified: preflight CORS lolos untuk origin tepercaya (dengan credentials) dan tidak cocok untuk
+  origin lain; alur penuh register → /me → onboarding → ganti paket → 403 di /internal → logout → 401;
+  direktori staf menampilkan 3 akun asli; 15 route web balas 200; tsc bersih di api/ dan web/.
+  Mock yang MASIH mock: zones, captures, schedules, studio, team, dashboard — keduanya yang memanggil
+  `getMe()` (dashboard, captures) sekarang justru memakai plan asli, jadi batas paketnya ikut nyata.
 
 ---
 

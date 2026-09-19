@@ -85,10 +85,15 @@ export default function InternalUsersPage() {
         const next = PLAN_LIMITS[downgrade.plan]
         const u = downgrade.row.usage
         const over: string[] = []
-        if (u.zonesCount > next.zonesLimit) over.push(`${u.zonesCount} zones over a ${next.zonesLimit}-zone limit`)
-        if (u.schedulesActiveCount > next.schedulesLimit)
+        // Counts are null until zones/captures/storage are tracked. A null is "not
+        // known", not "zero" — skipping the check is right, but the dialog must not
+        // then imply the downgrade was verified as safe.
+        if (u.zonesCount !== null && u.zonesCount > next.zonesLimit)
+          over.push(`${u.zonesCount} zones over a ${next.zonesLimit}-zone limit`)
+        if (u.schedulesActiveCount !== null && u.schedulesActiveCount > next.schedulesLimit)
           over.push(`${u.schedulesActiveCount} active windows over a ${next.schedulesLimit} limit`)
-        if (u.storageUsedGb > next.storageGb) over.push(`${u.storageUsedGb} GB over a ${next.storageGb} GB limit`)
+        if (u.storageUsedGb !== null && u.storageUsedGb > next.storageGb)
+          over.push(`${u.storageUsedGb} GB over a ${next.storageGb} GB limit`)
         return over
       })()
     : []
@@ -171,11 +176,6 @@ export default function InternalUsersPage() {
                           <p className="font-semibold text-text-primary truncate">
                             {row.fullName}
                             {row.isYou && <span className="ml-sm text-micro text-text-muted font-normal">You</span>}
-                            {row.isDemo && (
-                              <span className="ml-sm text-micro text-text-muted font-normal border border-border rounded-xs px-sm py-[1px]">
-                                demo
-                              </span>
-                            )}
                           </p>
                           <p className="text-caption text-text-muted truncate">{row.email}</p>
                         </div>
@@ -274,11 +274,10 @@ function UsageDialog({ row, onClose }: { row: InternalUserRow; onClose: () => vo
             {row.organisation && ` · ${row.organisation}`} · {PLAN_LABEL[row.plan]} plan
           </Dialog.Description>
 
-          {row.isDemo && (
-            <Alert variant="warning" className="mb-lg">
-              Seeded demo tenant — these figures are fabricated and never change.
-            </Alert>
-          )}
+          <Alert variant="warning" className="mb-lg">
+            Usage is not tracked yet — zones, captures and storage arrive with those features.
+            The limits below are what this account&apos;s plan allows.
+          </Alert>
 
           <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
             <UsageMeter label="Zones" value={row.usage.zonesCount} max={row.usage.zonesLimit} />

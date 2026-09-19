@@ -1,18 +1,33 @@
 import { ProgressBar } from './ProgressBar'
 
-/** A labelled quota meter — used on Profile & usage and in the internal drawer. */
-export function UsageMeter({ label, value, max, unit = '' }: { label: string; value: number; max: number; unit?: string }) {
+/**
+ * A labelled quota meter — used on Profile & usage and in the internal drawer.
+ *
+ * `value` may be null for a quota that is not tracked yet. That renders as "— / max"
+ * with an empty bar, which reads as "unknown". Passing 0 instead would draw a full,
+ * confident "nothing used" — a claim we cannot make.
+ */
+export function UsageMeter({
+  label,
+  value,
+  max,
+  unit = '',
+}: {
+  label: string
+  value: number | null
+  max: number
+  unit?: string
+}) {
   return (
     <div>
       <div className="flex items-baseline justify-between gap-sm">
         <span className="text-label text-text-secondary">{label}</span>
         <span className="text-body font-semibold text-text-primary tabular-nums">
-          {value}
-          {unit} / {max}
+          {value === null ? '—' : `${value}${unit}`} / {max}
           {unit}
         </span>
       </div>
-      <ProgressBar value={value} max={max} className="mt-sm" />
+      <ProgressBar value={value ?? 0} max={max} className="mt-sm" />
     </div>
   )
 }

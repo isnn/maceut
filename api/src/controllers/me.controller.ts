@@ -39,3 +39,14 @@ export async function completeOnboarding(req: Request, res: Response, next: Next
     next(err)
   }
 }
+
+/** See the warning on userService.changeOwnPlan — this is ungated until billing. */
+export async function changeOwnPlan(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) throw new UnauthorizedError()
+    const { plan } = onboardingSchema.parse(req.body)
+    return res.status(200).json(ok(await userService.changeOwnPlan(req.userId, plan as Plan)))
+  } catch (err) {
+    next(err)
+  }
+}

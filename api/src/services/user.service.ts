@@ -82,6 +82,27 @@ export async function completeOnboarding(userId: string, plan: Plan): Promise<Pu
   return getUser(userId)
 }
 
+/**
+ * A user changing their own plan.
+ *
+ * ⚠️ PLACEHOLDER UNTIL BILLING (Sprint 3). There is no payment gate, so this lets any
+ * account grant itself premium limits for free. It exists because the Profile screen
+ * has always offered a plan switch and SPRINT.md records that screen as "simulasi
+ * ganti paket" — keeping the simulation working is the lesser evil against silently
+ * breaking a shipped screen.
+ *
+ * When billing lands this MUST become: create a payment intent, and only move the
+ * plan on a confirmed payment webhook. Do not build features that assume a user
+ * cannot reach premium limits on their own until that is true.
+ */
+export async function changeOwnPlan(userId: string, plan: Plan): Promise<PublicUser> {
+  const found = await userRepo.findById(userId)
+  if (!found) throw new NotFoundError('User')
+
+  await userRepo.setPlan(userId, plan)
+  return getUser(userId)
+}
+
 export interface ListUsersParams {
   search?: string
   plan?: Plan

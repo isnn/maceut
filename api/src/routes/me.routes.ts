@@ -83,4 +83,42 @@ router.get('/me', authMiddleware, meController.me)
  */
 router.post('/me/onboarding', authMiddleware, meController.completeOnboarding)
 
+/**
+ * @swagger
+ * /me/plan:
+ *   patch:
+ *     summary: Ganti paket sendiri (SEMENTARA — belum ada gate pembayaran)
+ *     description: >
+ *       ⚠️ Placeholder sampai billing dikerjakan (Sprint 3). Endpoint ini TIDAK
+ *       memverifikasi pembayaran, jadi akun mana pun bisa memberi dirinya batas
+ *       premium secara gratis. Dipakai oleh tombol ganti paket di halaman Profil,
+ *       yang memang tercatat sebagai simulasi. Saat billing ada, endpoint ini wajib
+ *       diubah menjadi: buat payment intent, dan paket hanya berpindah setelah
+ *       webhook pembayaran terkonfirmasi.
+ *     tags: [Account]
+ *     security: [{ cookieAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [plan]
+ *             properties:
+ *               plan: { type: string, enum: [free, standard, premium] }
+ *     responses:
+ *       200:
+ *         description: Paket diubah
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/User' }
+ *       401: { description: UNAUTHORIZED }
+ *       422: { description: VALIDATION_ERROR — paket tidak dikenal }
+ */
+router.patch('/me/plan', authMiddleware, meController.changeOwnPlan)
+
 export default router
