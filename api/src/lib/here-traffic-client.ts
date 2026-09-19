@@ -208,14 +208,37 @@ export async function getTrafficFlow(bbox: BBox, opts: TrafficFlowOptions = {}):
   return toGeoJson(payload, opts.functionalClasses)
 }
 
-/** Turns a status code into something an operator can act on. */
+/**
+ * Turns a status code into something an operator can act on.
+ *
+ * HERE's own `error_description` is included because it distinguishes cases a status
+ * code alone cannot: "not from an authorized source" (the app is disabled, the key is
+ * restricted to referrers/IPs, or it has not propagated yet) reads very differently
+ * from an unknown key, yet both arrive as a bare 401.
+ */
 function describeStatus(status: number, body: string): string {
-  const snippet = body.slice(0, 200)
-  if (status === 401) return 'HTTP 401 — HERE_API_KEY is wrong, or Traffic is not enabled for that key'
-  if (status === 403) return `HTTP 403 — key rejected for this request (quota or plan): ${snippet}`
+  const snippet = body.slice(0, 300).replace(/\s+/g, ' ')
+
+  let description = ''
+  try {
+    const parsed = JSON.parse(body) as { error_description?: string; error?: string }
+    description = parsed.error_description ?? parsed.error ?? ''
+  } catch {
+    description = snippet
+  }
+
+  if (status === 401) {
+    return (
+      `HTTP 401 — ${description || 'unauthorized'}. Check, in order: ` +
+      'the app is Active in platform.here.com; the API key has no domain/IP restriction ' +
+      '(a server sends no Referer, so a browser-restricted key always fails here); ' +
+      'the Traffic product is enabled on that app; and a newly created key may need a few minutes.'
+    )
+  }
+  if (status === 403) return `HTTP 403 — ${description || snippet} (quota, plan, or product not enabled)`
   if (status === 429) return 'HTTP 429 — HERE rate limit or quota exhausted'
-  if (status === 400) return `HTTP 400 — HERE rejected the request: ${snippet}`
-  return `HTTP ${status}: ${snippet}`
+  if (status === 400) return `HTTP 400 — HERE rejected the request: ${description || snippet}`
+  return `HTTP ${status}: ${description || snippet}`
 }
 
 export function toGeoJson(payload: HereFlowResponse, functionalClasses?: number[]): TrafficCollection {
