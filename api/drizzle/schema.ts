@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, pgEnum, unique, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, integer, numeric, pgEnum, unique, index } from 'drizzle-orm/pg-core'
 import { user } from './auth-schema'
 
 /**
@@ -43,3 +43,47 @@ export const userPlans = pgTable(
 )
 
 export type UserPlanRow = typeof userPlans.$inferSelect
+
+/** BR-020: chosen when the zone is created, and editable afterwards per BR-029. */
+export const roadClassEnum = pgEnum('road_class', ['nasional', 'nasional_provinsi', 'semua'])
+
+/** Whether the zone's capture windows are running. */
+export const zoneStatusEnum = pgEnum('zone_status', ['collecting', 'paused'])
+
+export const zones = pgTable(
+  'zones',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    roadClass: roadClassEnum('road_class').notNull(),
+    status: zoneStatusEnum('status').notNull().default('collecting'),
+
+    // `geometry geometry(Polygon, 4326)` is added by migration 0002 — PostGIS has no
+    // native Drizzle type, so it is written and read through `sql` templates with
+    // ST_GeomFromGeoJSON / ST_AsGeoJSON (ADR-011). Declaring it here would make
+    // drizzle-kit try to drop it on the next generate.
+
+    /**
+     * Segment count and total length inside the boundary for this road class.
+     *
+     * Nullable on purpose: they are derived from HERE, so an unconfigured HERE key
+     * means "not known yet", which the UI renders as "—". Storing 0 would claim the
+     * zone matched no roads, which is a different and wrong statement.
+     */
+    roadsCount: integer('roads_count'),
+    lengthKm: numeric('length_km', { precision: 10, scale: 2 }),
+
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // BR-015 — zone names are unique per user.
+    unique('zones_user_id_name_unique').on(t.userId, t.name),
+    index('zones_user_id_idx').on(t.userId),
+  ],
+)
+
+export type ZoneRow = typeof zones.$inferSelect

@@ -28,13 +28,13 @@ function writeWindows(windows: CaptureWindow[]) {
 }
 
 /** Gives the seeded demo zones the windows the Schedule mockup shows. */
-async function seedIfEmpty(plan: Plan) {
+async function seedIfEmpty() {
   if (typeof window === 'undefined') return
   if (window.localStorage.getItem(SEEDED_KEY)) return
   window.localStorage.setItem(SEEDED_KEY, '1')
   if (readWindows().length > 0) return
 
-  const zones = await zonesApi.getZones(plan)
+  const zones = await zonesApi.getZones()
   const collecting = zones.filter((z) => z.status === 'collecting')
   const seeded: CaptureWindow[] = []
   if (collecting[0]) {
@@ -72,8 +72,8 @@ function makeWindow(
   }
 }
 
-export async function getWindows(plan: Plan = 'standard'): Promise<CaptureWindow[]> {
-  await seedIfEmpty(plan)
+export async function getWindows(): Promise<CaptureWindow[]> {
+  await seedIfEmpty()
   return delay(readWindows())
 }
 

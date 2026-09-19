@@ -15,6 +15,20 @@
       "when": 1789779553605,
       "tag": "0001_postgis_and_email_ci",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789811798118,
+      "tag": "0002_zones",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789811808181,
+      "tag": "0003_zones_geometry",
+      "breakpoints": true
     }
   ]
 }

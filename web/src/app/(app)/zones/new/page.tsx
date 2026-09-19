@@ -17,7 +17,7 @@ export default function NewZonePage() {
   const [zones, setZones] = useState<Zone[] | null>(null)
 
   useEffect(() => {
-    if (user) zonesApi.getZones(user.plan).then(setZones)
+    if (user) zonesApi.getZones().then(setZones)
   }, [user])
 
   if (!user || zones === null) return <div className="h-[32rem] bg-canvas-secondary rounded-lg animate-pulse" />

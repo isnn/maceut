@@ -43,7 +43,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Setup Drizzle: drizzle.config.ts + schema.ts dasar (user, user_plans) | zone-management/tasks.md Phase 1 |
 | ✅ | Setup PostGIS extension + generate & jalankan migration awal | zone-management/tasks.md Phase 1 |
 | ✅ | Setup Swagger: swagger-jsdoc + swagger-ui-express di /api-docs | auth/tasks.md Phase 2 |
-| 🔴 | Migration: zones, branding_configs, captures | zone-management/tasks.md Phase 1, 3 |
+| 🟡 | Migration: zones ✅ · branding_configs 🔴 · captures 🔴 | zone-management/tasks.md Phase 1, 3 |
 | ✅ | Auth: register via Better Auth `/api/auth/sign-up/email` + GET /me + unit test + swagger | auth/tasks.md Phase 2 |
 | ✅ | Auth: login/logout via Better Auth `/api/auth/sign-in\|sign-out` + unit test | auth/tasks.md Phase 2 |
 | ✅ | Middleware: auth (sesi Better Auth) + plan-check + internalOnly + error-handler | auth/tasks.md Phase 2 |
@@ -55,13 +55,13 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: ganti mock `features/internal/api.ts` → GET /internal/users, /internal/stats | specs/internal/requirements.md |
 | 🔴 | Backend: gate pembayaran untuk PATCH /me/plan (sekarang siapa pun bisa naik paket gratis) | Sprint 3 billing |
 | 🔴 | Backend: kirim flag `roleLockedByConfig` per user supaya UI tidak perlu NEXT_PUBLIC_INTERNAL_EMAILS | specs/internal/requirements.md |
-| 🔴 | API: GET /zones + POST /zones (Drizzle + PostGIS raw) + unit test + swagger | zone-management/tasks.md Phase 2 |
-| 🔴 | API: DELETE /zones/:id + unit test + swagger | zone-management/tasks.md Phase 2 |
+| ✅ | API: GET /zones + POST /zones (Drizzle + PostGIS raw) + unit test + swagger | zone-management/tasks.md Phase 2 |
+| ✅ | API: GET/PATCH/DELETE /zones/:id + unit test + swagger (F-24, BR-028..030) | zone-management/tasks.md Phase 2 |
 | ✅ | Lib: RabbitMQ client (connect, assert queue + dead-letter, publish) | zone-management/tasks.md Phase 3 |
 | ✅ | **BE-07** Lib: R2 client (upload/download/presign/delete, path BR-011) | zone-management/tasks.md Phase 3 |
 | ✅ | **BE-08** Lib: HERE Traffic client (getTrafficFlow → GeoJSON, BR-017/BR-022) | zone-management/tasks.md Phase 3 |
 | ✅ | **BE-09** Script: `npm run env:check` — bukti Postgres/MQ/R2/HERE tersambung | plan BE-09 |
-| 🔴 | **BE-10** Verifikasi kredensial HERE + R2 live (menunggu 6 nilai di api/.env) | plan BE-10 |
+| 🟡 | **BE-10** Verifikasi kredensial live — R2 ✅ lulus round-trip penuh · HERE 🔴 401 (key ditolak, lihat Progress Log) | plan BE-10 |
 | 🔴 | Lib: Playwright client (screenshot internal render page) | zone-management/tasks.md Phase 3 |
 | 🔴 | API: POST /captures/manual + GET /captures/:id + unit test + swagger | zone-management/tasks.md Phase 3 |
 | 🔴 | Worker: capture.worker.ts (consume → road class filter → screenshot → upload) | zone-management/tasks.md Phase 3 |
@@ -72,7 +72,9 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: ZoneCreateStepper shell + progress indicator | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: Step 1 — Pilih Area (Map Editor HERE Maps) | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: Step 2 — Pilih Road Class + UpgradeModal | zone-management/tasks.md Phase 4, subscription/tasks.md |
-| 🔴 | Backend: HERE Traffic client + GET /traffic/preview | zone-management/tasks.md Phase 3 |
+| ✅ | Backend: HERE Traffic client + GET /traffic/preview | zone-management/tasks.md Phase 3 |
+| ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
+| 🔴 | Frontend: hitung ruas per kelas di RoadClassPicker dari /traffic/preview (kini masih katalog lokal) | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: MapCanvas (Leaflet + OSM) + TrafficPreviewPanel + StyleSelector | zone-management/tasks.md Phase 4 |
 | 🔴 | Backend: internal render page (Playwright target) + update playwright-client.ts | zone-management/tasks.md Phase 3 |
 | ✅ | Frontend: Step 3 — Review & Konfirmasi | zone-management/tasks.md Phase 4 |
@@ -332,6 +334,85 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   Verified: 74 test hijau, tsc & eslint bersih; env:check keluar 0 dengan R2+HERE SKIP; jalur gagal
   diuji dengan DB_HOST salah dan DB_PASSWORD salah — keduanya memunculkan hint yang tepat, exit 1.
   BELUM: BE-10 (verifikasi kredensial live) menunggu 6 nilai di api/.env.
+
+[2026-09-19] Zone management backend + frontend disambungkan. Modul zona tidak lagi memakai mock.
+  Schema: tabel `zones` (migration 0002) + kolom PostGIS `geometry(Polygon,4326)` & index GIST
+  lewat SQL mentah (0003) — tidak dideklarasikan di drizzle/schema.ts karena tidak ada tipe
+  Drizzle-nya, dan mendeklarasikannya sebagai tipe lain akan membuat `drizzle-kit generate`
+  berikutnya mencoba meng-alter/menghapusnya (ADR-011).
+  `areaKm2` TIDAK disimpan — dihitung saat dibaca dengan ST_Area(geography(geometry))/1e6.
+  Cast ke `geography` itu yang membuat hasilnya meter persegi, bukan derajat persegi yang tidak
+  bermakna sebagai luas. Diverifikasi live: 0.01°×0.01° di 7.8°LS = 1.22 km² (cocok dengan hitungan
+  manual 1.11 × 1.10 km).
+  `roadsCount`/`lengthKm` NULLABLE dan diturunkan dari HERE saat create/ganti kelas jalan. Null =
+  "belum diketahui" (HERE belum dikonfigurasi), dirender "—". Nol akan berarti "tidak ada ruas yang
+  cocok" — pernyataan berbeda. Kegagalan HERE TIDAK memblokir pembuatan zona: batas wilayah adalah
+  hasil kerja user, angka ruas hanya pelengkap.
+  Endpoint: GET/POST /zones, GET/PATCH/DELETE /zones/:id, GET /traffic/preview (proxy HERE supaya
+  key tidak pernah sampai ke browser, dan cap kelas jalan diterapkan di server sehingga tidak bisa
+  diakali lewat devtools).
+  Bug ditemukan saat menulis test: `getTrafficFlow` memeriksa konfigurasi HERE SEBELUM memvalidasi
+  bbox, jadi bbox ngawur dijawab "HERE belum dikonfigurasi" — melaporkan masalah deployment kita
+  alih-alih masalah request mereka. Urutannya dibalik.
+  Frontend: `features/zones/api.ts` memanggil API asli. Parameter `plan` dihapus dari getZones/
+  createZone/updateZone/getWindows — server membaca plan dari sesi, satu-satunya salinan yang bisa
+  dipercaya; mengirimnya dari client hanya dekoratif dan bisa dipalsukan.
+  ⚠️ SATU data karangan tersisa di modul ini: `matchRoads` di RoadClassPicker masih katalog lokal
+  yang MENGABAIKAN geometry — nama jalan yang sama di mana pun zonanya. Dipertahankan karena
+  menghapusnya membuat picker tidak punya apa pun untuk ditampilkan saat user memilih. Angka
+  TERSIMPAN pada zona sudah nyata (dari server, null kalau belum diketahui). Ditandai sebagai task.
+  Verified live: create zona (PostGIS insert, area 1.22 km²), BR-015 nama duplikat termasuk beda
+  kapitalisasi, BR-013 polygon tidak tertutup, rename ke nama sendiri berhasil, pause, patch kosong
+  ditolak, zona milik user lain 403, batas zona paket free, BR-021 saat create DAN saat edit
+  (menaikkan nasional→semua di akun free ditolak), BR-022 zona `semua` SELAMAT saat paket
+  diturunkan (kelas tersimpan tidak berubah), delete. 102 unit test hijau, tsc & eslint bersih,
+  11 route web balas 200.
+
+[2026-09-19] Alur pengisian kredensial: `npm run env:set` + instruksi konkret di api/.env.example.
+  `env:set` menulis SATU nilai ke api/.env dengan input tersembunyi, supaya secret tidak masuk
+  ~/.bash_history (yang terjadi kalau pakai `export KEY=...` atau `sed -i "s/.../secret/"`) dan
+  tidak muncul di scrollback/screen share. Hanya baris yang cocok yang ditulis ulang — komentar
+  penjelas di api/.env dipertahankan byte-per-byte, tidak di-round-trip lewat parser dotenv.
+  Menolak: key tidak dikenal, nilai kosong, nilai mengandung newline, dan paste `KEY=value`
+  (kesalahan umum yang akan menghasilkan `KEY=KEY=value`). Secret ditampilkan balik ter-mask.
+  api/.env.example sekarang memuat langkah konkret untuk mendapatkan tiap kunci, termasuk dua
+  jebakan yang gejalanya menyesatkan: token R2 WAJIB "Object Read & Write" (yang read-only tetap
+  LOLOS cek bucket lalu gagal di setiap upload), dan app HERE wajib punya produk Traffic aktif
+  (key valid tanpa Traffic membalas 401 — persis seperti key salah).
+  ⚠️ Bug ditemukan saat menguji alurnya: mengedit api/.env lalu menjalankan env:check di dalam
+  container TIDAK terlihat perubahannya — dilaporkan MISSING padahal file sudah benar. Sebabnya
+  `env_file` docker compose menyuntikkan KEY='' untuk setiap key yang masih kosong, dan dotenv
+  menolak menimpa entri yang sudah ada di process.env meskipun nilainya string kosong. Jadi blank
+  dari docker menutupi nilai asli di file. Diperbaiki dengan membuang entri kosong dari process.env
+  sebelum dotenv.config(); override sungguhan (`docker compose exec -e KEY=value`, secret CI) tetap
+  menang karena nilainya tidak kosong. `override: true` akan jadi solusi tumpul yang merusak itu.
+  Verified: env:set lewat prompt & --stdin, komentar tetap utuh, key berawalan sama tidak saling
+  menimpa, semua penolakan bekerja; env:check membaca nilai baru TANPA restart container dan
+  melaporkan key HERE palsu sebagai "HTTP 401 — wrong, or Traffic not enabled"; override -e tetap
+  berfungsi. 111 test hijau, tsc & eslint bersih.
+
+[2026-09-19] BE-10 dijalankan dengan kredensial asli. R2 LULUS, HERE masih 401.
+  R2: `bucket "maceut" · put → get → presign → delete OK`. Round-trip penuh berhasil, artinya token
+  benar-benar "Object Read & Write" — jebakan yang paling dikhawatirkan (token read-only LOLOS cek
+  bucket lalu gagal di setiap upload) tidak terjadi.
+  Temuan yang menjawab pertanyaan terbuka ADR-008: bucket bersifat PRIVATE (public URL tidak
+  menyajikan objek) sementara presigned URL BERFUNGSI. Jadi capture akan dikirim ke browser lewat
+  presigned URL, bukan URL publik/CDN. R2_PUBLIC_URL dibiarkan kosong.
+  HERE: 401 `"The request is not from an authorized source."` Diprobe dengan produk HERE lain
+  (Geocode v1) memakai key yang sama → 401 IDENTIK. Ini MENYINGKIRKAN dugaan "produk Traffic belum
+  aktif": kalau itu penyebabnya, Geocode akan berhasil. Jadi masalahnya di key/app-nya sendiri.
+  Panjang key 43 karakter (format HERE benar), jadi bukan salah paste.
+  Dugaan utama: key punya pembatasan domain/referrer. Request dari server tidak mengirim header
+  Referer sama sekali, sehingga key yang dibatasi ke sebuah website TIDAK AKAN PERNAH bisa dipakai
+  dari backend. Urutan periksa: app Active → key tanpa pembatasan domain/IP → produk Traffic aktif →
+  key baru butuh beberapa menit untuk propagasi.
+  Pesan error diperbaiki: sebelumnya berbunyi "wrong, or Traffic is not enabled" — yang justru
+  mengarahkan orang memeriksa satu-satunya hal yang terbukti BUKAN penyebabnya. Sekarang
+  `error_description` milik HERE ikut ditampilkan beserta urutan pemeriksaan di atas.
+  MASIH TERBUKA sampai HERE jalan: apakah respons flow v7 membawa functional class per segmen —
+  dasar tiering kelas jalan Free/Standard/Premium (BR-022). env:check akan melaporkannya otomatis.
+  Catatan lain: AWS SDK memperingatkan Node >=22 mulai Januari 2027; image kita node:20-alpine.
+  Belum mendesak, satu baris di Dockerfile.
 
 ---
 

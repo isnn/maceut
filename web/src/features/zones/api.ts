@@ -1,237 +1,62 @@
-// TODO: replace with real fetch through @/lib/api-client once api/ exists
-// (GET/POST/PATCH /zones, DELETE /zones/:id, GET /traffic/preview).
-// Seeds a demo workspace on first read so the turn 3 screens have data to show.
+/**
+ * Zones, against the real backend
+ * (GET/POST /zones, GET/PATCH/DELETE /zones/:id, GET /traffic/preview).
+ *
+ * The rules that used to be enforced here — name uniqueness, road-class limits, zone
+ * counts — now live in the API's service layer where they belong (BR-007), and are
+ * surfaced as `ApiError` with the same codes the screens already branch on. Nothing
+ * is seeded: the list shows the zones that exist.
+ *
+ * Two helpers stay client-side, and neither writes anything:
+ *   - `areaKm2` gives the wizard a live readout while the boundary is still being
+ *     drawn, before anything has been saved. The server recomputes it in PostGIS and
+ *     its answer is the one stored.
+ *   - `matchRoads` is still a local estimate. See the note on it.
+ */
 
-import { ApiError } from '@/types/api'
-import { PLAN_LIMITS } from '@/lib/constants'
-import { generateId } from '@/lib/utils'
-import type { Plan } from '@/features/auth/types'
+import { apiClient } from '@/lib/api-client'
 import type { CreateZoneInput, MatchedRoad, RoadClass, Zone, ZoneStatus } from './types'
 
-const ZONES_KEY = 'maceut_mock_zones'
-const SEEDED_KEY = 'maceut_mock_zones_seeded'
-const MOCK_LATENCY_MS = 400
-const ROAD_CLASS_ORDER: RoadClass[] = ['nasional', 'nasional_provinsi', 'semua']
-
-function delay<T>(value: T): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), MOCK_LATENCY_MS))
-}
-
-function boxGeometry(lng: number, lat: number, size = 0.012): Zone['geometry'] {
-  return {
-    type: 'Polygon',
-    coordinates: [
-      [
-        [lng, lat],
-        [lng + size, lat],
-        [lng + size, lat - size],
-        [lng, lat - size],
-        [lng, lat],
-      ],
-    ],
-  }
-}
-
-/** The three zones the mockups show, in the order 3f lists them. */
-function demoZones(): Zone[] {
-  return [
-    {
-      id: generateId(),
-      name: 'Sudirman corridor',
-      geometry: boxGeometry(106.818, -6.208),
-      roadClass: 'nasional_provinsi',
-      status: 'collecting',
-      areaKm2: 8.9,
-      roadsCount: 3,
-      lengthKm: 11.6,
-      cadence: 'Hourly',
-      createdAt: '2026-07-22T02:00:00.000Z',
-    },
-    {
-      id: generateId(),
-      name: 'Satrio – Casablanca',
-      geometry: boxGeometry(106.83, -6.224),
-      roadClass: 'nasional_provinsi',
-      status: 'collecting',
-      areaKm2: 5.2,
-      roadsCount: 2,
-      lengthKm: 5.9,
-      cadence: 'Hourly',
-      createdAt: '2026-08-04T02:00:00.000Z',
-    },
-    {
-      id: generateId(),
-      name: 'Tol Cawang–Grogol',
-      geometry: boxGeometry(106.86, -6.24, 0.02),
-      roadClass: 'nasional',
-      status: 'paused',
-      areaKm2: 12.4,
-      roadsCount: 1,
-      lengthKm: 5.0,
-      cadence: 'Daily',
-      createdAt: '2026-08-12T02:00:00.000Z',
-    },
-  ]
-}
-
-function readZones(): Zone[] {
-  if (typeof window === 'undefined') return []
-  const raw = window.localStorage.getItem(ZONES_KEY)
-  if (!raw) return []
-  const parsed = JSON.parse(raw) as Partial<Zone>[]
-  // Zones created before the turn 3 fields existed still need to render.
-  return parsed.map((z) => ({
-    id: z.id!,
-    name: z.name!,
-    geometry: z.geometry!,
-    roadClass: z.roadClass ?? 'nasional',
-    status: z.status ?? 'collecting',
-    areaKm2: z.areaKm2 ?? 0,
-    roadsCount: z.roadsCount ?? 0,
-    lengthKm: z.lengthKm ?? 0,
-    cadence: z.cadence ?? 'Not scheduled',
-    createdAt: z.createdAt ?? new Date().toISOString(),
-  }))
-}
-
-function writeZones(zones: Zone[]) {
-  window.localStorage.setItem(ZONES_KEY, JSON.stringify(zones))
-}
-
 /**
- * Seeds demo zones once per browser, sized to the plan so quota readouts stay
- * coherent (a Free workspace gets the one zone its plan allows).
+ * No `plan` argument: the server reads the caller's plan from their session, which is
+ * the only copy that can be trusted. Passing it from the client would have been
+ * decorative at best and spoofable at worst.
  */
-function seedIfEmpty(plan: Plan) {
-  if (typeof window === 'undefined') return
-  if (window.localStorage.getItem(SEEDED_KEY)) return
-  window.localStorage.setItem(SEEDED_KEY, '1')
-  if (readZones().length > 0) return
-  const seed = plan === 'free' ? demoZones().slice(0, 1) : demoZones()
-  writeZones(seed)
-}
-
-export async function getZones(plan: Plan = 'standard'): Promise<Zone[]> {
-  seedIfEmpty(plan)
-  return delay(readZones().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)))
+export async function getZones(): Promise<Zone[]> {
+  return apiClient.get<Zone[]>('/zones')
 }
 
 export async function getZone(id: string): Promise<Zone> {
-  const zone = readZones().find((z) => z.id === id)
-  if (!zone) {
-    await delay(null)
-    throw new ApiError({ code: 'NOT_FOUND', message: 'Zone not found.' })
-  }
-  return delay(zone)
+  return apiClient.get<Zone>(`/zones/${id}`)
 }
 
-export async function createZone(input: CreateZoneInput, plan: Plan): Promise<Zone> {
-  const zones = readZones()
-
-  if (zones.some((z) => z.name.toLowerCase() === input.name.toLowerCase())) {
-    await delay(null)
-    throw new ApiError({ code: 'ZONE_NAME_TAKEN', message: 'That zone name is already taken.' })
-  }
-
-  if (zones.length >= PLAN_LIMITS[plan].zonesLimit) {
-    await delay(null)
-    throw new ApiError({
-      code: 'ZONE_LIMIT_EXCEEDED',
-      message: `Your plan includes ${PLAN_LIMITS[plan].zonesLimit} zones and all of them are in use.`,
-    })
-  }
-
-  const maxRoadClass = PLAN_LIMITS[plan].maxRoadClass
-  if (ROAD_CLASS_ORDER.indexOf(input.roadClass) > ROAD_CLASS_ORDER.indexOf(maxRoadClass)) {
-    await delay(null)
-    throw new ApiError({
-      code: 'ROAD_CLASS_NOT_ALLOWED',
-      message: 'This road class requires a plan upgrade.',
-      details: { requiredPlan: maxRoadClass },
-    })
-  }
-
-  const matched = matchRoads(input.geometry, input.roadClass)
-  const zone: Zone = {
-    id: generateId(),
-    name: input.name,
-    geometry: input.geometry,
-    roadClass: input.roadClass,
-    status: 'collecting',
-    areaKm2: areaKm2(input.geometry),
-    roadsCount: matched.length,
-    lengthKm: Number(matched.reduce((sum, r) => sum + r.lengthKm, 0).toFixed(1)),
-    cadence: 'Not scheduled',
-    createdAt: new Date().toISOString(),
-  }
-  writeZones([...zones, zone])
-  return delay(zone)
+export async function createZone(input: CreateZoneInput): Promise<Zone> {
+  return apiClient.post<Zone>('/zones', input)
 }
 
-/**
- * Rules live here rather than in the page, per BR-007. A plain merge would let
- * an edit bypass everything `createZone` enforces and leave the derived road
- * figures describing a class the zone no longer has.
- */
 export async function updateZone(
   id: string,
-  patch: Partial<Pick<Zone, 'name' | 'status' | 'roadClass'>>,
-  plan?: Plan
+  patch: Partial<Pick<Zone, 'name' | 'roadClass' | 'status'>>,
 ): Promise<Zone> {
-  const zones = readZones()
-  const zone = zones.find((z) => z.id === id)
-  if (!zone) {
-    await delay(null)
-    throw new ApiError({ code: 'NOT_FOUND', message: 'Zone not found.' })
-  }
-
-  // BR-015, excluding this zone — renaming something to its own name is a no-op,
-  // not a collision.
-  const nextName = patch.name?.trim()
-  if (nextName && nextName.toLowerCase() !== zone.name.toLowerCase()) {
-    if (zones.some((z) => z.id !== id && z.name.toLowerCase() === nextName.toLowerCase())) {
-      await delay(null)
-      throw new ApiError({ code: 'ZONE_NAME_TAKEN', message: 'That zone name is already taken.' })
-    }
-  }
-
-  // BR-021 again — otherwise editing is a way around the limit the wizard enforces.
-  if (patch.roadClass && plan) {
-    const maxRoadClass = PLAN_LIMITS[plan].maxRoadClass
-    if (ROAD_CLASS_ORDER.indexOf(patch.roadClass) > ROAD_CLASS_ORDER.indexOf(maxRoadClass)) {
-      await delay(null)
-      throw new ApiError({
-        code: 'ROAD_CLASS_NOT_ALLOWED',
-        message: 'This road class requires a plan upgrade.',
-        details: { requiredPlan: maxRoadClass },
-      })
-    }
-  }
-
-  const updated: Zone = { ...zone, ...patch, ...(nextName ? { name: nextName } : {}) }
-
-  // A different class collects a different set of roads; the boundary is
-  // unchanged, so areaKm2 stays as it was.
-  if (patch.roadClass && patch.roadClass !== zone.roadClass) {
-    const matched = matchRoads(zone.geometry, patch.roadClass)
-    updated.roadsCount = matched.length
-    updated.lengthKm = Number(matched.reduce((sum, r) => sum + r.lengthKm, 0).toFixed(1))
-  }
-
-  writeZones(zones.map((z) => (z.id === id ? updated : z)))
-  return delay(updated)
+  return apiClient.patch<Zone>(`/zones/${id}`, patch)
 }
 
 export async function setZoneStatus(id: string, status: ZoneStatus): Promise<Zone> {
-  return updateZone(id, { status })
+  return apiClient.patch<Zone>(`/zones/${id}`, { status })
 }
 
 export async function deleteZone(id: string): Promise<void> {
-  writeZones(readZones().filter((z) => z.id !== id))
-  await delay(null)
+  await apiClient.delete<{ deleted: boolean }>(`/zones/${id}`)
 }
 
-/** Rough boundary area in km², good enough for the wizard readout. */
+/**
+ * Rough boundary area in km², for the wizard readout while drawing.
+ *
+ * Deliberately not the stored value: the server computes area with PostGIS on the
+ * spheroid, which is more accurate than this flat approximation. This exists only so
+ * the number updates as the user draws, before there is anything to ask the server
+ * about.
+ */
 export function areaKm2(geometry: Zone['geometry']): number {
   const ring = geometry.coordinates[0]
   const lngs = ring.map(([lng]) => lng)
@@ -251,7 +76,22 @@ const ROAD_CATALOG: MatchedRoad[] = [
   { name: 'Jl. Karet Pasar Baru', roadClass: 'kota', lengthKm: 1.2 },
 ]
 
-/** Which catalog roads a boundary + road class would collect (3c preview). */
+/**
+ * ⚠️ STILL AN ESTIMATE — the last fabricated data left in this feature.
+ *
+ * The road-class picker shows "how many roads would this class collect?" while the
+ * user is choosing, which needs a live answer from HERE for the boundary they have
+ * drawn. HERE is not configured yet, so this returns a fixed catalogue that ignores
+ * the geometry entirely — the same names regardless of where the zone is.
+ *
+ * It is kept because removing it would leave the picker with nothing to show at the
+ * moment of choosing. The *stored* counts on a zone are real: they come from the
+ * server as `roadsCount`/`lengthKm`, and are null (rendered "—") until HERE is
+ * configured rather than being filled in from here.
+ *
+ * To finish: call `getTrafficPreview` for the boundary once per class and count the
+ * returned features. Blocked on HERE_API_KEY.
+ */
 export function matchRoads(_geometry: Zone['geometry'], roadClass: RoadClass): MatchedRoad[] {
   const allowed: Record<RoadClass, MatchedRoad['roadClass'][]> = {
     nasional: ['nasional'],
@@ -264,7 +104,13 @@ export function matchRoads(_geometry: Zone['geometry'], roadClass: RoadClass): M
 export interface TrafficFeature {
   type: 'Feature'
   geometry: { type: 'LineString'; coordinates: number[][] }
-  properties: { trafficState: 'normal' | 'slow' | 'heavy' | 'congested'; color: string }
+  properties: {
+    trafficState: 'normal' | 'slow' | 'heavy' | 'congested'
+    color: string
+    jamFactor?: number
+    name?: string
+    functionalClass?: number
+  }
 }
 
 export interface TrafficPreview {
@@ -272,28 +118,16 @@ export interface TrafficPreview {
   features: TrafficFeature[]
 }
 
-const TRAFFIC_STATES: TrafficFeature['properties']['trafficState'][] = ['normal', 'slow', 'heavy', 'congested']
-const TRAFFIC_STATE_COLOR: Record<string, string> = {
-  normal: '#4CAF50',
-  slow: '#F4A300',
-  heavy: '#EF7B21',
-  congested: '#EF4444',
-}
-
-export async function getTrafficPreview(bbox: [number, number, number, number]): Promise<TrafficPreview> {
-  const [minLng, minLat, maxLng, maxLat] = bbox
-  const segments = 8
-  const features: TrafficFeature[] = Array.from({ length: segments }, (_, i) => {
-    const t = i / segments
-    const lat = minLat + (maxLat - minLat) * t
-    const lng1 = minLng + (maxLng - minLng) * Math.random()
-    const lng2 = minLng + (maxLng - minLng) * Math.random()
-    const state = TRAFFIC_STATES[Math.floor(Math.random() * TRAFFIC_STATES.length)]
-    return {
-      type: 'Feature',
-      geometry: { type: 'LineString', coordinates: [[lng1, lat], [lng2, lat + 0.001]] },
-      properties: { trafficState: state, color: TRAFFIC_STATE_COLOR[state] },
-    }
-  })
-  return delay({ type: 'FeatureCollection', features })
+/**
+ * Live traffic for a bounding box, proxied by the API so the HERE key never reaches
+ * the browser (ADR-010). The server also caps the road class to the caller's plan
+ * (BR-022), so the cap cannot be edited away in devtools.
+ */
+export async function getTrafficPreview(
+  bbox: [number, number, number, number],
+  roadClass?: RoadClass,
+): Promise<TrafficPreview> {
+  const params = new URLSearchParams({ bbox: bbox.join(',') })
+  if (roadClass) params.set('roadClass', roadClass)
+  return apiClient.get<TrafficPreview>(`/traffic/preview?${params.toString()}`)
 }

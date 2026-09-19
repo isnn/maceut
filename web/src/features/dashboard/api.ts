@@ -42,9 +42,9 @@ export async function getUsage(): Promise<UsageSummary> {
   const limits = PLAN_LIMITS[plan]
 
   const [zones, capturesToday, windows] = await Promise.all([
-    zonesApi.getZones(plan),
+    zonesApi.getZones(),
     capturesApi.countTodayCaptures(),
-    schedulesApi.getWindows(plan),
+    schedulesApi.getWindows(),
   ])
 
   const activeWindows = windows.filter((w) => w.active)

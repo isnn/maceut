@@ -31,7 +31,7 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     const [usage, health] = await Promise.all([dashboardApi.getUsage(), dashboardApi.getCollectionHealth()])
-    const zones = await zonesApi.getZones(usage.plan)
+    const zones = await zonesApi.getZones()
     const renders = await studioApi.getRenders(Object.fromEntries(zones.map((z) => [z.id, z.name])))
     return { usage, health, zones, renders }
   }, [])
@@ -134,7 +134,9 @@ export default function DashboardPage() {
                     <div className="min-w-0">
                       <p className="text-body font-semibold text-text-primary truncate">{zone.name}</p>
                       <p className="text-caption text-text-muted mt-xs">
-                        {zone.cadence} · {zone.roadsCount} roads · {zone.lengthKm} km
+                        {zone.cadence}
+                        {zone.roadsCount !== null && ` · ${zone.roadsCount} roads`}
+                        {zone.lengthKm !== null && ` · ${zone.lengthKm} km`}
                       </p>
                     </div>
                     <ZoneStatusPill status={zone.status} />

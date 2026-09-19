@@ -62,7 +62,7 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
     setSubmitting(true)
     setError(null)
     try {
-      await zonesApi.createZone({ name: name.trim(), geometry, roadClass }, plan)
+      await zonesApi.createZone({ name: name.trim(), geometry, roadClass })
       router.push('/schedule')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
