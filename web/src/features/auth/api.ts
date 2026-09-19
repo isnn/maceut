@@ -1,232 +1,85 @@
-// TODO: replace with real fetch through @/lib/api-client once api/ exists
-// (POST /auth/register, POST /auth/login, POST /auth/logout, GET /auth/me).
-// Mock persists a fake user table + session in localStorage so the
-// register -> onboarding -> dashboard flow is demoable end-to-end without a backend.
+/**
+ * Auth, against the real backend.
+ *
+ * Sign-up, sign-in and sign-out are Better Auth's, under `/api/auth/*`, and answer in
+ * its response shape (ADR-016). Everything about a user that Better Auth does not
+ * know — plan, platform role, onboarding state — comes from `GET /me` in this API's
+ * `{ success, data }` envelope. That is why register() and login() each make two
+ * calls: authenticate, then load the application's view of the account.
+ *
+ * The session is an HttpOnly cookie, so nothing here stores a token and nothing on
+ * this page can read one. There is no longer a localStorage fallback: if the API is
+ * unreachable, calls fail loudly rather than quietly serving stale local state.
+ */
 
-import type { LoginInput, Plan, PlatformRole, RegisterInput, User } from './types'
+import type { LoginInput, Plan, RegisterInput, User } from './types'
 import { ApiError } from '@/types/api'
-import { generateId } from '@/lib/utils'
-import { isInternalByConfig } from './internal-access'
-
-interface MockUserRecord {
-  id: string
-  email: string
-  password: string
-  fullName: string
-  organisation: string
-  plan: Plan
-  role: PlatformRole
-  onboardingDone: boolean
-  createdAt: string
-}
-
-const USERS_KEY = 'maceut_mock_users'
-const SESSION_KEY = 'maceut_session'
-const MOCK_LATENCY_MS = 400
-
-function delay<T>(value: T): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), MOCK_LATENCY_MS))
-}
-
-function readUsers(): MockUserRecord[] {
-  if (typeof window === 'undefined') return []
-  const raw = window.localStorage.getItem(USERS_KEY)
-  if (!raw) return []
-  const parsed = JSON.parse(raw) as Partial<MockUserRecord>[]
-  // Records created before the turn 3/4 screens lack the newer fields.
-  const records: MockUserRecord[] = parsed.map((u) => ({
-    id: u.id!,
-    email: u.email!,
-    password: u.password!,
-    fullName: u.fullName ?? u.email!.split('@')[0],
-    organisation: u.organisation ?? '',
-    plan: u.plan ?? 'free',
-    role: u.role ?? 'user',
-    onboardingDone: u.onboardingDone ?? true,
-    createdAt: u.createdAt ?? new Date().toISOString(),
-  }))
-
-  // Internal access comes from NEXT_PUBLIC_INTERNAL_EMAILS, so who can reach
-  // /internal is a deployment decision rather than an accident of who
-  // registered first. Config always wins; roles granted through the internal
-  // users table are kept for everyone else.
-  for (const record of records) {
-    if (isInternalByConfig(record.email)) record.role = 'internal'
-  }
-
-  return records
-}
-
-function writeUsers(users: MockUserRecord[]) {
-  window.localStorage.setItem(USERS_KEY, JSON.stringify(users))
-}
-
-function toPublicUser(record: MockUserRecord): User {
-  return {
-    id: record.id,
-    email: record.email,
-    fullName: record.fullName,
-    organisation: record.organisation,
-    plan: record.plan,
-    role: record.role,
-    onboardingDone: record.onboardingDone,
-    createdAt: record.createdAt,
-  }
-}
+import { apiClient, authRequest } from '@/lib/api-client'
 
 export async function register(input: RegisterInput): Promise<User> {
-  const users = readUsers()
-  if (users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) {
-    await delay(null)
-    throw new ApiError({ code: 'EMAIL_ALREADY_TAKEN', message: 'That email is already registered.' })
-  }
-  const record: MockUserRecord = {
-    id: generateId(),
+  await authRequest<unknown>('/sign-up/email', {
     email: input.email,
     password: input.password,
-    fullName: input.fullName,
+    // Better Auth's field is `name`; every screen here calls it fullName.
+    name: input.fullName,
+    // Declared as an additional field on the server. `role` and `onboardingDone` are
+    // input:false there, so sending those would be ignored — which is the point.
     organisation: input.organisation,
-    // Placeholder until step 2 of sign-up; the onboarding guard forces that step.
-    plan: 'free',
-    role: 'user',
-    onboardingDone: false,
-    createdAt: new Date().toISOString(),
-  }
-  writeUsers([...users, record])
-  window.localStorage.setItem(SESSION_KEY, record.id)
-  return delay(toPublicUser(record))
+  })
+
+  // Better Auth signs the user in on sign-up (autoSignIn), so the cookie is already
+  // set and this call is authenticated.
+  const user = await getMe()
+  if (!user) throw new ApiError({ code: 'UNAUTHORIZED', message: 'Signed up, but the session did not start. Please log in.' })
+  return user
 }
 
 export async function login(input: LoginInput): Promise<User> {
-  const users = readUsers()
-  const record = users.find((u) => u.email.toLowerCase() === input.email.toLowerCase())
-  if (!record || record.password !== input.password) {
-    await delay(null)
-    throw new ApiError({ code: 'INVALID_CREDENTIALS', message: 'Incorrect email or password.' })
-  }
-  window.localStorage.setItem(SESSION_KEY, record.id)
-  return delay(toPublicUser(record))
+  await authRequest<unknown>('/sign-in/email', { email: input.email, password: input.password })
+
+  const user = await getMe()
+  if (!user) throw new ApiError({ code: 'UNAUTHORIZED', message: 'Signed in, but the session did not start. Please try again.' })
+  return user
 }
 
 export async function logout(): Promise<void> {
-  window.localStorage.removeItem(SESSION_KEY)
-  await delay(null)
-}
-
-export async function getMe(): Promise<User | null> {
-  if (typeof window === 'undefined') return null
-  const userId = window.localStorage.getItem(SESSION_KEY)
-  if (!userId) return delay(null)
-  const record = readUsers().find((u) => u.id === userId)
-  return delay(record ? toPublicUser(record) : null)
-}
-
-/** Used by onboarding (3p) and the plan cards on Profile & usage (3o). */
-export async function updatePlan(plan: Plan): Promise<User> {
-  return patchCurrentUser({ plan })
-}
-
-export async function completeOnboarding(): Promise<User> {
-  return patchCurrentUser({ onboardingDone: true })
-}
-
-async function patchCurrentUser(patch: Partial<MockUserRecord>): Promise<User> {
-  const userId = window.localStorage.getItem(SESSION_KEY)
-  const users = readUsers()
-  const record = users.find((u) => u.id === userId)
-  if (!record) {
-    await delay(null)
-    throw new ApiError({ code: 'UNAUTHORIZED', message: 'Your session has ended. Please log in again.' })
+  try {
+    await authRequest<unknown>('/sign-out')
+  } catch {
+    // Never block the redirect to /login. If the call failed the cookie may still be
+    // set, but leaving the user stuck on a page they think they left is worse — and
+    // the next request will 401 and bounce them here anyway.
   }
-  const updated = { ...record, ...patch }
-  writeUsers(users.map((u) => (u.id === updated.id ? updated : u)))
-  return delay(toPublicUser(updated))
-}
-
-// --- Platform directory (used by /internal) ------------------------------------
-// Guards live here rather than in the pages, matching the repo's rule that
-// business rules are enforced in the service layer, never the caller (BR-007).
-
-export interface SeedUserInput {
-  fullName: string
-  organisation: string
-  email: string
-  plan: Plan
-  createdAt: string
-}
-
-export async function listUsers(): Promise<User[]> {
-  return delay(readUsers().map(toPublicUser))
-}
-
-export async function setUserRole(userId: string, role: PlatformRole): Promise<User> {
-  const users = readUsers()
-  const target = users.find((u) => u.id === userId)
-  if (!target) {
-    await delay(null)
-    throw new ApiError({ code: 'NOT_FOUND', message: 'Account not found.' })
-  }
-  if (userId === window.localStorage.getItem(SESSION_KEY)) {
-    await delay(null)
-    throw new ApiError({
-      code: 'CANNOT_CHANGE_OWN_ROLE',
-      message: 'You cannot change your own role — ask another internal user to do it.',
-    })
-  }
-  if (isInternalByConfig(target.email) && role !== 'internal') {
-    await delay(null)
-    throw new ApiError({
-      code: 'ROLE_SET_BY_CONFIG',
-      message: 'This account is listed in NEXT_PUBLIC_INTERNAL_EMAILS — remove it there to change the role.',
-    })
-  }
-  if (target.role === 'internal' && role !== 'internal') {
-    const othersInternal = users.filter((u) => u.role === 'internal' && u.id !== userId).length
-    if (othersInternal === 0) {
-      await delay(null)
-      throw new ApiError({
-        code: 'LAST_INTERNAL',
-        message: 'This is the last internal account — promote someone else before demoting it.',
-      })
-    }
-  }
-  const updated = { ...target, role }
-  writeUsers(users.map((u) => (u.id === userId ? updated : u)))
-  return delay(toPublicUser(updated))
-}
-
-export async function setUserPlan(userId: string, plan: Plan): Promise<User> {
-  const users = readUsers()
-  const target = users.find((u) => u.id === userId)
-  if (!target) {
-    await delay(null)
-    throw new ApiError({ code: 'NOT_FOUND', message: 'Account not found.' })
-  }
-  const updated = { ...target, plan }
-  writeUsers(users.map((u) => (u.id === userId ? updated : u)))
-  return delay(toPublicUser(updated))
 }
 
 /**
- * Appends demo tenants to the same table real accounts live in, so the
- * directory and auth never disagree. Existing rows are never touched.
+ * The signed-in user, or null when there is no session.
+ *
+ * A 401 is the ordinary signed-out answer, not an error to surface — every guard in
+ * the app calls this on mount. Anything else (network down, 500) is rethrown, so a
+ * broken backend does not masquerade as "logged out" and silently redirect.
  */
-export async function seedUsers(inputs: SeedUserInput[]): Promise<void> {
-  const users = readUsers()
-  const existing = new Set(users.map((u) => u.email.toLowerCase()))
-  const seeded: MockUserRecord[] = inputs
-    .filter((input) => !existing.has(input.email.toLowerCase()))
-    .map((input) => ({
-      id: generateId(),
-      email: input.email,
-      password: generateId(),
-      fullName: input.fullName,
-      organisation: input.organisation,
-      plan: input.plan,
-      role: 'user',
-      onboardingDone: true,
-      createdAt: input.createdAt,
-    }))
-  if (seeded.length > 0) writeUsers([...users, ...seeded])
-  await delay(null)
+export async function getMe(): Promise<User | null> {
+  try {
+    return await apiClient.get<User>('/me')
+  } catch (err) {
+    if (err instanceof ApiError && err.code === 'UNAUTHORIZED') return null
+    throw err
+  }
+}
+
+/** Step 2 of sign-up (3p): choose a plan and finish onboarding. */
+export async function completeOnboarding(plan: Plan): Promise<User> {
+  return apiClient.post<User>('/me/onboarding', { plan })
+}
+
+/**
+ * Plan switch on Profile & usage (3o).
+ *
+ * ⚠️ Ungated until billing ships — the server does not check payment, so this grants
+ * the new plan's limits immediately. The screen is recorded as a simulation in
+ * SPRINT.md; see the warning on the endpoint.
+ */
+export async function updatePlan(plan: Plan): Promise<User> {
+  return apiClient.patch<User>('/me/plan', { plan })
 }

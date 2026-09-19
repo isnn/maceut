@@ -62,7 +62,8 @@ export default function InternalOverviewPage() {
       </div>
 
       <Alert variant="warning">
-        Figures include seeded demo tenants. Only your own account reports live usage.
+        Zones, captures and storage are not tracked yet, so those figures read &quot;—&quot;. Account
+        and plan numbers are live.
       </Alert>
 
       <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-lg">
@@ -72,8 +73,16 @@ export default function InternalOverviewPage() {
           value={stats.internalUsers}
           note={`${configuredInternalEmails().length} granted by env`}
         />
-        <StatTile label="Zones collecting" value={stats.zonesTotal} note={`${stats.capturesTodayTotal} captures today`} />
-        <StatTile label="Estimated MRR" value={formatIdr(stats.mrr)} note={`${stats.storageUsedGbTotal} GB stored`} />
+        <StatTile
+          label="Zones collecting"
+          value={stats.zonesTotal ?? '—'}
+          note={stats.capturesTodayTotal === null ? 'not tracked yet' : `${stats.capturesTodayTotal} captures today`}
+        />
+        <StatTile
+          label="Estimated MRR"
+          value={formatIdr(stats.mrr)}
+          note={stats.storageUsedGbTotal === null ? 'from plan mix' : `${stats.storageUsedGbTotal} GB stored`}
+        />
       </div>
 
       <section>
@@ -130,11 +139,6 @@ export default function InternalOverviewPage() {
                     <p className="font-semibold text-text-primary">
                       {row.fullName}
                       {row.isYou && <span className="ml-sm text-micro text-text-muted font-normal">You</span>}
-                      {row.isDemo && (
-                        <span className="ml-sm text-micro text-text-muted font-normal border border-border rounded-xs px-sm py-[1px]">
-                          demo
-                        </span>
-                      )}
                     </p>
                     <p className="text-caption text-text-muted">{row.email}</p>
                   </Td>

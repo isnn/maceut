@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    // CommonJS, not ESM, on purpose: structure.md's documented import style has no
+    // file extensions ("from '../services/zone.service'"), which NodeNext rejects.
+    // Matching the docs beats matching the newer module system here — and it keeps
+    // swagger-jsdoc / swagger-ui-express / amqplib interop free of surprises.
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "rootDir": ".",
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": false,
+
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "declaration": false
+  },
+  "include": ["src/**/*.ts", "drizzle/**/*.ts", "scripts/**/*.ts", "drizzle.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}
