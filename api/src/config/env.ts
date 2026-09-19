@@ -65,6 +65,22 @@ const schema = z.object({
   DB_POOL_MAX: intFromEnv(25),
   DB_POOL_IDLE_TIMEOUT_MS: intFromEnv(30_000),
 
+  /**
+   * Comma-separated emails granted the `internal` platform role (BR-027).
+   * Unlike the frontend's NEXT_PUBLIC_INTERNAL_EMAILS, this one is server-side and
+   * is the actual authority — the frontend copy only decides what to render.
+   */
+  INTERNAL_EMAILS: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) =>
+      (v ?? '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => e.length > 0 && !e.startsWith('#')),
+    ),
+
   JWT_SECRET: requiredStr('JWT_SECRET').min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRY: z.string().trim().default('7d'),
   COOKIE_DOMAIN: z.string().trim().default('localhost'),
@@ -151,6 +167,8 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
     databaseUrl: deriveDatabaseUrl(e),
     dbPoolMax: e.DB_POOL_MAX,
     dbPoolIdleTimeoutMs: e.DB_POOL_IDLE_TIMEOUT_MS,
+
+    internalEmails: e.INTERNAL_EMAILS,
 
     jwtSecret: e.JWT_SECRET,
     jwtExpiry: e.JWT_EXPIRY,

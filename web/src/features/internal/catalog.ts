@@ -98,6 +98,14 @@ export const CONFIG_VARS: ConfigVarMeta[] = [
     rotateWarning: 'Rotating this signs out every user immediately — every existing session token stops validating.',
   },
   { key: 'JWT_EXPIRY', group: 'auth', label: 'Session lifetime', type: 'string', defaultValue: '7d', help: 'Duration string, e.g. 7d or 12h.' },
+  {
+    key: 'INTERNAL_EMAILS',
+    group: 'auth',
+    label: 'Internal staff emails',
+    help: 'Comma-separated. These accounts always get the internal role and cannot be demoted from this app (BR-027). Config grants but does not revoke: removing an address here only removes access if the account was not also promoted in the database.',
+    type: 'string',
+    requiresRestart: true,
+  },
 
   // Flags
   { key: 'SWAGGER_ENABLED', group: 'feature_flags', label: 'Swagger UI at /api-docs', type: 'boolean', defaultValue: true, requiresRestart: true },

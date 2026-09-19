@@ -10,7 +10,7 @@
 ```
 1. Pilih task → tandai 🟡 In Progress di tabel bawah
 2. Kerjakan: route → controller → service → repository → unit test → swagger annotation
-3. Jalankan: cd api && pnpm test (semua harus pass)
+3. Jalankan: cd api && npm test (semua harus pass)
 4. Verifikasi Swagger UI ter-update di /api-docs
 5. Tandai ✅ Done di tabel
 6. Catat di Progress Log: tanggal + ringkasan singkat
@@ -33,20 +33,22 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 |--------|------|---------------|
 | ✅ | Setup docker-compose.yml (postgres, rabbitmq, api, worker, web) | deployment.md |
 | ✅ | Setup root .env dari .env.example | .env.example |
-| 🔴 | Setup api/: init TypeScript + Express + package.json + tsconfig.json | structure.md |
-| 🔴 | Setup api/: Dockerfile.dev + Dockerfile | deployment.md |
-| 🔴 | Setup api/.env dari .env.example | api/.env.example |
+| ✅ | Setup api/: init TypeScript + Express + package.json + tsconfig.json | structure.md |
+| ✅ | Setup api/: Dockerfile.dev + Dockerfile | deployment.md |
+| 🟡 | Setup api/.env dari .env.example (HERE + R2 masih kosong, menunggu kredensial) | api/.env.example |
 | ✅ | Setup web/: Next.js + Tailwind (token dari design.md) + Base UI | design.md |
 | 🟡 | Setup web/: Dockerfile.dev ✅ + Dockerfile (production) 🔴 | deployment.md |
 | ✅ | Setup web/.env.local dari .env.example | web/.env.example |
-| 🔴 | Jalankan `docker compose up` — pastikan semua service start | deployment.md |
-| 🔴 | Setup Drizzle: drizzle.config.ts + schema.ts dasar (users, user_plans) | zone-management/tasks.md Phase 1 |
-| 🔴 | Setup PostGIS extension + generate & jalankan migration awal | zone-management/tasks.md Phase 1 |
-| 🔴 | Setup Swagger: swagger-jsdoc + swagger-ui-express di /api-docs | auth/tasks.md Phase 2 |
+| ✅ | Jalankan `docker compose up` — pastikan semua service start | deployment.md |
+| ✅ | Setup Drizzle: drizzle.config.ts + schema.ts dasar (user, user_plans) | zone-management/tasks.md Phase 1 |
+| ✅ | Setup PostGIS extension + generate & jalankan migration awal | zone-management/tasks.md Phase 1 |
+| ✅ | Setup Swagger: swagger-jsdoc + swagger-ui-express di /api-docs | auth/tasks.md Phase 2 |
 | 🔴 | Migration: zones, branding_configs, captures | zone-management/tasks.md Phase 1, 3 |
-| 🔴 | Auth: POST /auth/register + unit test + swagger | auth/tasks.md Phase 2 |
-| 🔴 | Auth: POST /auth/login + POST /auth/logout + unit test | auth/tasks.md Phase 2 |
-| 🔴 | Middleware: auth (JWT cookie) + plan-check + error-handler | auth/tasks.md Phase 2 |
+| ✅ | Auth: register via Better Auth `/api/auth/sign-up/email` + GET /me + unit test + swagger | auth/tasks.md Phase 2 |
+| ✅ | Auth: login/logout via Better Auth `/api/auth/sign-in\|sign-out` + unit test | auth/tasks.md Phase 2 |
+| ✅ | Middleware: auth (sesi Better Auth) + plan-check + internalOnly + error-handler | auth/tasks.md Phase 2 |
+| ✅ | Backend: GET /me + POST /me/onboarding (plan + onboardingDone) | auth/tasks.md Phase 2 |
+| ✅ | Backend: /internal/users + /internal/stats (F-21, F-22) + guard role | specs/internal/requirements.md |
 | 🔴 | API: GET /zones + POST /zones (Drizzle + PostGIS raw) + unit test + swagger | zone-management/tasks.md Phase 2 |
 | 🔴 | API: DELETE /zones/:id + unit test + swagger | zone-management/tasks.md Phase 2 |
 | 🔴 | Lib: RabbitMQ client + R2 client + Playwright client | zone-management/tasks.md Phase 3 |
@@ -203,6 +205,42 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   Verified: `tsc --noEmit` bersih, `eslint` bersih, route `/zones/[id]` balas 200.
   NOT verified: klik-through interaktif di browser — perlu review manual.
 
+[2026-09-19] Backend berdiri (BE-01..BE-06) + modul auth & user management.
+  api/ sebelumnya hanya berisi .env — tidak ada package.json, src/, maupun Dockerfile.dev,
+  padahal docker-compose membangun service api & worker darinya, jadi `docker compose up`
+  memang tidak pernah bisa jalan. Sekarang kelima service naik semua.
+  Scaffold: package.json (npm), tsconfig CommonJS, config zod (src/config/env.ts), src/errors/,
+  error-handler terpusat, Swagger di /api-docs, GET /health (lapor Postgres+PostGIS, RabbitMQ,
+  dan status konfigurasi R2/HERE), klien Drizzle & RabbitMQ, entry worker idle, Dockerfile.dev +
+  Dockerfile produksi.
+  Tiga masalah environment ditemukan & diperbaiki:
+  (1) root .env TIDAK ADA padahal ditandai ✅ — postgres diminta init dengan user/password kosong.
+      Sekarang root .env dan api/.env dibuat sekaligus dari satu DB_PASSWORD supaya tidak bisa beda;
+      kalau beda, postgres tetap healthy dan hanya API yang gagal tanpa petunjuk jelas.
+  (2) FRONTEND_URL dipakai untuk dua alamat berbeda (origin CORS vs target Playwright) — dipecah
+      jadi FRONTEND_URL + RENDER_BASE_URL (ADR-017).
+  (3) DATABASE_URL duplikat dengan DB_* — sekarang diturunkan dari DB_*, var-nya jadi override saja.
+  Jebakan tambahan: docker compose env_file hanya membuang inline comment kalau ADA nilai di
+  depannya. `R2_ACCOUNT_ID=   # <-- FILL ME` sampai ke container sebagai string "# <-- FILL ME"
+  dan terbaca sebagai "sudah dikonfigurasi". Placeholder dipindah ke baris komentar sendiri, dan
+  config menganggap nilai berawalan '#' sebagai kosong supaya tidak terulang.
+  Auth: dikerjakan dulu dengan jsonwebtoken+bcryptjs, lalu DIGANTI ke Better Auth atas permintaan
+  user sesuai ADR-009 (lihat Decisions). Better Auth memegang /api/auth/* dengan format responsnya
+  sendiri; modul lain tetap `{ success, data }`.
+  User management: GET /me, POST /me/onboarding, GET /internal/users (search/filter/sort/paginate),
+  GET /internal/users/:id, PATCH .../plan, PATCH .../role, GET /internal/stats — semua staff-only.
+  Dua bug ditemukan lewat pengujian live, bukan lewat test:
+  (a) param id divalidasi `.uuid()` padahal id Better Auth berupa text (mis.
+      "V1DXkN6XVpTK20lUZCK3wbRU97Jz4IAE") — SEMUA endpoint PATCH balas 422.
+  (b) resolveRole menurunkan siapa pun yang tidak ada di INTERNAL_EMAILS, membuat jalur promote di
+      changeRole jadi dead code. Sekarang config adalah lantai, bukan plafon (lihat Decisions).
+  Verified live: sign-up/sign-in/sign-out lewat Better Auth, sign-out benar-benar mencabut sesi
+  (GET /me langsung 401), origin tak dipercaya ditolak (INVALID_ORIGIN), percobaan kirim
+  role:"internal" saat sign-up diabaikan (input:false), promosi/demosi role berjalan, akun yang
+  dikunci INTERNAL_EMAILS tidak bisa diturunkan, non-staf dapat 403. 46 unit test hijau,
+  tsc & eslint bersih, /health 200 dengan PostgreSQL 16.4 + PostGIS 3.4.3 + 2 queue.
+  BELUM: klien R2 & HERE (BE-07/BE-08), env:check (BE-09), verifikasi kredensial live (BE-10).
+
 ---
 
 ## Decisions This Sprint
@@ -323,6 +361,42 @@ Format:
     meng-enforce BR-015 & BR-021 dan meng-derive ulang roadsCount/lengthKm, product.md Feature Status diperluas
     dari "Edit nama zona" ke nama + kelas jalan
   Catatan: frame yang sudah ter-capture TIDAK berubah — hasilnya tetap sesuai kelas saat capture berjalan
+[2026-09-19] Keputusan: api/ memakai npm, bukan pnpm — menutup review yang ditunda 2026-07-29
+  Alasan: pnpm dan corepack tidak tersedia di VPS ini; perintah pnpm di CLAUDE.md/SPRINT.md/
+    deployment.md selama ini mendeskripsikan perintah yang tidak bisa dijalankan. web/ sudah npm.
+  Impact: api/package.json, Dockerfile & Dockerfile.dev (tanpa corepack), docker-compose command,
+    CLAUDE.md, deployment.md, structure.md
+
+[2026-09-19] Keputusan: Better Auth dipakai untuk modul auth (menegakkan ADR-009), dengan format
+  respons Better Auth di /api/auth/* dan `{ success, data }` di semua modul lain (ADR-016)
+  Alasan: implementasi awal sesi ini hand-rolled (jsonwebtoken+bcryptjs) dan menyimpang dari ADR-009;
+    user memilih menegakkan ADR. Membungkus respons Better Auth akan memaksa maintain adapter per
+    endpoint dan membuat client library resminya tidak bisa dipakai apa adanya. Keuntungan konkret
+    yang langsung terbukti: sesi tersimpan di tabel, jadi sign-out benar-benar mencabut akses —
+    persis trade-off yang dicatat ADR-009 versi lama.
+  Impact: ADR-009 ditulis ulang + ADR-016 baru, src/lib/auth.ts, drizzle/auth-schema.ts (di-generate
+    `@better-auth/cli`, JANGAN diedit tangan), app.ts (handler dipasang SEBELUM express.json —
+    Better Auth membaca stream mentah), auth.middleware.ts, GET /me menggantikan GET /auth/me.
+  Catatan: kolom `user.id` bertipe text (id Better Auth), bukan uuid — user_plans.user_id ikut text.
+    `fullName` di frontend dipetakan dari `name` milik Better Auth di satu tempat (user.service.ts).
+    Field tambahan `role` & `onboardingDone` memakai `input: false` supaya client tidak bisa
+    mengirimnya saat sign-up — tanpa itu siapa pun bisa mendaftar sebagai staf.
+
+[2026-09-19] Keputusan: INTERNAL_EMAILS adalah LANTAI, bukan plafon (memperjelas BR-027)
+  Alasan: versi pertama menurunkan siapa pun yang tidak terdaftar, yang membuat tombol promote di
+    /internal/users jadi dead code — role yang baru diberikan akan dicabut lagi pada pembacaan
+    berikutnya. Email yang terdaftar selalu internal dan tidak bisa diturunkan lewat API; email
+    yang tidak terdaftar memakai nilai di database, sehingga staf bisa dipromosikan tanpa redeploy.
+  Impact: src/lib/internal-access.ts + test-nya, auth.middleware.ts, user.service.ts
+  ⚠️ Konsekuensi yang harus diketahui: menghapus email dari INTERNAL_EMAILS SAJA tidak mencabut
+    akses kalau akun itu juga dipromosikan di database. Mencabut butuh keduanya.
+
+[2026-09-19] Keputusan: layar /internal/config jadi read-only mirror dari .env (ADR-018) —
+  menutup ⚠️ yang tercatat 2026-09-09
+  Alasan: config dibaca saat container start; membuatnya editable berarti menyimpan secret di
+    database dan membuat satu salah-edit bisa menjatuhkan platform. Belum ada kebutuhan runtime.
+  Impact: ADR-018 baru di tech.md; features/internal/config-api.ts + halaman Config masih perlu
+    dimatikan jalur tulisnya (belum dikerjakan — masuk BE-12)
 ```
 
 ---

@@ -1,6 +1,8 @@
 import express from 'express'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
+import { toNodeHandler } from 'better-auth/node'
+import { auth } from './lib/auth'
 import routes from './routes'
 import { mountSwagger } from './lib/swagger'
 import { errorHandler, notFoundHandler } from './middlewares/error-handler.middleware'
@@ -30,6 +32,20 @@ app.use(
     credentials: true,
   }),
 )
+
+/**
+ * Better Auth owns everything under /api/auth (ADR-009) and answers in its own
+ * response shapes rather than this API's `{ success, data }` envelope — a deliberate
+ * split, so its client library works unmodified.
+ *
+ * This MUST be mounted before express.json(): Better Auth reads the raw request
+ * stream itself, and a body parser that has already consumed it leaves the handler
+ * hanging on requests that never resolve.
+ */
+// '/api/auth/*' is Express 4 wildcard syntax. Express 5 renamed it to '*splat';
+// on 4.x that form matches nothing and every auth request falls through to our
+// 404 handler instead.
+app.all('/api/auth/*', toNodeHandler(auth))
 
 app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true }))
