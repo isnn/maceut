@@ -78,6 +78,11 @@ cp web/.env.example web/.env.local   # Setup frontend env
 - Semua secret & config dari `.env` — jangan hardcode di source code, load via `zod`-validated config object
 - Styling frontend wajib pakai token Tailwind dari `tailwind.config.ts` — jangan hardcode hex
 - Semua service (api, worker, web, db, rabbitmq) wajib bisa jalan lewat `docker compose up` tanpa setup manual tambahan
+- **Nama branch & judul PR HANYA `feat/` · `fix/` · `chore/`** — `feat` untuk fitur baru, `fix`
+  untuk perbaikan bug, `chore` untuk selain keduanya (konvensi, infra, docs, refactor, test,
+  dependency, security). Format `<type>/<nama-kebab-case>`, contoh `feat/schedule-management`.
+  Daftar type COMMIT tetap tujuh (lihat structure.md) — commit dibaca satu per satu saat menelusuri
+  riwayat file, branch dibaca sebagai daftar PR. Dua audiens, dua tingkat kedetailan.
 
 ## Project Structure
 ```
@@ -167,6 +172,7 @@ DO   → Enforce plan limit di service layer, referensikan BR-007.
 DO   → Simpan polygon sebagai PostGIS geometry, bukan JSON biasa.
 DO   → Pakai `timestamptz` untuk SEMUA kolom waktu — tidak pernah `timestamp` polos.
 DO   → Update docs/database/schema.dbml di commit yang sama saat schema berubah.
+DO   → Nama branch & judul PR pakai feat/ · fix/ · chore/ saja (feat/schedule-management).
 DO   → Tulis Swagger JSDoc annotation di setiap route baru.
 DO   → Tulis unit test untuk setiap endpoint baru.
 DO   → Baca .env.example sebelum menggunakan config value.

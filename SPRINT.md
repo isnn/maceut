@@ -474,6 +474,20 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   ikut ke produksi. Ditambahkan sebagai task.
   Pencegahan: pola swap/backup editor (*.swp, .*.swp, *.swo, *~, *.bak, .#*) masuk .gitignore.
 
+[2026-09-19] Aturan penamaan branch & judul PR: HANYA `feat/` · `fix/` · `chore/`.
+  feat = fitur baru, fix = perbaikan bug, chore = selain keduanya (konvensi, infra, docs, refactor,
+  test, dependency, security). Format `<type>/<nama-kebab-case>`, contoh `feat/schedule-management`.
+  Sengaja TIGA, bukan tujuh seperti daftar type commit. Nama branch dibaca sekilas di daftar PR
+  untuk menjawab satu pertanyaan: "ini menambah, memperbaiki, atau bukan keduanya?" Pilihan yang
+  lebih halus (refactor vs chore vs perf) memindahkan waktu ke perdebatan kategori tanpa membuat
+  daftar PR lebih mudah dibaca. Daftar type COMMIT tetap tujuh — commit dibaca satu per satu saat
+  menelusuri riwayat sebuah file, di mana membedakan docs/refactor/test memang berguna.
+  Dicatat di CLAUDE.md (Key Conventions + AI Rules) dan structure.md.
+  Semua branch aktif sudah patuh. Yang tidak patuh hanya sisa mati dari pemulihan squash-merge
+  September lalu (`land/*`, `final-state`) — sudah ter-merge ke main, aman dihapus.
+  ⚠️ `feat/db-conventions` (branch ini sendiri) secara teknis `chore/` menurut aturan barunya.
+  Tidak di-rename karena PR #37 sudah terbuka di atasnya; aturan berlaku untuk branch berikutnya.
+
 ---
 
 ## Decisions This Sprint
