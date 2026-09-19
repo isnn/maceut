@@ -368,6 +368,29 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   diturunkan (kelas tersimpan tidak berubah), delete. 102 unit test hijau, tsc & eslint bersih,
   11 route web balas 200.
 
+[2026-09-19] Alur pengisian kredensial: `npm run env:set` + instruksi konkret di api/.env.example.
+  `env:set` menulis SATU nilai ke api/.env dengan input tersembunyi, supaya secret tidak masuk
+  ~/.bash_history (yang terjadi kalau pakai `export KEY=...` atau `sed -i "s/.../secret/"`) dan
+  tidak muncul di scrollback/screen share. Hanya baris yang cocok yang ditulis ulang — komentar
+  penjelas di api/.env dipertahankan byte-per-byte, tidak di-round-trip lewat parser dotenv.
+  Menolak: key tidak dikenal, nilai kosong, nilai mengandung newline, dan paste `KEY=value`
+  (kesalahan umum yang akan menghasilkan `KEY=KEY=value`). Secret ditampilkan balik ter-mask.
+  api/.env.example sekarang memuat langkah konkret untuk mendapatkan tiap kunci, termasuk dua
+  jebakan yang gejalanya menyesatkan: token R2 WAJIB "Object Read & Write" (yang read-only tetap
+  LOLOS cek bucket lalu gagal di setiap upload), dan app HERE wajib punya produk Traffic aktif
+  (key valid tanpa Traffic membalas 401 — persis seperti key salah).
+  ⚠️ Bug ditemukan saat menguji alurnya: mengedit api/.env lalu menjalankan env:check di dalam
+  container TIDAK terlihat perubahannya — dilaporkan MISSING padahal file sudah benar. Sebabnya
+  `env_file` docker compose menyuntikkan KEY='' untuk setiap key yang masih kosong, dan dotenv
+  menolak menimpa entri yang sudah ada di process.env meskipun nilainya string kosong. Jadi blank
+  dari docker menutupi nilai asli di file. Diperbaiki dengan membuang entri kosong dari process.env
+  sebelum dotenv.config(); override sungguhan (`docker compose exec -e KEY=value`, secret CI) tetap
+  menang karena nilainya tidak kosong. `override: true` akan jadi solusi tumpul yang merusak itu.
+  Verified: env:set lewat prompt & --stdin, komentar tetap utuh, key berawalan sama tidak saling
+  menimpa, semua penolakan bekerja; env:check membaca nilai baru TANPA restart container dan
+  melaporkan key HERE palsu sebagai "HTTP 401 — wrong, or Traffic not enabled"; override -e tetap
+  berfungsi. 111 test hijau, tsc & eslint bersih.
+
 ---
 
 ## Decisions This Sprint

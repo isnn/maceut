@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildConfig, isR2Configured, isHereConfigured, missingIntegrationKeys } from './env'
+import { buildConfig, isR2Configured, isHereConfigured, missingIntegrationKeys, dropEmptyEnvEntries } from './env'
 
 /** The minimum a process genuinely cannot start without. */
 const base: NodeJS.ProcessEnv = {
@@ -11,6 +11,27 @@ const base: NodeJS.ProcessEnv = {
   RABBITMQ_URL: 'amqp://guest:guest@rabbitmq:5672/',
   FRONTEND_URL: 'http://localhost:3000',
 }
+
+describe('dropEmptyEnvEntries', () => {
+  it('removes only the empty entries', () => {
+    // docker compose's env_file injects KEY='' for every key in api/.env with no
+    // value yet, and dotenv will not overwrite an entry that already exists. Without
+    // this, a key you had just set in api/.env was reported MISSING until the
+    // container restarted — sending you back to edit a file that was already right.
+    const env = { EMPTY: '', REAL: 'value', ALSO_EMPTY: '' }
+    const dropped = dropEmptyEnvEntries(env)
+
+    expect(dropped.sort()).toEqual(['ALSO_EMPTY', 'EMPTY'])
+    expect(env).toEqual({ REAL: 'value' })
+  })
+
+  it('leaves a genuinely provided override in place', () => {
+    // `docker compose exec -e DB_HOST=x` and CI secrets must still win over the file.
+    const env = { DB_HOST: 'override-me' }
+    dropEmptyEnvEntries(env)
+    expect(env.DB_HOST).toBe('override-me')
+  })
+})
 
 describe('buildConfig', () => {
   it('accepts the minimum set and applies defaults', () => {

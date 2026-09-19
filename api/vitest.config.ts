@@ -5,7 +5,7 @@ export default defineConfig({
     environment: 'node',
     // Tests live beside the code they cover (structure.md): zone.controller.test.ts
     // sits next to zone.controller.ts.
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

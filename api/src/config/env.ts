@@ -17,6 +17,29 @@
 import path from 'node:path'
 import dotenv from 'dotenv'
 
+/**
+ * docker compose's `env_file` injects `KEY=''` into the container for every key in
+ * api/.env that has no value yet. dotenv refuses to overwrite an entry that already
+ * exists in process.env — even an empty one — so those blanks would mask the real
+ * values in the file: set HERE_API_KEY, run env:check, and be told it is MISSING.
+ *
+ * Dropping empty entries first lets the file fill them, while a genuinely provided
+ * override (`docker compose exec -e KEY=value`, a CI secret) still wins because it is
+ * not empty. `override: true` would have been the blunt fix and would break those.
+ */
+export function dropEmptyEnvEntries(env: NodeJS.ProcessEnv = process.env): string[] {
+  const dropped: string[] = []
+  for (const [key, value] of Object.entries(env)) {
+    if (value === '') {
+      delete env[key]
+      dropped.push(key)
+    }
+  }
+  return dropped
+}
+
+dropEmptyEnvEntries()
+
 dotenv.config({ path: path.resolve(__dirname, '../../.env') })
 
 import { z } from 'zod'
