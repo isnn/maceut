@@ -51,6 +51,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Backend: /internal/users + /internal/stats (F-21, F-22) + guard role | specs/internal/requirements.md |
 | ✅ | Konvensi DB: semua kolom waktu `timestamptz` + guard test | CLAUDE.md |
 | ✅ | docs/database/schema.dbml — ERD wajib ikut ter-update saat schema berubah | CLAUDE.md |
+| 🔴 | Produksi: ganti kredensial RabbitMQ `guest:guest` di docker-compose.prod.yml | deployment.md |
 | 🔴 | Middleware: rate-limit (belum ada; /internal tanpa proteksi, Better Auth hanya melindungi route-nya sendiri) | structure.md |
 | 🔴 | **BE-12** Frontend: /internal Config jadi read-only sesuai ADR-018 | specs/internal/requirements.md |
 | ✅ | Frontend: ganti mock `features/auth/api.ts` → `/api/auth/*` + GET /me (fetch langsung, tanpa dependency baru) | auth/tasks.md Phase 3 |
@@ -444,6 +445,34 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   docs/database/README.md untuk ditinjau ulang kalau schema tumbuh lebih cepat dari disiplinnya.
   Verified: 0 kolom naif tersisa (17/17 timestamptz), 115 test hijau, tsc & eslint bersih,
   /health ok, sesi lama masih valid dan sign-in baru berhasil.
+
+[2026-09-19] `api/..env.swp` dihapus dari riwayat git + audit kredensial menyeluruh.
+  File itu adalah swap file NANO untuk `api/.env`, ikut ter-commit oleh `git add -A` milik saya
+  saat user sedang mengedit .env untuk memasukkan kunci. Blob-nya diperiksa lebih dulu: 1024 byte,
+  HANYA header nano (versi editor, username, hostname, nama file) — tidak ada isi buffer, tidak ada
+  kredensial. Jadi tidak ada yang bocor. Tetap dihapus atas permintaan user.
+  Cara menghapus: `git filter-branch --index-filter` pada rentang feat/api-r2-here-clients..
+  feat/api-zones, lalu feat/db-conventions di-rebase ke atasnya. Diverifikasi ketat:
+  (1) diff antara tip lama dan baru feat/api-zones HANYA `D api/..env.swp` — tidak ada perubahan isi;
+  (2) tree hash tip feat/db-conventions IDENTIK sebelum & sesudah (985bd259...), membuktikan tidak
+      ada konten yang berubah sama sekali;
+  (3) tiga commit pertama mempertahankan SHA aslinya (ff68eb1, da40ab3, 5c765dc) — hanya dua commit
+      yang memang memuat blob itu yang ditulis ulang;
+  (4) 115 test tetap hijau, tsc & eslint bersih setelah rewrite.
+  Force-push memakai `--force-with-lease` (menolak kalau remote bergerak tak terduga). Keempat PR
+  (#34-#37) tetap utuh dengan base yang benar. Blob hilang dari 6 remote branch dan dari object
+  store lokal setelah tag backup dihapus + gc.
+  Audit: `scripts/audit-secrets.sh` (baru) membaca nilai asli dari file env lalu mencari SETIAP
+  nilai di seluruh commit di semua ref. Nilainya TIDAK PERNAH dicetak — hanya nama key, panjang,
+  4 karakter terakhir, dan verdict. Hasil: HERE_API_KEY, keempat R2_*, JWT_SECRET, DB_PASSWORD
+  semuanya CLEAN; .env/api/.env/web/.env.local tidak pernah ter-commit sama sekali.
+  Satu false positive diperbaiki di script: RABBITMQ_URL cocok karena namanya mengandung "URL",
+  padahal nilainya `amqp://guest:guest@rabbitmq:5672/` — persis sama dengan .env.example. Script
+  sekarang membandingkan dengan .env.example dan menandainya sebagai default, bukan rahasia.
+  ⚠️ Catatan terpisah yang ditemukan dari situ: `guest:guest` adalah kredensial RabbitMQ sungguhan
+  di docker-compose. Aman untuk dev (RabbitMQ menolak `guest` dari non-loopback) tapi TIDAK boleh
+  ikut ke produksi. Ditambahkan sebagai task.
+  Pencegahan: pola swap/backup editor (*.swp, .*.swp, *.swo, *~, *.bak, .#*) masuk .gitignore.
 
 ---
 
