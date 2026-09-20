@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
+  buildFlowUrl,
+  redactUrl,
   stateFromJamFactor,
   functionalClassesFor,
   toGeoJson,
@@ -90,6 +92,27 @@ describe('validateBBox', () => {
   })
 })
 
+describe('buildFlowUrl', () => {
+  it('sends functionalClasses to HERE — the only way to filter', () => {
+    // The flow response carries no functional class, so a local filter would be a
+    // silent no-op and every plan would receive every road class.
+    const url = buildFlowUrl([110.36, -7.8, 110.37, -7.79], { functionalClasses: [1, 2] })
+    expect(url).toContain('functionalClasses=1%2C2')
+    expect(url).toContain('in=bbox%3A110.36%2C-7.8%2C110.37%2C-7.79')
+    expect(url).toContain('locationReferencing=shape')
+  })
+
+  it('omits the filter when no classes are given', () => {
+    expect(buildFlowUrl([110.36, -7.8, 110.37, -7.79])).not.toContain('functionalClasses')
+  })
+
+  it('never leaks the key when redacted for logs', () => {
+    const url = buildFlowUrl([110.36, -7.8, 110.37, -7.79])
+    expect(redactUrl(url)).toContain('apiKey=***')
+    expect(redactUrl(url)).not.toMatch(/apiKey=[^*&]/)
+  })
+})
+
 describe('toGeoJson', () => {
   it('maps a result to a coloured LineString', () => {
     const out = toGeoJson({ results: [result(8.5, { name: 'Jalan Malioboro' })] })
@@ -128,6 +151,8 @@ describe('toGeoJson', () => {
   })
 
   describe('functional-class filtering', () => {
+    // HERE filters upstream; these cover the defensive local pass, which only bites
+    // if HERE ever starts returning a class.
     it('keeps only the requested classes', () => {
       const out = toGeoJson(
         { results: [result(1, { fc: 1 }), result(2, { fc: 3 }), result(3, { fc: 5 })] },
@@ -142,9 +167,9 @@ describe('toGeoJson', () => {
     })
 
     it('keeps segments whose class HERE did not report', () => {
-      // The open question behind BR-022: if HERE stops reporting functional class,
-      // dropping unknowns would silently empty the map for every Free and Standard
-      // account. Keeping them degrades to "no tiering" instead of "no traffic".
+      // This is every segment in practice: HERE's flow response carries no functional
+      // class, so filtering happens upstream via the `functionalClasses` parameter.
+      // Dropping unknowns here would empty the map entirely.
       const out = toGeoJson({ results: [result(1)] }, [1, 2])
       expect(out.features).toHaveLength(1)
       expect(out.features[0]!.properties.functionalClass).toBeUndefined()

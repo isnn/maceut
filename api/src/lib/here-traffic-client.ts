@@ -34,7 +34,7 @@ export interface TrafficFeature {
     jamFactor: number
     /** Street name where HERE provides one. */
     name?: string
-    /** HERE functional class 1–5, when the response carries it. See FC_AVAILABLE below. */
+    /** HERE functional class 1–5. Absent in practice — HERE does not return it (see fcOf). */
     functionalClass?: number
   }
 }
@@ -103,14 +103,16 @@ interface HereFlowResponse {
 }
 
 /**
- * Where the functional class sits in a v7 response, if anywhere.
+ * Functional class, if a response happens to carry one.
  *
- * This is the open question flagged in the plan: BR-022's road-class tiering — the
- * main paid differentiator between Free, Standard and Premium — assumes HERE reports
- * a functional class per segment. Both plausible locations are read here, and
- * `npm run env:check` reports which (if either) a live response actually carries.
- * If neither does, the tiering needs a different mechanism and that is a product
- * decision, not a bug to patch here.
+ * ANSWERED 2026-09-20, and the answer changed the design: HERE's v7 flow response
+ * does **not** include a functional class per segment. It is a request filter only
+ * (`functionalClasses=1,2,3`), per
+ * docs.here.com/traffic-api/docs/flow-filter-functional-class-flow-1.
+ *
+ * That means BR-022's tiering can only be enforced upstream. This reader is kept
+ * because it costs nothing and would pick the field up if HERE ever adds it, but
+ * nothing may depend on it being present.
  */
 function fcOf(result: HereResult, link: HereLink): number | undefined {
   return link.functionalClass ?? result.location?.functionalClass
@@ -137,10 +139,12 @@ export function validateBBox(bbox: BBox): void {
 }
 
 export interface TrafficFlowOptions {
-  /** Restrict to these HERE functional classes. Empty or omitted returns everything. */
+  /**
+   * Restrict to these HERE functional classes. Sent to HERE as `functionalClasses`,
+   * which is the ONLY way to filter: the response carries no class to filter on.
+   * Empty or omitted returns every class.
+   */
   functionalClasses?: number[]
-  /** Ask HERE to filter server-side too. Off by default — see getTrafficFlow. */
-  filterUpstream?: boolean
   signal?: AbortSignal
 }
 
@@ -148,8 +152,13 @@ export function buildFlowUrl(bbox: BBox, opts: TrafficFlowOptions = {}): string 
   const [west, south, east, north] = bbox
   const url = new URL(config.hereTrafficFlowUrl)
   url.searchParams.set('in', `bbox:${west},${south},${east},${north}`)
+  // `shape` returns the geometry we turn into GeoJSON LineStrings. HERE also accepts
+  // `olr` and `tmc`, neither of which carries drawable coordinates.
   url.searchParams.set('locationReferencing', 'shape')
-  if (opts.filterUpstream && opts.functionalClasses?.length) {
+
+  // Always sent when a filter is wanted — there is no local fallback, because the
+  // response has no class to filter on.
+  if (opts.functionalClasses?.length) {
     url.searchParams.set('functionalClasses', opts.functionalClasses.join(','))
   }
   url.searchParams.set('apiKey', config.hereApiKey as string)
@@ -164,12 +173,12 @@ export function redactUrl(url: string): string {
 /**
  * Fetches traffic flow for a bounding box and maps it to GeoJSON.
  *
- * Filtering by functional class happens **locally** by default rather than through
- * HERE's `functionalClasses` parameter. Two reasons: a parameter HERE does not accept
- * fails the whole request with a 400 instead of degrading, and filtering locally lets
- * the response be inspected for whether it carries a functional class at all. Pass
- * `filterUpstream: true` once env:check has confirmed the parameter works — it is
- * cheaper, since HERE returns less.
+ * Road-class filtering is done by HERE, not by us. An earlier version filtered
+ * locally on a `functionalClass` field in the response — which does not exist. That
+ * made the filter a silent no-op: every plan would have received every road class,
+ * and BR-022's tiering (the main paid differentiator) would have sold nothing.
+ *
+ * Filtering upstream also costs less: HERE returns fewer segments.
  */
 export async function getTrafficFlow(bbox: BBox, opts: TrafficFlowOptions = {}): Promise<TrafficCollection> {
   // Validate the caller's input first. Answering "HERE is not configured" to a
@@ -257,8 +266,9 @@ export function toGeoJson(payload: HereFlowResponse, functionalClasses?: number[
       if (points.length < 2) continue
 
       const fc = fcOf(result, link)
-      // Only drop a segment when its class is known and unwanted. Dropping unknowns
-      // would silently empty the map if HERE stops reporting the field.
+      // Defensive only. HERE filters upstream and does not return a class, so this
+      // drops nothing today — but if the field ever appears, a segment outside the
+      // requested set must not be drawn.
       if (wanted && fc !== undefined && !wanted.has(fc)) continue
 
       features.push({

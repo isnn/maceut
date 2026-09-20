@@ -81,6 +81,10 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Backend: akun internal tidak dihitung sebagai user/pendapatan di /internal/stats | keputusan user |
 | ✅ | Frontend: Halaman Jadwal pakai API asli | mockup turn 3 |
 | ❌ | Frontend: Halaman Tim — DIHAPUS, out of scope MVP (product.md) | product.md |
+| ✅ | Backend: GET /usage — angka dashboard nyata, `null` untuk yang belum terukur | zone-management F-19 |
+| ✅ | Frontend: Dashboard pakai API asli (tidak ada lagi angka karangan) | zone-management F-19 |
+| ✅ | Fix: filter functional class dikirim ke HERE, bukan difilter lokal | docs HERE v7 |
+| 🔴 | HERE API key masih 401 "not from an authorized source" — restriksi domain/IP di app-nya | BE-10 |
 | 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
 | ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
 | 🔴 | Frontend: hitung ruas per kelas di RoadClassPicker dari /traffic/preview (kini masih katalog lokal) | zone-management/tasks.md Phase 4 |
@@ -534,6 +538,49 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   ditolak → mem-pause satu zona membebaskan slot dan pembuatan berhasil → upgrade kembali ke
   premium membiarkan yang ter-pause tetap ter-pause. 160 test hijau, tsc & eslint bersih,
   10 route web balas 200, /team balas 404.
+
+[2026-09-20] Dashboard pakai data nyata + perbaikan filter functional class HERE.
+  DASHBOARD. `GET /usage` baru: setiap angka diukur atau `null`, tidak ada yang diperkirakan.
+  Versi lama melaporkan `rendersThisMonth: 7`, storage `zones.length * 1.37`, dan seats
+  `plan === 'free' ? 1 : 3` — tidak satu pun mengukur apa pun. Dashboard dibaca sekilas dan
+  dipercaya, jadi angka yang kelihatan masuk akal tapi dikarang lebih buruk daripada tanda "—":
+  tidak ada yang terpikir memeriksanya.
+  Yang sekarang nyata: jumlah zona collecting, jendela aktif, frame/hari pada HARI TERSIBUK
+  (bukan jumlah seminggu), dan `nextCaptureAt` yang DITURUNKAN dari jendela aktif — dihitung
+  dalam WIB, bukan UTC. Diverifikasi live: Minggu 18:52 WIB dengan jendela Senin-Jumat 07:00-09:00
+  menghasilkan "07:00 (besok · 1 zona)". Ada test yang mengunci kasus batasnya, termasuk 23:00 UTC
+  Minggu yang di Jakarta sudah Senin 06:00 — membacanya sebagai UTC akan memundurkan capture
+  berikutnya satu hari penuh.
+  `pausedByPlan` ditambahkan: berapa zona/jendela yang di-pause karena melebihi paket (ADR-020).
+  Ini potongan yang membuat grandfathering terlihat — tanpanya akun yang baru turun paket cuma
+  melihat pengumpulan berhenti tanpa penjelasan di mana pun. Badge "Collection health" yang dulu
+  hardcoded "Healthy" sekarang healthy/degraded/idle. `idle` sengaja bukan kegagalan: akun yang
+  belum menjadwalkan apa pun bekerja persis seperti yang diatur, menyebutnya "degraded" itu
+  membunyikan alarm palsu.
+  HERE. Membaca docs yang dikirim user (docs.here.com/traffic-api/docs/flow-filter-functional-
+  class-flow-1) menemukan BUG NYATA: `functionalClasses` adalah parameter REQUEST, dan functional
+  class TIDAK dikembalikan di respons flow. Kode kita memfilter LOKAL pada field yang tidak pernah
+  ada — artinya filternya no-op diam-diam, dan SETIAP paket akan menerima SEMUA kelas jalan. BR-022
+  (pembeda berbayar utama Free/Standard/Premium) tidak akan menjual apa pun.
+  Diperbaiki: `functionalClasses` selalu dikirim ke HERE; filter lokal tinggal sebagai pertahanan
+  kalau suatu saat HERE menambah field-nya. Ini sekaligus lebih murah — HERE mengembalikan lebih
+  sedikit segmen.
+  Korelasi FC ↔ kelas jalan Indonesia didokumentasikan di types/plan.ts, memakai definisi HERE
+  sendiri: FC1 (akses terkontrol, antar metropolitan) + FC2 (menyalurkan ke FC1, antar kota tercepat)
+  ≈ Jalan Nasional; FC3 (volume tinggi mobilitas lebih rendah) ≈ Jalan Provinsi; FC4+FC5 ≈ Jalan
+  Kabupaten/Kota dan lingkungan. Pemetaan yang ada sudah benar dan tidak diubah.
+  ⚠️ Dicatat jujur: ini APROKSIMASI. Indonesia mengklasifikasi jalan berdasarkan status administratif
+  (UU 38/2004 — siapa yang memiliki dan mendanai), HERE berdasarkan FUNGSI lalu lintas. Umumnya
+  sejalan, tapi tidak selalu: Jalan Nasional yang melewati kecamatan sepi bisa jadi FC3, dan Jalan
+  Jenderal Sudirman bisa FC2 meski jalan kota. Jadi tier menjual "kedalaman data jalan", bukan
+  "berstatus nasional secara hukum" — dan memang begitu produk menjelaskannya.
+  ⚠️ HERE MASIH 401. Semua bentuk request diuji — bbox, circle sesuai contoh docs, dengan dan tanpa
+  filter, locationReferencing shape dan olr — SEMUA memberi "not from an authorized source" yang
+  sama. Jadi formatnya BUKAN masalahnya; kuncinya yang ditolak. Variasi Bearer memberi error
+  berbeda ("unrecognized kid null"), mengonfirmasi ini API key, bukan OAuth token. Dugaan utama
+  tetap restriksi domain/referrer pada key: request dari server tidak mengirim header Referer sama
+  sekali, jadi key yang dibatasi ke sebuah website tidak akan pernah bisa dipakai dari backend.
+  180 test hijau, tsc & eslint bersih di api/ dan web/, 8 route web balas 200.
 
 ---
 

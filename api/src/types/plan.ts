@@ -15,7 +15,34 @@ export type RoadClass = 'nasional' | 'nasional_provinsi' | 'semua'
 
 export const ROAD_CLASS_ORDER: readonly RoadClass[] = ['nasional', 'nasional_provinsi', 'semua'] as const
 
-/** HERE functional classes each road class resolves to (BR-001..003). */
+/**
+ * HERE functional classes each road class resolves to (BR-001..003).
+ *
+ * The mapping, against HERE's own definitions:
+ *
+ *   FC1  controlled access, high volume at maximum speed between and through major
+ *        metropolitan areas            → jalan tol, arteri primer
+ *   FC2  channels traffic to FC1, travel between and through cities in the shortest
+ *        time                          → arteri primer non-tol
+ *        ⇒ FC1 + FC2 ≈ **Jalan Nasional**
+ *   FC3  interconnects with FC2, high volume at lower mobility
+ *        ⇒ ≈ **Jalan Provinsi** (kolektor primer)
+ *   FC4  high volume at moderate speed between neighbourhoods
+ *   FC5  volume and movement below any other road
+ *        ⇒ FC4 + FC5 ≈ **Jalan Kabupaten/Kota** and jalan lingkungan
+ *
+ * ⚠️ This is an approximation, and knowingly so. Indonesia classifies roads by
+ * administrative status (UU 38/2004 — who owns and funds them); HERE classifies by
+ * traffic *function*. They mostly line up, but not always: a Jalan Nasional through a
+ * quiet district may be FC3, and a busy city street like Jalan Jenderal Sudirman can
+ * be FC2 despite being a city road. The tier therefore sells "depth of road data",
+ * not "legally classified as national" — which is how the product describes it, and
+ * the honest reading.
+ *
+ * Verified against HERE's docs on 2026-09-20. FC is a *request* filter: the flow
+ * response does not carry a functional class per segment, so filtering can only be
+ * done upstream — see here-traffic-client.ts.
+ */
 export const ROAD_CLASS_FC: Record<RoadClass, readonly string[]> = {
   nasional: ['FC1', 'FC2'],
   nasional_provinsi: ['FC1', 'FC2', 'FC3'],

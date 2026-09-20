@@ -61,8 +61,10 @@ export default function DashboardPage() {
     )
   }
 
-  const captureTimes = Array.from({ length: 5 }, (_, i) => `${String(9 - i).padStart(2, '0')}:00`)
-  const remainingCaptures = Math.max(usage.capturesToday - captureTimes.length, 0)
+  // Captures do not exist yet (CAP-01), so there is no strip to build. Once they do,
+  // this comes from GET /captures rather than being generated from a count.
+  const captureTimes: string[] = []
+  const remainingCaptures = 0
 
   return (
     <div className="space-y-xl">
@@ -91,16 +93,25 @@ export default function DashboardPage() {
         />
         <StatTile
           label="Captures today"
-          value={usage.capturesToday}
-          note={`Limit ${usage.capturesLimit} / day`}
-          progress={{ value: usage.capturesToday, max: usage.capturesLimit }}
+          value={usage.capturesToday ?? '—'}
+          note={usage.capturesToday === null ? 'Not tracked yet' : `Limit ${usage.capturesLimit} / day`}
+          {...(usage.capturesToday !== null
+            ? { progress: { value: usage.capturesToday, max: usage.capturesLimit } }
+            : {})}
         />
-        <StatTile label="Animations rendered" value={usage.rendersThisMonth} note="This month" />
+        <StatTile
+          label="Frames scheduled"
+          value={usage.framesPerDay}
+          note={`per day · limit ${usage.capturesLimit}`}
+          progress={{ value: usage.framesPerDay, max: usage.capturesLimit }}
+        />
         <StatTile
           label="Storage used"
-          value={`${usage.storageUsedGb} GB`}
-          note={`of ${usage.storageLimitGb} GB`}
-          progress={{ value: usage.storageUsedGb, max: usage.storageLimitGb }}
+          value={usage.storageUsedGb === null ? '—' : `${usage.storageUsedGb} GB`}
+          note={usage.storageUsedGb === null ? `Limit ${usage.storageLimitGb} GB` : `of ${usage.storageLimitGb} GB`}
+          {...(usage.storageUsedGb !== null
+            ? { progress: { value: usage.storageUsedGb, max: usage.storageLimitGb } }
+            : {})}
         />
       </div>
 
@@ -210,13 +221,35 @@ export default function DashboardPage() {
           <Card className="p-lg">
             <div className="flex items-center justify-between mb-md">
               <h2 className="text-heading-sm text-text-primary">Collection health</h2>
-              <span className="bg-success-bg text-success-text text-micro font-semibold rounded-xs px-sm py-xs">Healthy</span>
+              <span
+                className={`text-micro font-semibold rounded-xs px-sm py-xs ${
+                  health.status === 'healthy'
+                    ? 'bg-success-bg text-success-text'
+                    : health.status === 'degraded'
+                      ? 'bg-warning-bg text-warning-text'
+                      : 'bg-canvas-secondary text-text-muted'
+                }`}
+              >
+                {health.status === 'healthy' ? 'Healthy' : health.status === 'degraded' ? 'Degraded' : 'Idle'}
+              </span>
             </div>
             <dl className="space-y-md">
-              <HealthRow label="Next capture" value={health.nextCaptureAt} note={health.nextCaptureIn} />
-              <HealthRow label="Roads reporting" value={`${health.roadsReporting} of ${health.roadsTotal}`} />
-              <HealthRow label="Missed captures" value={health.missedCaptures} />
-              <HealthRow label="Peak index" value={String(health.peakIndex)} note={`at ${health.peakAt}`} />
+              <HealthRow label="Next capture" value={health.nextCaptureAt ?? '—'} note={health.nextCaptureNote} />
+              <HealthRow
+                label="Roads reporting"
+                value={health.roadsReporting === null ? '—' : String(health.roadsReporting)}
+                note={health.roadsReporting === null ? 'Waiting on traffic data' : undefined}
+              />
+              <HealthRow
+                label="Missed captures"
+                value={health.missedCaptures === null ? '—' : String(health.missedCaptures)}
+                note={health.missedCaptures === null ? 'Not tracked yet' : undefined}
+              />
+              <HealthRow
+                label="Peak index"
+                value={health.peakIndex === null ? '—' : String(health.peakIndex)}
+                note={health.peakIndex === null ? 'Not tracked yet' : `at ${health.peakAt}`}
+              />
             </dl>
           </Card>
         </div>

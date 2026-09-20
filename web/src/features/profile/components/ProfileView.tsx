@@ -99,7 +99,6 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                 <UsageMeter label="Scheduled frames / day" value={usage.framesPerDay} max={usage.capturesLimit} />
                 <UsageMeter label="Active windows" value={usage.schedulesActiveCount} max={usage.schedulesLimit} />
                 <UsageMeter label="Storage" value={usage.storageUsedGb} max={usage.storageLimitGb} unit=" GB" />
-                <UsageMeter label="Team seats" value={usage.seatsUsed} max={usage.seatsLimit} />
               </div>
             </Card>
 

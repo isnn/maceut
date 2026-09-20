@@ -212,25 +212,21 @@ async function checkHere() {
     return
   }
 
-  const withFc = all.features.filter((f) => f.properties.functionalClass !== undefined).length
   const states = new Set(all.features.map((f) => f.properties.trafficState))
 
-  const fcNote =
-    withFc === 0
-      ? '⚠️  NO functional class in the response — BR-022 road-class tiering (the Free/Standard/Premium differentiator) cannot filter on it as designed. Needs a product decision.'
-      : `functional class present on ${withFc}/${all.features.length} segments — BR-022 tiering can filter as designed`
-
-  // Does HERE accept server-side filtering? Cheaper than filtering locally, but a
-  // rejected parameter fails the whole request, so it stays off until proven.
-  let upstreamNote = ''
+  // BR-022 depends on this working, and it is the only way to filter: the flow
+  // response carries no functional class to filter on locally.
+  let fcNote: string
   try {
-    const filtered = await here.getTrafficFlow(bbox, { functionalClasses: [1, 2], filterUpstream: true })
-    upstreamNote = ` · upstream functionalClasses filter accepted (${filtered.features.length} segments)`
-  } catch {
-    upstreamNote = ' · upstream functionalClasses filter REJECTED — keep filtering locally'
+    const filtered = await here.getTrafficFlow(bbox, { functionalClasses: [1, 2] })
+    fcNote =
+      `functionalClasses filter accepted — ${filtered.features.length} FC1-2 segments ` +
+      `of ${all.features.length} total. BR-022 road-class tiering works.`
+  } catch (err) {
+    fcNote = `⚠️  functionalClasses filter REJECTED (${msg(err)}). BR-022 tiering cannot be enforced — every plan would get every road class.`
   }
 
-  add('HERE', 'PASS', `${all.features.length} segments · states: ${[...states].join(', ')}${upstreamNote}`, fcNote)
+  add('HERE', 'PASS', `${all.features.length} segments · states: ${[...states].join(', ')}`, fcNote)
 }
 
 function msg(err: unknown): string {
