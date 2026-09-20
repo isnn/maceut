@@ -25,6 +25,7 @@ import {
   type CaptureWindow,
 } from '@/features/schedules/types'
 import type { Zone } from '@/features/zones/types'
+import { can } from '@/features/auth/capabilities'
 
 /** The board renders 05:00 → 21:00, matching the mockup's ruler. */
 const FIRST_HOUR = 5
@@ -43,6 +44,8 @@ export default function SchedulePage() {
   const [editing, setEditing] = useState<CaptureWindow | null>(null)
 
   const plan = user?.plan ?? 'free'
+  // A Viewer can read the board but not change it — the API refuses either way.
+  const canWrite = can(user?.memberRole, 'write')
   const limits = PLAN_LIMITS[plan]
 
   const load = useCallback(async () => {
@@ -69,7 +72,7 @@ export default function SchedulePage() {
     <div className="space-y-lg">
       <div className="flex flex-wrap items-end justify-between gap-md">
         <h1 className="text-page-title font-bold text-text-primary">Schedule</h1>
-        <Button onClick={() => setAddOpen(true)} disabled={zones.length === 0}>
+        <Button onClick={() => setAddOpen(true)} disabled={zones.length === 0 || !canWrite}>
           Add window
         </Button>
       </div>
@@ -267,7 +270,7 @@ function WindowDialog({
       if (editing) {
         await schedulesApi.updateWindow(editing.id, { zoneId, label, start, end, interval, days, active })
       } else {
-        await schedulesApi.createWindow({ zoneId, label, start, end, interval, days }, plan)
+        await schedulesApi.createWindow({ zoneId, label, start, end, interval, days })
       }
       onSaved()
     } catch (err) {

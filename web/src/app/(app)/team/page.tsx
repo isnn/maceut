@@ -6,6 +6,7 @@ import { Dialog } from '@base-ui/react/dialog'
 import { Button } from '@/components/ui/Button'
 import { FormLabel, Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
+import { can } from '@/features/auth/capabilities'
 import { Alert } from '@/components/ui/Alert'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -20,6 +21,10 @@ import { ROLE_CAPABILITIES, ROLE_LABEL, type Member, type MemberRole } from '@/f
 export default function TeamPage() {
   const { user } = useCurrentUser()
   const [members, setMembers] = useState<Member[] | null>(null)
+  // Only an Owner may invite or change roles. Hiding these is not the guard —
+  // /team/invite and /team/:id/role enforce it — but a button that always 403s
+  // is a worse experience than no button.
+  const canManage = can(user?.memberRole, 'manage')
   const [inviteOpen, setInviteOpen] = useState(false)
   const [pendingRemove, setPendingRemove] = useState<Member | null>(null)
 
@@ -27,7 +32,7 @@ export default function TeamPage() {
   const seatsLimit = PLAN_LIMITS[plan].seatsLimit
 
   const load = useCallback(
-    () => (user ? teamApi.getMembers({ fullName: user.fullName, email: user.email }) : Promise.resolve(null)),
+    () => (user ? teamApi.getMembers() : Promise.resolve(null)),
     [user]
   )
   const refetch = useCallback(() => load().then(setMembers), [load])
@@ -62,7 +67,7 @@ export default function TeamPage() {
             Owner and Editor can change zones and schedules. Viewer can watch and download.
           </p>
         </div>
-        <Button onClick={() => setInviteOpen(true)}>Invite member</Button>
+        {canManage && <Button onClick={() => setInviteOpen(true)}>Invite member</Button>}
       </div>
 
       {members === null ? (
@@ -171,7 +176,6 @@ export default function TeamPage() {
 
       <InviteDialog
         open={inviteOpen}
-        plan={plan}
         onClose={() => setInviteOpen(false)}
         onInvited={() => {
           setInviteOpen(false)
@@ -192,14 +196,13 @@ export default function TeamPage() {
   )
 }
 
+/** The seat limit is enforced by the server, which returns the message to show. */
 function InviteDialog({
   open,
-  plan,
   onClose,
   onInvited,
 }: {
   open: boolean
-  plan: 'free' | 'standard' | 'premium'
   onClose: () => void
   onInvited: () => void
 }) {
@@ -212,7 +215,7 @@ function InviteDialog({
     setSaving(true)
     setError(null)
     try {
-      await teamApi.inviteMember({ email, role }, plan)
+      await teamApi.inviteMember({ email, role })
       setEmail('')
       onInvited()
     } catch (err) {

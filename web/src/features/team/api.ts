@@ -1,11 +1,16 @@
-// TODO: replace with real fetch through @/lib/api-client once api/ exists.
-// Team/roles are out of scope for the MVP specs (product.md lists them as
-// out of scope) — these screens exist because the turn 3 mockups include them.
+/**
+ * Team, against the real backend (GET/POST /team, PATCH/DELETE /team/:id).
+ *
+ * Membership is real now: an invited Editor signs in, switches to this workspace, and
+ * sees its zones and schedules. Before the workspace model existed the screen could
+ * list members but sharing was structurally impossible, because every resource
+ * belonged to a user id.
+ *
+ * Roles are enforced server-side. A Viewer sent the buttons anyway would get a 403,
+ * so the screens read `memberRole` from `/me` and hide what the API would refuse.
+ */
 
-import { ApiError } from '@/types/api'
-import { PLAN_LIMITS } from '@/lib/constants'
-import { generateId } from '@/lib/utils'
-import type { Plan } from '@/features/auth/types'
+import { apiClient } from '@/lib/api-client'
 
 export type MemberRole = 'owner' | 'editor' | 'viewer'
 export type MemberStatus = 'active' | 'invited'
@@ -29,7 +34,15 @@ export const ROLE_LABEL: Record<MemberRole, string> = {
   viewer: 'Viewer',
 }
 
-/** The capability matrix rendered under the member table (3n). */
+/**
+ * The capability matrix rendered under the member table (3n).
+ *
+ * Mirrors `ROLE_CAPABILITIES` in `api/src/types/workspace.ts`, which the server also
+ * exposes at `GET /team/capabilities`. Kept here as the render source so the table
+ * does not depend on a round trip, and asserted against the server's copy by
+ * `api/src/controllers/team.controller.test.ts` — a table that promised an Editor
+ * something the API refuses would be the product lying to the user.
+ */
 export const ROLE_CAPABILITIES: { capability: string; viewer: boolean; editor: boolean; owner: boolean }[] = [
   { capability: 'View zones and captures', viewer: true, editor: true, owner: true },
   { capability: 'Render and download animations', viewer: false, editor: true, owner: true },
@@ -37,106 +50,45 @@ export const ROLE_CAPABILITIES: { capability: string; viewer: boolean; editor: b
   { capability: 'Invite members and change plan', viewer: false, editor: false, owner: true },
 ]
 
-const MEMBERS_KEY = 'maceut_mock_members'
-const MOCK_LATENCY_MS = 350
-
-function delay<T>(value: T): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), MOCK_LATENCY_MS))
+/**
+ * No `currentUser` argument — the server marks `isYou` from the session, which is the
+ * only copy that cannot be edited in devtools.
+ */
+export async function getMembers(): Promise<Member[]> {
+  return apiClient.get<Member[]>('/team')
 }
 
-function readMembers(): Member[] | null {
-  if (typeof window === 'undefined') return []
-  const raw = window.localStorage.getItem(MEMBERS_KEY)
-  return raw ? (JSON.parse(raw) as Member[]) : null
-}
-
-function writeMembers(members: Member[]) {
-  window.localStorage.setItem(MEMBERS_KEY, JSON.stringify(members))
-}
-
-export async function getMembers(currentUser: { fullName: string; email: string }): Promise<Member[]> {
-  const stored = readMembers()
-  if (stored) {
-    return delay(stored.map((m) => (m.isYou ? { ...m, name: currentUser.fullName, email: currentUser.email } : m)))
-  }
-  const seeded: Member[] = [
-    {
-      id: generateId(),
-      name: currentUser.fullName || 'You',
-      email: currentUser.email,
-      unit: 'Logistics ops',
-      role: 'owner',
-      zones: 'All zones',
-      lastSeen: 'Now',
-      status: 'active',
-      isYou: true,
-    },
-    {
-      id: generateId(),
-      name: 'Dewi Anggraini',
-      email: 'dewi@jakselpemda.go.id',
-      unit: 'Urban planning',
-      role: 'editor',
-      zones: 'All zones',
-      lastSeen: '1 hr ago',
-      status: 'active',
-    },
-    {
-      id: generateId(),
-      name: 'Sri Handayani',
-      email: 'sri@dishub.go.id',
-      unit: 'Dishub liaison',
-      role: 'viewer',
-      zones: 'Sudirman corridor',
-      lastSeen: '3 days ago',
-      status: 'active',
-    },
-    {
-      id: generateId(),
-      name: 'Andi Kurniawan',
-      email: 'andi@logistik.co.id',
-      unit: 'Logistics ops',
-      role: 'viewer',
-      zones: 'Satrio – Casablanca',
-      lastSeen: '—',
-      status: 'invited',
-    },
-  ]
-  writeMembers(seeded)
-  return delay(seeded)
-}
-
-export async function inviteMember(input: { email: string; role: MemberRole }, plan: Plan): Promise<Member> {
-  const members = readMembers() ?? []
-  if (members.length >= PLAN_LIMITS[plan].seatsLimit) {
-    await delay(null)
-    throw new ApiError({
-      code: 'SEAT_LIMIT_EXCEEDED',
-      message: `Your plan includes ${PLAN_LIMITS[plan].seatsLimit} seats and all of them are taken.`,
-    })
-  }
-  const member: Member = {
-    id: generateId(),
-    name: input.email.split('@')[0],
-    email: input.email,
-    unit: '—',
-    role: input.role,
-    zones: 'All zones',
-    lastSeen: '—',
-    status: 'invited',
-  }
-  writeMembers([...members, member])
-  return delay(member)
+export async function inviteMember(input: { email: string; role: MemberRole }): Promise<Member> {
+  return apiClient.post<Member>('/team/invite', input)
 }
 
 export async function updateMemberRole(id: string, role: MemberRole): Promise<void> {
-  const members = readMembers() ?? []
-  writeMembers(members.map((m) => (m.id === id ? { ...m, role } : m)))
-  await delay(null)
+  await apiClient.patch<Member>(`/team/${id}/role`, { role })
 }
 
 export async function removeMember(id: string): Promise<void> {
-  const members = readMembers() ?? []
-  writeMembers(members.filter((m) => m.id !== id))
-  await delay(null)
+  await apiClient.delete<{ removed: boolean }>(`/team/${id}`)
+}
+
+// --- Workspaces ----------------------------------------------------------------
+
+export interface Workspace {
+  id: string
+  name: string
+  role: MemberRole
+  plan: 'free' | 'standard' | 'premium'
+}
+
+/**
+ * Every workspace this account can reach.
+ *
+ * Someone can own their personal workspace *and* be invited into others, so this is
+ * a list rather than a single value. `activeWorkspaceId` is the one currently open.
+ */
+export async function getWorkspaces(): Promise<{ workspaces: Workspace[]; activeWorkspaceId: string }> {
+  return apiClient.get<{ workspaces: Workspace[]; activeWorkspaceId: string }>('/workspaces')
+}
+
+export async function switchWorkspace(workspaceId: string): Promise<{ workspaceId: string; workspaceName: string; role: MemberRole }> {
+  return apiClient.post('/workspaces/switch', { workspaceId })
 }

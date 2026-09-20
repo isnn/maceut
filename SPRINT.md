@@ -52,6 +52,11 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Konvensi DB: semua kolom waktu `timestamptz` + guard test | CLAUDE.md |
 | ✅ | docs/database/schema.dbml — ERD wajib ikut ter-update saat schema berubah | CLAUDE.md |
 | 🔴 | Produksi: ganti kredensial RabbitMQ `guest:guest` di docker-compose.prod.yml | deployment.md |
+| ✅ | Multi-tenancy: workspaces + workspace_members + workspace_plans (migrasi 0005-0007) | keputusan user |
+| ✅ | Backend: /team, /team/capabilities, /workspaces (+switch) + guard peran | specs belum ada — lihat Decisions |
+| ✅ | Backend: /schedules CRUD (F-05, F-06) + BR-005 + anggaran frame BR-006 | capture-schedule/requirements.md |
+| 🔴 | Frontend: workspace switcher di header (API `/workspaces` sudah ada, UI belum) | — |
+| 🔴 | Spec untuk fitur Tim (F-2x + BR) — dibangun tanpa spec atas permintaan user | product.md |
 | 🔴 | Middleware: rate-limit (belum ada; /internal tanpa proteksi, Better Auth hanya melindungi route-nya sendiri) | structure.md |
 | 🔴 | **BE-12** Frontend: /internal Config jadi read-only sesuai ADR-018 | specs/internal/requirements.md |
 | ✅ | Frontend: ganti mock `features/auth/api.ts` → `/api/auth/*` + GET /me (fetch langsung, tanpa dependency baru) | auth/tasks.md Phase 3 |
@@ -85,9 +90,9 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: Landing page publik (mockup 4a) | mockup turn 4 |
 | ✅ | Frontend: AppHeader top-nav + notification & profile dropdown (3g-3i) | mockup turn 3 |
 | ✅ | Frontend: Onboarding pilih paket (3p) | mockup turn 3 |
-| ✅ | Frontend: Halaman Jadwal + dialog tambah/ubah jendela (3j-3l) | mockup turn 3 |
+| ✅ | Frontend: Halaman Jadwal + dialog tambah/ubah jendela (3j-3l) — kini pakai API asli | mockup turn 3 |
 | ✅ | Frontend: Halaman Studio — pemutar frame + builder animasi (3m) | mockup turn 3 |
-| ✅ | Frontend: Halaman Tim — anggota + matriks peran (3n) | mockup turn 3 |
+| ✅ | Frontend: Halaman Tim — anggota + matriks peran (3n) — kini pakai API asli | mockup turn 3 |
 | ✅ | Frontend: Halaman Profil & penggunaan (3o) | mockup turn 3 |
 | ✅ | Frontend: Alur daftar 2 langkah (detail → pilih paket → dashboard) | mockup 4c + 3p, revisi user |
 | ✅ | Frontend: Foto panel di halaman login (Unsplash, di-vendor ke public/) | permintaan user |
@@ -483,6 +488,55 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   Dicatat di CLAUDE.md (Key Conventions + AI Rules) dan structure.md.
   Semua branch aktif sudah patuh. Yang tidak patuh hanya sisa mati dari pemulihan squash-merge
   September lalu (`land/*`, `final-state`) — sudah ter-merge ke main, aman dihapus.
+
+[2026-09-20] Multi-tenancy penuh + fitur Tim + fitur Jadwal, backend & frontend tersambung.
+  Keputusan user: (1) jadwal disimpan sebagai JENDELA, cron diturunkan; (2) Tim dikerjakan penuh
+  dengan multi-tenancy, bukan sekadar daftar anggota.
+  MULTI-TENANCY. Setiap resource sekarang milik WORKSPACE, bukan user. Sebelumnya `zones.user_id`
+  membuat kolaborator yang diundang TIDAK BISA melihat apa pun — layar Tim bisa menampilkan daftar
+  anggota tapi berbagi datanya mustahil secara struktural. Tabel baru: workspaces,
+  workspace_members, workspace_plans, user_preferences. Plan pindah dari user ke workspace: kursi,
+  jumlah zona dan capture harian adalah yang DIBELI AKUN, bukan jatah tiap orang.
+  Migrasi dipecah TIGA, bukan satu: drizzle-kit akan menghapus user_plans dan membuat
+  workspace_plans sebagai tabel tak berhubungan — diam-diam membuang paket tiap akun.
+    0005 hanya penambahan (tabel & kolom baru, tidak ada DROP)
+    0006 backfill tulisan tangan (workspace pribadi per user, membership owner, paket dipindah,
+         zona di-repoint, active workspace di-default)
+    0007 baru penghapusan, setelah datanya aman
+  0006 diakhiri assertion yang RAISE dan rollback kalau ada user/paket/zona tertinggal. Backfill
+  setengah jadi lebih buruk daripada yang gagal: 0007 akan menghancurkan satu-satunya salinan
+  tersisa. Diverifikasi: ketiga akun mempertahankan paketnya, termasuk yang premium.
+  Dua pertanyaan izin, dua jawaban: `user.role` (user/internal) = apakah dia staf Maceut, gate
+  /internal. `workspace_members.role` (owner/editor/viewer) = boleh apa di dalam workspace milik
+  pelanggan. Satu field akan mencampur keduanya.
+  Matriks kemampuan DISAJIKAN dari `/team/capabilities`, bukan diduplikasi di frontend, supaya
+  tabel yang menjelaskan peran dan kode yang menegakkannya tidak bisa berbeda — tabel yang
+  menjanjikan Editor bisa sesuatu yang ditolak API adalah produk yang berbohong ke user.
+  JADWAL disimpan sebagai jendela (start/end/interval/days), cron diturunkan saat dibaca.
+  Jendela → cron selalu bisa; cron → jendela TIDAK (`0 3,17 * * *` tidak punya bentuk jendela).
+  Menyimpan cron berarti UI tidak bisa menampilkan ulang apa yang user simpan.
+  Dua detail: UI memakai 0 = Senin sedangkan cron 0 = Minggu, jadi dipetakan ulang (salah di sini
+  menggeser SEMUA jadwal satu hari, dan baru ketahuan di produksi, hari Senin); dan jendelanya
+  setengah terbuka — 07:00-09:00 hourly menembak jam 07 dan 08, bukan 09.
+  BR-005 hanya menghitung jendela AKTIF (pause membebaskan slot, resume diperiksa ulang).
+  Anggaran frame BR-006 dinilai pada HARI TERBURUK, bukan rata-rata — jendela yang cuma jalan
+  Minggu tidak boleh memblokir jendela hari Senin.
+  FRONTEND: features/schedules/api.ts dan features/team/api.ts memanggil API asli. Parameter
+  `plan` dihapus dari createWindow/inviteMember/getMembers — server membaca dari workspace/sesi.
+  `/me` sekarang mengembalikan workspaceId, workspaceName, memberRole; layar menyembunyikan aksi
+  yang akan ditolak API (Viewer tidak melihat tombol Add window / Invite member). Menyembunyikan
+  BUKAN pengaman — API yang menegakkan — tapi tombol yang selalu 403 lebih buruk daripada tidak ada.
+  Verified live, bukan hanya unit test: budi buat zona → undang siti sebagai editor → siti login,
+  melihat DUA workspace (miliknya + milik budi), pindah, dan MEMBACA zona budi. Siti bisa buat
+  jadwal di sana tapi tidak bisa mengundang; diturunkan jadi viewer, masih bisa baca jadwal tapi
+  tidak bisa membuat. Cron keluar `0 7-8 * * 1,2,3,4,5` untuk jendela Senin-Jumat 07:00-09:00.
+  171 test hijau, tsc & eslint bersih di api/ dan web/, 10 route web balas 200.
+  ⚠️ Fitur Tim DIBANGUN TANPA SPEC, atas permintaan user. product.md masih menandainya out of
+  scope MVP. Keputusan produk yang saya ambil sendiri dan perlu ditinjau: mengundang langsung
+  sebagai Owner ditolak (transfer kepemilikan beda operasi, belum dispesifikasi); undangan
+  memesan kursi sejak dikirim; akses per WORKSPACE, bukan per zona; Owner terakhir tidak bisa
+  diturunkan/dikeluarkan. Perlu F-2x + BR resmi.
+  BELUM: workspace switcher di UI (endpoint `/workspaces` + `/workspaces/switch` sudah ada).
 
 ---
 
