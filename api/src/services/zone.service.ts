@@ -49,13 +49,13 @@ export function toPublic(zone: ZoneRecord): PublicZone {
   }
 }
 
-/** Loads a zone and proves it belongs to this user. */
-async function ownedZone(userId: string, zoneId: string): Promise<ZoneRecord> {
+/** Loads a zone and proves it belongs to this workspace. */
+async function zoneInWorkspace(workspaceId: string, zoneId: string): Promise<ZoneRecord> {
   const zone = await zoneRepo.findById(zoneId)
   if (!zone) throw new NotFoundError('Zona')
   // 403 rather than 404: the id is real, the caller just has no claim to it. Both are
   // defensible; consistency with tech.md's table matters more than the debate.
-  if (zone.userId !== userId) throw new ForbiddenError('Zona ini bukan milik Anda.')
+  if (zone.workspaceId !== workspaceId) throw new ForbiddenError('Zona ini bukan milik workspace Anda.')
   return zone
 }
 
@@ -161,7 +161,12 @@ export interface CreateZoneInput {
   roadClass: RoadClass
 }
 
-export async function createZone(userId: string, plan: Plan, input: CreateZoneInput): Promise<PublicZone> {
+export async function createZone(
+  workspaceId: string,
+  createdBy: string,
+  plan: Plan,
+  input: CreateZoneInput,
+): Promise<PublicZone> {
   validateGeometry(input.geometry)
 
   // BR-021 — the requested road class must be within the plan.
@@ -170,13 +175,13 @@ export async function createZone(userId: string, plan: Plan, input: CreateZoneIn
   }
 
   // BR-015 — names are unique per user.
-  if (await zoneRepo.existsByNameAndUserId(userId, input.name)) {
+  if (await zoneRepo.existsByNameInWorkspace(workspaceId, input.name)) {
     throw new ZoneNameTakenError(input.name)
   }
 
   // Zone count limit for the plan.
   const limit = PLAN_LIMITS[plan].zonesLimit
-  if ((await zoneRepo.countByUserId(userId)) >= limit) {
+  if ((await zoneRepo.countByWorkspaceId(workspaceId)) >= limit) {
     throw new ValidationError(`Paket Anda dibatasi ${limit} zona. Hapus zona lain atau naikkan paket.`, {
       limit,
       plan,
@@ -186,7 +191,8 @@ export async function createZone(userId: string, plan: Plan, input: CreateZoneIn
   const stats = await deriveRoadStats(input.geometry, input.roadClass)
 
   const created = await zoneRepo.create({
-    userId,
+    workspaceId,
+    createdBy,
     name: input.name.trim(),
     geometry: input.geometry,
     roadClass: input.roadClass,
@@ -195,12 +201,12 @@ export async function createZone(userId: string, plan: Plan, input: CreateZoneIn
   return toPublic(created)
 }
 
-export async function getZonesForUser(userId: string): Promise<PublicZone[]> {
-  return (await zoneRepo.findByUserId(userId)).map(toPublic)
+export async function getZonesForWorkspace(workspaceId: string): Promise<PublicZone[]> {
+  return (await zoneRepo.findByWorkspaceId(workspaceId)).map(toPublic)
 }
 
-export async function getZone(userId: string, zoneId: string): Promise<PublicZone> {
-  return toPublic(await ownedZone(userId, zoneId))
+export async function getZone(workspaceId: string, zoneId: string): Promise<PublicZone> {
+  return toPublic(await zoneInWorkspace(workspaceId, zoneId))
 }
 
 export interface UpdateZoneInput {
@@ -216,19 +222,19 @@ export interface UpdateZoneInput {
  * leaving them stale would have the zone claim to collect roads it no longer does.
  */
 export async function updateZone(
-  userId: string,
+  workspaceId: string,
   zoneId: string,
   plan: Plan,
   patch: UpdateZoneInput,
 ): Promise<PublicZone> {
-  const zone = await ownedZone(userId, zoneId)
+  const zone = await zoneInWorkspace(workspaceId, zoneId)
 
   const next: zoneRepo.UpdateZoneRow = {}
 
   if (patch.name !== undefined && patch.name.trim() !== zone.name) {
     const name = patch.name.trim()
     // Excluding this zone is what lets a rename to its own current name succeed.
-    if (await zoneRepo.existsByNameAndUserId(userId, name, zoneId)) {
+    if (await zoneRepo.existsByNameInWorkspace(workspaceId, name, zoneId)) {
       throw new ZoneNameTakenError(name)
     }
     next.name = name
@@ -254,8 +260,8 @@ export async function updateZone(
   return toPublic(updated)
 }
 
-export async function deleteZone(userId: string, zoneId: string): Promise<void> {
-  await ownedZone(userId, zoneId)
+export async function deleteZone(workspaceId: string, zoneId: string): Promise<void> {
+  await zoneInWorkspace(workspaceId, zoneId)
   await zoneRepo.deleteById(zoneId)
 }
 

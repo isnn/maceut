@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import * as meController from '../controllers/me.controller'
 import { authMiddleware } from '../middlewares/auth.middleware'
+import { workspaceContext } from '../middlewares/workspace.middleware'
 
 const router = Router()
 
@@ -49,7 +50,7 @@ const router = Router()
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get('/me', authMiddleware, meController.me)
+router.get('/me', authMiddleware, workspaceContext, meController.me)
 
 /**
  * @swagger

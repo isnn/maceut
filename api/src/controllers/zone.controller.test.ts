@@ -24,13 +24,20 @@ vi.mock('../repositories/user.repository', () => ({
 vi.mock('../repositories/zone.repository', () => ({
   create: vi.fn(),
   findById: vi.fn(),
-  findByUserId: vi.fn(),
+  findByWorkspaceId: vi.fn(),
   update: vi.fn(),
   deleteById: vi.fn(),
-  countByUserId: vi.fn(),
-  existsByNameAndUserId: vi.fn(),
+  countByWorkspaceId: vi.fn(),
+  existsByNameInWorkspace: vi.fn(),
   bboxOf: vi.fn(),
 }))
+// workspaceContext replaces planCheck: it resolves the workspace, the caller's role
+// in it, and that workspace's plan.
+vi.mock('../services/workspace.service', () => ({
+  ensureWorkspace: vi.fn(),
+  requireCapability: vi.fn(),
+}))
+vi.mock('../repositories/workspace.repository', () => ({ getPlan: vi.fn() }))
 // HERE is not configured in tests, so road stats derive to null without a network call.
 vi.mock('../config/env', async (orig) => {
   const actual = (await orig()) as Record<string, unknown>
@@ -40,11 +47,14 @@ vi.mock('../config/env', async (orig) => {
 import { app } from '../app'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as userRepo from '../repositories/user.repository'
+import * as workspaceService from '../services/workspace.service'
+import * as workspaceRepo from '../repositories/workspace.repository'
 import { auth } from '../lib/auth'
 import type { ZoneRecord } from '../repositories/zone.repository'
 import type { Plan } from '../types/plan'
 
 const USER_ID = 'user_01'
+const WORKSPACE_ID = '9a1b2c3d-1111-4111-8111-111111111111'
 const ZONE_ID = '3f8a1c2e-1111-4111-8111-111111111111'
 
 const SQUARE: number[][][] = [
@@ -60,7 +70,8 @@ const SQUARE: number[][][] = [
 function zone(over: Partial<ZoneRecord> = {}): ZoneRecord {
   return {
     id: ZONE_ID,
-    userId: USER_ID,
+    workspaceId: WORKSPACE_ID,
+    createdBy: USER_ID,
     name: 'Zona Malioboro',
     geometry: { type: 'Polygon', coordinates: SQUARE },
     roadClass: 'nasional',
@@ -74,17 +85,24 @@ function zone(over: Partial<ZoneRecord> = {}): ZoneRecord {
   }
 }
 
-function signedIn(plan: Plan = 'standard') {
+function signedIn(plan: Plan = 'standard', role: 'owner' | 'editor' | 'viewer' = 'owner') {
   vi.mocked(auth.api.getSession).mockResolvedValue({ user: { id: USER_ID }, session: { id: 's' } } as never)
   vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue({ plan } as never)
+  vi.mocked(workspaceService.ensureWorkspace).mockResolvedValue({
+    workspaceId: WORKSPACE_ID,
+    workspaceName: 'Dishub DIY',
+    role,
+  })
+  vi.mocked(workspaceRepo.getPlan).mockResolvedValue(plan)
+  vi.mocked(workspaceService.requireCapability).mockImplementation(() => {})
 }
 
 const body = { name: 'Zona Malioboro', geometry: { type: 'Polygon', coordinates: SQUARE }, roadClass: 'nasional' }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(zoneRepo.existsByNameAndUserId).mockResolvedValue(false)
-  vi.mocked(zoneRepo.countByUserId).mockResolvedValue(0)
+  vi.mocked(zoneRepo.existsByNameInWorkspace).mockResolvedValue(false)
+  vi.mocked(zoneRepo.countByWorkspaceId).mockResolvedValue(0)
 })
 
 describe('auth', () => {
@@ -119,7 +137,7 @@ describe('POST /zones', () => {
 
   it('returns 422 ZONE_NAME_TAKEN for a duplicate name (BR-015)', async () => {
     signedIn()
-    vi.mocked(zoneRepo.existsByNameAndUserId).mockResolvedValue(true)
+    vi.mocked(zoneRepo.existsByNameInWorkspace).mockResolvedValue(true)
 
     const res = await request(app).post('/zones').send(body)
 
@@ -141,7 +159,7 @@ describe('POST /zones', () => {
 
   it('refuses once the plan zone limit is reached', async () => {
     signedIn('free') // free allows 1 zone
-    vi.mocked(zoneRepo.countByUserId).mockResolvedValue(1)
+    vi.mocked(zoneRepo.countByWorkspaceId).mockResolvedValue(1)
 
     const res = await request(app).post('/zones').send(body)
 
@@ -178,6 +196,18 @@ describe('POST /zones', () => {
     expect(res.status).toBe(422)
   })
 
+  it('records who created the zone, for attribution', async () => {
+    signedIn()
+    vi.mocked(zoneRepo.create).mockResolvedValue(zone())
+
+    await request(app).post('/zones').send(body)
+
+    // Attribution only — access is decided by the workspace, never by createdBy.
+    expect(zoneRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: WORKSPACE_ID, createdBy: USER_ID }),
+    )
+  })
+
   it('stores null road stats when HERE is unconfigured, not zero', async () => {
     signedIn()
     vi.mocked(zoneRepo.create).mockResolvedValue(zone())
@@ -192,15 +222,15 @@ describe('POST /zones', () => {
 })
 
 describe('GET /zones', () => {
-  it('lists only this user’s zones', async () => {
+  it('lists only this workspace’s zones', async () => {
     signedIn()
-    vi.mocked(zoneRepo.findByUserId).mockResolvedValue([zone()])
+    vi.mocked(zoneRepo.findByWorkspaceId).mockResolvedValue([zone()])
 
     const res = await request(app).get('/zones')
 
     expect(res.status).toBe(200)
     expect(res.body.data).toHaveLength(1)
-    expect(zoneRepo.findByUserId).toHaveBeenCalledWith(USER_ID)
+    expect(zoneRepo.findByWorkspaceId).toHaveBeenCalledWith(WORKSPACE_ID)
   })
 })
 
@@ -223,9 +253,9 @@ describe('GET /zones/:id', () => {
     expect(res.status).toBe(404)
   })
 
-  it("returns 403 for another user's zone", async () => {
+  it("returns 403 for a zone in another workspace", async () => {
     signedIn()
-    vi.mocked(zoneRepo.findById).mockResolvedValue(zone({ userId: 'someone_else' }))
+    vi.mocked(zoneRepo.findById).mockResolvedValue(zone({ workspaceId: 'ffffffff-2222-4222-8222-222222222222' }))
 
     const res = await request(app).get(`/zones/${ZONE_ID}`)
 
@@ -263,12 +293,12 @@ describe('PATCH /zones/:id', () => {
     const res = await request(app).patch(`/zones/${ZONE_ID}`).send({ name: 'Zona Malioboro' })
 
     expect(res.status).toBe(200)
-    expect(zoneRepo.existsByNameAndUserId).not.toHaveBeenCalled()
+    expect(zoneRepo.existsByNameInWorkspace).not.toHaveBeenCalled()
   })
 
   it('returns 422 when renaming onto another zone’s name', async () => {
     signedIn()
-    vi.mocked(zoneRepo.existsByNameAndUserId).mockResolvedValue(true)
+    vi.mocked(zoneRepo.existsByNameInWorkspace).mockResolvedValue(true)
 
     const res = await request(app).patch(`/zones/${ZONE_ID}`).send({ name: 'Zona Tugu' })
 
@@ -318,9 +348,9 @@ describe('PATCH /zones/:id', () => {
     expect(zoneRepo.update).not.toHaveBeenCalled()
   })
 
-  it("refuses to edit another user's zone", async () => {
+  it("refuses to edit a zone in another workspace", async () => {
     signedIn()
-    vi.mocked(zoneRepo.findById).mockResolvedValue(zone({ userId: 'someone_else' }))
+    vi.mocked(zoneRepo.findById).mockResolvedValue(zone({ workspaceId: 'ffffffff-2222-4222-8222-222222222222' }))
 
     const res = await request(app).patch(`/zones/${ZONE_ID}`).send({ name: 'Hijacked' })
 
@@ -340,9 +370,9 @@ describe('DELETE /zones/:id', () => {
     expect(zoneRepo.deleteById).toHaveBeenCalledWith(ZONE_ID)
   })
 
-  it("refuses to delete another user's zone", async () => {
+  it("refuses to delete a zone in another workspace", async () => {
     signedIn()
-    vi.mocked(zoneRepo.findById).mockResolvedValue(zone({ userId: 'someone_else' }))
+    vi.mocked(zoneRepo.findById).mockResolvedValue(zone({ workspaceId: 'ffffffff-2222-4222-8222-222222222222' }))
 
     const res = await request(app).delete(`/zones/${ZONE_ID}`)
 

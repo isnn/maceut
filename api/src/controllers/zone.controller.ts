@@ -10,18 +10,18 @@ const zoneIdParam = z.string().uuid('Id zona tidak valid.')
 
 /** Thin: parse, call the service, format. Rules live in the service (BR-007). */
 
-function requireAuth(req: Request): { userId: string; plan: Plan } {
-  if (!req.userId) throw new UnauthorizedError()
-  // planCheck middleware runs before every route here, so plan is set. Defaulting to
-  // free rather than asserting keeps a middleware ordering mistake from becoming a
-  // crash — and free is the safe direction to fail in.
-  return { userId: req.userId, plan: req.plan ?? 'free' }
+function requireContext(req: Request): { userId: string; workspaceId: string; plan: Plan } {
+  if (!req.userId || !req.workspaceId) throw new UnauthorizedError()
+  // workspaceContext runs before every route here, so plan is set. Defaulting to free
+  // rather than asserting keeps a middleware-ordering mistake from becoming a crash —
+  // and free is the safe direction to fail in.
+  return { userId: req.userId, workspaceId: req.workspaceId, plan: req.plan ?? 'free' }
 }
 
 export async function list(req: Request, res: Response, next: NextFunction) {
   try {
-    const { userId } = requireAuth(req)
-    return res.status(200).json(ok(await zoneService.getZonesForUser(userId)))
+    const { workspaceId } = requireContext(req)
+    return res.status(200).json(ok(await zoneService.getZonesForWorkspace(workspaceId)))
   } catch (err) {
     next(err)
   }
@@ -29,9 +29,9 @@ export async function list(req: Request, res: Response, next: NextFunction) {
 
 export async function detail(req: Request, res: Response, next: NextFunction) {
   try {
-    const { userId } = requireAuth(req)
+    const { workspaceId } = requireContext(req)
     const id = zoneIdParam.parse(req.params.id)
-    return res.status(200).json(ok(await zoneService.getZone(userId, id)))
+    return res.status(200).json(ok(await zoneService.getZone(workspaceId, id)))
   } catch (err) {
     next(err)
   }
@@ -39,9 +39,9 @@ export async function detail(req: Request, res: Response, next: NextFunction) {
 
 export async function create(req: Request, res: Response, next: NextFunction) {
   try {
-    const { userId, plan } = requireAuth(req)
+    const { userId, workspaceId, plan } = requireContext(req)
     const input = createZoneSchema.parse(req.body)
-    return res.status(201).json(ok(await zoneService.createZone(userId, plan, input)))
+    return res.status(201).json(ok(await zoneService.createZone(workspaceId, userId, plan, input)))
   } catch (err) {
     next(err)
   }
@@ -49,10 +49,10 @@ export async function create(req: Request, res: Response, next: NextFunction) {
 
 export async function update(req: Request, res: Response, next: NextFunction) {
   try {
-    const { userId, plan } = requireAuth(req)
+    const { workspaceId, plan } = requireContext(req)
     const id = zoneIdParam.parse(req.params.id)
     const patch = updateZoneSchema.parse(req.body)
-    return res.status(200).json(ok(await zoneService.updateZone(userId, id, plan, patch)))
+    return res.status(200).json(ok(await zoneService.updateZone(workspaceId, id, plan, patch)))
   } catch (err) {
     next(err)
   }
@@ -60,9 +60,9 @@ export async function update(req: Request, res: Response, next: NextFunction) {
 
 export async function remove(req: Request, res: Response, next: NextFunction) {
   try {
-    const { userId } = requireAuth(req)
+    const { workspaceId } = requireContext(req)
     const id = zoneIdParam.parse(req.params.id)
-    await zoneService.deleteZone(userId, id)
+    await zoneService.deleteZone(workspaceId, id)
     return res.status(200).json(ok({ deleted: true }))
   } catch (err) {
     next(err)

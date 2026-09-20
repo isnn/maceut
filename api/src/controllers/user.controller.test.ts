@@ -23,7 +23,7 @@ vi.mock('../repositories/user.repository', () => ({
   findByIdWithPlan: vi.fn(),
   findByEmail: vi.fn(),
   updateUser: vi.fn(),
-  setPlan: vi.fn(),
+  setPlanForOwnedWorkspace: vi.fn(),
   ensurePlan: vi.fn(),
   listWithPlans: vi.fn(),
   countInternal: vi.fn(),
@@ -207,14 +207,14 @@ describe('PATCH /internal/users/:id/plan', () => {
   it('changes the plan', async () => {
     signedInAs(STAFF_ID)
     staffLookups()
-    vi.mocked(userRepo.setPlan).mockResolvedValue(undefined)
+    vi.mocked(userRepo.setPlanForOwnedWorkspace).mockResolvedValue(true)
     vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(row({ plan: 'premium' }))
 
     const res = await request(app).patch(`/internal/users/${TARGET_ID}/plan`).send({ plan: 'premium' })
 
     expect(res.status).toBe(200)
     expect(res.body.data.plan).toBe('premium')
-    expect(userRepo.setPlan).toHaveBeenCalledWith(TARGET_ID, 'premium')
+    expect(userRepo.setPlanForOwnedWorkspace).toHaveBeenCalledWith(TARGET_ID, 'premium')
   })
 
   it('rejects an unknown plan', async () => {
@@ -224,7 +224,7 @@ describe('PATCH /internal/users/:id/plan', () => {
     const res = await request(app).patch(`/internal/users/${TARGET_ID}/plan`).send({ plan: 'enterprise' })
 
     expect(res.status).toBe(422)
-    expect(userRepo.setPlan).not.toHaveBeenCalled()
+    expect(userRepo.setPlanForOwnedWorkspace).not.toHaveBeenCalled()
   })
 
   it('returns 404 for an account that does not exist', async () => {

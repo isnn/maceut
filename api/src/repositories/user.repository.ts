@@ -1,10 +1,15 @@
 import { eq, sql, desc, asc, and, ilike, or, not, type SQL } from 'drizzle-orm'
 import { db } from '../lib/drizzle-client'
-import { user, userPlans, type UserPlanRow } from '../../drizzle/schema'
+import { user, workspaceMembers, workspacePlans } from '../../drizzle/schema'
 import type { Plan, PlatformRole } from '../types/plan'
 
 /**
  * Data access only — no business rules. Those live in the service layer (BR-007).
+ *
+ * "A user's plan" now means the plan of the workspace they OWN. Plans moved to the
+ * workspace when teams arrived — seats, zone counts and daily captures are what the
+ * account bought, not what each person gets. The /internal screens still list users,
+ * so this joins back through their owning membership to show something meaningful.
  *
  * Reads and writes Better Auth's `user` table. Creating users, hashing passwords and
  * issuing sessions all belong to Better Auth; this file only reads users back and
@@ -38,9 +43,10 @@ export async function findById(id: string): Promise<UserRow | undefined> {
 
 export async function findByIdWithPlan(id: string): Promise<UserWithPlan | undefined> {
   const rows = await db
-    .select({ u: user, plan: userPlans.plan })
+    .select({ u: user, plan: workspacePlans.plan })
     .from(user)
-    .leftJoin(userPlans, eq(userPlans.userId, user.id))
+    .leftJoin(workspaceMembers, and(eq(workspaceMembers.userId, user.id), eq(workspaceMembers.role, 'owner')))
+    .leftJoin(workspacePlans, eq(workspacePlans.workspaceId, workspaceMembers.workspaceId))
     .where(eq(user.id, id))
     .limit(1)
 
@@ -63,25 +69,32 @@ export async function updateUser(
   return rows[0]
 }
 
-export async function setPlan(userId: string, plan: Plan): Promise<UserPlanRow | undefined> {
-  const rows = await db
-    .update(userPlans)
+/**
+ * Sets the plan on the workspace this user owns.
+ *
+ * Returns false when they own none — an invited collaborator has no workspace to bill,
+ * so silently creating one would give them an account nobody asked for.
+ */
+export async function setPlanForOwnedWorkspace(userId: string, plan: Plan): Promise<boolean> {
+  const owned = await db
+    .select({ workspaceId: workspaceMembers.workspaceId })
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.role, 'owner')))
+    .limit(1)
+
+  const workspaceId = owned[0]?.workspaceId
+  if (!workspaceId) return false
+
+  const updated = await db
+    .update(workspacePlans)
     .set({ plan, startedAt: new Date() })
-    .where(eq(userPlans.userId, userId))
-    .returning()
+    .where(eq(workspacePlans.workspaceId, workspaceId))
+    .returning({ id: workspacePlans.id })
 
-  if (rows[0]) return rows[0]
-
-  // No plan row yet — every account created through Better Auth starts without one,
-  // since Better Auth does not know about our tables. Create it rather than silently
-  // doing nothing and leaving the account plan-less forever.
-  const created = await db.insert(userPlans).values({ userId, plan }).returning()
-  return created[0]
-}
-
-/** BR-001: ensure a newly registered account has a plan row. Idempotent. */
-export async function ensurePlan(userId: string, plan: Plan = 'free'): Promise<void> {
-  await db.insert(userPlans).values({ userId, plan }).onConflictDoNothing({ target: userPlans.userId })
+  if (updated.length === 0) {
+    await db.insert(workspacePlans).values({ workspaceId, plan })
+  }
+  return true
 }
 
 /**
@@ -135,7 +148,7 @@ export async function listWithPlans(opts: ListUsersOptions): Promise<{ rows: Use
     const clause = or(ilike(user.email, term), ilike(user.name, term), ilike(user.organisation, term))
     if (clause) filters.push(clause)
   }
-  if (opts.plan) filters.push(eq(userPlans.plan, opts.plan))
+  if (opts.plan) filters.push(eq(workspacePlans.plan, opts.plan))
   if (opts.role === 'internal') filters.push(isInternalSql(opts.internalEmails))
   if (opts.role === 'user') filters.push(not(isInternalSql(opts.internalEmails)))
 
@@ -148,9 +161,10 @@ export async function listWithPlans(opts: ListUsersOptions): Promise<{ rows: Use
   }[opts.sort ?? 'created_desc']
 
   const rows = await db
-    .select({ u: user, plan: userPlans.plan })
+    .select({ u: user, plan: workspacePlans.plan })
     .from(user)
-    .leftJoin(userPlans, eq(userPlans.userId, user.id))
+    .leftJoin(workspaceMembers, and(eq(workspaceMembers.userId, user.id), eq(workspaceMembers.role, 'owner')))
+    .leftJoin(workspacePlans, eq(workspacePlans.workspaceId, workspaceMembers.workspaceId))
     .where(where)
     .orderBy(orderBy)
     .limit(opts.limit)
@@ -161,7 +175,8 @@ export async function listWithPlans(opts: ListUsersOptions): Promise<{ rows: Use
   const countRows = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(user)
-    .leftJoin(userPlans, eq(userPlans.userId, user.id))
+    .leftJoin(workspaceMembers, and(eq(workspaceMembers.userId, user.id), eq(workspaceMembers.role, 'owner')))
+    .leftJoin(workspacePlans, eq(workspacePlans.workspaceId, workspaceMembers.workspaceId))
     .where(where)
 
   return {

@@ -52,16 +52,16 @@ export async function getUser(userId: string): Promise<PublicUser> {
 /**
  * Called after sign-in and on /me.
  *
- * Two things are reconciled here rather than at sign-up, because Better Auth creates
- * the account without knowing about our tables: the plan row (BR-001, every account
- * starts free) and the platform role, which follows INTERNAL_EMAILS and so can change
+ * Reconciles the platform role, which follows INTERNAL_EMAILS and can therefore change
  * between one sign-in and the next without anyone touching the database.
+ *
+ * The workspace and its plan are ensured separately by `workspace.middleware`, which
+ * runs on every workspace-scoped route — plans belong to workspaces now, so creating
+ * one here would be doing it in the wrong place and at the wrong time.
  */
 export async function reconcileAfterSignIn(userId: string): Promise<PublicUser> {
   const found = await userRepo.findById(userId)
   if (!found) throw new NotFoundError('User')
-
-  await userRepo.ensurePlan(userId, 'free')
 
   const resolved = resolveRole(found.email, (found.role ?? 'user') as PlatformRole)
   if (resolved !== found.role) {
@@ -76,7 +76,7 @@ export async function completeOnboarding(userId: string, plan: Plan): Promise<Pu
   const found = await userRepo.findById(userId)
   if (!found) throw new NotFoundError('User')
 
-  await userRepo.setPlan(userId, plan)
+  await userRepo.setPlanForOwnedWorkspace(userId, plan)
   await userRepo.updateUser(userId, { onboardingDone: true })
 
   return getUser(userId)
@@ -99,7 +99,7 @@ export async function changeOwnPlan(userId: string, plan: Plan): Promise<PublicU
   const found = await userRepo.findById(userId)
   if (!found) throw new NotFoundError('User')
 
-  await userRepo.setPlan(userId, plan)
+  await userRepo.setPlanForOwnedWorkspace(userId, plan)
   return getUser(userId)
 }
 
@@ -145,7 +145,7 @@ export async function changePlan(userId: string, plan: Plan): Promise<PublicUser
   const found = await userRepo.findById(userId)
   if (!found) throw new NotFoundError('User')
 
-  await userRepo.setPlan(userId, plan)
+  await userRepo.setPlanForOwnedWorkspace(userId, plan)
   return getUser(userId)
 }
 

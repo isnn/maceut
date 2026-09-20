@@ -22,9 +22,22 @@ const onboardingSchema = z.object({
 export async function me(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.userId) throw new UnauthorizedError()
-    // Reconciles the plan row and the config-driven role, both of which can be out of
-    // date the moment an account is created or INTERNAL_EMAILS changes.
-    return res.status(200).json(ok(await userService.reconcileAfterSignIn(req.userId)))
+    // Reconciles the config-driven role, which can be out of date the moment
+    // INTERNAL_EMAILS changes. workspaceContext has already ensured the workspace.
+    const user = await userService.reconcileAfterSignIn(req.userId)
+
+    return res.status(200).json(
+      ok({
+        ...user,
+        // The workspace the caller is acting in, and their role there. The UI needs
+        // both: a Viewer must not be shown buttons the API will refuse.
+        workspaceId: req.workspaceId,
+        workspaceName: req.workspaceName,
+        memberRole: req.memberRole,
+        // Plan now comes from the workspace, not the user record.
+        plan: req.plan ?? user.plan,
+      }),
+    )
   } catch (err) {
     next(err)
   }

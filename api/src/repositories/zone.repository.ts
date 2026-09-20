@@ -4,7 +4,7 @@ import { zones } from '../../drizzle/schema'
 import type { RoadClass } from '../types/plan'
 
 /**
- * Zone data access.
+ * Zone data access — scoped by workspace, never by user.
  *
  * Every query that touches `geometry` goes through a `sql` template, because PostGIS
  * has no Drizzle representation (ADR-011). Everything else uses the query builder —
@@ -24,7 +24,8 @@ export interface ZoneGeometry {
 /** A zone as the rest of the app sees it. `areaKm2` is computed, never stored. */
 export interface ZoneRecord {
   id: string
-  userId: string
+  workspaceId: string
+  createdBy: string | null
   name: string
   geometry: ZoneGeometry
   roadClass: RoadClass
@@ -39,7 +40,8 @@ export interface ZoneRecord {
 /** Raw shape of a selected row before the numeric columns are coerced. */
 interface RawZoneRow {
   id: string
-  user_id: string
+  workspace_id: string
+  created_by: string | null
   name: string
   geometry: ZoneGeometry
   road_class: RoadClass
@@ -60,7 +62,8 @@ interface RawZoneRow {
  */
 const ZONE_COLUMNS = sql`
   id,
-  user_id,
+  workspace_id,
+  created_by,
   name,
   ST_AsGeoJSON(geometry)::json AS geometry,
   road_class,
@@ -82,7 +85,8 @@ function num(value: string | number | null): number | null {
 function toRecord(row: RawZoneRow): ZoneRecord {
   return {
     id: row.id,
-    userId: row.user_id,
+    workspaceId: row.workspace_id,
+    createdBy: row.created_by,
     name: row.name,
     geometry: row.geometry,
     roadClass: row.road_class,
@@ -98,7 +102,8 @@ function toRecord(row: RawZoneRow): ZoneRecord {
 }
 
 export interface CreateZoneRow {
-  userId: string
+  workspaceId: string
+  createdBy: string
   name: string
   geometry: ZoneGeometry
   roadClass: RoadClass
@@ -108,9 +113,10 @@ export interface CreateZoneRow {
 
 export async function create(input: CreateZoneRow): Promise<ZoneRecord> {
   const result = await db.execute(sql`
-    INSERT INTO zones (user_id, name, geometry, road_class, roads_count, length_km)
+    INSERT INTO zones (workspace_id, created_by, name, geometry, road_class, roads_count, length_km)
     VALUES (
-      ${input.userId},
+      ${input.workspaceId},
+      ${input.createdBy},
       ${input.name},
       ST_GeomFromGeoJSON(${JSON.stringify(input.geometry)}),
       ${input.roadClass}::road_class,
@@ -128,9 +134,9 @@ export async function findById(id: string): Promise<ZoneRecord | undefined> {
   return row ? toRecord(row as unknown as RawZoneRow) : undefined
 }
 
-export async function findByUserId(userId: string): Promise<ZoneRecord[]> {
+export async function findByWorkspaceId(workspaceId: string): Promise<ZoneRecord[]> {
   const result = await db.execute(sql`
-    SELECT ${ZONE_COLUMNS} FROM zones WHERE user_id = ${userId} ORDER BY created_at DESC
+    SELECT ${ZONE_COLUMNS} FROM zones WHERE workspace_id = ${workspaceId} ORDER BY created_at DESC
   `)
   return result.rows.map((r) => toRecord(r as unknown as RawZoneRow))
 }
@@ -173,22 +179,25 @@ export async function deleteById(id: string): Promise<void> {
   await db.delete(zones).where(eq(zones.id, id))
 }
 
-export async function countByUserId(userId: string): Promise<number> {
+export async function countByWorkspaceId(workspaceId: string): Promise<number> {
   const rows = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(zones)
-    .where(eq(zones.userId, userId))
+    .where(eq(zones.workspaceId, workspaceId))
   return rows[0]?.count ?? 0
 }
 
 /**
- * BR-015 — name uniqueness per user, case-insensitive.
+ * BR-015 — name uniqueness per workspace, case-insensitive.
+ *
+ * Per workspace rather than per user: two colleagues both creating "Zona Malioboro"
+ * in the same account is the collision worth preventing.
  *
  * `excludeZoneId` is what makes rename work: without it, saving a zone under its own
  * current name collides with itself and is rejected.
  */
-export async function existsByNameAndUserId(
-  userId: string,
+export async function existsByNameInWorkspace(
+  workspaceId: string,
   name: string,
   excludeZoneId?: string,
 ): Promise<boolean> {
@@ -197,7 +206,7 @@ export async function existsByNameAndUserId(
     .from(zones)
     .where(
       and(
-        eq(zones.userId, userId),
+        eq(zones.workspaceId, workspaceId),
         sql`lower(${zones.name}) = lower(${name})`,
         excludeZoneId ? sql`${zones.id} <> ${excludeZoneId}` : undefined,
       ),

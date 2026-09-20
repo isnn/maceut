@@ -1,13 +1,15 @@
 import { Router } from 'express'
 import * as zoneController from '../controllers/zone.controller'
 import * as trafficController from '../controllers/traffic.controller'
-import { authMiddleware, planCheck } from '../middlewares/auth.middleware'
+import { authMiddleware } from '../middlewares/auth.middleware'
+import { workspaceContext, requireCapability } from '../middlewares/workspace.middleware'
 
 const router = Router()
 
-// Every route below needs both the user and their plan: limits are enforced in the
-// service layer (BR-007) and the service is given the plan, never asked to look it up.
-router.use(['/zones', '/zones/:id', '/traffic'], authMiddleware, planCheck)
+// Every route below needs the workspace the caller is acting in, their role there,
+// and that workspace's plan. Limits are enforced in the service layer (BR-007), which
+// is handed the plan rather than asked to look it up.
+router.use(['/zones', '/zones/:id', '/traffic'], authMiddleware, workspaceContext)
 
 /**
  * @swagger
@@ -95,7 +97,7 @@ router.get('/zones', zoneController.list)
  *       403: { description: ROAD_CLASS_NOT_ALLOWED — kelas jalan melebihi paket (BR-021) }
  *       422: { description: ZONE_NAME_TAKEN (BR-015), batas zona tercapai, atau VALIDATION_ERROR }
  */
-router.post('/zones', zoneController.create)
+router.post('/zones', requireCapability('write'), zoneController.create)
 
 /**
  * @swagger
@@ -166,7 +168,7 @@ router.get('/zones/:id', zoneController.detail)
  *       404: { description: NOT_FOUND }
  *       422: { description: ZONE_NAME_TAKEN atau VALIDATION_ERROR }
  */
-router.patch('/zones/:id', zoneController.update)
+router.patch('/zones/:id', requireCapability('write'), zoneController.update)
 
 /**
  * @swagger
@@ -185,7 +187,7 @@ router.patch('/zones/:id', zoneController.update)
  *       403: { description: FORBIDDEN — zona milik user lain }
  *       404: { description: NOT_FOUND }
  */
-router.delete('/zones/:id', zoneController.remove)
+router.delete('/zones/:id', requireCapability('write'), zoneController.remove)
 
 /**
  * @swagger
