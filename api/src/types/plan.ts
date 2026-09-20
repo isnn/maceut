@@ -65,5 +65,5 @@ export function effectiveRoadClass(zoneRoadClass: RoadClass, plan: Plan): RoadCl
   return roadClassRank(zoneRoadClass) <= roadClassRank(max) ? zoneRoadClass : max
 }
 
-/** Platform role — distinct from workspace/team role (specs/internal, BR-027). */
+/** Platform role: `user` = paying customer, `internal` = Maceut staff (BR-027). */
 export type PlatformRole = 'user' | 'internal'

@@ -36,6 +36,13 @@
       "when": 1789817681137,
       "tag": "0004_timestamptz",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789903237263,
+      "tag": "0005_schedules",
+      "breakpoints": true
     }
   ]
 }

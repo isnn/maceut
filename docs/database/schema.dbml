@@ -11,7 +11,7 @@
 // Convention: every timestamp is `timestamptz`. A bare `timestamp` carries no
 // offset and means whatever the reading process assumes.
 //
-// Last updated: 2026-09-19 (migration 0004_timestamptz)
+// Last updated: 2026-09-20 (migration 0005_schedules)
 // =============================================================================
 
 Project maceut {
@@ -135,6 +135,18 @@ Enum plan {
   premium
 }
 
+Enum capture_interval {
+  "15min" [note: 'Premium only']
+  hourly  [note: 'Standard and up']
+  daily   [note: 'All plans']
+}
+
+Enum schedule_status {
+  active
+  paused  [note: 'Frees its BR-005 slot. Also what a downgrade does (ADR-020)']
+  deleted [note: 'Soft delete — capture history references the schedule']
+}
+
 Enum platform_role {
   user
   internal
@@ -160,11 +172,35 @@ Ref: account.user_id > user.id [delete: cascade]
 Ref: user_plans.user_id - user.id [delete: cascade]
 Ref: zones.user_id > user.id [delete: cascade]
 
+Table schedules {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id text [not null]
+  zone_id uuid [not null]
+  label text [not null]
+  start_time text [not null, note: '"HH:mm" in Asia/Jakarta']
+  end_time text [not null]
+  interval capture_interval [not null]
+  days "integer[]" [not null, note: '0 = Monday … 6 = Sunday']
+  status schedule_status [not null, default: 'active']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Note: 'Stored as a WINDOW, not cron (ADR-019). Window -> cron is total; cron -> window is not, so the lossy direction happens in memory. See api/src/types/schedule.ts'
+
+  Indexes {
+    user_id [name: 'schedules_user_id_idx']
+    zone_id [name: 'schedules_zone_id_idx']
+    (user_id, status) [name: 'schedules_user_status_idx', note: 'BR-005 counts active only']
+  }
+}
+
+Ref: schedules.user_id > user.id [delete: cascade]
+Ref: schedules.zone_id > zones.id [delete: cascade]
+
 // -----------------------------------------------------------------------------
 // Not built yet — listed so the gap is visible rather than forgotten
 // -----------------------------------------------------------------------------
 // captures          — CAP-01 (next ticket). Note: captures.schedule_id ships as a
 //                     nullable uuid with NO foreign key, because schedules does not
 //                     exist yet. The FK is added with that table.
-// schedules         — Sprint 2 (F-05, F-06)
 // branding_configs  — Sprint 2 (F-11, F-12). BR-018's logo compositing needs it.

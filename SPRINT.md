@@ -76,6 +76,12 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: Step 1 — Pilih Area (Map Editor HERE Maps) | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: Step 2 — Pilih Road Class + UpgradeModal | zone-management/tasks.md Phase 4, subscription/tasks.md |
 | ✅ | Backend: HERE Traffic client + GET /traffic/preview | zone-management/tasks.md Phase 3 |
+| ✅ | Backend: /schedules CRUD (F-05, F-06) — jendela, cron diturunkan (ADR-019) + BR-005 + anggaran frame BR-006 | capture-schedule/requirements.md |
+| ✅ | Backend: grandfather-and-block saat ganti paket + `GET /plan/impact` (ADR-020) | product.md BR-005/BR-006 |
+| ✅ | Backend: akun internal tidak dihitung sebagai user/pendapatan di /internal/stats | keputusan user |
+| ✅ | Frontend: Halaman Jadwal pakai API asli | mockup turn 3 |
+| ❌ | Frontend: Halaman Tim — DIHAPUS, out of scope MVP (product.md) | product.md |
+| 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
 | ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
 | 🔴 | Frontend: hitung ruas per kelas di RoadClassPicker dari /traffic/preview (kini masih katalog lokal) | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: MapCanvas (Leaflet + OSM) + TrafficPreviewPanel + StyleSelector | zone-management/tasks.md Phase 4 |
@@ -483,6 +489,51 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   Dicatat di CLAUDE.md (Key Conventions + AI Rules) dan structure.md.
   Semua branch aktif sudah patuh. Yang tidak patuh hanya sisa mati dari pemulihan squash-merge
   September lalu (`land/*`, `final-state`) — sudah ter-merge ke main, aman dihapus.
+
+[2026-09-20] Paradigma workspace DIBATALKAN — kembali ke product.md: satu akun = satu paket.
+  Kemarin saya membangun multi-tenancy penuh setelah bertanya apakah fitur Tim harus nyata.
+  product.md sejak awal menyatakan sebaliknya: "MVP menggunakan single workspace — tidak ada
+  multi-tenant atau team role." User memutuskan dokumennya yang benar. Dua jenis akun: `user`
+  (pelanggan berbayar) dan `internal` (staf Maceut — superadmin, nanti customer service).
+  Cara membatalkan: PR #38 ditutup, branch baru dari #37. Workspace TIDAK PERNAH muncul di
+  riwayat migrasi — tidak ada tabel yang dibuat di 0005 lalu dihapus di 0008 untuk dibaca orang
+  nanti. Pekerjaan schedules dibawa menyeberang lalu di-rescope ke user; migrasi tunggal
+  0005_schedules.sql. Database di-reset (`down -v`), akun uji dibuat ulang.
+  Dua dari tiga bug di assessment kemarin hilang dengan sendirinya: plan targeting (viewer
+  menurunkan paket workspace lain) mustahil kalau cuma ada satu paket per akun, dan kebingungan
+  kata benda di /internal hilang saat kata bendanya kembali jadi user.
+  Yang TIDAK hilang sendiri, dan ini yang penting secara komersial: downgrade tidak menegakkan
+  apa pun. Terbukti live — Budi turun premium→free dan tetap memegang jendela `hourly`, interval
+  yang paket free tidak bisa buat. Sekarang GRANDFATHER AND BLOCK (ADR-020): tidak ada yang
+  dihapus, yang melebihi batas di-pause, pembuatan baru ditolak.
+  Urutan pause disengaja: interval di luar paket dulu (absolut — hourly memang tidak bisa jalan
+  di free), lalu jumlah jendela aktif, lalu anggaran frame/hari, lalu jumlah zona. Menyelesaikan
+  interval lebih dulu sering sudah menurunkan hitungan, jadi yang ter-pause lebih sedikit daripada
+  kalau diproses asal urut. Yang di-pause: yang TERBARU dulu — zona yang sudah lama dipegang lebih
+  mungkin jadi yang benar-benar diandalkan.
+  Perubahan penghitungan yang membuat aturannya berfungsi: `zonesLimit` dulu menghitung SEMUA
+  baris zona. Kalau dibiarkan, mem-pause zona saat downgrade jadi percuma — hitungannya tidak
+  turun, jadi user tidak akan pernah bisa membuat lagi meski sudah merapikan. Sekarang hanya
+  menghitung zona ber-status `collecting`, sama seperti BR-005 menghitung jendela aktif. Satu
+  aturan hitung untuk dua resource, dan pause jadi obat sungguhan, bukan label.
+  `GET /plan/impact?plan=X` menjalankan FUNGSI YANG SAMA dengan perubahan sungguhan, jadi yang
+  diperingatkan ke user dan yang benar-benar terjadi tidak bisa berbeda — itu cara dialog
+  peringatan biasanya rusak. Dialog downgrade di /internal/users:85-94 sudah ada sejak dulu tapi
+  TIDAK PERNAH bisa menyala karena angka yang dibacanya selalu null; sekarang ada isinya.
+  Upgrade TIDAK otomatis melanjutkan yang ter-pause — melanjutkan itu keputusan user; menyalakan
+  ulang capture yang sudah mereka hentikan akan menghabiskan kuota harian tanpa bertanya.
+  Akun internal dikecualikan dari `totalUsers`, `planMix` dan `estimatedSeats` (filter
+  `role: 'user'`). Diverifikasi dengan kasus terburuk: akun staf di paket premium — DB berisi dua
+  akun premium, laporan menunjukkan totalUsers=1 dan premium=1, MRR tidak bergerak.
+  Fitur Tim DIHAPUS seluruhnya: 6 file backend, features/team/, capabilities.ts, halaman /team
+  (273 baris), dua entri nav, dan field workspace di tipe User. Copy yang menjanjikan hal yang
+  tidak ada juga diperbaiki — halaman daftar dulu berbunyi "invite your team afterwards", dan ada
+  notifikasi contoh "Dewi joined the workspace as Editor".
+  Verified live: preview menamai persis apa yang akan di-pause → apply mem-pause persis itu →
+  jendela hourly `active=false`, 2 zona `paused`, TIDAK ADA yang terhapus → membuat zona ke-2
+  ditolak → mem-pause satu zona membebaskan slot dan pembuatan berhasil → upgrade kembali ke
+  premium membiarkan yang ter-pause tetap ter-pause. 160 test hijau, tsc & eslint bersih,
+  10 route web balas 200, /team balas 404.
 
 ---
 

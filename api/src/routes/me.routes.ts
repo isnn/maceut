@@ -121,4 +121,42 @@ router.post('/me/onboarding', authMiddleware, meController.completeOnboarding)
  */
 router.patch('/me/plan', authMiddleware, meController.changeOwnPlan)
 
+/**
+ * @swagger
+ * /plan/impact:
+ *   get:
+ *     summary: Apa yang akan di-pause kalau pindah ke paket tertentu (ADR-020)
+ *     description: >
+ *       Tidak mengubah apa pun. Menjalankan fungsi yang sama dengan perubahan paket
+ *       sungguhan, supaya yang diperingatkan ke user dan yang benar-benar terjadi
+ *       tidak bisa berbeda. Aturannya grandfather-and-block: tidak ada yang dihapus,
+ *       yang melebihi batas di-pause, dan pembuatan baru ditolak sampai kembali di
+ *       bawah batas.
+ *     tags: [Account]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: plan
+ *         required: true
+ *         schema: { type: string, enum: [free, standard, premium] }
+ *     responses:
+ *       200:
+ *         description: Daftar zona & jendela yang akan di-pause, dengan alasannya
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     plan: { type: string }
+ *                     clean: { type: boolean, description: true = tidak ada yang berubah }
+ *                     zonesToPause: { type: array, items: { type: object } }
+ *                     schedulesToPause: { type: array, items: { type: object } }
+ *       401: { description: UNAUTHORIZED }
+ */
+router.get('/plan/impact', authMiddleware, meController.planImpact)
+
 export default router

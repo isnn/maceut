@@ -173,11 +173,18 @@ export async function deleteById(id: string): Promise<void> {
   await db.delete(zones).where(eq(zones.id, id))
 }
 
+/**
+ * Counts zones that are actually collecting, not every row.
+ *
+ * Matches how BR-005 counts schedules, and it is what makes pausing a real remedy:
+ * counting every row would mean an account paused down to its limit still could not
+ * create anything, so the grandfather rule would leave them permanently stuck.
+ */
 export async function countByUserId(userId: string): Promise<number> {
   const rows = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(zones)
-    .where(eq(zones.userId, userId))
+    .where(and(eq(zones.userId, userId), eq(zones.status, 'collecting')))
   return rows[0]?.count ?? 0
 }
 
