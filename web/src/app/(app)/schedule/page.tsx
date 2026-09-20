@@ -267,7 +267,7 @@ function WindowDialog({
       if (editing) {
         await schedulesApi.updateWindow(editing.id, { zoneId, label, start, end, interval, days, active })
       } else {
-        await schedulesApi.createWindow({ zoneId, label, start, end, interval, days }, plan)
+        await schedulesApi.createWindow({ zoneId, label, start, end, interval, days })
       }
       onSaved()
     } catch (err) {

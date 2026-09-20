@@ -76,6 +76,16 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: Step 1 — Pilih Area (Map Editor HERE Maps) | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: Step 2 — Pilih Road Class + UpgradeModal | zone-management/tasks.md Phase 4, subscription/tasks.md |
 | ✅ | Backend: HERE Traffic client + GET /traffic/preview | zone-management/tasks.md Phase 3 |
+| ✅ | Backend: /schedules CRUD (F-05, F-06) — jendela, cron diturunkan (ADR-019) + BR-005 + anggaran frame BR-006 | capture-schedule/requirements.md |
+| ✅ | Backend: grandfather-and-block saat ganti paket + `GET /plan/impact` (ADR-020) | product.md BR-005/BR-006 |
+| ✅ | Backend: akun internal tidak dihitung sebagai user/pendapatan di /internal/stats | keputusan user |
+| ✅ | Frontend: Halaman Jadwal pakai API asli | mockup turn 3 |
+| ❌ | Frontend: Halaman Tim — DIHAPUS, out of scope MVP (product.md) | product.md |
+| ✅ | Backend: GET /usage — angka dashboard nyata, `null` untuk yang belum terukur | zone-management F-19 |
+| ✅ | Frontend: Dashboard pakai API asli (tidak ada lagi angka karangan) | zone-management F-19 |
+| ✅ | Fix: filter functional class dikirim ke HERE, bukan difilter lokal | docs HERE v7 |
+| 🔴 | HERE API key masih 401 "not from an authorized source" — restriksi domain/IP di app-nya | BE-10 |
+| 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
 | ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
 | 🔴 | Frontend: hitung ruas per kelas di RoadClassPicker dari /traffic/preview (kini masih katalog lokal) | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: MapCanvas (Leaflet + OSM) + TrafficPreviewPanel + StyleSelector | zone-management/tasks.md Phase 4 |
@@ -483,6 +493,94 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   Dicatat di CLAUDE.md (Key Conventions + AI Rules) dan structure.md.
   Semua branch aktif sudah patuh. Yang tidak patuh hanya sisa mati dari pemulihan squash-merge
   September lalu (`land/*`, `final-state`) — sudah ter-merge ke main, aman dihapus.
+
+[2026-09-20] Paradigma workspace DIBATALKAN — kembali ke product.md: satu akun = satu paket.
+  Kemarin saya membangun multi-tenancy penuh setelah bertanya apakah fitur Tim harus nyata.
+  product.md sejak awal menyatakan sebaliknya: "MVP menggunakan single workspace — tidak ada
+  multi-tenant atau team role." User memutuskan dokumennya yang benar. Dua jenis akun: `user`
+  (pelanggan berbayar) dan `internal` (staf Maceut — superadmin, nanti customer service).
+  Cara membatalkan: PR #38 ditutup, branch baru dari #37. Workspace TIDAK PERNAH muncul di
+  riwayat migrasi — tidak ada tabel yang dibuat di 0005 lalu dihapus di 0008 untuk dibaca orang
+  nanti. Pekerjaan schedules dibawa menyeberang lalu di-rescope ke user; migrasi tunggal
+  0005_schedules.sql. Database di-reset (`down -v`), akun uji dibuat ulang.
+  Dua dari tiga bug di assessment kemarin hilang dengan sendirinya: plan targeting (viewer
+  menurunkan paket workspace lain) mustahil kalau cuma ada satu paket per akun, dan kebingungan
+  kata benda di /internal hilang saat kata bendanya kembali jadi user.
+  Yang TIDAK hilang sendiri, dan ini yang penting secara komersial: downgrade tidak menegakkan
+  apa pun. Terbukti live — Budi turun premium→free dan tetap memegang jendela `hourly`, interval
+  yang paket free tidak bisa buat. Sekarang GRANDFATHER AND BLOCK (ADR-020): tidak ada yang
+  dihapus, yang melebihi batas di-pause, pembuatan baru ditolak.
+  Urutan pause disengaja: interval di luar paket dulu (absolut — hourly memang tidak bisa jalan
+  di free), lalu jumlah jendela aktif, lalu anggaran frame/hari, lalu jumlah zona. Menyelesaikan
+  interval lebih dulu sering sudah menurunkan hitungan, jadi yang ter-pause lebih sedikit daripada
+  kalau diproses asal urut. Yang di-pause: yang TERBARU dulu — zona yang sudah lama dipegang lebih
+  mungkin jadi yang benar-benar diandalkan.
+  Perubahan penghitungan yang membuat aturannya berfungsi: `zonesLimit` dulu menghitung SEMUA
+  baris zona. Kalau dibiarkan, mem-pause zona saat downgrade jadi percuma — hitungannya tidak
+  turun, jadi user tidak akan pernah bisa membuat lagi meski sudah merapikan. Sekarang hanya
+  menghitung zona ber-status `collecting`, sama seperti BR-005 menghitung jendela aktif. Satu
+  aturan hitung untuk dua resource, dan pause jadi obat sungguhan, bukan label.
+  `GET /plan/impact?plan=X` menjalankan FUNGSI YANG SAMA dengan perubahan sungguhan, jadi yang
+  diperingatkan ke user dan yang benar-benar terjadi tidak bisa berbeda — itu cara dialog
+  peringatan biasanya rusak. Dialog downgrade di /internal/users:85-94 sudah ada sejak dulu tapi
+  TIDAK PERNAH bisa menyala karena angka yang dibacanya selalu null; sekarang ada isinya.
+  Upgrade TIDAK otomatis melanjutkan yang ter-pause — melanjutkan itu keputusan user; menyalakan
+  ulang capture yang sudah mereka hentikan akan menghabiskan kuota harian tanpa bertanya.
+  Akun internal dikecualikan dari `totalUsers`, `planMix` dan `estimatedSeats` (filter
+  `role: 'user'`). Diverifikasi dengan kasus terburuk: akun staf di paket premium — DB berisi dua
+  akun premium, laporan menunjukkan totalUsers=1 dan premium=1, MRR tidak bergerak.
+  Fitur Tim DIHAPUS seluruhnya: 6 file backend, features/team/, capabilities.ts, halaman /team
+  (273 baris), dua entri nav, dan field workspace di tipe User. Copy yang menjanjikan hal yang
+  tidak ada juga diperbaiki — halaman daftar dulu berbunyi "invite your team afterwards", dan ada
+  notifikasi contoh "Dewi joined the workspace as Editor".
+  Verified live: preview menamai persis apa yang akan di-pause → apply mem-pause persis itu →
+  jendela hourly `active=false`, 2 zona `paused`, TIDAK ADA yang terhapus → membuat zona ke-2
+  ditolak → mem-pause satu zona membebaskan slot dan pembuatan berhasil → upgrade kembali ke
+  premium membiarkan yang ter-pause tetap ter-pause. 160 test hijau, tsc & eslint bersih,
+  10 route web balas 200, /team balas 404.
+
+[2026-09-20] Dashboard pakai data nyata + perbaikan filter functional class HERE.
+  DASHBOARD. `GET /usage` baru: setiap angka diukur atau `null`, tidak ada yang diperkirakan.
+  Versi lama melaporkan `rendersThisMonth: 7`, storage `zones.length * 1.37`, dan seats
+  `plan === 'free' ? 1 : 3` — tidak satu pun mengukur apa pun. Dashboard dibaca sekilas dan
+  dipercaya, jadi angka yang kelihatan masuk akal tapi dikarang lebih buruk daripada tanda "—":
+  tidak ada yang terpikir memeriksanya.
+  Yang sekarang nyata: jumlah zona collecting, jendela aktif, frame/hari pada HARI TERSIBUK
+  (bukan jumlah seminggu), dan `nextCaptureAt` yang DITURUNKAN dari jendela aktif — dihitung
+  dalam WIB, bukan UTC. Diverifikasi live: Minggu 18:52 WIB dengan jendela Senin-Jumat 07:00-09:00
+  menghasilkan "07:00 (besok · 1 zona)". Ada test yang mengunci kasus batasnya, termasuk 23:00 UTC
+  Minggu yang di Jakarta sudah Senin 06:00 — membacanya sebagai UTC akan memundurkan capture
+  berikutnya satu hari penuh.
+  `pausedByPlan` ditambahkan: berapa zona/jendela yang di-pause karena melebihi paket (ADR-020).
+  Ini potongan yang membuat grandfathering terlihat — tanpanya akun yang baru turun paket cuma
+  melihat pengumpulan berhenti tanpa penjelasan di mana pun. Badge "Collection health" yang dulu
+  hardcoded "Healthy" sekarang healthy/degraded/idle. `idle` sengaja bukan kegagalan: akun yang
+  belum menjadwalkan apa pun bekerja persis seperti yang diatur, menyebutnya "degraded" itu
+  membunyikan alarm palsu.
+  HERE. Membaca docs yang dikirim user (docs.here.com/traffic-api/docs/flow-filter-functional-
+  class-flow-1) menemukan BUG NYATA: `functionalClasses` adalah parameter REQUEST, dan functional
+  class TIDAK dikembalikan di respons flow. Kode kita memfilter LOKAL pada field yang tidak pernah
+  ada — artinya filternya no-op diam-diam, dan SETIAP paket akan menerima SEMUA kelas jalan. BR-022
+  (pembeda berbayar utama Free/Standard/Premium) tidak akan menjual apa pun.
+  Diperbaiki: `functionalClasses` selalu dikirim ke HERE; filter lokal tinggal sebagai pertahanan
+  kalau suatu saat HERE menambah field-nya. Ini sekaligus lebih murah — HERE mengembalikan lebih
+  sedikit segmen.
+  Korelasi FC ↔ kelas jalan Indonesia didokumentasikan di types/plan.ts, memakai definisi HERE
+  sendiri: FC1 (akses terkontrol, antar metropolitan) + FC2 (menyalurkan ke FC1, antar kota tercepat)
+  ≈ Jalan Nasional; FC3 (volume tinggi mobilitas lebih rendah) ≈ Jalan Provinsi; FC4+FC5 ≈ Jalan
+  Kabupaten/Kota dan lingkungan. Pemetaan yang ada sudah benar dan tidak diubah.
+  ⚠️ Dicatat jujur: ini APROKSIMASI. Indonesia mengklasifikasi jalan berdasarkan status administratif
+  (UU 38/2004 — siapa yang memiliki dan mendanai), HERE berdasarkan FUNGSI lalu lintas. Umumnya
+  sejalan, tapi tidak selalu: Jalan Nasional yang melewati kecamatan sepi bisa jadi FC3, dan Jalan
+  Jenderal Sudirman bisa FC2 meski jalan kota. Jadi tier menjual "kedalaman data jalan", bukan
+  "berstatus nasional secara hukum" — dan memang begitu produk menjelaskannya.
+  ⚠️ HERE MASIH 401. Semua bentuk request diuji — bbox, circle sesuai contoh docs, dengan dan tanpa
+  filter, locationReferencing shape dan olr — SEMUA memberi "not from an authorized source" yang
+  sama. Jadi formatnya BUKAN masalahnya; kuncinya yang ditolak. Variasi Bearer memberi error
+  berbeda ("unrecognized kid null"), mengonfirmasi ini API key, bukan OAuth token. Dugaan utama
+  tetap restriksi domain/referrer pada key: request dari server tidak mengirim header Referer sama
+  sekali, jadi key yang dibatasi ke sebuah website tidak akan pernah bisa dipakai dari backend.
+  180 test hijau, tsc & eslint bersih di api/ dan web/, 8 route web balas 200.
 
 ---
 

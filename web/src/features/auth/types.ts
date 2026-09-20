@@ -1,8 +1,9 @@
 export type Plan = 'free' | 'standard' | 'premium'
 
 /**
- * Platform-level role, distinct from the workspace-scoped MemberRole in
- * features/team. `internal` is Maceut staff and gates the /internal area.
+ * `user` is a paying customer; `internal` is Maceut staff and gates the /internal
+ * area. Internal accounts are not customers and are excluded from user counts and
+ * revenue figures.
  */
 export type PlatformRole = 'user' | 'internal'
 

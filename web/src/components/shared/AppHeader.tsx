@@ -17,7 +17,6 @@ const NAV_ITEMS = [
   { href: '/zones', label: 'Zones' },
   { href: '/schedule', label: 'Schedule' },
   { href: '/studio', label: 'Studio' },
-  { href: '/team', label: 'Team' },
 ]
 
 const TONE_MARK: Record<AppNotification['tone'], { Icon: typeof IconAlert; className: string }> = {
@@ -154,7 +153,6 @@ export function AppHeader() {
                     {[
                       { href: '/profile', label: 'Profile & usage' },
                       { href: '/profile#billing', label: 'Billing & plan' },
-                      { href: '/team', label: 'Workspace settings' },
                     ].map((item) => (
                       <Link
                         key={item.href}

@@ -2,6 +2,7 @@ import * as userRepo from '../repositories/user.repository'
 import { NotFoundError, ForbiddenError, ValidationError } from '../errors'
 import { isInternalByConfig, resolveRole, configuredInternalEmails } from '../lib/internal-access'
 import { PLAN_LIMITS, type Plan, type PlatformRole } from '../types/plan'
+import * as planService from './plan.service'
 
 /**
  * User records and platform administration (F-21, F-22).
@@ -71,7 +72,11 @@ export async function reconcileAfterSignIn(userId: string): Promise<PublicUser> 
   return getUser(userId)
 }
 
-/** Step 2 of sign-up: the chosen plan, and onboarding marked done. */
+/**
+ * Step 2 of sign-up: the chosen plan, and onboarding marked done.
+ *
+ * No impact pass — a brand-new account has nothing to pause.
+ */
 export async function completeOnboarding(userId: string, plan: Plan): Promise<PublicUser> {
   const found = await userRepo.findById(userId)
   if (!found) throw new NotFoundError('User')
@@ -80,6 +85,18 @@ export async function completeOnboarding(userId: string, plan: Plan): Promise<Pu
   await userRepo.updateUser(userId, { onboardingDone: true })
 
   return getUser(userId)
+}
+
+export interface PlanChangeResult {
+  user: PublicUser
+  impact: planService.PlanImpact
+}
+
+/** What a move to `plan` would pause, without changing anything (ADR-020). */
+export async function previewPlanChange(userId: string, plan: Plan): Promise<planService.PlanImpact> {
+  const found = await userRepo.findById(userId)
+  if (!found) throw new NotFoundError('User')
+  return planService.previewPlanChange(userId, plan)
 }
 
 /**
@@ -95,12 +112,15 @@ export async function completeOnboarding(userId: string, plan: Plan): Promise<Pu
  * plan on a confirmed payment webhook. Do not build features that assume a user
  * cannot reach premium limits on their own until that is true.
  */
-export async function changeOwnPlan(userId: string, plan: Plan): Promise<PublicUser> {
+export async function changeOwnPlan(userId: string, plan: Plan): Promise<PlanChangeResult> {
   const found = await userRepo.findById(userId)
   if (!found) throw new NotFoundError('User')
 
   await userRepo.setPlan(userId, plan)
-  return getUser(userId)
+  // Grandfather and block (ADR-020): pause what no longer fits, delete nothing.
+  const impact = await planService.applyPlanChange(userId, plan)
+
+  return { user: await getUser(userId), impact }
 }
 
 export interface ListUsersParams {
@@ -141,12 +161,15 @@ export async function listUsers(params: ListUsersParams): Promise<ListUsersResul
   }
 }
 
-export async function changePlan(userId: string, plan: Plan): Promise<PublicUser> {
+/** Staff changing a customer's plan from /internal. Same grandfather rule. */
+export async function changePlan(userId: string, plan: Plan): Promise<PlanChangeResult> {
   const found = await userRepo.findById(userId)
   if (!found) throw new NotFoundError('User')
 
   await userRepo.setPlan(userId, plan)
-  return getUser(userId)
+  const impact = await planService.applyPlanChange(userId, plan)
+
+  return { user: await getUser(userId), impact }
 }
 
 /**
@@ -198,7 +221,12 @@ export async function getPlatformStats(): Promise<{
 }> {
   // One page large enough to aggregate over. Fine at this scale; when it stops being
   // fine the answer is a SQL GROUP BY in the repository, not a bigger page.
+  // `role: 'user'` excludes staff. Maceut employees are not customers: counting them
+  // inflates the account total, and the frontend multiplies the plan mix by a monthly
+  // price, so an internal account on a paid plan would invent revenue that does not
+  // exist.
   const { rows, total } = await userRepo.listWithPlans({
+    role: 'user',
     internalEmails: configuredInternalEmails(),
     limit: 10_000,
     offset: 0,

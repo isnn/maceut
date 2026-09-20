@@ -21,7 +21,7 @@ type Tab = (typeof ALL_TABS)[number]
 
 /**
  * Staff see only Account and Notifications. Usage and Billing are customer
- * concerns — an internal account has no workspace quota to report, and its
+ * concerns — an internal account has no plan quota to report, and its
  * seeded figures would be noise to someone with no Zones page to open.
  */
 const TABS_FOR: Record<'tenant' | 'internal', readonly Tab[]> = {
@@ -99,7 +99,6 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                 <UsageMeter label="Scheduled frames / day" value={usage.framesPerDay} max={usage.capturesLimit} />
                 <UsageMeter label="Active windows" value={usage.schedulesActiveCount} max={usage.schedulesLimit} />
                 <UsageMeter label="Storage" value={usage.storageUsedGb} max={usage.storageLimitGb} unit=" GB" />
-                <UsageMeter label="Team seats" value={usage.seatsUsed} max={usage.seatsLimit} />
               </div>
             </Card>
 
@@ -169,7 +168,6 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
               <AttributeRow label="Full name" value={user.fullName || '—'} />
               <AttributeRow label="Email" value={user.email} />
               <AttributeRow label="Organisation" value={user.organisation || '—'} />
-              <AttributeRow label="Workspace role" value="Owner" />
               <AttributeRow label="Platform role" value={user.role === 'internal' ? 'Internal (Maceut staff)' : 'Customer'} />
             </dl>
           </Card>

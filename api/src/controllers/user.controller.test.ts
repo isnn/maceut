@@ -28,6 +28,10 @@ vi.mock('../repositories/user.repository', () => ({
   listWithPlans: vi.fn(),
   countInternal: vi.fn(),
 }))
+// changePlan now runs the grandfather-and-block pass (ADR-020), which reads the
+// account's zones and schedules to work out what would exceed the new plan.
+vi.mock('../repositories/zone.repository', () => ({ findByUserId: vi.fn(() => []), update: vi.fn() }))
+vi.mock('../repositories/schedule.repository', () => ({ findByUserId: vi.fn(() => []), update: vi.fn() }))
 vi.mock('../lib/internal-access', () => ({
   isInternalByConfig: vi.fn(() => false),
   resolveRole: vi.fn((_email: string, stored: string) => stored),
@@ -213,7 +217,10 @@ describe('PATCH /internal/users/:id/plan', () => {
     const res = await request(app).patch(`/internal/users/${TARGET_ID}/plan`).send({ plan: 'premium' })
 
     expect(res.status).toBe(200)
-    expect(res.body.data.plan).toBe('premium')
+    // The response now carries what the change paused alongside the user, so the
+    // confirmation dialog and the outcome report the same shape (ADR-020).
+    expect(res.body.data.user.plan).toBe('premium')
+    expect(res.body.data.impact.clean).toBe(true)
     expect(userRepo.setPlan).toHaveBeenCalledWith(TARGET_ID, 'premium')
   })
 

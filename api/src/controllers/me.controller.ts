@@ -40,12 +40,33 @@ export async function completeOnboarding(req: Request, res: Response, next: Next
   }
 }
 
-/** See the warning on userService.changeOwnPlan — this is ungated until billing. */
+/**
+ * See the warning on userService.changeOwnPlan — this is ungated until billing.
+ *
+ * Returns what was paused alongside the user, so the screen can report the outcome
+ * in the same shape the confirmation dialog previewed.
+ */
 export async function changeOwnPlan(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.userId) throw new UnauthorizedError()
     const { plan } = onboardingSchema.parse(req.body)
     return res.status(200).json(ok(await userService.changeOwnPlan(req.userId, plan as Plan)))
+  } catch (err) {
+    next(err)
+  }
+}
+
+/**
+ * What a plan change would pause, without changing anything (ADR-020).
+ *
+ * Backs the confirmation dialog. It runs the same function the change itself runs, so
+ * what the user is warned about and what actually happens cannot drift apart.
+ */
+export async function planImpact(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) throw new UnauthorizedError()
+    const { plan } = onboardingSchema.parse({ plan: req.query.plan })
+    return res.status(200).json(ok(await userService.previewPlanChange(req.userId, plan as Plan)))
   } catch (err) {
     next(err)
   }

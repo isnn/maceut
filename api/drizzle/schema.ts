@@ -87,3 +87,54 @@ export const zones = pgTable(
 )
 
 export type ZoneRow = typeof zones.$inferSelect
+
+/**
+ * A capture window (F-05/F-06), stored as the UI models it rather than as cron.
+ *
+ * ADR-019: the spec said `cron_expr`, but the Schedule board edits start/end time, an
+ * interval and weekdays. Window → cron is total — every window has exactly one cron
+ * form. Cron → window is not: `0 3,17 * * *` has no window representation at all. So
+ * the window is stored and the cron expression is derived when the scheduler loads
+ * it, keeping the lossy direction in memory and never in the database.
+ */
+export const captureIntervalEnum = pgEnum('capture_interval', ['15min', 'hourly', 'daily'])
+
+export const scheduleStatusEnum = pgEnum('schedule_status', ['active', 'paused', 'deleted'])
+
+export const schedules = pgTable(
+  'schedules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    zoneId: uuid('zone_id')
+      .notNull()
+      .references(() => zones.id, { onDelete: 'cascade' }),
+
+    label: text('label').notNull(),
+    /** "HH:mm" in Asia/Jakarta — the window the UI draws on the hour ruler. */
+    startTime: text('start_time').notNull(),
+    endTime: text('end_time').notNull(),
+    interval: captureIntervalEnum('interval').notNull(),
+    /** ISO weekday numbers the UI uses: 0 = Monday … 6 = Sunday. */
+    days: integer('days').array().notNull(),
+
+    /**
+     * `deleted` is a soft delete (F-06) — capture history references the schedule that
+     * produced each frame, so removing the row would orphan that history.
+     */
+    status: scheduleStatusEnum('status').notNull().default('active'),
+
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('schedules_user_id_idx').on(t.userId),
+    index('schedules_zone_id_idx').on(t.zoneId),
+    // BR-005 counts only `active` rows, so the status is part of the lookup.
+    index('schedules_user_status_idx').on(t.userId, t.status),
+  ],
+)
+
+export type ScheduleRow = typeof schedules.$inferSelect
