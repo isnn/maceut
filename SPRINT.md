@@ -56,7 +56,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | 🔴 | **BE-12** Frontend: /internal Config jadi read-only sesuai ADR-018 | specs/internal/requirements.md |
 | ✅ | Frontend: ganti mock `features/auth/api.ts` → `/api/auth/*` + GET /me (fetch langsung, tanpa dependency baru) | auth/tasks.md Phase 3 |
 | ✅ | Frontend: ganti mock `features/internal/api.ts` → GET /internal/users, /internal/stats | specs/internal/requirements.md |
-| 🔴 | Backend: gate pembayaran untuk PATCH /me/plan (sekarang siapa pun bisa naik paket gratis) | Sprint 3 billing |
+| 🟡 | **BE-13** Gate pembayaran `PATCH /me/plan` — lubang self-serve sudah ditutup (403, ADR-021) ✅ · payment intent + webhook 🔴 | Sprint 3 billing |
 | 🔴 | Backend: kirim flag `roleLockedByConfig` per user supaya UI tidak perlu NEXT_PUBLIC_INTERNAL_EMAILS | specs/internal/requirements.md |
 | ✅ | API: GET /zones + POST /zones (Drizzle + PostGIS raw) + unit test + swagger | zone-management/tasks.md Phase 2 |
 | ✅ | API: GET/PATCH/DELETE /zones/:id + unit test + swagger (F-24, BR-028..030) | zone-management/tasks.md Phase 2 |
@@ -90,6 +90,10 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Tutup upgrade self-serve — `PATCH /me/plan` tolak kenaikan paket (403) | ADR-021 |
 | ✅ | Admin dashboard: jumlah zona & jendela per akun dan platform-wide, bukan "—" | F-21/F-22 |
 | ✅ | Admin bisa membuat akun baru — `POST /internal/users` + dialog Add user | F-21 |
+| 🔴 | **BE-14** Lupa/ganti password — tautan "Forgot password?" di login mati (`href="#lupa-password"`), dan akun buatan admin tak bisa mengganti password generated | auth/requirements.md |
+| 🔴 | **BE-15** `DELETE /internal/users/:id` (atau nonaktifkan) — akun tidak bisa dihapus sama sekali, termasuk akun uji | F-22 |
+| 🔴 | **BE-16** Scheduler node-cron: `api/src/schedulers/` belum ada — jendela aktif tidak pernah mem-publish job | capture-schedule/requirements.md |
+| 🔴 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev (butuh BE-15) | housekeeping |
 | 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
 | ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
 | 🔴 | Frontend: hitung ruas per kelas di RoadClassPicker dari /traffic/preview (kini masih katalog lokal) | zone-management/tasks.md Phase 4 |
