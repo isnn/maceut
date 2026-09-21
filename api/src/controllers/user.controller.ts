@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import * as userService from '../services/user.service'
-import { listUsersQuerySchema, changePlanSchema, changeRoleSchema } from '../schemas/user.schema'
+import { listUsersQuerySchema, createUserSchema, changePlanSchema, changeRoleSchema } from '../schemas/user.schema'
 import { UnauthorizedError } from '../errors'
 import { ok, paginated } from '../types/api'
 import type { Plan, PlatformRole } from '../types/plan'
@@ -26,6 +26,29 @@ export async function list(req: Request, res: Response, next: NextFunction) {
         total_pages: result.totalPages,
       }),
     )
+  } catch (err) {
+    next(err)
+  }
+}
+
+/**
+ * Staff creating an account (F-21).
+ *
+ * 201 with the new account, plus `temporaryPassword` when the server generated one.
+ * That value is returned exactly once and is never logged — it is hashed on the way
+ * into the database and cannot be read back.
+ */
+export async function create(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = createUserSchema.parse(req.body)
+    const created = await userService.createUser({
+      email: body.email,
+      fullName: body.fullName,
+      plan: body.plan as Plan,
+      role: body.role as PlatformRole,
+      password: body.password,
+    })
+    return res.status(201).json(ok(created))
   } catch (err) {
     next(err)
   }

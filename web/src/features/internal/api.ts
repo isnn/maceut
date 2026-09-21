@@ -127,6 +127,29 @@ export async function getPlatformStats(): Promise<PlatformStats> {
   }
 }
 
+export interface CreateUserInput {
+  email: string
+  fullName: string
+  plan: Plan
+  role: PlatformRole
+  /** Leave out to have the server generate one and return it once. */
+  password?: string
+}
+
+export interface CreatedUser {
+  user: User
+  /**
+   * Only present when the server generated it. There is one chance to copy it — it is
+   * hashed on the way into the database and cannot be read back.
+   */
+  temporaryPassword?: string
+}
+
+/** Staff creating an account for someone (F-21). */
+export async function createUser(input: CreateUserInput): Promise<CreatedUser> {
+  return apiClient.post<CreatedUser>('/internal/users', input)
+}
+
 export async function setUserRole(userId: string, role: PlatformRole): Promise<void> {
   await apiClient.patch<User>(`/internal/users/${userId}/role`, { role })
 }

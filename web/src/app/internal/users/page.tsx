@@ -10,6 +10,7 @@ import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { UsageMeter } from '@/components/ui/UsageMeter'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { AddUserDialog } from '@/features/internal/components/AddUserDialog'
 import { formatDate } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER } from '@/lib/constants'
 import { ApiError } from '@/types/api'
@@ -28,6 +29,7 @@ export default function InternalUsersPage() {
   const [error, setError] = useState<string | null>(null)
   const [viewing, setViewing] = useState<InternalUserRow | null>(null)
   const [downgrade, setDowngrade] = useState<{ row: InternalUserRow; plan: Plan } | null>(null)
+  const [adding, setAdding] = useState(false)
 
   const load = useCallback(() => internalApi.getUserDirectory(), [])
   const refetch = useCallback(() => load().then(setRows), [load])
@@ -84,13 +86,14 @@ export default function InternalUsersPage() {
         const next = PLAN_LIMITS[downgrade.plan]
         const u = downgrade.row.usage
         const over: string[] = []
-        // Counts are null until zones/captures/storage are tracked. A null is "not
-        // known", not "zero" — skipping the check is right, but the dialog must not
-        // then imply the downgrade was verified as safe.
-        if (u.zonesCount !== null && u.zonesCount > next.zonesLimit)
+        // Zones and windows are measured, so this list is now real rather than always
+        // empty — the warning it feeds could never fire while every count was null.
+        if (u.zonesCount > next.zonesLimit)
           over.push(`${u.zonesCount} zones over a ${next.zonesLimit}-zone limit`)
-        if (u.schedulesActiveCount !== null && u.schedulesActiveCount > next.schedulesLimit)
+        if (u.schedulesActiveCount > next.schedulesLimit)
           over.push(`${u.schedulesActiveCount} active windows over a ${next.schedulesLimit} limit`)
+        // Storage is still unmeasured; null means "not known", not "zero", so it is
+        // skipped rather than reported as within limits.
         if (u.storageUsedGb !== null && u.storageUsedGb > next.storageGb)
           over.push(`${u.storageUsedGb} GB over a ${next.storageGb} GB limit`)
         return over
@@ -99,13 +102,18 @@ export default function InternalUsersPage() {
 
   return (
     <div className="space-y-lg">
-      <div>
-        <p className="text-label text-text-secondary">Platform · {rows?.length ?? 0} accounts</p>
-        <h1 className="text-page-title font-bold text-text-primary mt-xs">Users</h1>
-        <p className="text-body text-text-secondary mt-xs max-w-[70ch]">
-          Change a customer&rsquo;s plan or grant them internal access. You cannot change your own role, and the last
-          internal account cannot be demoted.
-        </p>
+      <div className="flex flex-wrap items-start gap-lg">
+        <div>
+          <p className="text-label text-text-secondary">Platform · {rows?.length ?? 0} accounts</p>
+          <h1 className="text-page-title font-bold text-text-primary mt-xs">Users</h1>
+          <p className="text-body text-text-secondary mt-xs max-w-[70ch]">
+            Create an account, change a customer&rsquo;s plan, or grant internal access. You cannot change your own
+            role, and the last internal account cannot be demoted.
+          </p>
+        </div>
+        <Button className="ml-auto shrink-0" onClick={() => setAdding(true)}>
+          Add user
+        </Button>
       </div>
 
       {error && <Alert variant="warning">{error}</Alert>}
@@ -215,7 +223,8 @@ export default function InternalUsersPage() {
                     </Td>
                     <Td className="text-caption text-text-secondary whitespace-nowrap tabular-nums">
                       {row.usage.zonesCount}/{row.usage.zonesLimit} zones ·{' '}
-                      {row.usage.capturesToday}/{row.usage.capturesLimit} captures
+                      {row.usage.schedulesActiveCount}/{row.usage.schedulesLimit} windows ·{' '}
+                      {row.usage.capturesToday ?? '—'}/{row.usage.capturesLimit} captures
                     </Td>
                     <Td className="text-text-secondary whitespace-nowrap">{formatDate(row.createdAt)}</Td>
                     <Td className="text-right">
@@ -254,6 +263,8 @@ export default function InternalUsersPage() {
         onConfirm={confirmDowngrade}
         onCancel={() => setDowngrade(null)}
       />
+
+      <AddUserDialog open={adding} onClose={() => setAdding(false)} onCreated={refetch} />
     </div>
   )
 }
@@ -270,9 +281,21 @@ function UsageDialog({ row, onClose }: { row: InternalUserRow; onClose: () => vo
             {row.email} · {PLAN_LABEL[row.plan]} plan
           </Dialog.Description>
 
+          {(row.usage.zonesPaused > 0 || row.usage.schedulesPaused > 0) && (
+            <Alert variant="warning" className="mb-lg">
+              This account has{' '}
+              {row.usage.zonesPaused > 0 && `${row.usage.zonesPaused} zone${row.usage.zonesPaused === 1 ? '' : 's'}`}
+              {row.usage.zonesPaused > 0 && row.usage.schedulesPaused > 0 && ' and '}
+              {row.usage.schedulesPaused > 0 &&
+                `${row.usage.schedulesPaused} capture window${row.usage.schedulesPaused === 1 ? '' : 's'}`}{' '}
+              paused for exceeding the {PLAN_LABEL[row.plan]} plan. Nothing was deleted &mdash; moving the plan back up
+              lets them be resumed.
+            </Alert>
+          )}
+
           <Alert variant="warning" className="mb-lg">
-            Usage is not tracked yet — zones, captures and storage arrive with those features.
-            The limits below are what this account&apos;s plan allows.
+            Captures and storage aren&apos;t tracked yet, so those read &quot;&mdash;&quot;. Zones and capture windows
+            are counted for real.
           </Alert>
 
           <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">

@@ -119,6 +119,63 @@ router.get('/internal/users/:id', userController.detail)
 
 /**
  * @swagger
+ * /internal/users:
+ *   post:
+ *     summary: Buat akun baru untuk seseorang (F-21)
+ *     description: >
+ *       Akun dibuat lewat jalur sign-up Better Auth sendiri, bukan INSERT manual,
+ *       supaya password di-hash oleh scrypt yang sama dengan pendaftaran mandiri dan
+ *       baris user/credential-nya terbentuk dengan benar. Menulis itu manual adalah
+ *       cara sebuah akun jadi ada tapi tidak bisa login.
+ *
+ *       `password` opsional. Kalau dikosongkan server membuatkan yang kuat dan
+ *       mengembalikannya SEKALI di `temporaryPassword` — setelah itu tidak bisa dibaca
+ *       lagi karena sudah di-hash. Kalau diisi, dipakai apa adanya; ini untuk admin
+ *       yang sedang mendampingi orangnya langsung, karena belum ada pengiriman email.
+ *
+ *       `onboardingDone` otomatis true: akunnya sudah disiapkan orang, dan layar
+ *       onboarding akan memberi tahu pemegang paket Premium bahwa ia di paket Free.
+ *
+ *       Sesi admin yang memanggil TIDAK berubah.
+ *     tags: [Internal]
+ *     security: [{ cookieAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, fullName]
+ *             properties:
+ *               email: { type: string, format: email }
+ *               fullName: { type: string, example: Siti Aminah }
+ *               plan: { type: string, enum: [free, standard, premium], default: free }
+ *               role: { type: string, enum: [user, internal], default: user }
+ *               password: { type: string, minLength: 8, description: Kosongkan agar dibuatkan }
+ *     responses:
+ *       201:
+ *         description: Akun dibuat
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user: { $ref: '#/components/schemas/User' }
+ *                     temporaryPassword:
+ *                       type: string
+ *                       description: Hanya ada kalau server yang membuatnya. Ditampilkan sekali.
+ *       401: { description: UNAUTHORIZED }
+ *       403: { description: FORBIDDEN — bukan akun internal }
+ *       422: { description: VALIDATION_ERROR atau EMAIL_ALREADY_TAKEN }
+ */
+router.post('/internal/users', userController.create)
+
+/**
+ * @swagger
  * /internal/users/{id}/plan:
  *   patch:
  *     summary: Ubah paket sebuah akun

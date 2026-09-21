@@ -1,5 +1,14 @@
+import { randomBytes } from 'node:crypto'
 import * as userRepo from '../repositories/user.repository'
-import { NotFoundError, ForbiddenError, ValidationError, UpgradeNotSelfServeError } from '../errors'
+import { auth } from '../lib/auth'
+import {
+  NotFoundError,
+  ForbiddenError,
+  ValidationError,
+  UpgradeNotSelfServeError,
+  EmailAlreadyTakenError,
+  AppError,
+} from '../errors'
 import { isInternalByConfig, resolveRole, configuredInternalEmails } from '../lib/internal-access'
 import { PLAN_LIMITS, isUpgrade, type Plan, type PlatformRole } from '../types/plan'
 import * as planService from './plan.service'
@@ -313,4 +322,76 @@ export async function getPlatformStats(): Promise<{
     capturesToday: null,
     storageUsedGb: null,
   }
+}
+
+/**
+ * A strong temporary password, shown to the admin once and never stored in the clear.
+ *
+ * base64url over 18 random bytes: 24 characters, no ambiguous escaping, and safe to
+ * paste into any field. Length is what carries the strength here — there is no point
+ * in a character-class rule on a value nobody has to type from memory.
+ */
+function generatePassword(): string {
+  return randomBytes(18).toString('base64url')
+}
+
+export interface CreateUserInput {
+  email: string
+  fullName: string
+  plan: Plan
+  role: PlatformRole
+  /** Omit to have one generated and returned once. */
+  password?: string
+}
+
+export interface CreatedUser {
+  user: PublicUser
+  /**
+   * Present only when the server generated it. The admin has one chance to copy it: it
+   * is hashed on the way into the database and cannot be read back afterwards.
+   */
+  temporaryPassword?: string
+}
+
+/**
+ * Staff creating an account for a customer (F-21).
+ *
+ * The account goes through Better Auth's own sign-up rather than an INSERT, so the
+ * password is hashed by the same scrypt path a self-registration uses and the account
+ * row, the credential row and their linkage are all built the one correct way. Writing
+ * those by hand is how an account ends up existing but unable to sign in.
+ *
+ * Two deliberate details:
+ *
+ * 1. Better Auth's `autoSignIn` mints a session for the new account. We do not forward
+ *    it anywhere — the admin's own cookie is untouched, and the token is dropped rather
+ *    than returned. The stray session simply expires.
+ *
+ * 2. `onboardingDone` is set true. An admin-created account has already been set up by
+ *    a person, and the onboarding screen would tell someone on a granted Premium plan
+ *    that they are on Free.
+ */
+export async function createUser(input: CreateUserInput): Promise<CreatedUser> {
+  // Checked before Better Auth so the answer is this API's error contract rather than
+  // Better Auth's, which the internal screens do not parse.
+  const existing = await userRepo.findByEmail(input.email)
+  if (existing) throw new EmailAlreadyTakenError()
+
+  const generated = input.password ? undefined : generatePassword()
+  const password = input.password ?? (generated as string)
+
+  const created = await auth.api.signUpEmail({
+    body: { email: input.email, password, name: input.fullName },
+  })
+
+  const userId = created?.user?.id
+  if (!userId) {
+    throw new AppError('INTERNAL_ERROR', 500, 'Akun gagal dibuat — Better Auth tidak mengembalikan user.')
+  }
+
+  await userRepo.ensurePlan(userId, input.plan)
+  await userRepo.setPlan(userId, input.plan)
+  await userRepo.updateUser(userId, { role: input.role, onboardingDone: true })
+
+  return { user: await getUser(userId), temporaryPassword: generated }
 }

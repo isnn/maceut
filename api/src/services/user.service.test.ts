@@ -4,6 +4,8 @@ vi.mock('../lib/drizzle-client', () => ({ db: {}, pool: {} }))
 vi.mock('../repositories/user.repository', () => ({
   findById: vi.fn(),
   findByIdWithPlan: vi.fn(),
+  findByEmail: vi.fn(),
+  ensurePlan: vi.fn(),
   setPlan: vi.fn(),
   updateUser: vi.fn(),
   listWithPlans: vi.fn(),
@@ -21,17 +23,28 @@ vi.mock('../repositories/schedule.repository', () => ({
   countsByUser: vi.fn(async () => new Map()),
   countAllActive: vi.fn(async () => 0),
 }))
+vi.mock('../lib/auth', () => ({
+  auth: { api: { signUpEmail: vi.fn() } },
+}))
 vi.mock('../lib/internal-access', () => ({
   isInternalByConfig: vi.fn(() => false),
   resolveRole: vi.fn((_email: string, stored: string) => stored),
   configuredInternalEmails: vi.fn(() => []),
 }))
 
+import { auth } from '../lib/auth'
 import * as userRepo from '../repositories/user.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
-import { changeOwnPlan, changePlan, completeOnboarding, listUsers, getPlatformStats } from './user.service'
-import { UpgradeNotSelfServeError } from '../errors'
+import {
+  changeOwnPlan,
+  changePlan,
+  completeOnboarding,
+  createUser,
+  listUsers,
+  getPlatformStats,
+} from './user.service'
+import { UpgradeNotSelfServeError, EmailAlreadyTakenError } from '../errors'
 import type { Plan } from '../types/plan'
 
 const USER = 'user_01'
@@ -51,6 +64,8 @@ function row(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(userRepo.findByEmail).mockResolvedValue(undefined as never)
+  vi.mocked(auth.api.signUpEmail).mockResolvedValue({ user: { id: USER } } as never)
   vi.mocked(userRepo.findById).mockResolvedValue(row())
   vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(row())
   vi.mocked(userRepo.listWithPlans).mockResolvedValue({ rows: [row()], total: 1 } as never)
@@ -187,5 +202,84 @@ describe('getPlatformStats', () => {
     // Staff are not customers: counting them inflates the total and, because the
     // frontend multiplies the plan mix by a price, invents revenue.
     expect(userRepo.listWithPlans).toHaveBeenCalledWith(expect.objectContaining({ role: 'user' }))
+  })
+})
+
+describe('createUser — staff creating an account (F-21)', () => {
+  it('goes through Better Auth rather than inserting a row', async () => {
+    await createUser({ email: 'siti@example.com', fullName: 'Siti', plan: 'free', role: 'user' })
+
+    // Hand-written INSERTs are how an account ends up existing but unable to sign in:
+    // the credential row and its linkage have to be built the same way sign-up builds
+    // them, and the password hashed by the same scrypt path.
+    expect(auth.api.signUpEmail).toHaveBeenCalledWith({
+      body: expect.objectContaining({ email: 'siti@example.com', name: 'Siti' }),
+    })
+  })
+
+  it('generates a password when none is given, and returns it once', async () => {
+    const out = await createUser({ email: 'siti@example.com', fullName: 'Siti', plan: 'free', role: 'user' })
+
+    expect(out.temporaryPassword).toBeTypeOf('string')
+    expect(out.temporaryPassword!.length).toBeGreaterThanOrEqual(16)
+    // Whatever was generated is what the account was actually created with.
+    const body = (vi.mocked(auth.api.signUpEmail).mock.calls[0]![0] as { body: { password: string } }).body
+    expect(body.password).toBe(out.temporaryPassword)
+  })
+
+  it('never echoes a password the admin chose', async () => {
+    const out = await createUser({
+      email: 'siti@example.com',
+      fullName: 'Siti',
+      plan: 'free',
+      role: 'user',
+      password: 'chosen-by-the-admin',
+    })
+
+    // Returning it would put a password the admin already knows into logs and
+    // responses for no gain. Only a generated one needs showing.
+    expect(out.temporaryPassword).toBeUndefined()
+    const body = (vi.mocked(auth.api.signUpEmail).mock.calls[0]![0] as { body: { password: string } }).body
+    expect(body.password).toBe('chosen-by-the-admin')
+  })
+
+  it('refuses a duplicate email before touching Better Auth', async () => {
+    vi.mocked(userRepo.findByEmail).mockResolvedValue(row() as never)
+
+    await expect(
+      createUser({ email: 'budi@example.com', fullName: 'Budi', plan: 'free', role: 'user' }),
+    ).rejects.toBeInstanceOf(EmailAlreadyTakenError)
+    expect(auth.api.signUpEmail).not.toHaveBeenCalled()
+  })
+
+  it('applies the plan the admin picked', async () => {
+    await createUser({ email: 'siti@example.com', fullName: 'Siti', plan: 'premium', role: 'user' })
+
+    expect(userRepo.setPlan).toHaveBeenCalledWith(USER, 'premium')
+  })
+
+  it('can create staff', async () => {
+    await createUser({ email: 'ops@maceut.id', fullName: 'Ops', plan: 'free', role: 'internal' })
+
+    expect(userRepo.updateUser).toHaveBeenCalledWith(USER, expect.objectContaining({ role: 'internal' }))
+  })
+
+  it('skips onboarding — a person already set this account up', async () => {
+    await createUser({ email: 'siti@example.com', fullName: 'Siti', plan: 'premium', role: 'user' })
+
+    // Otherwise the welcome screen tells someone on a granted Premium plan they are on
+    // Free, which is the one thing it exists to get right.
+    expect(userRepo.updateUser).toHaveBeenCalledWith(USER, expect.objectContaining({ onboardingDone: true }))
+  })
+
+  it('fails loudly if Better Auth returns no user', async () => {
+    vi.mocked(auth.api.signUpEmail).mockResolvedValue({} as never)
+
+    await expect(
+      createUser({ email: 'siti@example.com', fullName: 'Siti', plan: 'free', role: 'user' }),
+    ).rejects.toThrow(/tidak mengembalikan user/)
+    // Silently returning a half-made account is worse than an error: the admin would
+    // hand over credentials for something that cannot sign in.
+    expect(userRepo.setPlan).not.toHaveBeenCalled()
   })
 })

@@ -89,6 +89,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Alur daftar: form register tanpa organisation, onboarding bukan pemilih paket | ADR-021 |
 | ✅ | Tutup upgrade self-serve — `PATCH /me/plan` tolak kenaikan paket (403) | ADR-021 |
 | ✅ | Admin dashboard: jumlah zona & jendela per akun dan platform-wide, bukan "—" | F-21/F-22 |
+| ✅ | Admin bisa membuat akun baru — `POST /internal/users` + dialog Add user | F-21 |
 | 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
 | ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
 | 🔴 | Frontend: hitung ruas per kelas di RoadClassPicker dari /traffic/preview (kini masih katalog lokal) | zone-management/tasks.md Phase 4 |
@@ -639,6 +640,58 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
   194 test hijau (14 baru untuk gate paket & penghitungan usage), tsc + eslint bersih di
   kedua paket, production build lolos, 11 route web balas 200.
+
+[2026-09-21b] Admin bisa membuat akun baru (F-21).
+
+  `POST /internal/users` — staff-only lewat guard `/internal` yang sudah ada. Akun dibuat
+  lewat jalur sign-up Better Auth sendiri, BUKAN INSERT manual. Alasannya bukan kerapian:
+  menulis baris user + credential + kaitannya dengan tangan adalah cara sebuah akun jadi
+  ADA tapi tidak bisa login, dan itu baru ketahuan saat orangnya mencoba masuk. Lewat
+  jalur yang sama dengan pendaftaran mandiri, password di-hash scrypt yang sama.
+
+  PASSWORD. Opsional. Kalau dikosongkan server membuat 18 byte acak (24 karakter base64url)
+  dan mengembalikannya SEKALI di `temporaryPassword`. Default-nya sengaja begitu: admin yang
+  mengarang password untuk orang lain menghasilkan password lemah dan berulang. Tapi tetap
+  bisa diisi, karena belum ada pengiriman email — admin yang sedang mendampingi orangnya
+  perlu sesuatu yang bisa diucapkan. Password pilihan admin TIDAK dikembalikan di respons:
+  dia sudah tahu, jadi mengembalikannya cuma menaruh password di log dan response tanpa
+  manfaat.
+
+  Dua detail yang disengaja:
+  1. `autoSignIn` Better Auth mencetak sesi untuk akun baru. Token itu dibuang, tidak
+     diteruskan ke mana pun — sesi admin yang memanggil TIDAK berubah. Diverifikasi.
+  2. `onboardingDone` = true. Akunnya sudah disiapkan manusia, dan layar onboarding akan
+     memberi tahu pemegang Premium hasil grant bahwa dia di paket Free — satu-satunya hal
+     yang layar itu ada untuk benar.
+
+  UI. Dialog dua keadaan, bukan satu layar yang mencoba jadi keduanya: formulir, lalu
+  serah-terima. Pemisahan itu ada karena batasannya nyata — tanpa email, apa pun yang
+  dipakai akun baru untuk login harus berpindah dari layar ini ke seorang manusia. Password
+  generated muncul sekali dan tidak bisa dibaca ulang, jadi dialognya harus BERHENTI dan
+  memaksa admin mengurusnya, bukan menutup diri lalu lanjut.
+
+  DIVERIFIKASI LANGSUNG (bukan hanya unit test): 401 tanpa sesi · 403 untuk akun customer ·
+  201 untuk staff · akun baru benar-benar bisa sign-in dengan password generated · password
+  salah tetap 401 · duplikat email 422 EMAIL_ALREADY_TAKEN · email & password invalid 422
+  dengan field error · sesi admin utuh setelah membuat akun.
+
+  Sekalian: /internal/stats dan direktori akhirnya diverifikasi di deployment (giliran
+  sebelumnya cuma lewat unit test karena tidak ada sesi staf). `zonesCollecting: 2`,
+  `schedulesActive: 1` — angka nyata di tempat yang dulu "—". `totalUsers: 12` sementara
+  total baris 14: dua akun internal memang tidak dihitung sebagai pelanggan.
+
+  DUA BUG DITEMUKAN SAAT MELIHAT HALAMANNYA DI BROWSER, keduanya lolos dari tsc dan test:
+  1. Sel Usage menampilkan "/10 captures" — `capturesToday` null di-render jadi string
+     kosong, jadi pembilangnya hilang sama sekali. Sekarang "—/10", plus kolom windows.
+  2. Alert di drawer akun masih berbunyi "Usage is not tracked yet" — penggantian teks di
+     commit sebelumnya MELESET diam-diam (aku tidak assert hasilnya, jadi tidak ketahuan).
+     Sekarang benar, dan peringatan "X zona di-pause" yang dijanjikan commit itu baru
+     benar-benar ada sekarang.
+  Keduanya hanya bisa ketahuan dengan membuka halamannya sebagai staf — HTTP 200 dan tsc
+  bersih tidak menyentuh keduanya.
+
+  202 test (8 baru untuk createUser), tsc + eslint bersih, production build lolos, 11 route
+  balas 200, Swagger menampilkan get+post di /internal/users.
 
 ---
 
