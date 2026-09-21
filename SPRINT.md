@@ -85,6 +85,10 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: Dashboard pakai API asli (tidak ada lagi angka karangan) | zone-management F-19 |
 | ✅ | Fix: filter functional class dikirim ke HERE, bukan difilter lokal | docs HERE v7 |
 | 🔴 | HERE API key masih 401 "not from an authorized source" — restriksi domain/IP di app-nya | BE-10 |
+| ✅ | Hapus kolom `organisation` dari user — migrasi 0006 + semua UI | ADR-022 |
+| ✅ | Alur daftar: form register tanpa organisation, onboarding bukan pemilih paket | ADR-021 |
+| ✅ | Tutup upgrade self-serve — `PATCH /me/plan` tolak kenaikan paket (403) | ADR-021 |
+| ✅ | Admin dashboard: jumlah zona & jendela per akun dan platform-wide, bukan "—" | F-21/F-22 |
 | 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
 | ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
 | 🔴 | Frontend: hitung ruas per kelas di RoadClassPicker dari /traffic/preview (kini masih katalog lokal) | zone-management/tasks.md Phase 4 |
@@ -581,6 +585,60 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   tetap restriksi domain/referrer pada key: request dari server tidak mengirim header Referer sama
   sekali, jadi key yang dibatasi ke sebuah website tidak akan pernah bisa dipakai dari backend.
   180 test hijau, tsc & eslint bersih di api/ dan web/, 8 route web balas 200.
+
+[2026-09-21] Organisation dihapus, alur daftar diperbaiki, admin dashboard pakai angka nyata.
+
+  ORGANISATION. Dihapus sepenuhnya — kolom, migrasi 0006, dan setiap tempat ia tampil.
+  Ini BUKAN paradigma multi-tenant yang sudah dibuang; ini label teks bebas pada user
+  ("Dinas Bina Marga"). Tapi di formulir pendaftaran ia duduk bersebelahan dengan nama
+  lengkap sebagai kolom setara, sehingga membaca seolah bergabung ke sebuah organisasi
+  adalah bagian dari membuat akun — dan tidak ada satu pun logika yang pernah membacanya.
+  ⚠️ Destruktif dan disengaja: nama organisasi yang sudah masuk ikut hilang. Kolom yang
+  tidak dibaca siapa pun adalah cara sebuah schema mengumpulkan field yang tujuannya tak
+  bisa direkonstruksi setahun kemudian. Kalau kontak pelanggan ternyata perlu, tempatnya
+  tabel customer-record yang menyatakan itu. Direktori internal kehilangan satu dimensi
+  pencarian — diganti kolom jumlah zona, yang lebih berguna untuk operator.
+  Dicatat sebagai ADR-022; schema.dbml diperbarui di commit yang sama (aturan #37).
+
+  ALUR DAFTAR. Tiga bug nyata, ditemukan saat menelusuri alurnya dari awal:
+  1. `choosePlan` di onboarding menelan kegagalan — kalau `completeOnboarding` melempar,
+     tombolnya tinggal di keadaan pending selamanya tanpa satu kata pun di layar. Sekarang
+     kegagalannya muncul. Hal yang sama di tombol ganti paket Profil.
+  2. "Back to details" mendorong ke /register padahal akunnya SUDAH ada dan sesi sudah
+     jalan — jalan buntu. Dihapus bersama langkah pemilih paketnya.
+  3. Overview internal masih berbunyi "not scoped to your own workspace".
+
+  PLAN PICKER = LUBANG PENDAPATAN. Ini temuan yang paling penting. Tanpa billing, memilih
+  "Premium" di onboarding bukan penjualan — itu formulir yang membagikan batas Premium ke
+  siapa pun yang membaca halaman harga. Ada DUA jalur terbuka: langkah onboarding dan
+  tombol ganti paket di Profil. Keduanya ditutup.
+  Onboarding sekarang langkah sambutan: menandai onboardingDone, dan menjelaskan apa yang
+  Free sebenarnya berikan plus apa yang harus dikerjakan pertama — dua hal yang tidak
+  dijawab kalau orang langsung dilempar ke dashboard kosong. `POST /me/onboarding` tidak
+  lagi menerima body sama sekali.
+  `PATCH /me/plan` menolak kenaikan paket dengan 403 UPGRADE_NOT_SELF_SERVE. PENURUNAN
+  sengaja tetap self-serve: melepas kapasitas tidak merugikan bisnis, dan memaksa orang
+  membuka tiket untuk berhemat itu tidak masuk akal — penurunan tetap menjalankan
+  grandfather-and-block penuh (ADR-020). 403 dipilih, bukan 402: 402 mengumumkan "bayar
+  lalu ini berhasil", yang belum benar — belum ada alat bayarnya. Dicatat sebagai ADR-021.
+  Diverifikasi langsung di deployment: akun baru → plan=free; POST /me/onboarding dengan
+  body {"plan":"premium"} tetap menghasilkan plan=free (jalur penyelundupan lama mati);
+  PATCH /me/plan ke premium → 403; ke free → 200.
+
+  ADMIN DASHBOARD. Perbaikan yang sama seperti dashboard user, dipakaikan ke sisi operator.
+  Zona dan jendela capture SEKARANG DIHITUNG sungguhan — per akun di direktori, dan
+  platform-wide di overview — lewat dua query GROUP BY, bukan satu query per baris. Yang
+  terakhir itu penting: direktori menampilkan setiap akun, jadi menghitung per baris akan
+  membuat halamannya makin lambat setiap ada pendaftar.
+  Captures dan storage TETAP `null` → "—". Belum ada tabel yang menghitungnya (CAP-01), dan
+  di perkakas operator angka karangan lebih berbahaya daripada di mana pun: itulah angka
+  yang dipakai orang saat menangani keluhan pelanggan.
+  Drawer akun sekarang menampilkan lebih dulu berapa zona/jendela yang di-pause karena
+  melebihi paket. Itu potongan yang dibutuhkan operator sebelum hal lain ketika ada yang
+  mengeluh "pengumpulan saya berhenti".
+
+  194 test hijau (14 baru untuk gate paket & penghitungan usage), tsc + eslint bersih di
+  kedua paket, production build lolos, 11 route web balas 200.
 
 ---
 

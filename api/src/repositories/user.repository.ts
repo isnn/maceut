@@ -53,7 +53,7 @@ export async function findByIdWithPlan(id: string): Promise<UserWithPlan | undef
 
 export async function updateUser(
   id: string,
-  patch: Partial<Pick<UserRow, 'name' | 'organisation' | 'role' | 'onboardingDone'>>,
+  patch: Partial<Pick<UserRow, 'name' | 'role' | 'onboardingDone'>>,
 ): Promise<UserRow | undefined> {
   const rows = await db
     .update(user)
@@ -132,7 +132,7 @@ export async function listWithPlans(opts: ListUsersOptions): Promise<{ rows: Use
 
   if (opts.search) {
     const term = `%${escapeLike(opts.search)}%`
-    const clause = or(ilike(user.email, term), ilike(user.name, term), ilike(user.organisation, term))
+    const clause = or(ilike(user.email, term), ilike(user.name, term))
     if (clause) filters.push(clause)
   }
   if (opts.plan) filters.push(eq(userPlans.plan, opts.plan))

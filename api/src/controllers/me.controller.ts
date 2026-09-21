@@ -30,18 +30,24 @@ export async function me(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+/**
+ * Marks sign-up finished. Takes no body.
+ *
+ * It used to accept a plan, which is how a brand-new account could award itself
+ * Premium. Everyone starts on Free; staff grant paid plans from `/internal/users`.
+ */
 export async function completeOnboarding(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.userId) throw new UnauthorizedError()
-    const { plan } = onboardingSchema.parse(req.body)
-    return res.status(200).json(ok(await userService.completeOnboarding(req.userId, plan as Plan)))
+    return res.status(200).json(ok(await userService.completeOnboarding(req.userId)))
   } catch (err) {
     next(err)
   }
 }
 
 /**
- * See the warning on userService.changeOwnPlan — this is ungated until billing.
+ * Downgrades only — an upgrade is refused with UPGRADE_NOT_SELF_SERVE until billing
+ * exists. See the note on userService.changeOwnPlan.
  *
  * Returns what was paused alongside the user, so the screen can report the outcome
  * in the same shape the confirmation dialog previewed.

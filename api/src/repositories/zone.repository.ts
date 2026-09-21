@@ -189,6 +189,36 @@ export async function countByUserId(userId: string): Promise<number> {
 }
 
 /**
+ * Collecting and paused zones per account, for the internal directory.
+ *
+ * One GROUP BY rather than two queries per row: the directory lists every account, so
+ * a per-row count would be a query per account and the page would get slower with
+ * every signup. Accounts with no zones are simply absent from the map — the caller
+ * reads a missing key as zero, which it is.
+ */
+export async function countsByUser(): Promise<Map<string, { collecting: number; paused: number }>> {
+  const rows = await db
+    .select({
+      userId: zones.userId,
+      collecting: sql<number>`count(*) filter (where ${zones.status} = 'collecting')::int`,
+      paused: sql<number>`count(*) filter (where ${zones.status} = 'paused')::int`,
+    })
+    .from(zones)
+    .groupBy(zones.userId)
+
+  return new Map(rows.map((r) => [r.userId, { collecting: r.collecting, paused: r.paused }]))
+}
+
+/** Every collecting zone on the platform (internal overview). */
+export async function countAllCollecting(): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(zones)
+    .where(eq(zones.status, 'collecting'))
+  return rows[0]?.count ?? 0
+}
+
+/**
  * BR-015 — name uniqueness per user, case-insensitive.
  *
  * `excludeZoneId` is what makes rename work: without it, saving a zone under its own

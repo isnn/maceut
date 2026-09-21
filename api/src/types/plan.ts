@@ -10,6 +10,19 @@ export type Plan = 'free' | 'standard' | 'premium'
 
 export const PLANS: readonly Plan[] = ['free', 'standard', 'premium'] as const
 
+/**
+ * Cheapest to dearest, so "is this an upgrade?" is a comparison rather than a chain of
+ * `if`s that has to be re-read every time a plan is added.
+ */
+export function planRank(plan: Plan): number {
+  return PLANS.indexOf(plan)
+}
+
+/** True when moving `from` → `to` gains capacity, i.e. costs money once billing exists. */
+export function isUpgrade(from: Plan, to: Plan): boolean {
+  return planRank(to) > planRank(from)
+}
+
 /** BR-020/021/022. Ordered: `nasional` < `nasional_provinsi` < `semua`. */
 export type RoadClass = 'nasional' | 'nasional_provinsi' | 'semua'
 

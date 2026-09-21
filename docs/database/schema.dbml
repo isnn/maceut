@@ -11,7 +11,7 @@
 // Convention: every timestamp is `timestamptz`. A bare `timestamp` carries no
 // offset and means whatever the reading process assumes.
 //
-// Last updated: 2026-09-20 (migration 0005_schedules)
+// Last updated: 2026-09-21 (migration 0006_drop_organisation)
 // =============================================================================
 
 Project maceut {
@@ -30,7 +30,6 @@ Table user {
   email text [not null, note: 'UNIQUE on lower(email) — see migration 0001']
   email_verified boolean [not null, default: false]
   image text [null]
-  organisation text [null, note: 'Additional field']
   role text [null, default: 'user', note: 'Platform role: user | internal (BR-027). Cache — INTERNAL_EMAILS is the authority and acts as a floor, never a ceiling.']
   onboarding_done boolean [null, default: false, note: 'Server-set only (input: false)']
   created_at timestamptz [not null, default: `now()`]

@@ -18,6 +18,7 @@ export type ErrorCode =
   | 'ROAD_CLASS_NOT_ALLOWED'
   | 'EMAIL_ALREADY_TAKEN'
   | 'INVALID_CREDENTIALS'
+  | 'UPGRADE_NOT_SELF_SERVE'
   | 'CAPTURE_FAILED'
   | 'UPSTREAM_ERROR'
   | 'INTERNAL_ERROR'
@@ -106,6 +107,31 @@ export class EmailAlreadyTakenError extends AppError {
 export class InvalidCredentialsError extends AppError {
   constructor() {
     super('INVALID_CREDENTIALS', 401, 'Email atau password salah.')
+  }
+}
+
+/**
+ * A paid plan cannot be granted to yourself while billing does not exist.
+ *
+ * Until there is a payment step, any self-serve upgrade path hands out Premium limits
+ * for nothing — and a deployment reachable by anyone is reachable by anyone who reads
+ * the pricing page. Staff grant paid plans from `/internal/users`, which leaves a
+ * record of who granted what.
+ *
+ * Downgrades are deliberately NOT blocked: giving up capacity costs the business
+ * nothing, and forcing someone to open a support ticket to spend less is hostile.
+ *
+ * 403 rather than 402: 402 announces "pay and this succeeds", which is not true yet —
+ * there is nothing to pay with. This is "not through this door".
+ */
+export class UpgradeNotSelfServeError extends AppError {
+  constructor(requested: string) {
+    super(
+      'UPGRADE_NOT_SELF_SERVE',
+      403,
+      `Paket ${requested} belum bisa dipilih sendiri. Hubungi tim Maceut untuk mengaktifkannya.`,
+      { requested },
+    )
   }
 }
 

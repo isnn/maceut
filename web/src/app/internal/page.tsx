@@ -57,13 +57,13 @@ export default function InternalOverviewPage() {
         <p className="text-label text-text-secondary">Platform</p>
         <h1 className="text-page-title font-bold text-text-primary mt-xs">Overview</h1>
         <p className="text-body text-text-secondary mt-xs">
-          Every account on the platform — not scoped to your own workspace.
+          Every account on the platform, not just your own.
         </p>
       </div>
 
       <Alert variant="warning">
-        Zones, captures and storage are not tracked yet, so those figures read &quot;—&quot;. Account
-        and plan numbers are live.
+        Captures and storage aren&rsquo;t tracked yet, so those read &quot;—&quot;. Accounts, plans, zones and
+        capture windows are live.
       </Alert>
 
       <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-lg">
@@ -75,13 +75,13 @@ export default function InternalOverviewPage() {
         />
         <StatTile
           label="Zones collecting"
-          value={stats.zonesTotal ?? '—'}
-          note={stats.capturesTodayTotal === null ? 'not tracked yet' : `${stats.capturesTodayTotal} captures today`}
+          value={stats.zonesTotal}
+          note={`${stats.schedulesActiveTotal} active capture ${stats.schedulesActiveTotal === 1 ? 'window' : 'windows'}`}
         />
         <StatTile
           label="Estimated MRR"
           value={formatIdr(stats.mrr)}
-          note={stats.storageUsedGbTotal === null ? 'from plan mix' : `${stats.storageUsedGbTotal} GB stored`}
+          note="from plan mix · excludes internal"
         />
       </div>
 
@@ -126,7 +126,7 @@ export default function InternalOverviewPage() {
             <thead>
               <tr>
                 <Th>Account</Th>
-                <Th>Organisation</Th>
+                <Th className="text-right">Zones</Th>
                 <Th>Plan</Th>
                 <Th>Role</Th>
                 <Th>Joined</Th>
@@ -142,7 +142,12 @@ export default function InternalOverviewPage() {
                     </p>
                     <p className="text-caption text-text-muted">{row.email}</p>
                   </Td>
-                  <Td className="text-text-secondary">{row.organisation || '—'}</Td>
+                  <Td className="text-right tabular-nums text-text-secondary">
+                    {row.usage.zonesCount}
+                    {row.usage.zonesPaused > 0 && (
+                      <span className="text-micro text-warning-text ml-sm">{row.usage.zonesPaused} paused</span>
+                    )}
+                  </Td>
                   <Td>
                     <span className="text-micro bg-canvas-secondary text-text-secondary border border-border rounded-xs px-sm py-xs">
                       {PLAN_LABEL[row.plan]}

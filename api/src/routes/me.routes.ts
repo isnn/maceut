@@ -15,7 +15,6 @@ const router = Router()
  *         id: { type: string }
  *         email: { type: string, format: email }
  *         fullName: { type: string, example: Budi Santoso }
- *         organisation: { type: string, nullable: true, example: Dinas Perhubungan DIY }
  *         plan: { type: string, enum: [free, standard, premium] }
  *         role: { type: string, enum: [user, internal], description: Platform role, ditentukan INTERNAL_EMAILS (BR-027) }
  *         onboardingDone: { type: boolean }
@@ -56,22 +55,17 @@ router.get('/me', authMiddleware, meController.me)
  * @swagger
  * /me/onboarding:
  *   post:
- *     summary: Selesaikan onboarding dengan memilih paket
- *     description: Langkah 2 alur daftar. Menyetel plan dan menandai onboardingDone.
+ *     summary: Tandai onboarding selesai
+ *     description: >
+ *       Tidak menerima body. Setiap akun mulai di paket Free; paket berbayar diberikan
+ *       staf lewat PATCH /internal/users/{id}/plan. Sebelumnya endpoint ini menerima
+ *       `plan`, yang berarti akun baru bisa memberi dirinya sendiri batas Premium
+ *       tanpa membayar apa pun.
  *     tags: [Account]
  *     security: [{ cookieAuth: [] }]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [plan]
- *             properties:
- *               plan: { type: string, enum: [free, standard, premium] }
  *     responses:
  *       200:
- *         description: Paket tersimpan
+ *         description: Onboarding ditandai selesai
  *         content:
  *           application/json:
  *             schema:
@@ -80,7 +74,6 @@ router.get('/me', authMiddleware, meController.me)
  *                 success: { type: boolean, example: true }
  *                 data: { $ref: '#/components/schemas/User' }
  *       401: { description: UNAUTHORIZED }
- *       422: { description: VALIDATION_ERROR — paket tidak dikenal }
  */
 router.post('/me/onboarding', authMiddleware, meController.completeOnboarding)
 
@@ -88,14 +81,15 @@ router.post('/me/onboarding', authMiddleware, meController.completeOnboarding)
  * @swagger
  * /me/plan:
  *   patch:
- *     summary: Ganti paket sendiri (SEMENTARA — belum ada gate pembayaran)
+ *     summary: Turunkan paket sendiri (upgrade ditolak sampai ada billing)
  *     description: >
- *       ⚠️ Placeholder sampai billing dikerjakan (Sprint 3). Endpoint ini TIDAK
- *       memverifikasi pembayaran, jadi akun mana pun bisa memberi dirinya batas
- *       premium secara gratis. Dipakai oleh tombol ganti paket di halaman Profil,
- *       yang memang tercatat sebagai simulasi. Saat billing ada, endpoint ini wajib
- *       diubah menjadi: buat payment intent, dan paket hanya berpindah setelah
- *       webhook pembayaran terkonfirmasi.
+ *       Hanya menurunkan paket. Upgrade ditolak dengan 403 UPGRADE_NOT_SELF_SERVE
+ *       karena menambah kapasitas yang belum dibayar siapa pun — paket berbayar
+ *       diberikan staf lewat PATCH /internal/users/{id}/plan, sehingga ada catatan
+ *       siapa memberi apa. Menurunkan paket tetap self-serve: melepas kapasitas tidak
+ *       merugikan bisnis, dan memaksa orang membuka tiket untuk berhemat itu tidak
+ *       masuk akal. Penurunan menjalankan grandfather-and-block penuh (ADR-020) —
+ *       tidak ada yang dihapus, yang melebihi batas di-pause.
  *     tags: [Account]
  *     security: [{ cookieAuth: [] }]
  *     requestBody:
@@ -118,6 +112,7 @@ router.post('/me/onboarding', authMiddleware, meController.completeOnboarding)
  *                 success: { type: boolean, example: true }
  *                 data: { $ref: '#/components/schemas/User' }
  *       401: { description: UNAUTHORIZED }
+ *       403: { description: UPGRADE_NOT_SELF_SERVE — naik paket harus lewat staf }
  *       422: { description: VALIDATION_ERROR — paket tidak dikenal }
  */
 router.patch('/me/plan', authMiddleware, meController.changeOwnPlan)

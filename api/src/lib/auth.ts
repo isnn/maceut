@@ -50,10 +50,6 @@ export const auth = betterAuth({
 
   user: {
     additionalFields: {
-      organisation: {
-        type: 'string',
-        required: false,
-      },
       /**
        * Platform role (BR-027). `input: false` means a client cannot send it — without
        * that, anyone could register themselves as staff by adding one field to the

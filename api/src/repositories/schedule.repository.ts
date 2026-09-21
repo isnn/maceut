@@ -76,6 +76,34 @@ export async function countActive(userId: string, excludeId?: string): Promise<n
   return rows[0]?.count ?? 0
 }
 
+/**
+ * Active and paused windows per account, for the internal directory.
+ *
+ * Grouped for the same reason as zones' version: one query for the whole page instead
+ * of one per listed account. Soft-deleted rows are excluded, matching countActive.
+ */
+export async function countsByUser(): Promise<Map<string, { active: number; paused: number }>> {
+  const rows = await db
+    .select({
+      userId: schedules.userId,
+      active: sql<number>`count(*) filter (where ${schedules.status} = 'active')::int`,
+      paused: sql<number>`count(*) filter (where ${schedules.status} = 'paused')::int`,
+    })
+    .from(schedules)
+    .groupBy(schedules.userId)
+
+  return new Map(rows.map((r) => [r.userId, { active: r.active, paused: r.paused }]))
+}
+
+/** Every active window on the platform (internal overview). */
+export async function countAllActive(): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schedules)
+    .where(eq(schedules.status, 'active'))
+  return rows[0]?.count ?? 0
+}
+
 export interface UpdateScheduleRow {
   label?: string
   startTime?: string

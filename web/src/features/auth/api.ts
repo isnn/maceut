@@ -22,9 +22,6 @@ export async function register(input: RegisterInput): Promise<User> {
     password: input.password,
     // Better Auth's field is `name`; every screen here calls it fullName.
     name: input.fullName,
-    // Declared as an additional field on the server. `role` and `onboardingDone` are
-    // input:false there, so sending those would be ignored — which is the point.
-    organisation: input.organisation,
   })
 
   // Better Auth signs the user in on sign-up (autoSignIn), so the cookie is already
@@ -69,16 +66,23 @@ export async function getMe(): Promise<User | null> {
 }
 
 /** Step 2 of sign-up (3p): choose a plan and finish onboarding. */
-export async function completeOnboarding(plan: Plan): Promise<User> {
-  return apiClient.post<User>('/me/onboarding', { plan })
+/**
+ * Marks sign-up finished. No plan argument: every account starts on Free.
+ *
+ * The onboarding step used to sell a plan, which meant a brand-new account could award
+ * itself Premium limits without paying anything. Staff grant paid plans instead.
+ */
+export async function completeOnboarding(): Promise<User> {
+  return apiClient.post<User>('/me/onboarding', {})
 }
 
 /**
- * Plan switch on Profile & usage (3o).
+ * Plan switch on Profile & usage (3o) — downgrades only.
  *
- * ⚠️ Ungated until billing ships — the server does not check payment, so this grants
- * the new plan's limits immediately. The screen is recorded as a simulation in
- * SPRINT.md; see the warning on the endpoint.
+ * The server refuses an upgrade with 403 UPGRADE_NOT_SELF_SERVE until billing exists,
+ * because gaining capacity nobody paid for is not something an account should be able
+ * to do to itself. Downgrading stays self-serve and runs the full grandfather-and-block
+ * pass (ADR-020).
  */
 export async function updatePlan(plan: Plan): Promise<User> {
   return apiClient.patch<User>('/me/plan', { plan })

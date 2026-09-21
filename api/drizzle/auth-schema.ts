@@ -24,7 +24,6 @@ export const user = pgTable("user", {
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
-  organisation: text("organisation"),
   role: text("role").default("user"),
   onboardingDone: boolean("onboarding_done").default(false),
 });

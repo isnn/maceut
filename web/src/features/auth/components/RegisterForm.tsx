@@ -25,7 +25,6 @@ const STRENGTH_LABEL = ['Too short', 'Weak', 'Fair', 'Strong']
 export function RegisterForm() {
   const router = useRouter()
   const [fullName, setFullName] = useState('')
-  const [organisation, setOrganisation] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [agreed, setAgreed] = useState(false)
@@ -47,7 +46,7 @@ export function RegisterForm() {
     if (!clientValid) return
     setLoading(true)
     try {
-      await authApi.register({ fullName, organisation, email, password })
+      await authApi.register({ fullName, email, password })
       router.push('/onboarding')
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
@@ -57,21 +56,10 @@ export function RegisterForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-lg" noValidate>
-      <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
-        <div className="space-y-xs">
-          <FormLabel htmlFor="fullName">Full name</FormLabel>
-          <Input id="fullName" placeholder="Rizky Zulkarnain" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-          {nameError && <p className="text-caption text-danger-text">{nameError}</p>}
-        </div>
-        <div className="space-y-xs">
-          <FormLabel htmlFor="organisation">Organisation</FormLabel>
-          <Input
-            id="organisation"
-            placeholder="Dinas Bina Marga"
-            value={organisation}
-            onChange={(e) => setOrganisation(e.target.value)}
-          />
-        </div>
+      <div className="space-y-xs">
+        <FormLabel htmlFor="fullName">Full name</FormLabel>
+        <Input id="fullName" placeholder="Rizky Zulkarnain" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        {nameError && <p className="text-caption text-danger-text">{nameError}</p>}
       </div>
 
       <div className="space-y-xs">
@@ -112,7 +100,7 @@ export function RegisterForm() {
       {agreedError && <p className="text-caption text-danger-text">{agreedError}</p>}
 
       <Button type="submit" disabled={loading} className="w-full">
-        {loading ? 'Creating account…' : 'Continue to plan'}
+        {loading ? 'Creating account…' : 'Create account'}
       </Button>
     </form>
   )

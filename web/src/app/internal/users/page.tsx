@@ -43,8 +43,7 @@ export default function InternalUsersPage() {
       const matchesTerm =
         term === '' ||
         row.fullName.toLowerCase().includes(term) ||
-        row.email.toLowerCase().includes(term) ||
-        row.organisation.toLowerCase().includes(term)
+        row.email.toLowerCase().includes(term)
       return matchesTerm && (planFilter === 'all' || row.plan === planFilter) && (roleFilter === 'all' || row.role === roleFilter)
     })
   }, [rows, search, planFilter, roleFilter])
@@ -114,7 +113,7 @@ export default function InternalUsersPage() {
       <div className="flex flex-wrap items-center gap-md">
         <Input
           type="search"
-          placeholder="Search name, email or organisation…"
+          placeholder="Search name or email…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full tablet:w-80"
@@ -152,7 +151,6 @@ export default function InternalUsersPage() {
             <thead>
               <tr>
                 <Th>Person</Th>
-                <Th>Organisation</Th>
                 <Th>Plan</Th>
                 <Th>Role</Th>
                 <Th>Usage</Th>
@@ -181,7 +179,6 @@ export default function InternalUsersPage() {
                         </div>
                       </div>
                     </Td>
-                    <Td className="text-text-secondary">{row.organisation || '—'}</Td>
                     <Td>
                       <Select
                         size="sm"
@@ -270,8 +267,7 @@ function UsageDialog({ row, onClose }: { row: InternalUserRow; onClose: () => vo
         <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[36rem] max-h-[90vh] overflow-y-auto bg-card border border-border rounded-lg p-xl shadow-elevation-3">
           <Dialog.Title className="text-section-title text-text-primary">{row.fullName}</Dialog.Title>
           <Dialog.Description className="text-caption text-text-secondary mt-xs mb-lg">
-            {row.email}
-            {row.organisation && ` · ${row.organisation}`} · {PLAN_LABEL[row.plan]} plan
+            {row.email} · {PLAN_LABEL[row.plan]} plan
           </Dialog.Description>
 
           <Alert variant="warning" className="mb-lg">

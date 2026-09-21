@@ -1,8 +1,10 @@
 import * as userRepo from '../repositories/user.repository'
-import { NotFoundError, ForbiddenError, ValidationError } from '../errors'
+import { NotFoundError, ForbiddenError, ValidationError, UpgradeNotSelfServeError } from '../errors'
 import { isInternalByConfig, resolveRole, configuredInternalEmails } from '../lib/internal-access'
-import { PLAN_LIMITS, type Plan, type PlatformRole } from '../types/plan'
+import { PLAN_LIMITS, isUpgrade, type Plan, type PlatformRole } from '../types/plan'
 import * as planService from './plan.service'
+import * as zoneRepo from '../repositories/zone.repository'
+import * as scheduleRepo from '../repositories/schedule.repository'
 
 /**
  * User records and platform administration (F-21, F-22).
@@ -18,7 +20,6 @@ export interface PublicUser {
   id: string
   email: string
   fullName: string
-  organisation: string | null
   plan: Plan
   role: PlatformRole
   onboardingDone: boolean
@@ -35,7 +36,6 @@ export function toPublic(row: userRepo.UserWithPlan): PublicUser {
     id: row.id,
     email: row.email,
     fullName: row.name,
-    organisation: row.organisation ?? null,
     plan: row.plan,
     // The stored column is a cache; config is the authority (BR-027).
     role: resolveRole(row.email, (row.role ?? 'user') as PlatformRole),
@@ -73,15 +73,20 @@ export async function reconcileAfterSignIn(userId: string): Promise<PublicUser> 
 }
 
 /**
- * Step 2 of sign-up: the chosen plan, and onboarding marked done.
+ * Step 2 of sign-up: onboarding marked done. The plan is not a parameter.
+ *
+ * Every account starts on Free and a paid plan is granted by staff from
+ * `/internal/users`. Until billing exists, a plan picker at sign-up is not a sale — it
+ * is a form that hands out Premium limits to anyone who reads the pricing page. The
+ * account already has its `free` plan row from registration, so there is nothing to
+ * set here.
  *
  * No impact pass — a brand-new account has nothing to pause.
  */
-export async function completeOnboarding(userId: string, plan: Plan): Promise<PublicUser> {
+export async function completeOnboarding(userId: string): Promise<PublicUser> {
   const found = await userRepo.findById(userId)
   if (!found) throw new NotFoundError('User')
 
-  await userRepo.setPlan(userId, plan)
   await userRepo.updateUser(userId, { onboardingDone: true })
 
   return getUser(userId)
@@ -100,21 +105,26 @@ export async function previewPlanChange(userId: string, plan: Plan): Promise<pla
 }
 
 /**
- * A user changing their own plan.
+ * A user changing their own plan — downwards only, until billing exists.
  *
- * ⚠️ PLACEHOLDER UNTIL BILLING (Sprint 3). There is no payment gate, so this lets any
- * account grant itself premium limits for free. It exists because the Profile screen
- * has always offered a plan switch and SPRINT.md records that screen as "simulasi
- * ganti paket" — keeping the simulation working is the lesser evil against silently
- * breaking a shipped screen.
+ * An upgrade gains capacity that nobody has paid for, so it is refused here and
+ * granted by staff from `/internal/users` instead, where there is a record of who
+ * granted what. This used to be ungated, which meant any account could hand itself
+ * premium limits by picking a card.
  *
- * When billing lands this MUST become: create a payment intent, and only move the
- * plan on a confirmed payment webhook. Do not build features that assume a user
- * cannot reach premium limits on their own until that is true.
+ * A downgrade stays self-serve on purpose: giving up capacity costs the business
+ * nothing, and making someone file a ticket in order to spend less is hostile. It
+ * still runs the full grandfather-and-block pass (ADR-020).
+ *
+ * When billing lands, the upgrade path becomes: create a payment intent, and move the
+ * plan only on a confirmed payment webhook — not by relaxing this check.
  */
 export async function changeOwnPlan(userId: string, plan: Plan): Promise<PlanChangeResult> {
   const found = await userRepo.findById(userId)
   if (!found) throw new NotFoundError('User')
+
+  const current = await userRepo.findByIdWithPlan(userId)
+  if (current && isUpgrade(current.plan, plan)) throw new UpgradeNotSelfServeError(plan)
 
   await userRepo.setPlan(userId, plan)
   // Grandfather and block (ADR-020): pause what no longer fits, delete nothing.
@@ -132,8 +142,28 @@ export interface ListUsersParams {
   sort?: 'created_desc' | 'created_asc' | 'email_asc'
 }
 
+/**
+ * What an account is actually using, for the internal directory.
+ *
+ * Zones and windows are measured. Captures and storage are `null` because no table
+ * counts them yet (CAP-01) — an operator tool that invents numbers is worse than one
+ * that admits it does not know, because the invented ones get acted on.
+ */
+export interface AccountUsage {
+  zonesCount: number
+  zonesPaused: number
+  schedulesActiveCount: number
+  schedulesPaused: number
+  capturesToday: number | null
+  storageUsedGb: number | null
+}
+
+export interface UserWithUsage extends PublicUser {
+  usage: AccountUsage
+}
+
 export interface ListUsersResult {
-  users: PublicUser[]
+  users: UserWithUsage[]
   total: number
   page: number
   limit: number
@@ -152,8 +182,29 @@ export async function listUsers(params: ListUsersParams): Promise<ListUsersResul
     sort: params.sort,
   })
 
+  // Two grouped queries for the whole page, not two per row — the directory lists
+  // every account, so per-row counting would slow down with every signup.
+  const [zoneCounts, scheduleCounts] = await Promise.all([
+    zoneRepo.countsByUser(),
+    scheduleRepo.countsByUser(),
+  ])
+
   return {
-    users: rows.map(toPublic),
+    users: rows.map((row) => {
+      const z = zoneCounts.get(row.id)
+      const sc = scheduleCounts.get(row.id)
+      return {
+        ...toPublic(row),
+        usage: {
+          zonesCount: z?.collecting ?? 0,
+          zonesPaused: z?.paused ?? 0,
+          schedulesActiveCount: sc?.active ?? 0,
+          schedulesPaused: sc?.paused ?? 0,
+          capturesToday: null,
+          storageUsedGb: null,
+        },
+      }
+    }),
     total,
     page: params.page,
     limit: params.limit,
@@ -218,6 +269,11 @@ export async function getPlatformStats(): Promise<{
   internalUsers: number
   planMix: Record<Plan, number>
   estimatedSeats: number
+  /** Measured platform-wide. Captures and storage stay null until CAP-01. */
+  zonesCollecting: number
+  schedulesActive: number
+  capturesToday: number | null
+  storageUsedGb: number | null
 }> {
   // One page large enough to aggregate over. Fine at this scale; when it stops being
   // fine the answer is a SQL GROUP BY in the repository, not a bigger page.
@@ -239,10 +295,22 @@ export async function getPlatformStats(): Promise<{
     estimatedSeats += PLAN_LIMITS[row.plan].seatsLimit
   }
 
+  const [internalUsers, zonesCollecting, schedulesActive] = await Promise.all([
+    userRepo.countInternal(configuredInternalEmails()),
+    zoneRepo.countAllCollecting(),
+    scheduleRepo.countAllActive(),
+  ])
+
   return {
     totalUsers: total,
-    internalUsers: await userRepo.countInternal(configuredInternalEmails()),
+    internalUsers,
     planMix,
     estimatedSeats,
+    zonesCollecting,
+    schedulesActive,
+    // No table counts these yet (CAP-01). Null travels to the UI as "—" rather than
+    // a zero, which would claim nothing was captured — a different statement.
+    capturesToday: null,
+    storageUsedGb: null,
   }
 }

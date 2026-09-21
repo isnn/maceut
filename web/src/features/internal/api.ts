@@ -6,10 +6,11 @@
  * show before a backend did; now the directory lists the accounts that actually exist,
  * and a quiet screen is the truth rather than a bug.
  *
- * Per-account usage went with them. Zones, captures and storage have no tables yet, so
- * there is nothing to count — the limits below come from the account's plan and the
- * counts are `null`, which the UI renders as "—". Reporting fabricated numbers in an
- * operator tool is worse than reporting none.
+ * Per-account usage went with them, and has now come back as real numbers: the server
+ * counts zones and capture windows per account in two grouped queries. Captures and
+ * storage stay `null` because nothing counts them yet (CAP-01), and the UI renders that
+ * as "—". Reporting fabricated numbers in an operator tool is worse than reporting
+ * none — those are the figures someone acts on when an account complains.
  */
 
 import { PLAN_LIMITS, PLAN_PRICE } from '@/lib/constants'
@@ -31,11 +32,23 @@ interface PaginationMeta {
   total_pages: number
 }
 
-async function fetchAllUsers(): Promise<User[]> {
-  const all: User[] = []
+/** The `usage` block GET /internal/users now returns alongside each account. */
+interface ServerUsage {
+  zonesCount: number
+  zonesPaused: number
+  schedulesActiveCount: number
+  schedulesPaused: number
+  capturesToday: number | null
+  storageUsedGb: number | null
+}
+
+type DirectoryUser = User & { usage?: ServerUsage }
+
+async function fetchAllUsers(): Promise<DirectoryUser[]> {
+  const all: DirectoryUser[] = []
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, meta } = await apiClient.getWithMeta<User[]>(
+    const { data, meta } = await apiClient.getWithMeta<DirectoryUser[]>(
       `/internal/users?page=${page}&limit=${PAGE_SIZE}&sort=created_desc`,
     )
     all.push(...data)
@@ -46,17 +59,19 @@ async function fetchAllUsers(): Promise<User[]> {
   return all
 }
 
-/** Limits from the plan; counts unknown until zones and captures exist. */
-function usageFor(plan: Plan): AccountUsage {
+/** Server-measured counts, plus the limits that come from the account's plan. */
+function usageFor(plan: Plan, measured: ServerUsage | undefined): AccountUsage {
   const limits = PLAN_LIMITS[plan]
   return {
-    zonesCount: null,
+    zonesCount: measured?.zonesCount ?? 0,
+    zonesPaused: measured?.zonesPaused ?? 0,
     zonesLimit: limits.zonesLimit,
-    capturesToday: null,
+    capturesToday: measured?.capturesToday ?? null,
     capturesLimit: limits.capturesLimit,
-    schedulesActiveCount: null,
+    schedulesActiveCount: measured?.schedulesActiveCount ?? 0,
+    schedulesPaused: measured?.schedulesPaused ?? 0,
     schedulesLimit: limits.schedulesLimit,
-    storageUsedGb: null,
+    storageUsedGb: measured?.storageUsedGb ?? null,
     storageLimitGb: limits.storageGb,
   }
 }
@@ -68,12 +83,11 @@ export async function getUserDirectory(): Promise<InternalUserRow[]> {
     id: user.id,
     fullName: user.fullName || user.email.split('@')[0],
     email: user.email,
-    organisation: user.organisation ?? '',
     plan: user.plan,
     role: user.role,
     createdAt: user.createdAt,
     isYou: user.id === me.id,
-    usage: usageFor(user.plan),
+    usage: usageFor(user.plan, user.usage),
   }))
 }
 
@@ -81,7 +95,15 @@ export async function getPlatformStats(): Promise<PlatformStats> {
   // Counts come from the server, which aggregates over every account rather than the
   // page the directory happens to have loaded.
   const [stats, rows] = await Promise.all([
-    apiClient.get<{ totalUsers: number; internalUsers: number; planMix: Record<Plan, number> }>('/internal/stats'),
+    apiClient.get<{
+      totalUsers: number
+      internalUsers: number
+      planMix: Record<Plan, number>
+      zonesCollecting: number
+      schedulesActive: number
+      capturesToday: number | null
+      storageUsedGb: number | null
+    }>('/internal/stats'),
     getUserDirectory(),
   ])
 
@@ -96,10 +118,11 @@ export async function getPlatformStats(): Promise<PlatformStats> {
     internalUsers: stats.internalUsers,
     signupsLast7d: rows.filter((r) => new Date(r.createdAt).getTime() >= weekAgo).length,
     byPlan: stats.planMix,
-    // No zones, captures or storage tables yet — see the note at the top of this file.
-    zonesTotal: null,
-    capturesTodayTotal: null,
-    storageUsedGbTotal: null,
+    zonesTotal: stats.zonesCollecting,
+    schedulesActiveTotal: stats.schedulesActive,
+    // Still unmeasured — no captures table (CAP-01).
+    capturesTodayTotal: stats.capturesToday,
+    storageUsedGbTotal: stats.storageUsedGb,
     mrr,
   }
 }

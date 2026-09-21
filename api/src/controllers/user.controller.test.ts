@@ -30,8 +30,20 @@ vi.mock('../repositories/user.repository', () => ({
 }))
 // changePlan now runs the grandfather-and-block pass (ADR-020), which reads the
 // account's zones and schedules to work out what would exceed the new plan.
-vi.mock('../repositories/zone.repository', () => ({ findByUserId: vi.fn(() => []), update: vi.fn() }))
-vi.mock('../repositories/schedule.repository', () => ({ findByUserId: vi.fn(() => []), update: vi.fn() }))
+// The directory and the overview also count zones and windows per account, in one
+// grouped query each rather than one per listed row.
+vi.mock('../repositories/zone.repository', () => ({
+  findByUserId: vi.fn(() => []),
+  update: vi.fn(),
+  countsByUser: vi.fn(async () => new Map()),
+  countAllCollecting: vi.fn(async () => 0),
+}))
+vi.mock('../repositories/schedule.repository', () => ({
+  findByUserId: vi.fn(() => []),
+  update: vi.fn(),
+  countsByUser: vi.fn(async () => new Map()),
+  countAllActive: vi.fn(async () => 0),
+}))
 vi.mock('../lib/internal-access', () => ({
   isInternalByConfig: vi.fn(() => false),
   resolveRole: vi.fn((_email: string, stored: string) => stored),
@@ -51,7 +63,6 @@ function row(over: Partial<userRepo.UserWithPlan> = {}): userRepo.UserWithPlan {
     id: TARGET_ID,
     email: 'budi@maceut.id',
     name: 'Budi Santoso',
-    organisation: null,
     emailVerified: true,
     image: null,
     role: 'user',

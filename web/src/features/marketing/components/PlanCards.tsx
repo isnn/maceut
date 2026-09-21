@@ -13,10 +13,16 @@ interface PlanCardsProps {
   /** Label template for the card action; omit to render read-only cards. */
   actionLabel?: (plan: Plan) => string
   pendingPlan?: Plan | null
+  /**
+   * Plans this viewer cannot move to themselves — upgrades, while billing does not
+   * exist. The card still renders in full: hiding a plan would remove the very thing
+   * someone is deciding whether to ask for.
+   */
+  disabledPlan?: (plan: Plan) => boolean
   className?: string
 }
 
-export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, className }: PlanCardsProps) {
+export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabledPlan, className }: PlanCardsProps) {
   return (
     <div className={cn('grid grid-cols-1 tablet:grid-cols-3 gap-lg items-start', className)}>
       {PLAN_ORDER.map((plan) => {
@@ -54,7 +60,7 @@ export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, classN
               <Button
                 variant={recommended || isSelected ? 'primary' : 'secondary'}
                 onClick={() => onSelect(plan)}
-                disabled={pendingPlan != null}
+                disabled={pendingPlan != null || isSelected || disabledPlan?.(plan) === true}
               >
                 {pendingPlan === plan ? 'Saving…' : actionLabel(plan)}
               </Button>

@@ -3,17 +3,22 @@ import type { Plan, PlatformRole } from '@/features/auth/types'
 /**
  * Usage figures shown per account in the directory and drawer.
  *
- * Counts are nullable because zones, captures and storage have no tables yet — there
- * is nothing to count, and `null` renders as "—". Limits are always known: they come
- * from the account's plan. When those features ship the counts become numbers and
- * nothing else here changes.
+ * Zones and capture windows are measured by the server. Captures and storage are still
+ * `null` because no table counts them (CAP-01), and `null` renders as "—" rather than
+ * a zero that would claim the account captured nothing. Limits always come from the
+ * account's plan.
+ *
+ * `zonesPaused` / `schedulesPaused` are what a downgrade left behind (ADR-020) — an
+ * operator looking at a complaint needs to see that before anything else.
  */
 export interface AccountUsage {
-  zonesCount: number | null
+  zonesCount: number
+  zonesPaused: number
   zonesLimit: number
   capturesToday: number | null
   capturesLimit: number
-  schedulesActiveCount: number | null
+  schedulesActiveCount: number
+  schedulesPaused: number
   schedulesLimit: number
   storageUsedGb: number | null
   storageLimitGb: number
@@ -23,7 +28,6 @@ export interface InternalUserRow {
   id: string
   fullName: string
   email: string
-  organisation: string
   plan: Plan
   role: PlatformRole
   createdAt: string
@@ -37,8 +41,9 @@ export interface PlatformStats {
   internalUsers: number
   signupsLast7d: number
   byPlan: Record<Plan, number>
-  /** Null until zones/captures/storage exist. See AccountUsage. */
-  zonesTotal: number | null
+  /** Measured. Captures and storage stay null until CAP-01 — see AccountUsage. */
+  zonesTotal: number
+  schedulesActiveTotal: number
   capturesTodayTotal: number | null
   storageUsedGbTotal: number | null
   /** Estimated monthly recurring revenue, in rupiah, derived from the plan mix. */
