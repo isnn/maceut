@@ -92,6 +92,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Admin bisa membuat akun baru — `POST /internal/users` + dialog Add user | F-21 |
 | 🔴 | **BE-14** Lupa/ganti password — tautan "Forgot password?" di login mati (`href="#lupa-password"`), dan akun buatan admin tak bisa mengganti password generated | auth/requirements.md |
 | ✅ | **BE-15** `DELETE /internal/users/:id` + `PATCH /internal/users/:id` — hapus & ubah akun (nama, email, password, paket, role) | F-22 |
+| ✅ | **FE-02** Semua tabel: sorting + pagination + search lewat `useTableControls` bersama | permintaan user |
 | 🔴 | **BE-16** Scheduler node-cron: `api/src/schedulers/` belum ada — jendela aktif tidak pernah mem-publish job | capture-schedule/requirements.md |
 | 🟡 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev — sekarang bisa lewat /internal/users | housekeeping |
 | 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
@@ -800,6 +801,62 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   yet" dengan Save nonaktif.
 
   232 test (16 baru), tsc + eslint bersih, production build lolos.
+
+[2026-09-22c] Semua tabel dapat sorting, pagination, dan search.
+
+  Sebelumnya tiap tabel punya subsetnya sendiri: /zones punya sort + search tanpa paging,
+  direktori user cuma search, overview internal dan daftar jendela di detail zona tidak
+  punya apa-apa. Tiga implementasi "filter lalu sort" adalah tiga kesempatan untuk tidak
+  sepakat soal arti search kosong atau nilai null.
+  Sekarang satu hook `useTableControls` + komponen `Pagination`, dipakai keempat tabel.
+
+  DETAIL YANG DIPERTAHANKAN, bukan diseragamkan begitu saja: tabel /zones punya arah
+  default per kolom — teks menanjak, kuantitas terbesar-dulu. "Urutkan berdasarkan luas"
+  yang berarti "terkecil dulu" hampir selalu salah menebak maksud orangnya. Itu diangkat
+  ke hook (`defaultDirection`) supaya semua tabel ikut dapat, bukan dibuang.
+  Klik ketiga pada kolom yang sama MENGHAPUS sorting, jadi urutan aslinya bisa dicapai
+  lagi tanpa reload.
+  Nilai null selalu di urutan terakhir, ke arah mana pun kolomnya menunjuk — null itu
+  "tidak tahu", bukan "nol", jadi membiarkannya naik ke puncak sorting menurun akan
+  menaruh baris paling tidak informatif di paling atas.
+  Ganti search atau sort mengembalikan ke halaman 1; nomor halaman juga di-clamp, supaya
+  menghapus baris terakhir di halaman terakhir tidak meninggalkan tabel di halaman yang
+  sudah tidak ada.
+
+  ADMIN. Kolom "Usage" yang menumpuk tiga angka jadi satu string dipecah menjadi tiga
+  kolom terpisah — Zones, Windows, Captures — masing-masing bisa di-sort. Windows
+  dipertahankan (bukan cuma zona & captures seperti yang diminta) karena itu data terukur
+  yang kalau dibuang berarti hilang dari layar.
+  Aksi per baris jadi dropdown `ActionMenu`, sama seperti tabel zona. "Delete account"
+  dinonaktifkan untuk akun sendiri — servernya juga menolak, tapi menonaktifkannya
+  menjelaskan lebih dulu alih-alih setelah 403.
+
+  Overview internal: "Recent signups" (8 terbaru, mati) jadi tabel "Accounts" penuh
+  dengan ketiga kontrol. Daftar tetap 8 per halaman, tapi sekarang bisa dicari dan
+  diurutkan — overview jadi bisa dipakai mencari akun tanpa pindah halaman.
+
+  ⚠️ Filternya di browser, atas baris yang sudah ter-load. Itu trade yang benar di skala
+  ini (zona maksimal 25; direktori user sudah mem-paging API sampai dapat semua) dan
+  membuat sorting instan. Berhenti benar begitu direktori tidak muat sekali fetch —
+  saat itu bentuk hook inilah yang harus ditiru panggilan servernya, dan itu sebabnya
+  kunci sortnya string biasa.
+
+  DUA HAL YANG HAMPIR LOLOS: `Pagination` sempat meng-hardcode 10 di baris "Showing X–Y",
+  yang akan berbohong begitu ada tabel dengan ukuran halaman lain (overview & daftar
+  jendela pakai 8) — sekarang pageSize dioper dan di-echo balik oleh hook supaya keduanya
+  tidak bisa berbeda. Dan `rows ?? []` inline mengalokasikan array baru tiap render saat
+  masih loading, membatalkan memo filter & sort; ditangkap lint, dibungkus useMemo.
+
+  Sempat menjalankan prettier pada satu file untuk merapikan indentasi — menghasilkan
+  diff 318 baris pada file yang tidak ada kaitannya dengan fitur ini, dan repo ini tidak
+  punya konfigurasi prettier. Di-revert, diulang manual: 123 baris.
+
+  Diverifikasi di browser sebagai staf dan sebagai pelanggan: /internal "Showing 1–8 of
+  20 accounts" · /internal/users "Showing 1–10 of 20 accounts" · /zones "Showing 1–10 of
+  12 zones" dengan 10 baris ter-render · detail zona "Showing 1–4 of 4 windows". Kotak
+  search ada di keempatnya. Tidak ada error klien.
+
+  232 test tetap hijau, tsc + eslint bersih, production build lolos.
 
 ---
 

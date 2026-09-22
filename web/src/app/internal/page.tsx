@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
-import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
+import { Pagination, SortableTh, Table, TableWrap, Td } from '@/components/ui/Table'
+import { useTableControls } from '@/components/ui/useTableControls'
+import { Input } from '@/components/ui/Input'
 import { cn, formatDate } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_ORDER } from '@/lib/constants'
 import * as internalApi from '@/features/internal/api'
@@ -21,21 +23,39 @@ const PLAN_BAR: Record<Plan, string> = {
 
 export default function InternalOverviewPage() {
   const [stats, setStats] = useState<PlatformStats | null>(null)
-  const [recent, setRecent] = useState<InternalUserRow[]>([])
+  const [accounts, setAccounts] = useState<InternalUserRow[] | null>(null)
 
   const load = useCallback(async () => {
     const [nextStats, rows] = await Promise.all([internalApi.getPlatformStats(), internalApi.getUserDirectory()])
-    return { stats: nextStats, recent: rows.slice(0, 8) }
+    return { stats: nextStats, accounts: rows }
   }, [])
 
-  const apply = useCallback((data: { stats: PlatformStats; recent: InternalUserRow[] }) => {
+  const apply = useCallback((data: { stats: PlatformStats; accounts: InternalUserRow[] }) => {
     setStats(data.stats)
-    setRecent(data.recent)
+    setAccounts(data.accounts)
   }, [])
 
   useEffect(() => {
     load().then(apply)
   }, [load, apply])
+
+  // Was a fixed "8 most recent" list, which could not answer any question beyond who
+  // signed up last. Same three controls as every other table now, so the overview can
+  // actually be used to find an account without leaving the page.
+  const table = useTableControls<InternalUserRow>({
+    rows: accounts,
+    searchOn: (row) => [row.fullName, row.email],
+    sortOn: {
+      account: (row) => row.fullName.toLowerCase(),
+      zones: (row) => row.usage.zonesCount,
+      plan: (row) => PLAN_ORDER.indexOf(row.plan),
+      role: (row) => row.role,
+      joined: (row) => row.createdAt,
+    },
+    defaultDirection: { zones: 'desc', joined: 'desc' },
+    initialSort: { key: 'joined', direction: 'desc' },
+    pageSize: 8,
+  })
 
   if (!stats) {
     return (
@@ -85,7 +105,7 @@ export default function InternalOverviewPage() {
         />
       </div>
 
-      <section>
+      <section className="space-y-md">
         <h2 className="text-section-title text-text-primary mb-md">Plan mix</h2>
         <Card className="p-lg">
           <div className="flex h-3 rounded-full overflow-hidden gap-[2px]">
@@ -115,25 +135,65 @@ export default function InternalOverviewPage() {
       </section>
 
       <section>
-        <div className="flex items-center justify-between mb-md">
-          <h2 className="text-section-title text-text-primary">Recent signups</h2>
-          <Link href="/internal/users" className="text-body text-info no-underline hover:underline">
-            Manage users
-          </Link>
+        <div className="flex flex-wrap items-center justify-between gap-md mb-md">
+          <h2 className="text-section-title text-text-primary">Accounts</h2>
+          <div className="flex items-center gap-md ml-auto">
+            <Input
+              type="search"
+              placeholder="Search name or email…"
+              value={table.search}
+              onChange={(e) => table.setSearch(e.target.value)}
+              className="w-full tablet:w-64"
+            />
+            <Link href="/internal/users" className="text-body text-info no-underline hover:underline whitespace-nowrap">
+              Manage users
+            </Link>
+          </div>
         </div>
         <TableWrap>
           <Table>
             <thead>
               <tr>
-                <Th>Account</Th>
-                <Th className="text-right">Zones</Th>
-                <Th>Plan</Th>
-                <Th>Role</Th>
-                <Th>Joined</Th>
+                <SortableTh
+                  active={table.sort?.key === 'account'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('account')}
+                >
+                  Account
+                </SortableTh>
+                <SortableTh
+                  className="text-right"
+                  active={table.sort?.key === 'zones'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('zones')}
+                >
+                  Zones
+                </SortableTh>
+                <SortableTh
+                  active={table.sort?.key === 'plan'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('plan')}
+                >
+                  Plan
+                </SortableTh>
+                <SortableTh
+                  active={table.sort?.key === 'role'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('role')}
+                >
+                  Role
+                </SortableTh>
+                <SortableTh
+                  active={table.sort?.key === 'joined'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('joined')}
+                >
+                  Joined
+                </SortableTh>
               </tr>
             </thead>
             <tbody>
-              {recent.map((row) => (
+              {table.visible.map((row) => (
                 <tr key={row.id} className="hover:bg-canvas-secondary/60 transition-colors">
                   <Td>
                     <p className="font-semibold text-text-primary">
@@ -166,6 +226,16 @@ export default function InternalOverviewPage() {
             </tbody>
           </Table>
         </TableWrap>
+          <Pagination
+            page={table.page}
+            pageCount={table.pageCount}
+            pageSize={table.pageSize}
+            onPage={table.setPage}
+            matchCount={table.matchCount}
+            totalCount={table.totalCount}
+            noun="accounts"
+            onClearSearch={table.search ? () => table.setSearch('') : undefined}
+          />
       </section>
     </div>
   )

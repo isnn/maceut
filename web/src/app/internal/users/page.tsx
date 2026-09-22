@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Alert } from '@/components/ui/Alert'
-import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
+import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
+import { useTableControls } from '@/components/ui/useTableControls'
+import { ActionMenu } from '@/components/ui/ActionMenu'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { UsageMeter } from '@/components/ui/UsageMeter'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -24,7 +26,6 @@ const ROLE_LABEL: Record<PlatformRole, string> = { user: 'User', internal: 'Inte
 
 export default function InternalUsersPage() {
   const [rows, setRows] = useState<InternalUserRow[] | null>(null)
-  const [search, setSearch] = useState('')
   const [planFilter, setPlanFilter] = useState<Plan | 'all'>('all')
   const [roleFilter, setRoleFilter] = useState<PlatformRole | 'all'>('all')
   const [error, setError] = useState<string | null>(null)
@@ -43,17 +44,32 @@ export default function InternalUsersPage() {
     load().then(setRows)
   }, [load])
 
-  const visible = useMemo(() => {
-    if (!rows) return []
-    const term = search.trim().toLowerCase()
-    return rows.filter((row) => {
-      const matchesTerm =
-        term === '' ||
-        row.fullName.toLowerCase().includes(term) ||
-        row.email.toLowerCase().includes(term)
-      return matchesTerm && (planFilter === 'all' || row.plan === planFilter) && (roleFilter === 'all' || row.role === roleFilter)
-    })
-  }, [rows, search, planFilter, roleFilter])
+  // The plan and role dropdowns narrow the set before search, sort and paging run, so
+  // "showing 4 of 12" counts within the filter rather than across the whole directory.
+  const filtered = useMemo(
+    () =>
+      rows?.filter(
+        (row) =>
+          (planFilter === 'all' || row.plan === planFilter) && (roleFilter === 'all' || row.role === roleFilter),
+      ) ?? null,
+    [rows, planFilter, roleFilter],
+  )
+
+  const table = useTableControls<InternalUserRow>({
+    rows: filtered,
+    searchOn: (row) => [row.fullName, row.email],
+    sortOn: {
+      name: (row) => row.fullName.toLowerCase(),
+      plan: (row) => PLAN_ORDER.indexOf(row.plan),
+      role: (row) => row.role,
+      zones: (row) => row.usage.zonesCount,
+      windows: (row) => row.usage.schedulesActiveCount,
+      captures: (row) => row.usage.capturesToday,
+      joined: (row) => row.createdAt,
+    },
+    initialSort: { key: 'joined', direction: 'desc' },
+  })
+  const visible = table.visible
 
   const internalCount = rows?.filter((r) => r.role === 'internal').length ?? 0
 
@@ -151,8 +167,8 @@ export default function InternalUsersPage() {
         <Input
           type="search"
           placeholder="Search name or email…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={table.search}
+          onChange={(e) => table.setSearch(e.target.value)}
           className="w-full tablet:w-80"
         />
         <Select
@@ -178,7 +194,7 @@ export default function InternalUsersPage() {
         />
       </div>
 
-      {rows === null ? (
+      {table.loading ? (
         <div className="h-64 bg-canvas-secondary rounded-lg animate-pulse" />
       ) : visible.length === 0 ? (
         <EmptyState title="No accounts match" description="Try a different filter or search term." />
@@ -187,11 +203,58 @@ export default function InternalUsersPage() {
           <Table>
             <thead>
               <tr>
-                <Th>Person</Th>
-                <Th>Plan</Th>
-                <Th>Role</Th>
-                <Th>Usage</Th>
-                <Th>Joined</Th>
+                <SortableTh
+                  active={table.sort?.key === 'name'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('name')}
+                >
+                  Person
+                </SortableTh>
+                <SortableTh
+                  active={table.sort?.key === 'plan'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('plan')}
+                >
+                  Plan
+                </SortableTh>
+                <SortableTh
+                  active={table.sort?.key === 'role'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('role')}
+                >
+                  Role
+                </SortableTh>
+                <SortableTh
+                  className="text-right"
+                  active={table.sort?.key === 'zones'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('zones')}
+                >
+                  Zones
+                </SortableTh>
+                <SortableTh
+                  className="text-right"
+                  active={table.sort?.key === 'windows'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('windows')}
+                >
+                  Windows
+                </SortableTh>
+                <SortableTh
+                  className="text-right"
+                  active={table.sort?.key === 'captures'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('captures')}
+                >
+                  Captures
+                </SortableTh>
+                <SortableTh
+                  active={table.sort?.key === 'joined'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('joined')}
+                >
+                  Joined
+                </SortableTh>
                 <Th className="text-right">Actions</Th>
               </tr>
             </thead>
@@ -250,29 +313,44 @@ export default function InternalUsersPage() {
                       />
                       {byConfig && <p className="text-micro text-text-muted mt-xs">set by env</p>}
                     </Td>
-                    <Td className="text-caption text-text-secondary whitespace-nowrap tabular-nums">
-                      {row.usage.zonesCount}/{row.usage.zonesLimit} zones ·{' '}
-                      {row.usage.schedulesActiveCount}/{row.usage.schedulesLimit} windows ·{' '}
-                      {row.usage.capturesToday ?? '—'}/{row.usage.capturesLimit} captures
+                    <Td className="text-right tabular-nums text-text-secondary whitespace-nowrap">
+                      {row.usage.zonesCount}
+                      <span className="text-text-muted">/{row.usage.zonesLimit}</span>
+                      {row.usage.zonesPaused > 0 && (
+                        <span className="block text-micro text-warning-text">{row.usage.zonesPaused} paused</span>
+                      )}
+                    </Td>
+                    <Td className="text-right tabular-nums text-text-secondary whitespace-nowrap">
+                      {row.usage.schedulesActiveCount}
+                      <span className="text-text-muted">/{row.usage.schedulesLimit}</span>
+                      {row.usage.schedulesPaused > 0 && (
+                        <span className="block text-micro text-warning-text">{row.usage.schedulesPaused} paused</span>
+                      )}
+                    </Td>
+                    <Td className="text-right tabular-nums text-text-secondary whitespace-nowrap">
+                      {/* Null, not zero: nothing counts captures yet (CAP-01). */}
+                      {row.usage.capturesToday ?? <span className="text-text-muted">&mdash;</span>}
+                      <span className="text-text-muted">/{row.usage.capturesLimit}</span>
                     </Td>
                     <Td className="text-text-secondary whitespace-nowrap">{formatDate(row.createdAt)}</Td>
                     <Td className="text-right whitespace-nowrap">
-                      <span className="inline-flex items-center gap-md">
-                        <button onClick={() => setViewing(row)} className="text-label text-info hover:underline">
-                          Usage
-                        </button>
-                        <button onClick={() => setEditing(row)} className="text-label text-info hover:underline">
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => setDeleting(row)}
-                          disabled={row.isYou}
-                          title={row.isYou ? 'You cannot delete your own account' : undefined}
-                          className="text-label text-danger-text hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
-                        >
-                          Delete
-                        </button>
-                      </span>
+                      <div className="flex justify-end">
+                        <ActionMenu
+                          label={`Actions for ${row.fullName}`}
+                          items={[
+                            { label: 'View usage', onSelect: () => setViewing(row) },
+                            { label: 'Edit account', onSelect: () => setEditing(row) },
+                            {
+                              label: 'Delete account',
+                              destructive: true,
+                              // Refused by the server too; disabling here explains why up front
+                              // rather than after a 403.
+                              disabled: row.isYou,
+                              onSelect: () => setDeleting(row),
+                            },
+                          ]}
+                        />
+                      </div>
                     </Td>
                   </tr>
                 )
@@ -280,6 +358,19 @@ export default function InternalUsersPage() {
             </tbody>
           </Table>
         </TableWrap>
+      )}
+
+      {!table.loading && (
+        <Pagination
+          page={table.page}
+          pageCount={table.pageCount}
+          pageSize={table.pageSize}
+          onPage={table.setPage}
+          matchCount={table.matchCount}
+          totalCount={table.totalCount}
+          noun="accounts"
+          onClearSearch={table.search ? () => table.setSearch('') : undefined}
+        />
       )}
 
       {viewing && <UsageDialog row={viewing} onClose={() => setViewing(null)} />}

@@ -8,7 +8,8 @@ import { Button, buttonClass } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { RoadClassBadge, ZoneStatusPill } from '@/components/ui/Badge'
-import { SortableTh, Table, TableWrap, Td, Th, type SortDirection } from '@/components/ui/Table'
+import { Pagination, SortableTh, Table, TableWrap, Td, Th, type SortDirection } from '@/components/ui/Table'
+import { useTableControls } from '@/components/ui/useTableControls'
 import { ActionMenu } from '@/components/ui/ActionMenu'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -21,16 +22,6 @@ import type { RoadClass, Zone } from '@/features/zones/types'
 
 type Filter = 'all' | 'collecting' | 'paused'
 type SortKey = 'name' | 'area' | 'roads' | 'cadence' | 'status' | 'created'
-type Sort = { key: SortKey; direction: SortDirection } | null
-
-const SORT_LABEL: Record<SortKey, string> = {
-  name: 'name',
-  area: 'area',
-  roads: 'roads',
-  cadence: 'capture',
-  status: 'status',
-  created: 'date created',
-}
 
 /** Text sorts read best ascending; quantities read best largest-first. */
 const DEFAULT_DIRECTION: Record<SortKey, SortDirection> = {
@@ -53,9 +44,8 @@ export default function ZonesPage() {
   const { user } = useCurrentUser()
   const [zones, setZones] = useState<Zone[] | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
-  const [search, setSearch] = useState('')
+
   const [roadClassFilter, setRoadClassFilter] = useState<RoadClass | 'all'>('all')
-  const [sort, setSort] = useState<Sort>(null)
   const [pendingDelete, setPendingDelete] = useState<Zone | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [limitOpen, setLimitOpen] = useState(false)
@@ -72,54 +62,39 @@ export default function ZonesPage() {
     if (user) load().then(setZones)
   }, [user, load])
 
-  const visible = useMemo(() => {
-    if (!zones) return []
-    const matched = zones.filter((zone) => {
-      const matchesStatus = filter === 'all' || zone.status === filter
-      const matchesClass = roadClassFilter === 'all' || zone.roadClass === roadClassFilter
-      const matchesSearch = zone.name.toLowerCase().includes(search.trim().toLowerCase())
-      return matchesStatus && matchesClass && matchesSearch
-    })
+  // Status and road class narrow the set before search, sort and paging, so the count
+  // under the table reads within the filter rather than across every zone.
+  const filtered = useMemo(
+    () =>
+      zones?.filter(
+        (zone) =>
+          (filter === 'all' || zone.status === filter) &&
+          (roadClassFilter === 'all' || zone.roadClass === roadClassFilter),
+      ) ?? null,
+    [zones, filter, roadClassFilter],
+  )
 
-    // Unsorted means newest first, so the list has a sensible order before
-    // anyone touches a header.
-    if (!sort) return [...matched].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+  const table = useTableControls<Zone>({
+    rows: filtered,
+    searchOn: (zone) => [zone.name],
+    sortOn: {
+      name: (zone) => zone.name.toLowerCase(),
+      area: (zone) => zone.areaKm2,
+      // Null rather than 0: a zone whose roads HERE has not reported is not a zone
+      // with no roads, and the hook sorts unknowns last either way.
+      roads: (zone) => zone.roadsCount,
+      cadence: (zone) => zone.cadence,
+      status: (zone) => zone.status,
+      created: (zone) => zone.createdAt,
+    },
+    defaultDirection: DEFAULT_DIRECTION,
+    // Newest first before anyone touches a header.
+    initialSort: { key: 'created', direction: 'desc' },
+  })
 
-    // Sorted copy — `zones` is the fetched list and shouldn't be mutated.
-    const factor = sort.direction === 'asc' ? 1 : -1
-    return [...matched].sort((a, b) => {
-      switch (sort.key) {
-        case 'area':
-          return (a.areaKm2 - b.areaKm2) * factor
-        case 'roads':
-          // Unknown counts sort last in either direction rather than as zero — a zone
-          // whose roads HERE has not reported is not a zone with no roads.
-          if (a.roadsCount === null && b.roadsCount === null) return 0
-          if (a.roadsCount === null) return 1
-          if (b.roadsCount === null) return -1
-          return (a.roadsCount - b.roadsCount) * factor
-        case 'cadence':
-          return a.cadence.localeCompare(b.cadence) * factor
-        case 'status':
-          return a.status.localeCompare(b.status) * factor
-        case 'created':
-          return (a.createdAt < b.createdAt ? -1 : 1) * factor
-        default:
-          return a.name.localeCompare(b.name) * factor
-      }
-    })
-  }, [zones, filter, roadClassFilter, search, sort])
-
-  function toggleSort(key: SortKey) {
-    setSort((current) => {
-      if (current?.key !== key) return { key, direction: DEFAULT_DIRECTION[key] }
-      // Cycle: default direction → reversed → unsorted.
-      if (current.direction === DEFAULT_DIRECTION[key]) {
-        return { key, direction: DEFAULT_DIRECTION[key] === 'asc' ? 'desc' : 'asc' }
-      }
-      return null
-    })
-  }
+  const visible = table.visible
+  const sort = table.sort
+  const toggleSort = (key: SortKey) => table.toggleSort(key)
 
   const atLimit = (zones?.length ?? 0) >= zonesLimit
 
@@ -171,8 +146,8 @@ export default function ZonesPage() {
         <Input
           type="search"
           placeholder="Search zones…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={table.search}
+          onChange={(e) => table.setSearch(e.target.value)}
           className="h-11 w-full tablet:w-56"
         />
         <Select
@@ -288,23 +263,19 @@ export default function ZonesPage() {
               </tbody>
             </Table>
           </TableWrap>
-          <div className="flex items-center justify-between text-caption text-text-muted">
-            <span className="flex items-center gap-sm">
-              Showing {visible.length} of {zones.length} zones
-              {sort && (
-                <>
-                  <span aria-hidden>·</span>
-                  <span>sorted by {SORT_LABEL[sort.key]}</span>
-                  <button onClick={() => setSort(null)} className="text-info hover:underline">
-                    Clear
-                  </button>
-                </>
-              )}
-            </span>
-            <span>
-              Deleting a zone keeps its captures and animations for 30 days, then removes them.
-            </span>
-          </div>
+          <Pagination
+            page={table.page}
+            pageCount={table.pageCount}
+            pageSize={table.pageSize}
+            onPage={table.setPage}
+            matchCount={table.matchCount}
+            totalCount={table.totalCount}
+            noun="zones"
+            onClearSearch={table.search ? () => table.setSearch('') : undefined}
+          />
+          <p className="text-caption text-text-muted">
+            Deleting a zone keeps its captures and animations for 30 days, then removes them.
+          </p>
         </>
       )}
 
