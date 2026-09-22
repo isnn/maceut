@@ -43,7 +43,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Setup Drizzle: drizzle.config.ts + schema.ts dasar (user, user_plans) | zone-management/tasks.md Phase 1 |
 | ✅ | Setup PostGIS extension + generate & jalankan migration awal | zone-management/tasks.md Phase 1 |
 | ✅ | Setup Swagger: swagger-jsdoc + swagger-ui-express di /api-docs | auth/tasks.md Phase 2 |
-| 🟡 | Migration: zones ✅ · branding_configs 🔴 · captures 🔴 | zone-management/tasks.md Phase 1, 3 |
+| 🟡 | Migration: zones ✅ · captures ✅ (0007) · branding_configs 🔴 | zone-management/tasks.md Phase 1, 3 |
 | ✅ | Auth: register via Better Auth `/api/auth/sign-up/email` + GET /me + unit test + swagger | auth/tasks.md Phase 2 |
 | ✅ | Auth: login/logout via Better Auth `/api/auth/sign-in\|sign-out` + unit test | auth/tasks.md Phase 2 |
 | ✅ | Middleware: auth (sesi Better Auth) + plan-check + internalOnly + error-handler | auth/tasks.md Phase 2 |
@@ -65,9 +65,9 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **BE-08** Lib: HERE Traffic client (getTrafficFlow → GeoJSON, BR-017/BR-022) | zone-management/tasks.md Phase 3 |
 | ✅ | **BE-09** Script: `npm run env:check` — bukti Postgres/MQ/R2/HERE tersambung | plan BE-09 |
 | ✅ | **BE-10** Verifikasi kredensial live — R2 ✅ round-trip penuh · HERE ✅ 268 ruas, filter functionalClasses diterima | plan BE-10 |
-| 🔴 | Lib: Playwright client (screenshot internal render page) | zone-management/tasks.md Phase 3 |
-| 🔴 | API: POST /captures/manual + GET /captures/:id + unit test + swagger | zone-management/tasks.md Phase 3 |
-| 🔴 | Worker: capture.worker.ts (consume → road class filter → screenshot → upload) | zone-management/tasks.md Phase 3 |
+| 🔴 | **CAP-02** Playwright: render page + screenshot → PNG ke R2, isi `captures.file_path` (BR-009/BR-018) | zone-management/tasks.md Phase 3 |
+| ✅ | API: POST /zones/:id/captures · GET /zones/:id/captures · GET /captures/:id + test + swagger | zone-management/tasks.md Phase 3 |
+| 🟡 | Worker: capture.worker.ts — consume ✅ · filter kelas jalan ✅ · simpan GeoJSON ✅ · screenshot & upload 🔴 (CAP-02) | zone-management/tasks.md Phase 3 |
 | ✅ | Frontend: tailwind.config.ts dengan token dari design.md | design.md |
 | ✅ | Frontend: Login + Register pages | auth/tasks.md Phase 3 |
 | ✅ | Frontend: Dashboard page (zone count, schedule count, CTA) | zone-management/tasks.md Phase 4 |
@@ -93,7 +93,8 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | 🔴 | **BE-14** Lupa/ganti password — tautan "Forgot password?" di login mati (`href="#lupa-password"`), dan akun buatan admin tak bisa mengganti password generated | auth/requirements.md |
 | ✅ | **BE-15** `DELETE /internal/users/:id` + `PATCH /internal/users/:id` — hapus & ubah akun (nama, email, password, paket, role) | F-22 |
 | ✅ | **FE-02** Semua tabel: sorting + pagination + search lewat `useTableControls` bersama | permintaan user |
-| 🔴 | **BE-16** Scheduler node-cron: `api/src/schedulers/` belum ada — jendela aktif tidak pernah mem-publish job | capture-schedule/requirements.md |
+| ✅ | **FE-03** Zona: panel Snapshots — panah antar siklus, peta per siklus, daftar file | permintaan user |
+| ✅ | **BE-16** Scheduler: jendela aktif mem-publish job tiap menit (tanpa dependency baru, ADR-023) | capture-schedule/requirements.md |
 | 🟡 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev — sekarang bisa lewat /internal/users | housekeeping |
 | 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
 | ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
@@ -857,6 +858,65 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   search ada di keempatnya. Tidak ada error klien.
 
   232 test tetap hijau, tsc + eslint bersih, production build lolos.
+
+[2026-09-22d] Jendela capture akhirnya menembak. Zona punya riwayat siklus.
+
+  SEBELUMNYA jendela capture adalah baris yang tidak pernah dibaca siapa pun: disimpan,
+  ditampilkan, dihitung terhadap batas paket, dan dipakai memprediksi "capture berikutnya
+  07:00" — dan tidak ada yang pernah menembak. Prediksi yang benar tentang peristiwa yang
+  tidak mungkin terjadi.
+
+  RANTAINYA SEKARANG UTUH: jendela → scheduler → RabbitMQ → worker → HERE → tersimpan.
+  Dibuktikan langsung, bukan cuma unit test: jendela 19:27 WIB menembak tepat 12:27 UTC,
+  worker mengumpulkan 8.684 ruas, rata-rata jam factor 1,91, barisnya `done` dengan
+  `trigger: scheduled`.
+
+  TANPA DEPENDENCY BARU (ADR-023). CLAUDE.md menyebut node-cron, tapi ADR-019 menyimpan
+  JENDELA, bukan cron. Pustaka cron berarti menurunkan ekspresi per jendela, menyerahkan
+  ke parser, lalu memercayai perjalanan bolak-baliknya — padahal pertanyaan tiap menit
+  cuma "apakah menit ini salah satu waktu tembak jendela ini?", yang dijawab jendelanya
+  sendiri. Ticknya menyelaraskan ke puncak menit, jadi 19:27 terjadi di 19:27.
+  ⚠️ Mengasumsikan SATU instance API. Dua replika menembak dobel; obatnya advisory lock
+  Postgres, bukan komentar yang lebih panjang. Sudah ditulis di kodenya.
+
+  BUG LAMA YANG BARU JADI BERBAHAYA HARI INI. `framesPerDay` membulatkan jendela ke jam
+  penuh: `floor((end - start) / 60) * per_jam`. Jendela di bawah satu jam hasilnya NOL.
+  Jendela 30 menit interval 15 menit menembak dua kali dan dihitung GRATIS terhadap
+  anggaran harian BR-006 — jalan memutari batas capture. Tak terlihat selama tidak ada
+  yang menembak; hidup sejak menit scheduler jalan.
+  Versi frontend lebih parah: cuma membaca digit JAM, jadi 07:30–09:00 dihitung dua jam
+  penuh. Keduanya kini memakai rumus yang sama dengan `firesAt`: `ceil((end-start)/step)`.
+  Keduanya setuju pada jendela jam bulat — itu sebabnya selama ini lolos. Enam kasus
+  dikunci test.
+
+  KEPUTUSAN PENYIMPANAN. Tiap siklus menyimpan GeoJSON dari HERE, bukan hanya PNG. Itu
+  yang membuat halaman zona bisa MENGGAMBAR ULANG siklus lama di peta sungguhan — bisa
+  di-pan dan di-zoom — bukan gambar datar, dan bentuknya sama dengan preview langsung
+  sehingga satu komponen menggambar keduanya. `file_path` tetap null sampai renderer
+  Playwright datang (CAP-02); null berarti "belum ada gambar", TIDAK PERNAH "tidak ada
+  data".
+
+  BARIS DITULIS UNTUK SETIAP HASIL, bukan hanya yang berhasil. Ditolak batas harian
+  (BR-008) maupun gagal, keduanya riwayat yang layak disimpan — zona yang diam-diam
+  berhenti mengumpulkan hanya bisa didiagnosis kalau berhentinya dicatat.
+
+  ACK SETELAH HASILNYA DICATAT, gagal sekalipun. Nack balik ke antrean berarti mengulang
+  capture yang momennya sudah lewat: nilai frame 07:00 adalah bahwa ia dari 07:00, dan
+  ulangan di 07:04 jawaban lain yang juga menghitung dobel ke batas harian.
+
+  BUG YANG KUPERKENALKAN DAN KUTANGKAP: `router.use([...paths])` di zone.routes ADALAH
+  penjaganya, dan `/captures` tidak ada di daftar — jadi `GET /captures/:id` TIDAK
+  terautentikasi. Terbaca aman karena saudaranya `/zones/:id/captures` terjaga. Hanya
+  request sungguhan yang mengungkapnya. Diperbaiki, dan bahayanya ditulis di daftar itu.
+
+  PANEL SNAPSHOTS di halaman zona: panah maju-mundur antar siklus, semuanya ikut — peta,
+  angka, daftar file. Hanya traffic siklus terpilih yang diambil; zona yang mengumpulkan
+  tiap jam punya ratusan siklus seminggu, masing-masing membawa satu FeatureCollection.
+
+  Dashboard user, direktori internal, dan overview internal menampilkan `capturesToday`
+  SUNGGUHAN — bukan "—" lagi. Storage tetap null sampai ada gambar.
+
+  262 test (26 baru), tsc + eslint bersih, production build lolos, tanpa error klien.
 
 ---
 
