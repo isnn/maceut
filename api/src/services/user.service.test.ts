@@ -5,6 +5,9 @@ vi.mock('../repositories/user.repository', () => ({
   findById: vi.fn(),
   findByIdWithPlan: vi.fn(),
   findByEmail: vi.fn(),
+  emailTakenByOther: vi.fn(),
+  updateEmail: vi.fn(),
+  deleteById: vi.fn(),
   ensurePlan: vi.fn(),
   setPlan: vi.fn(),
   updateUser: vi.fn(),
@@ -41,10 +44,18 @@ import {
   changePlan,
   completeOnboarding,
   createUser,
+  updateUserAsStaff,
+  deleteUser,
   listUsers,
   getPlatformStats,
 } from './user.service'
-import { UpgradeNotSelfServeError, EmailAlreadyTakenError } from '../errors'
+import {
+  UpgradeNotSelfServeError,
+  EmailAlreadyTakenError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '../errors'
 import type { Plan } from '../types/plan'
 
 const USER = 'user_01'
@@ -281,5 +292,143 @@ describe('createUser — staff creating an account (F-21)', () => {
     // Silently returning a half-made account is worse than an error: the admin would
     // hand over credentials for something that cannot sign in.
     expect(userRepo.setPlan).not.toHaveBeenCalled()
+  })
+})
+
+describe('updateUserAsStaff — editing an account (F-22)', () => {
+  const TARGET = 'user_02'
+
+  beforeEach(() => {
+    vi.mocked(userRepo.findById).mockResolvedValue(row({ id: TARGET }))
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(row({ id: TARGET }))
+    vi.mocked(userRepo.emailTakenByOther).mockResolvedValue(false)
+  })
+
+  it('changes the name', async () => {
+    await updateUserAsStaff(USER, TARGET, { fullName: 'Siti Baru' })
+
+    expect(userRepo.updateUser).toHaveBeenCalledWith(TARGET, { name: 'Siti Baru' })
+  })
+
+  it('changes the email through the normalising path', async () => {
+    await updateUserAsStaff(USER, TARGET, { email: 'Baru@Example.COM' })
+
+    // updateEmail lowercases, because the unique index is on lower(email).
+    expect(userRepo.updateEmail).toHaveBeenCalledWith(TARGET, 'Baru@Example.COM')
+  })
+
+  it('refuses an email another account already holds', async () => {
+    vi.mocked(userRepo.emailTakenByOther).mockResolvedValue(true)
+
+    await expect(updateUserAsStaff(USER, TARGET, { email: 'taken@example.com' })).rejects.toBeInstanceOf(
+      EmailAlreadyTakenError,
+    )
+    expect(userRepo.updateEmail).not.toHaveBeenCalled()
+  })
+
+  it('refuses before writing anything else', async () => {
+    vi.mocked(userRepo.emailTakenByOther).mockResolvedValue(true)
+
+    await expect(
+      updateUserAsStaff(USER, TARGET, { fullName: 'Renamed', email: 'taken@example.com' }),
+    ).rejects.toBeInstanceOf(EmailAlreadyTakenError)
+    // A rename that survived a rejected request would be a half-applied edit — worse
+    // than nothing changing at all.
+    expect(userRepo.updateUser).not.toHaveBeenCalled()
+  })
+
+  it('does not call changeRole when the role is unchanged', async () => {
+    // A dialog submits the whole object. Without this, an admin renaming themselves
+    // would be 403'd by changeRole's no-self-edit guard for a role they never touched.
+    await updateUserAsStaff(TARGET, TARGET, { fullName: 'Self Rename', role: 'user' })
+
+    expect(userRepo.updateUser).toHaveBeenCalledWith(TARGET, { name: 'Self Rename' })
+  })
+
+  it('still refuses an actual self role change', async () => {
+    await expect(updateUserAsStaff(TARGET, TARGET, { role: 'internal' })).rejects.toBeInstanceOf(ForbiddenError)
+  })
+
+  it('reports plan impact only when the plan moves', async () => {
+    const unchanged = await updateUserAsStaff(USER, TARGET, { fullName: 'X', plan: 'free' })
+    expect(unchanged.impact).toBeNull()
+    expect(userRepo.setPlan).not.toHaveBeenCalled()
+  })
+
+  it('runs the grandfather pass when the plan does move', async () => {
+    const moved = await updateUserAsStaff(USER, TARGET, { plan: 'premium' })
+
+    expect(userRepo.setPlan).toHaveBeenCalledWith(TARGET, 'premium')
+    expect(moved.impact).not.toBeNull()
+  })
+
+  it('rejects an unknown account', async () => {
+    vi.mocked(userRepo.findById).mockResolvedValue(undefined as never)
+
+    await expect(updateUserAsStaff(USER, 'nobody', { fullName: 'X' })).rejects.toBeInstanceOf(NotFoundError)
+  })
+})
+
+describe('deleteUser — removing an account (F-22)', () => {
+  const TARGET = 'user_02'
+
+  beforeEach(() => {
+    vi.mocked(userRepo.findById).mockResolvedValue(row({ id: TARGET }))
+    vi.mocked(userRepo.countInternal).mockResolvedValue(2)
+  })
+
+  it('deletes once; the database cascades the rest', async () => {
+    // Every table referencing user.id declares ON DELETE CASCADE, so there is no order
+    // to get wrong and no second call to forget.
+    await deleteUser(USER, TARGET)
+
+    expect(userRepo.deleteById).toHaveBeenCalledWith(TARGET)
+  })
+
+  it('reports what went with the account', async () => {
+    vi.mocked(zoneRepo.countsByUser).mockResolvedValue(new Map([[TARGET, { collecting: 2, paused: 1 }]]))
+    vi.mocked(scheduleRepo.countsByUser).mockResolvedValue(new Map([[TARGET, { active: 3, paused: 1 }]]))
+
+    const out = await deleteUser(USER, TARGET)
+
+    // Paused rows count too — they are still the account's data and still disappear.
+    expect(out.removed).toEqual({ zones: 3, schedules: 4 })
+  })
+
+  it('counts before deleting, not after', async () => {
+    vi.mocked(zoneRepo.countsByUser).mockResolvedValue(new Map([[TARGET, { collecting: 2, paused: 0 }]]))
+
+    const out = await deleteUser(USER, TARGET)
+
+    expect(out.removed.zones).toBe(2)
+  })
+
+  it('refuses to delete yourself', async () => {
+    // Unrecoverable through the API: the only fix would be editing the database.
+    await expect(deleteUser(TARGET, TARGET)).rejects.toBeInstanceOf(ForbiddenError)
+    expect(userRepo.deleteById).not.toHaveBeenCalled()
+  })
+
+  it('refuses to remove the last internal account', async () => {
+    vi.mocked(userRepo.findById).mockResolvedValue(row({ id: TARGET, role: 'internal' }))
+    vi.mocked(userRepo.countInternal).mockResolvedValue(1)
+
+    await expect(deleteUser(USER, TARGET)).rejects.toBeInstanceOf(ValidationError)
+    expect(userRepo.deleteById).not.toHaveBeenCalled()
+  })
+
+  it('allows removing an internal account while another remains', async () => {
+    vi.mocked(userRepo.findById).mockResolvedValue(row({ id: TARGET, role: 'internal' }))
+    vi.mocked(userRepo.countInternal).mockResolvedValue(2)
+
+    await deleteUser(USER, TARGET)
+
+    expect(userRepo.deleteById).toHaveBeenCalledWith(TARGET)
+  })
+
+  it('rejects an unknown account', async () => {
+    vi.mocked(userRepo.findById).mockResolvedValue(undefined as never)
+
+    await expect(deleteUser(USER, 'nobody')).rejects.toBeInstanceOf(NotFoundError)
   })
 })

@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { UsageMeter } from '@/components/ui/UsageMeter'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { AddUserDialog } from '@/features/internal/components/AddUserDialog'
+import { EditUserDialog } from '@/features/internal/components/EditUserDialog'
 import { formatDate } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER } from '@/lib/constants'
 import { ApiError } from '@/types/api'
@@ -27,9 +28,13 @@ export default function InternalUsersPage() {
   const [planFilter, setPlanFilter] = useState<Plan | 'all'>('all')
   const [roleFilter, setRoleFilter] = useState<PlatformRole | 'all'>('all')
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [viewing, setViewing] = useState<InternalUserRow | null>(null)
   const [downgrade, setDowngrade] = useState<{ row: InternalUserRow; plan: Plan } | null>(null)
   const [adding, setAdding] = useState(false)
+  const [editing, setEditing] = useState<InternalUserRow | null>(null)
+  const [deleting, setDeleting] = useState<InternalUserRow | null>(null)
+  const [deletePending, setDeletePending] = useState(false)
 
   const load = useCallback(() => internalApi.getUserDirectory(), [])
   const refetch = useCallback(() => load().then(setRows), [load])
@@ -72,6 +77,29 @@ export default function InternalUsersPage() {
     }
     await internalApi.setUserPlan(row.id, plan)
     refetch()
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return
+    setDeletePending(true)
+    setError(null)
+    try {
+      const res = await internalApi.deleteUser(deleting.id)
+      setDeleting(null)
+      refetch()
+      // Say what actually went, rather than leaving the operator to wonder what they
+      // just destroyed. The server counts it before deleting, so this is measured.
+      setNotice(
+        `Deleted ${res.deleted.email}` +
+          (res.removed.zones || res.removed.schedules
+            ? ` · ${res.removed.zones} zones and ${res.removed.schedules} capture windows removed`
+            : ''),
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not delete the account. Please try again.')
+    } finally {
+      setDeletePending(false)
+    }
   }
 
   async function confirmDowngrade() {
@@ -117,6 +145,7 @@ export default function InternalUsersPage() {
       </div>
 
       {error && <Alert variant="warning">{error}</Alert>}
+      {notice && <Alert variant="success">{notice}</Alert>}
 
       <div className="flex flex-wrap items-center gap-md">
         <Input
@@ -227,10 +256,23 @@ export default function InternalUsersPage() {
                       {row.usage.capturesToday ?? '—'}/{row.usage.capturesLimit} captures
                     </Td>
                     <Td className="text-text-secondary whitespace-nowrap">{formatDate(row.createdAt)}</Td>
-                    <Td className="text-right">
-                      <button onClick={() => setViewing(row)} className="text-label text-info hover:underline">
-                        View usage
-                      </button>
+                    <Td className="text-right whitespace-nowrap">
+                      <span className="inline-flex items-center gap-md">
+                        <button onClick={() => setViewing(row)} className="text-label text-info hover:underline">
+                          Usage
+                        </button>
+                        <button onClick={() => setEditing(row)} className="text-label text-info hover:underline">
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => setDeleting(row)}
+                          disabled={row.isYou}
+                          title={row.isYou ? 'You cannot delete your own account' : undefined}
+                          className="text-label text-danger-text hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
+                        >
+                          Delete
+                        </button>
+                      </span>
                     </Td>
                   </tr>
                 )
@@ -265,6 +307,32 @@ export default function InternalUsersPage() {
       />
 
       <AddUserDialog open={adding} onClose={() => setAdding(false)} onCreated={refetch} />
+
+      <EditUserDialog row={editing} onClose={() => setEditing(null)} onSaved={refetch} />
+
+      <ConfirmDialog
+        open={deleting !== null}
+        title={`Delete ${deleting?.fullName ?? ''}?`}
+        description={
+          <>
+            <p>
+              This removes <strong>{deleting?.email}</strong> and everything belonging to the account. It cannot be
+              undone.
+            </p>
+            {deleting && deleting.usage.zonesCount + deleting.usage.zonesPaused > 0 && (
+              <p className="mt-md">
+                Going with it: {deleting.usage.zonesCount + deleting.usage.zonesPaused} zones and{' '}
+                {deleting.usage.schedulesActiveCount + deleting.usage.schedulesPaused} capture windows.
+              </p>
+            )}
+          </>
+        }
+        confirmLabel="Delete account"
+        destructive
+        pending={deletePending}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleting(null)}
+      />
     </div>
   )
 }

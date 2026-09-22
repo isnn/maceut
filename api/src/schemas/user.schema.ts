@@ -44,5 +44,21 @@ export const createUserSchema = z.object({
   password: z.string().min(8, 'Password minimal 8 karakter.').max(128, 'Password terlalu panjang.').optional(),
 })
 
+/**
+ * Staff editing an account (F-22). Every field optional — the dialog sends what changed.
+ *
+ * An empty body is rejected rather than treated as a no-op: it always means the caller
+ * built the request wrong, and answering 200 to it hides the mistake behind a success.
+ */
+export const updateUserSchema = z
+  .object({
+    fullName: z.string().trim().min(1, 'Nama wajib diisi.').max(120, 'Nama terlalu panjang.').optional(),
+    email: z.string().trim().toLowerCase().email('Format email tidak valid.').optional(),
+    plan: planEnum.optional(),
+    role: roleEnum.optional(),
+    password: z.string().min(8, 'Password minimal 8 karakter.').max(128, 'Password terlalu panjang.').optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'Tidak ada perubahan yang dikirim.' })
+
 export const changePlanSchema = z.object({ plan: planEnum })
 export const changeRoleSchema = z.object({ role: roleEnum })

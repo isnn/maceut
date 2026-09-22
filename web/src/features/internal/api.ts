@@ -150,6 +150,42 @@ export async function createUser(input: CreateUserInput): Promise<CreatedUser> {
   return apiClient.post<CreatedUser>('/internal/users', input)
 }
 
+export interface UpdateUserInput {
+  fullName?: string
+  email?: string
+  plan?: Plan
+  role?: PlatformRole
+  /** Changing this signs the account out everywhere. */
+  password?: string
+}
+
+export interface UpdatedUser {
+  user: User
+  /** Present only when the plan actually moved — what the change paused (ADR-020). */
+  impact: { zonesToPause: unknown[]; schedulesToPause: unknown[] } | null
+}
+
+/** Staff editing an account (F-22). Send only what changed. */
+export async function updateUser(userId: string, input: UpdateUserInput): Promise<UpdatedUser> {
+  return apiClient.patch<UpdatedUser>(`/internal/users/${userId}`, input)
+}
+
+export interface DeletedUser {
+  deleted: { id: string; email: string }
+  removed: { zones: number; schedules: number }
+}
+
+/**
+ * Staff deleting an account (F-22).
+ *
+ * Irreversible, and it takes the account's zones and capture windows with it. The
+ * response reports what went, so the screen can say so rather than leave the operator
+ * guessing what they just destroyed.
+ */
+export async function deleteUser(userId: string): Promise<DeletedUser> {
+  return apiClient.delete<DeletedUser>(`/internal/users/${userId}`)
+}
+
 export async function setUserRole(userId: string, role: PlatformRole): Promise<void> {
   await apiClient.patch<User>(`/internal/users/${userId}/role`, { role })
 }

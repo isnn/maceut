@@ -91,9 +91,9 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Admin dashboard: jumlah zona & jendela per akun dan platform-wide, bukan "—" | F-21/F-22 |
 | ✅ | Admin bisa membuat akun baru — `POST /internal/users` + dialog Add user | F-21 |
 | 🔴 | **BE-14** Lupa/ganti password — tautan "Forgot password?" di login mati (`href="#lupa-password"`), dan akun buatan admin tak bisa mengganti password generated | auth/requirements.md |
-| 🔴 | **BE-15** `DELETE /internal/users/:id` (atau nonaktifkan) — akun tidak bisa dihapus sama sekali, termasuk akun uji | F-22 |
+| ✅ | **BE-15** `DELETE /internal/users/:id` + `PATCH /internal/users/:id` — hapus & ubah akun (nama, email, password, paket, role) | F-22 |
 | 🔴 | **BE-16** Scheduler node-cron: `api/src/schedulers/` belum ada — jendela aktif tidak pernah mem-publish job | capture-schedule/requirements.md |
-| 🔴 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev (butuh BE-15) | housekeeping |
+| 🟡 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev — sekarang bisa lewat /internal/users | housekeeping |
 | 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
 | ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: RoadClassPicker pakai `GET /traffic/road-class-counts` — katalog lokal dihapus | zone-management/tasks.md Phase 4 |
@@ -746,6 +746,60 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   356,06 km", tanpa error klien.
 
   216 test (15 baru), tsc + eslint bersih, production build lolos.
+
+[2026-09-22b] Admin bisa menghapus dan mengubah akun (F-22).
+
+  DUA ENDPOINT BARU. `PATCH /internal/users/:id` (nama, email, password, paket, role
+  sekaligus) dan `DELETE /internal/users/:id`. Paket dan role diterapkan lewat
+  `changePlan`/`changeRole` yang sudah ada, bukan ditulis ulang — satu tempat yang tahu
+  penjaganya dan aturan grandfather. Salinan kedua akan benar di hari ia ditulis dan
+  salah pertama kali aturannya berubah.
+
+  PASSWORD. Ini bagian yang paling berisiko salah. Hash-nya milik Better Auth di tabel
+  `account`, dan kita tidak punya sesi user target. Menulis baris itu manual akan
+  menghasilkan row yang KELIHATAN benar tapi gagal verify — dan baru ketahuan waktu
+  orangnya mencoba login. Jalan yang benar ternyata ada di `auth.$context`:
+  `password.hash` + `internalAdapter.updatePassword`, kode Better Auth sendiri. Diprobe
+  dulu sebelum dipakai (password lama → 401, baru → 200).
+  Mengganti password MENGAKHIRI semua sesi akun itu (`deleteUserSessions`). Alasan staf
+  memutar password biasanya karena bocor; membiarkan sesi lama hidup berarti memberi
+  password baru ke pemiliknya sambil membiarkan pihak lain tetap masuk. Diverifikasi:
+  cookie target 200 sebelum rotate, 401 sesudah.
+
+  HAPUS. Satu `DELETE FROM "user"` sudah cukup — SEMUA tabel yang mereferensikan
+  `user.id` sudah `ON DELETE CASCADE` (user_plans, zones, schedules, session, account).
+  Dicek ke schema, bukan diasumsikan. Responsnya melaporkan APA yang ikut terhapus
+  (dihitung sebelum delete, karena sesudahnya tidak ada yang bisa dihitung), supaya
+  operator tidak menebak-nebak apa yang baru saja ia musnahkan. Diverifikasi: akun dengan
+  1 zona + 2 jendela → `{"zones":1,"schedules":2}`, sesi korban langsung 401.
+
+  ⚠️ Catatan jujur soal penjaga: `deleteUser` menolak menghapus akun internal terakhir,
+  TAPI cabang itu praktis tak terjangkau — kalau hanya ada 1 internal, pelakunya pasti
+  akun itu sendiri, dan penjaga "tidak boleh menghapus akun sendiri" sudah menolak lebih
+  dulu. Dibiarkan sebagai pertahanan berlapis, bukan karena ia yang bekerja. Yang
+  benar-benar menjaga adalah larangan hapus-diri-sendiri.
+
+  SATU BUG DICEGAH SEBELUM ADA. Dialog mengirim seluruh objek, jadi `role` yang TIDAK
+  diubah akan menabrak penjaga "tidak boleh mengubah role sendiri" dan mem-403 admin yang
+  cuma memperbaiki salah ketik namanya. Server sekarang hanya memanggil `changeRole`
+  kalau rolenya benar-benar bergeser, dan dialog hanya mengirim field yang berubah. Dua
+  lapis, karena keduanya masuk akal sendiri-sendiri.
+
+  Email yang berganti ikut menghitung ulang platform role — INTERNAL_EMAILS dikunci ke
+  alamat, jadi tanpa itu direktori menampilkan role basi sampai akun itu sign-in lagi.
+  Mengubah email akun SENDIRI yang terdaftar di INTERNAL_EMAILS ditolak: itu mencabut
+  akses staf sendiri secara diam-diam pada sign-in berikutnya.
+
+  Lint menangkap lagi setState sinkron di dalam effect (reset form saat baris berganti).
+  Diperbaiki dengan me-remount form lewat `key={row.id}`, bukan effect — effect melakukan
+  hal yang sama satu render terlambat, dan sempat menampilkan data akun sebelumnya.
+
+  Diverifikasi lewat HTTP sungguhan: edit nama+email+paket sekaligus · rotate password ·
+  hapus-diri-sendiri 403 · turunkan-role-sendiri 403 · body kosong 422 · email duplikat
+  422 · id tak dikenal 404. Dialog di-render di browser, terisi penuh, "Nothing changed
+  yet" dengan Save nonaktif.
+
+  232 test (16 baru), tsc + eslint bersih, production build lolos.
 
 ---
 

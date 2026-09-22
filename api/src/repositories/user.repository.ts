@@ -1,4 +1,4 @@
-import { eq, sql, desc, asc, and, ilike, or, not, type SQL } from 'drizzle-orm'
+import { eq, ne, sql, desc, asc, and, ilike, or, not, type SQL } from 'drizzle-orm'
 import { db } from '../lib/drizzle-client'
 import { user, userPlans, type UserPlanRow } from '../../drizzle/schema'
 import type { Plan, PlatformRole } from '../types/plan'
@@ -61,6 +61,45 @@ export async function updateUser(
     .where(eq(user.id, id))
     .returning()
   return rows[0]
+}
+
+/**
+ * Change an account's email, case-insensitively unique across the table.
+ *
+ * Separate from `updateUser` because email is the sign-in identifier, not an ordinary
+ * attribute: the unique index is on `lower(email)` (migration 0001), so the value is
+ * normalised here rather than trusting every caller to remember.
+ */
+export async function updateEmail(id: string, email: string): Promise<UserRow | undefined> {
+  const rows = await db
+    .update(user)
+    .set({ email: email.trim().toLowerCase(), updatedAt: new Date() })
+    .where(eq(user.id, id))
+    .returning()
+  return rows[0]
+}
+
+/** True when another account already uses this address. Excludes `exceptId`. */
+export async function emailTakenByOther(email: string, exceptId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(and(sql`lower(${user.email}) = lower(${email})`, ne(user.id, exceptId)))
+    .limit(1)
+  return rows.length > 0
+}
+
+/**
+ * Remove an account and everything hanging off it.
+ *
+ * Every table that references `user.id` declares ON DELETE CASCADE — user_plans,
+ * zones, schedules, and Better Auth's session and account rows — so one delete is the
+ * whole operation and there is no order to get wrong. Confirmed against the schema
+ * rather than assumed; a missing cascade would leave an orphan row that blocks the
+ * delete with a foreign-key error rather than silently succeeding.
+ */
+export async function deleteById(id: string): Promise<void> {
+  await db.delete(user).where(eq(user.id, id))
 }
 
 export async function setPlan(userId: string, plan: Plan): Promise<UserPlanRow | undefined> {

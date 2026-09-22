@@ -176,6 +176,122 @@ router.post('/internal/users', userController.create)
 
 /**
  * @swagger
+ * /internal/users/{id}:
+ *   patch:
+ *     summary: Ubah data akun — nama, email, password, paket, role (F-22)
+ *     description: >
+ *       Semua field opsional; kirim yang berubah saja. Body kosong ditolak, bukan
+ *       dianggap no-op: itu selalu berarti pemanggilnya salah membentuk request, dan
+ *       menjawab 200 hanya menyembunyikan kesalahannya.
+ *
+ *       Paket dan role diterapkan lewat jalur yang sama dengan endpoint `/plan` dan
+ *       `/role`, jadi aturannya tidak bisa berbeda: role tetap tunduk pada tiga penjaga
+ *       (tidak boleh mengubah role sendiri, INTERNAL_EMAILS menang, akun internal
+ *       terakhir tidak boleh diturunkan), dan penurunan paket tetap menjalankan
+ *       grandfather-and-block (ADR-020).
+ *
+ *       Mengganti password akan MENGAKHIRI semua sesi akun itu. Alasan staf memutar
+ *       password biasanya karena bocor — membiarkan sesi lama hidup berarti memberi
+ *       password baru ke pemiliknya sambil membiarkan pihak lain tetap masuk.
+ *
+ *       Mengganti email ikut menghitung ulang platform role, karena INTERNAL_EMAILS
+ *       dikunci ke alamat: tanpa itu direktori akan menampilkan role basi sampai akun
+ *       tersebut sign-in berikutnya.
+ *     tags: [Internal]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             minProperties: 1
+ *             properties:
+ *               fullName: { type: string }
+ *               email: { type: string, format: email }
+ *               plan: { type: string, enum: [free, standard, premium] }
+ *               role: { type: string, enum: [user, internal] }
+ *               password: { type: string, minLength: 8, description: Mengakhiri semua sesi akun itu }
+ *     responses:
+ *       200:
+ *         description: Akun diperbarui
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user: { $ref: '#/components/schemas/User' }
+ *                     impact:
+ *                       type: object
+ *                       nullable: true
+ *                       description: Hanya terisi kalau paketnya benar-benar berpindah (ADR-020)
+ *       401: { description: UNAUTHORIZED }
+ *       403: { description: FORBIDDEN — bukan staf, atau mengubah role sendiri }
+ *       404: { description: NOT_FOUND }
+ *       422: { description: VALIDATION_ERROR atau EMAIL_ALREADY_TAKEN }
+ */
+router.patch('/internal/users/:id', userController.update)
+
+/**
+ * @swagger
+ * /internal/users/{id}:
+ *   delete:
+ *     summary: Hapus akun beserta seluruh isinya (F-22)
+ *     description: >
+ *       ⚠️ TIDAK BISA DIBATALKAN. Zona, jendela capture, dan baris paket milik akun itu
+ *       ikut terhapus lewat ON DELETE CASCADE. Tidak ada undo dan tidak ada soft-delete:
+ *       pemanggilnya staf yang bertindak sengaja, dan akun setengah terhapus yang masih
+ *       memiliki zona lebih buruk daripada kedua hasilnya.
+ *
+ *       Dua penjaga yang sama dengan perubahan role, karena alasan yang sama — keduanya
+ *       tidak bisa dipulihkan lewat API: tidak boleh menghapus akun sendiri, dan tidak
+ *       boleh menghapus akun internal terakhir.
+ *
+ *       Mengembalikan apa yang ikut terhapus, bukan 204 kosong, supaya layarnya bisa
+ *       menyebutkan angkanya alih-alih membiarkan operator menebak.
+ *     tags: [Internal]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Akun terhapus
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     deleted:
+ *                       type: object
+ *                       properties: { id: { type: string }, email: { type: string } }
+ *                     removed:
+ *                       type: object
+ *                       properties: { zones: { type: integer }, schedules: { type: integer } }
+ *       401: { description: UNAUTHORIZED }
+ *       403: { description: FORBIDDEN — bukan staf, atau menghapus akun sendiri }
+ *       404: { description: NOT_FOUND }
+ *       422: { description: VALIDATION_ERROR — akun internal terakhir }
+ */
+router.delete('/internal/users/:id', userController.remove)
+
+/**
+ * @swagger
  * /internal/users/{id}/plan:
  *   patch:
  *     summary: Ubah paket sebuah akun

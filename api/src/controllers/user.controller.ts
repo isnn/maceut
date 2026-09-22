@@ -1,7 +1,13 @@
 import type { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import * as userService from '../services/user.service'
-import { listUsersQuerySchema, createUserSchema, changePlanSchema, changeRoleSchema } from '../schemas/user.schema'
+import {
+  listUsersQuerySchema,
+  createUserSchema,
+  updateUserSchema,
+  changePlanSchema,
+  changeRoleSchema,
+} from '../schemas/user.schema'
 import { UnauthorizedError } from '../errors'
 import { ok, paginated } from '../types/api'
 import type { Plan, PlatformRole } from '../types/plan'
@@ -88,6 +94,51 @@ export async function changeRole(req: Request, res: Response, next: NextFunction
 export async function stats(_req: Request, res: Response, next: NextFunction) {
   try {
     return res.status(200).json(ok(await userService.getPlatformStats()))
+  } catch (err) {
+    next(err)
+  }
+}
+
+/**
+ * Staff editing an account (F-22).
+ *
+ * `impact` is null unless the plan actually moved; when it did, it reports what the
+ * grandfather pass paused (ADR-020), in the same shape the confirmation dialog
+ * previewed.
+ */
+export async function update(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) throw new UnauthorizedError()
+    const id = userIdParam.parse(req.params.id)
+    const body = updateUserSchema.parse(req.body)
+
+    return res.status(200).json(
+      ok(
+        await userService.updateUserAsStaff(req.userId, id, {
+          fullName: body.fullName,
+          email: body.email,
+          plan: body.plan as Plan | undefined,
+          role: body.role as PlatformRole | undefined,
+          password: body.password,
+        }),
+      ),
+    )
+  } catch (err) {
+    next(err)
+  }
+}
+
+/**
+ * Staff deleting an account (F-22).
+ *
+ * Returns what went with it rather than an empty 204, so the screen can say "3 zones
+ * and 2 capture windows were removed" instead of leaving the operator to wonder.
+ */
+export async function remove(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) throw new UnauthorizedError()
+    const id = userIdParam.parse(req.params.id)
+    return res.status(200).json(ok(await userService.deleteUser(req.userId, id)))
   } catch (err) {
     next(err)
   }

@@ -395,3 +395,176 @@ export async function createUser(input: CreateUserInput): Promise<CreatedUser> {
 
   return { user: await getUser(userId), temporaryPassword: generated }
 }
+
+/**
+ * Sets an account's password on the operator's behalf, and signs it out everywhere.
+ *
+ * Hashing goes through Better Auth's own `password.hash` and `internalAdapter`, reached
+ * via `auth.$context`, rather than writing the `account` row by hand. Better Auth owns
+ * the hash format — scrypt with its own parameters — and a hand-rolled write would
+ * produce a row that looks right and fails to verify, which only shows up when the
+ * person tries to sign in.
+ *
+ * Existing sessions are revoked deliberately. The usual reason staff rotate a password
+ * is that it leaked; leaving the old sessions alive would hand the new password to the
+ * rightful owner while the other party stayed signed in.
+ */
+async function setPasswordAndRevokeSessions(userId: string, password: string): Promise<void> {
+  const ctx = await (auth as unknown as { $context: Promise<AuthContext> }).$context
+  const hashed = await ctx.password.hash(password)
+  await ctx.internalAdapter.updatePassword(userId, hashed)
+  await ctx.internalAdapter.deleteUserSessions(userId)
+}
+
+/** Only the slice of Better Auth's context this module uses. */
+interface AuthContext {
+  password: { hash: (plain: string) => Promise<string> }
+  internalAdapter: {
+    updatePassword: (userId: string, hashed: string) => Promise<unknown>
+    deleteUserSessions: (userId: string) => Promise<unknown>
+  }
+}
+
+export interface UpdateUserInput {
+  fullName?: string
+  email?: string
+  plan?: Plan
+  role?: PlatformRole
+  password?: string
+}
+
+/**
+ * Staff editing an account (F-22).
+ *
+ * Role and plan are applied through `changeRole` and `changePlan` rather than written
+ * here, so there is exactly one place that knows the guards and the grandfather rule.
+ * A second copy would be correct on the day it was written and wrong the first time a
+ * rule changed.
+ *
+ * Order matters: the guards run before anything is written, so a request that will be
+ * refused cannot leave a half-applied edit behind — an email changed but the role
+ * rejected is worse than nothing changed at all.
+ */
+export interface StaffUpdateResult {
+  user: PublicUser
+  /** Only present when the plan actually moved; null otherwise (ADR-020). */
+  impact: planService.PlanImpact | null
+}
+
+export async function updateUserAsStaff(
+  actorId: string,
+  targetUserId: string,
+  input: UpdateUserInput,
+): Promise<StaffUpdateResult> {
+  const target = await userRepo.findById(targetUserId)
+  if (!target) throw new NotFoundError('User')
+
+  // --- refuse first, write second ---
+
+  if (input.email && (await userRepo.emailTakenByOther(input.email, targetUserId))) {
+    throw new EmailAlreadyTakenError()
+  }
+
+  // Changing your own email can move you out of INTERNAL_EMAILS and lock you out of the
+  // staff area on the next sign-in — silently, since the column still says internal.
+  if (input.email && actorId === targetUserId && isInternalByConfig(target.email)) {
+    const stillConfigured = isInternalByConfig(input.email)
+    if (!stillConfigured) {
+      throw new ValidationError(
+        'Email akun Anda sendiri terdaftar di INTERNAL_EMAILS. Mengubahnya akan mencabut akses staf Anda pada sign-in berikutnya.',
+      )
+    }
+  }
+
+  // --- writes ---
+
+  if (input.fullName !== undefined) {
+    await userRepo.updateUser(targetUserId, { name: input.fullName })
+  }
+
+  if (input.email !== undefined) {
+    await userRepo.updateEmail(targetUserId, input.email)
+  }
+
+  if (input.password !== undefined) {
+    await setPasswordAndRevokeSessions(targetUserId, input.password)
+  }
+
+  // Only when it actually moves. A dialog submits the whole object, so an unchanged
+  // role would otherwise trip changeRole's no-self-edit guard and 403 an admin who was
+  // only renaming themselves.
+  if (input.role !== undefined && input.role !== resolveRole(target.email, (target.role ?? 'user') as PlatformRole)) {
+    // Guards live in changeRole: no self-edit, config wins, never the last internal.
+    await changeRole(actorId, targetUserId, input.role)
+  } else if (input.email !== undefined) {
+    // A new address can be in — or out of — INTERNAL_EMAILS, and the column is only a
+    // cache of that. Re-resolving here means the directory does not show a stale role
+    // until the account next signs in.
+    const after = await userRepo.findById(targetUserId)
+    if (after) {
+      const resolved = resolveRole(after.email, (after.role ?? 'user') as PlatformRole)
+      if (resolved !== after.role) await userRepo.updateUser(targetUserId, { role: resolved })
+    }
+  }
+
+  // Plan last: it is the only field that can pause the account's zones and windows, and
+  // its impact report is what the caller gets back. Skipped when unchanged — running
+  // the grandfather pass for a plan that did not move is work with nothing to report.
+  const currentPlan = (await userRepo.findByIdWithPlan(targetUserId))?.plan
+  if (input.plan !== undefined && input.plan !== currentPlan) {
+    return changePlan(targetUserId, input.plan)
+  }
+
+  return { user: await getUser(targetUserId), impact: null }
+}
+
+export interface DeleteUserResult {
+  deleted: { id: string; email: string }
+  /** What went with the account, so the caller can report it rather than guess. */
+  removed: { zones: number; schedules: number }
+}
+
+/**
+ * Deletes an account and everything belonging to it (F-22).
+ *
+ * ⚠️ Irreversible, and it takes the account's zones, capture windows and plan row with
+ * it through ON DELETE CASCADE. There is no undo and no soft-delete fallback: the
+ * caller is staff acting deliberately, and a half-deleted account that still owns
+ * zones would be worse than either outcome.
+ *
+ * The same two guards as role changes, for the same reason — both are unrecoverable
+ * through the API, and the only fix would be editing the database by hand.
+ */
+export async function deleteUser(actorId: string, targetUserId: string): Promise<DeleteUserResult> {
+  const target = await userRepo.findById(targetUserId)
+  if (!target) throw new NotFoundError('User')
+
+  if (actorId === targetUserId) {
+    throw new ForbiddenError('Anda tidak bisa menghapus akun Anda sendiri.')
+  }
+
+  const targetIsInternal = resolveRole(target.email, (target.role ?? 'user') as PlatformRole) === 'internal'
+  if (targetIsInternal && (await userRepo.countInternal(configuredInternalEmails())) <= 1) {
+    throw new ValidationError(
+      'Ini satu-satunya akun internal yang tersisa — sistem tidak boleh kehilangan semua akses staf.',
+    )
+  }
+
+  // Counted before the delete, because afterwards there is nothing left to count.
+  const [zoneCounts, scheduleCounts] = await Promise.all([
+    zoneRepo.countsByUser(),
+    scheduleRepo.countsByUser(),
+  ])
+  const z = zoneCounts.get(targetUserId)
+  const sc = scheduleCounts.get(targetUserId)
+
+  await userRepo.deleteById(targetUserId)
+
+  return {
+    deleted: { id: target.id, email: target.email },
+    removed: {
+      zones: (z?.collecting ?? 0) + (z?.paused ?? 0),
+      schedules: (sc?.active ?? 0) + (sc?.paused ?? 0),
+    },
+  }
+}
