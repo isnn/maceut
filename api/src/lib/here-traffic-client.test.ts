@@ -8,6 +8,8 @@ import {
   validateBBox,
   TRAFFIC_STATE_COLOR,
   MAX_BBOX_DEGREES,
+  totalLengthMetres,
+  toKm,
   type BBox,
 } from './here-traffic-client'
 import { ValidationError } from '../errors'
@@ -174,5 +176,55 @@ describe('toGeoJson', () => {
       expect(out.features).toHaveLength(1)
       expect(out.features[0]!.properties.functionalClass).toBeUndefined()
     })
+  })
+})
+
+describe('totalLengthMetres', () => {
+  /** One degree of latitude is ~111 km anywhere on the globe. */
+  function lineString(coords: [number, number][]) {
+    return {
+      type: 'FeatureCollection' as const,
+      features: [
+        {
+          type: 'Feature' as const,
+          geometry: { type: 'LineString' as const, coordinates: coords },
+          properties: { trafficState: 'normal' as const, color: '#4CAF50', jamFactor: 1 },
+        },
+      ],
+    }
+  }
+
+  it('measures a degree of latitude as about 111 km', () => {
+    const metres = totalLengthMetres(lineString([[110, -7], [110, -8]]))
+    expect(metres / 1000).toBeCloseTo(111.19, 1)
+  })
+
+  it('shortens a degree of longitude near the equator by cos(lat)', () => {
+    // Indonesia sits close to the equator, so this barely shrinks — but it must shrink,
+    // and a haversine with the wrong radius or a missing cos() still returns plausible
+    // kilometres rather than an error. That is what this pins.
+    const atEquator = totalLengthMetres(lineString([[110, 0], [111, 0]]))
+    const atSixty = totalLengthMetres(lineString([[110, 60], [111, 60]]))
+    expect(atSixty).toBeLessThan(atEquator / 1.9)
+  })
+
+  it('sums across features and segments', () => {
+    const two = {
+      type: 'FeatureCollection' as const,
+      features: [...lineString([[110, -7], [110, -8]]).features, ...lineString([[110, -8], [110, -9]]).features],
+    }
+    expect(totalLengthMetres(two) / 1000).toBeCloseTo(222.39, 1)
+  })
+
+  it('is zero for an empty collection or a single point', () => {
+    expect(totalLengthMetres({ type: 'FeatureCollection', features: [] })).toBe(0)
+    expect(totalLengthMetres(lineString([[110, -7]]))).toBe(0)
+  })
+})
+
+describe('toKm', () => {
+  it('rounds to two decimals, the form every screen shows', () => {
+    expect(toKm(356_055.7)).toBe(356.06)
+    expect(toKm(0)).toBe(0)
   })
 })

@@ -231,4 +231,61 @@ router.delete('/zones/:id', zoneController.remove)
  */
 router.get('/traffic/preview', trafficController.preview)
 
+/**
+ * @swagger
+ * /traffic/road-class-counts:
+ *   get:
+ *     summary: Berapa ruas & km yang didapat tiap kelas jalan di sebuah bbox (BR-022)
+ *     description: >
+ *       Dibaca oleh langkah pemilihan kelas jalan di wizard zona. Menggantikan katalog
+ *       lokal yang mengabaikan geometri dan mengembalikan angka karangan yang sama di
+ *       mana pun zona digambar — padahal angka itulah yang seharusnya menjelaskan beda
+ *       antar paket.
+ *
+ *       ⚠️ Hitungan untuk kelas DI ATAS paket pemanggil tetap dikembalikan, berbeda dari
+ *       /traffic/preview yang memotong hasilnya. Menghitung bukan melihat: pemanggil tahu
+ *       zona Premium di sini akan mencakup 8.684 ruas dan bukan 1.043, tanpa mendapat satu
+ *       pun geometri-nya. Menyembunyikan angkanya justru membuat ajakan upgrade tidak
+ *       punya apa-apa untuk dikatakan.
+ *
+ *       Biayanya tiga request HERE, satu per tingkat, dijalankan paralel. Tidak bisa satu:
+ *       respons flow tidak memuat functional class, jadi pemisahannya hanya bisa dilakukan
+ *       dengan menanyakan tiga pertanyaan berbeda ke HERE.
+ *     tags: [Zones]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: bbox
+ *         required: true
+ *         schema: { type: string }
+ *         example: 110.330,-7.820,110.430,-7.740
+ *         description: west,south,east,north (WGS84)
+ *     responses:
+ *       200:
+ *         description: Jumlah ruas & panjang per kelas jalan
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     counts:
+ *                       type: object
+ *                       properties:
+ *                         nasional: { type: object, properties: { roads: { type: integer }, lengthKm: { type: number } } }
+ *                         nasional_provinsi: { type: object, properties: { roads: { type: integer }, lengthKm: { type: number } } }
+ *                         semua: { type: object, properties: { roads: { type: integer }, lengthKm: { type: number } } }
+ *                     maxRoadClass:
+ *                       type: string
+ *                       enum: [nasional, nasional_provinsi, semua]
+ *                       description: Kelas tertinggi yang boleh dipakai paket pemanggil
+ *       401: { description: UNAUTHORIZED }
+ *       422: { description: VALIDATION_ERROR — bbox tidak valid atau terlalu luas }
+ *       502: { description: UPSTREAM_ERROR — HERE gagal atau quota habis }
+ */
+router.get('/traffic/road-class-counts', trafficController.roadClassCounts)
+
 export default router

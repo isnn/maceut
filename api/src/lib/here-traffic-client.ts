@@ -250,6 +250,41 @@ function describeStatus(status: number, body: string): string {
   return `HTTP ${status}: ${description || snippet}`
 }
 
+/**
+ * Great-circle length of a collection's LineStrings, in metres.
+ *
+ * Lives here rather than beside either caller because both measure the same thing —
+ * HERE flow geometry — and two copies of a haversine would drift silently: a wrong
+ * earth radius produces plausible kilometres, not an error.
+ *
+ * HERE does report `location.length`, but not on every result, and mixing a reported
+ * length with a derived one would make the total mean two different things depending
+ * on what came back.
+ */
+export function totalLengthMetres(collection: TrafficCollection): number {
+  const R = 6_371_000
+  const rad = (d: number) => (d * Math.PI) / 180
+  let total = 0
+
+  for (const feature of collection.features) {
+    const coordinates = feature.geometry.coordinates
+    for (let i = 1; i < coordinates.length; i++) {
+      const [lng1, lat1] = coordinates[i - 1]!
+      const [lng2, lat2] = coordinates[i]!
+      const dLat = rad(lat2 - lat1)
+      const dLng = rad(lng2 - lng1)
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2
+      total += 2 * R * Math.asin(Math.sqrt(a))
+    }
+  }
+  return total
+}
+
+/** Metres to kilometres, two decimals — the form every screen shows. */
+export function toKm(metres: number): number {
+  return Math.round((metres / 1000) * 100) / 100
+}
+
 export function toGeoJson(payload: HereFlowResponse, functionalClasses?: number[]): TrafficCollection {
   const features: TrafficFeature[] = []
   const wanted = functionalClasses && functionalClasses.length > 0 ? new Set(functionalClasses) : null

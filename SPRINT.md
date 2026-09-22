@@ -64,7 +64,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **BE-07** Lib: R2 client (upload/download/presign/delete, path BR-011) | zone-management/tasks.md Phase 3 |
 | ✅ | **BE-08** Lib: HERE Traffic client (getTrafficFlow → GeoJSON, BR-017/BR-022) | zone-management/tasks.md Phase 3 |
 | ✅ | **BE-09** Script: `npm run env:check` — bukti Postgres/MQ/R2/HERE tersambung | plan BE-09 |
-| 🟡 | **BE-10** Verifikasi kredensial live — R2 ✅ lulus round-trip penuh · HERE 🔴 401 (key ditolak, lihat Progress Log) | plan BE-10 |
+| ✅ | **BE-10** Verifikasi kredensial live — R2 ✅ round-trip penuh · HERE ✅ 268 ruas, filter functionalClasses diterima | plan BE-10 |
 | 🔴 | Lib: Playwright client (screenshot internal render page) | zone-management/tasks.md Phase 3 |
 | 🔴 | API: POST /captures/manual + GET /captures/:id + unit test + swagger | zone-management/tasks.md Phase 3 |
 | 🔴 | Worker: capture.worker.ts (consume → road class filter → screenshot → upload) | zone-management/tasks.md Phase 3 |
@@ -84,7 +84,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Backend: GET /usage — angka dashboard nyata, `null` untuk yang belum terukur | zone-management F-19 |
 | ✅ | Frontend: Dashboard pakai API asli (tidak ada lagi angka karangan) | zone-management F-19 |
 | ✅ | Fix: filter functional class dikirim ke HERE, bukan difilter lokal | docs HERE v7 |
-| 🔴 | HERE API key masih 401 "not from an authorized source" — restriksi domain/IP di app-nya | BE-10 |
+| ✅ | HERE API key aktif (dibetulkan user 22 Sep) — BR-022 tiering terbukti nyata di 4 bbox | BE-10 |
 | ✅ | Hapus kolom `organisation` dari user — migrasi 0006 + semua UI | ADR-022 |
 | ✅ | Alur daftar: form register tanpa organisation, onboarding bukan pemilih paket | ADR-021 |
 | ✅ | Tutup upgrade self-serve — `PATCH /me/plan` tolak kenaikan paket (403) | ADR-021 |
@@ -96,7 +96,8 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | 🔴 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev (butuh BE-15) | housekeeping |
 | 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
 | ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
-| 🔴 | Frontend: hitung ruas per kelas di RoadClassPicker dari /traffic/preview (kini masih katalog lokal) | zone-management/tasks.md Phase 4 |
+| ✅ | Frontend: RoadClassPicker pakai `GET /traffic/road-class-counts` — katalog lokal dihapus | zone-management/tasks.md Phase 4 |
+| 🔴 | **FE-01** Zona kecil di pusat kota bisa sah-sah saja dapat 0 ruas di paket Free — butuh penjelasan di wizard, bukan angka 0 telanjang | temuan 22 Sep |
 | ✅ | Frontend: MapCanvas (Leaflet + OSM) + TrafficPreviewPanel + StyleSelector | zone-management/tasks.md Phase 4 |
 | 🔴 | Backend: internal render page (Playwright target) + update playwright-client.ts | zone-management/tasks.md Phase 3 |
 | ✅ | Frontend: Step 3 — Review & Konfirmasi | zone-management/tasks.md Phase 4 |
@@ -696,6 +697,55 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
   202 test (8 baru untuk createUser), tsc + eslint bersih, production build lolos, 11 route
   balas 200, Swagger menampilkan get+post di /internal/users.
+
+[2026-09-22] HERE hidup. Wizard zona berhenti mengarang angka.
+
+  KEY-nya jalan (dibetulkan user). `env:check` lulus: 268 ruas di bbox uji, filter
+  functionalClasses diterima. Tapi baris keduanya berbunyi "0 FC1-2 dari 268", yang harus
+  diperiksa dulu sebelum dipakai — kalau FC1-2 benar-benar selalu 0, pengguna Free akan
+  melihat peta kosong dan BR-022 tidak menjual apa pun.
+  Diuji di 4 bbox: Malioboro 1 km → 268 total, FC1-2 = 0 · Ring road Yogya → 8.684 / 1.043 ·
+  Sudirman Jakarta → 5.653 / 164 · Tol Cikampek → 5.191 / 1.434. Jadi filternya BENAR dan
+  tiering-nya nyata; bbox uji di env-check kebetulan area pejalan kaki tanpa arteri sama
+  sekali. Bukan bug.
+  ⚠️ TAPI itu temuan produk (FE-01): zona kecil di pusat kota di paket Free bisa sah-sah
+  saja menghasilkan 0 ruas. "0 roads" telanjang akan terbaca sebagai kerusakan, padahal
+  jawabannya benar. Wizard perlu menjelaskannya, bukan menampilkan angka 0 saja.
+
+  ZONA. `roadsCount`/`lengthKm` langsung terisi begitu key hidup — kodenya sudah ada sejak
+  BE-08, cuma selalu mengembalikan null. Zona uji ring road: 8.684 ruas · 356,06 km.
+
+  PEMILIH KELAS JALAN. Ini pekerjaan sebenarnya hari ini. `matchRoads` MENGABAIKAN geometri
+  sepenuhnya dan mengembalikan katalog hardcoded 7 nama jalan Jakarta — jadi angka yang
+  seharusnya menjelaskan beda antar paket IDENTIK untuk setiap zona di seluruh Indonesia,
+  termasuk zona di Yogyakarta yang "berisi" Jl. Casablanca Raya. Katalognya dihapus, begitu
+  juga tipe `MatchedRoad`: tidak ada lagi yang mencocokkan jalan di sisi klien.
+  Gantinya `GET /traffic/road-class-counts?bbox=` — tiga request HERE paralel, satu per
+  tingkat. Tidak bisa satu: respons flow tidak memuat functional class, jadi pemisahannya
+  hanya ada kalau kita bertanya tiga kali.
+
+  KEPUTUSAN YANG PERLU DICATAT: endpoint ini MENGEMBALIKAN hitungan untuk kelas DI ATAS
+  paket pemanggil, berbeda dari /traffic/preview yang memotong hasilnya. Menghitung bukan
+  melihat — akun Free tahu Premium di sini mencakup 8.684 ruas dan bukan 1.043, tanpa
+  mendapat satu pun geometri-nya. Menyembunyikan angkanya justru membuat ajakan upgrade
+  tidak punya apa-apa untuk dikatakan. Diverifikasi keduanya: akun Free melihat ketiga
+  hitungan, DAN /traffic/preview tetap mengembalikan 1.043 fitur walau diminta `semua`.
+
+  Haversine yang tadinya cuma ada di zone.service dipindah ke here-traffic-client sebagai
+  `totalLengthMetres` + `toKm`, dipakai kedua pemanggil. Dua salinan haversine akan
+  melenceng diam-diam: radius bumi yang salah menghasilkan kilometer yang masuk akal,
+  bukan error. Ada test yang mengunci satu derajat lintang = 111 km.
+
+  Dua error lint nyata muncul saat ini: setState sinkron di dalam useEffect pada kedua
+  komponen. Diperbaiki dengan menyimpan hasil ber-KUNCI bbox, bukan me-reset state dulu —
+  hasil yang kuncinya tidak cocok memang bukan milik boundary ini, jadi barisnya kembali ke
+  "Counting roads…" dengan sendirinya. Tidak ada reset, tidak ada cascading render.
+
+  Diverifikasi di browser sungguhan sebagai akun Free: "Nasional 1.043 roads · 58,2 km ·
+  Nasional + Provinsi [Standard] 4.777 roads · 195,28 km · All roads [Premium] 8.684 roads ·
+  356,06 km", tanpa error klien.
+
+  216 test (15 baru), tsc + eslint bersih, production build lolos.
 
 ---
 

@@ -126,33 +126,11 @@ export async function deriveRoadStats(
     const bbox = bboxOfGeometry(geometry)
     const flow = await here.getTrafficFlow(bbox, { functionalClasses: here.functionalClassesFor(roadClass) })
 
-    let metres = 0
-    for (const feature of flow.features) {
-      metres += lengthOf(feature.geometry.coordinates)
-    }
-    return { roadsCount: flow.features.length, lengthKm: Math.round((metres / 1000) * 100) / 100 }
+    return { roadsCount: flow.features.length, lengthKm: here.toKm(here.totalLengthMetres(flow)) }
   } catch {
     // HERE down, over quota, or the bbox rejected — the zone is still valid.
     return { roadsCount: null, lengthKm: null }
   }
-}
-
-/** Great-circle length of a LineString in metres. */
-function lengthOf(coordinates: [number, number][]): number {
-  const R = 6_371_000
-  const rad = (d: number) => (d * Math.PI) / 180
-  let total = 0
-
-  for (let i = 1; i < coordinates.length; i++) {
-    const [lng1, lat1] = coordinates[i - 1]!
-    const [lng2, lat2] = coordinates[i]!
-    const dLat = rad(lat2 - lat1)
-    const dLng = rad(lng2 - lng1)
-    const a =
-      Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2
-    total += 2 * R * Math.asin(Math.sqrt(a))
-  }
-  return total
 }
 
 export interface CreateZoneInput {

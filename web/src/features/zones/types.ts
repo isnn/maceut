@@ -34,13 +34,6 @@ export interface CreateZoneInput {
   roadClass: RoadClass
 }
 
-/** Road segments matched inside the boundary, grouped by class (3c). */
-export interface MatchedRoad {
-  name: string
-  roadClass: Exclude<RoadClass, 'nasional_provinsi' | 'semua'> | 'provinsi' | 'kota'
-  lengthKm: number
-}
-
 export interface StylePreset {
   id: string
   name: string
