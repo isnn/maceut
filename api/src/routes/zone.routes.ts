@@ -1,13 +1,25 @@
 import { Router } from 'express'
 import * as zoneController from '../controllers/zone.controller'
 import * as trafficController from '../controllers/traffic.controller'
+import * as captureController from '../controllers/capture.controller'
 import { authMiddleware, planCheck } from '../middlewares/auth.middleware'
 
 const router = Router()
 
 // Every route below needs both the user and their plan: limits are enforced in the
 // service layer (BR-007) and the service is given the plan, never asked to look it up.
-router.use(['/zones', '/zones/:id', '/traffic'], authMiddleware, planCheck)
+/**
+ * ⚠️ This list is the guard. A path prefix missing from it is an UNAUTHENTICATED route,
+ * and nothing fails loudly when one is forgotten — the handler simply sees no
+ * `req.userId`. That is exactly what happened when `/captures/:id` was added: it read
+ * as guarded because its sibling `/zones/:id/captures` was, and only a live request
+ * revealed otherwise.
+ *
+ * It cannot be an unscoped `router.use(...)`: this router is mounted at the root, so an
+ * unscoped middleware would also run for /me, /internal and everything else that passes
+ * through. When adding a route here, add its prefix below in the same edit.
+ */
+router.use(['/zones', '/zones/:id', '/traffic', '/captures', '/captures/:id'], authMiddleware, planCheck)
 
 /**
  * @swagger
@@ -287,5 +299,158 @@ router.get('/traffic/preview', trafficController.preview)
  *       502: { description: UPSTREAM_ERROR — HERE gagal atau quota habis }
  */
 router.get('/traffic/road-class-counts', trafficController.roadClassCounts)
+
+/**
+ * @swagger
+ * /zones/{id}/captures:
+ *   post:
+ *     summary: Jalankan satu siklus capture sekarang (F-04)
+ *     description: >
+ *       202, bukan 201: barisnya sudah ada tapi siklusnya belum selesai — worker masih
+ *       harus bertanya ke HERE. Menjawab 201 berarti mengklaim capture yang selesai,
+ *       padahal paling cepat beberapa detik lagi.
+ *
+ *       Kalau batas harian (BR-006) sudah tercapai, jawabannya TETAP 202 dengan
+ *       `queued: false` dan sebuah baris berstatus `skipped_limit`. BR-008: job yang
+ *       ditolak batas di-DROP, bukan di-retry, dan dicatat — supaya riwayatnya
+ *       menunjukkan ada yang dilewati beserta alasannya, bukan zona yang diam-diam
+ *       berhenti.
+ *
+ *       Kelas jalan yang dikumpulkan adalah MIN(kelas zona, batas paket) (BR-022), dan
+ *       disimpan di barisnya supaya frame itu tetap bisa dijelaskan bertahun kemudian
+ *       tanpa memutar ulang riwayat paket akunnya.
+ *     tags: [Captures]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       202:
+ *         description: Siklus diantre, atau ditolak batas harian
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     capture: { $ref: '#/components/schemas/Capture' }
+ *                     queued: { type: boolean, description: false = ditolak batas harian }
+ *       401: { description: UNAUTHORIZED }
+ *       403: { description: FORBIDDEN — zona milik akun lain }
+ *       404: { description: ZONE_NOT_FOUND }
+ */
+router.post('/zones/:id/captures', captureController.create)
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Capture:
+ *       type: object
+ *       properties:
+ *         id: { type: string, format: uuid }
+ *         zoneId: { type: string, format: uuid }
+ *         scheduleId: { type: string, format: uuid, nullable: true, description: null untuk capture manual }
+ *         status: { type: string, enum: [pending, processing, done, failed, skipped_limit] }
+ *         trigger: { type: string, enum: [manual, scheduled] }
+ *         roadClass: { type: string, enum: [nasional, nasional_provinsi, semua] }
+ *         roadsCount: { type: integer, nullable: true }
+ *         jamFactorAvg: { type: number, nullable: true, description: Rata-rata jam factor 0-10 }
+ *         filePath: { type: string, nullable: true, description: Path R2; null = belum ada gambar, BUKAN belum ada data }
+ *         fileSize: { type: integer, nullable: true }
+ *         error: { type: string, nullable: true }
+ *         capturedAt: { type: string, format: date-time }
+ */
+
+/**
+ * @swagger
+ * /zones/{id}/captures:
+ *   get:
+ *     summary: Riwayat siklus sebuah zona, terbaru dulu (F-07)
+ *     description: >
+ *       Tidak menyertakan `traffic`. Satu FeatureCollection per baris berarti daftar 30
+ *       siklus jadi megabyte geometri yang belum dilihat siapa pun — halaman zona
+ *       mengambil daftarnya, lalu satu siklus yang ditunjuk panah.
+ *     tags: [Captures]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 100 }
+ *     responses:
+ *       200:
+ *         description: Daftar siklus
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { type: array, items: { $ref: '#/components/schemas/Capture' } }
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     total: { type: integer }
+ *                     page: { type: integer }
+ *                     limit: { type: integer }
+ *                     total_pages: { type: integer }
+ *       401: { description: UNAUTHORIZED }
+ *       403: { description: FORBIDDEN }
+ *       404: { description: ZONE_NOT_FOUND }
+ */
+router.get('/zones/:id/captures', captureController.listForZone)
+
+/**
+ * @swagger
+ * /captures/{id}:
+ *   get:
+ *     summary: Satu siklus beserta traffic yang dikumpulkannya
+ *     description: >
+ *       Ini yang dimuat halaman zona saat panah dipindah. `traffic` adalah
+ *       FeatureCollection GeoJSON yang sama bentuknya dengan preview langsung, jadi satu
+ *       komponen peta menggambar keduanya — siklus lama tetap bisa di-pan dan di-zoom,
+ *       bukan gambar datar.
+ *     tags: [Captures]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Siklus + traffic
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   allOf:
+ *                     - $ref: '#/components/schemas/Capture'
+ *                     - type: object
+ *                       properties:
+ *                         traffic:
+ *                           type: object
+ *                           nullable: true
+ *                           description: FeatureCollection; null saat pending atau gagal
+ *       401: { description: UNAUTHORIZED }
+ *       403: { description: FORBIDDEN }
+ *       404: { description: NOT_FOUND }
+ */
+router.get('/captures/:id', captureController.detail)
 
 export default router

@@ -128,3 +128,49 @@ export async function getTrafficPreview(
   if (roadClass) params.set('roadClass', roadClass)
   return apiClient.get<TrafficPreview>(`/traffic/preview?${params.toString()}`)
 }
+
+// --- captures: one row per cycle a zone collects (F-07) -------------------------
+
+export type CaptureStatus = 'pending' | 'processing' | 'done' | 'failed' | 'skipped_limit'
+export type CaptureTrigger = 'manual' | 'scheduled'
+
+export interface Capture {
+  id: string
+  zoneId: string
+  scheduleId: string | null
+  status: CaptureStatus
+  trigger: CaptureTrigger
+  roadClass: RoadClass
+  roadsCount: number | null
+  /** Mean jam factor 0–10 across collected roads. */
+  jamFactorAvg: number | null
+  /** R2 path. Null means no image rendered yet — never "no data". */
+  filePath: string | null
+  fileSize: number | null
+  error: string | null
+  capturedAt: string
+}
+
+/** One cycle with the traffic it collected — what the arrows load. */
+export interface CaptureDetail extends Capture {
+  traffic: TrafficPreview | null
+}
+
+export async function getZoneCaptures(zoneId: string, limit = 50): Promise<Capture[]> {
+  return apiClient.get<Capture[]>(`/zones/${zoneId}/captures?limit=${limit}`)
+}
+
+export async function getCapture(captureId: string): Promise<CaptureDetail> {
+  return apiClient.get<CaptureDetail>(`/captures/${captureId}`)
+}
+
+export interface EnqueuedCapture {
+  capture: Capture
+  /** False when the daily plan limit refused it (BR-008). */
+  queued: boolean
+}
+
+/** Runs one cycle now (F-04). */
+export async function runCapture(zoneId: string): Promise<EnqueuedCapture> {
+  return apiClient.post<EnqueuedCapture>(`/zones/${zoneId}/captures`)
+}

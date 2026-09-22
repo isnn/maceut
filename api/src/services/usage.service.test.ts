@@ -4,10 +4,12 @@ vi.mock('../lib/drizzle-client', () => ({ db: {}, pool: {} }))
 vi.mock('../repositories/zone.repository', () => ({ findByUserId: vi.fn() }))
 vi.mock('../repositories/schedule.repository', () => ({ findByUserId: vi.fn() }))
 vi.mock('../repositories/user.repository', () => ({ findByIdWithPlan: vi.fn() }))
+vi.mock('../repositories/capture.repository', () => ({ countForWibDay: vi.fn(async () => 0) }))
 
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as userRepo from '../repositories/user.repository'
+import * as captureRepo from '../repositories/capture.repository'
 import { getUsage, getCollectionHealth } from './usage.service'
 
 const USER = 'user_01'
@@ -44,18 +46,33 @@ beforeEach(() => {
   vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue({ plan: 'premium' } as never)
   vi.mocked(zoneRepo.findByUserId).mockResolvedValue([])
   vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([])
+  vi.mocked(captureRepo.countForWibDay).mockResolvedValue(0)
 })
 afterEach(() => vi.useRealTimers())
 
 describe('getUsage', () => {
-  it('reports null rather than a guess for anything not yet measured', async () => {
+  it('reports null rather than a guess for anything still unmeasured', async () => {
     const usage = await getUsage(USER)
 
     // The old dashboard reported rendersThisMonth: 7 and storage as zones * 1.37.
-    // A plausible invented number is worse than a dash: nobody re-checks it.
-    expect(usage.capturesToday).toBeNull()
+    // A plausible invented number is worse than a dash: nobody re-checks it. These two
+    // stay null until images are rendered into R2.
     expect(usage.rendersThisMonth).toBeNull()
     expect(usage.storageUsedGb).toBeNull()
+  })
+
+  it('counts today’s captures for real now that the table exists', async () => {
+    vi.mocked(captureRepo.countForWibDay).mockResolvedValue(7)
+
+    expect((await getUsage(USER)).capturesToday).toBe(7)
+  })
+
+  it('counts them against the WIB day, not the server’s', async () => {
+    await getUsage(USER)
+
+    // BR-006's day boundary is Jakarta's. Counting in UTC would roll the quota over at
+    // 07:00 WIB, seven hours into someone's working day.
+    expect(captureRepo.countForWibDay).toHaveBeenCalledWith(USER, expect.any(Date))
   })
 
   it('counts only collecting zones and active windows', async () => {

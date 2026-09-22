@@ -44,6 +44,10 @@ vi.mock('../repositories/schedule.repository', () => ({
   countsByUser: vi.fn(async () => new Map()),
   countAllActive: vi.fn(async () => 0),
 }))
+vi.mock('../repositories/capture.repository', () => ({
+  countsToday: vi.fn(async () => new Map()),
+  countAllToday: vi.fn(async () => 0),
+}))
 vi.mock('../lib/internal-access', () => ({
   isInternalByConfig: vi.fn(() => false),
   resolveRole: vi.fn((_email: string, stored: string) => stored),

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, numeric, pgEnum, unique, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, integer, numeric, jsonb, pgEnum, unique, index } from 'drizzle-orm/pg-core'
 import { user } from './auth-schema'
 
 /**
@@ -138,3 +138,86 @@ export const schedules = pgTable(
 )
 
 export type ScheduleRow = typeof schedules.$inferSelect
+
+/**
+ * Captures — one row per cycle a zone collects (BR-009, BR-010).
+ *
+ * A "cycle" is a single firing of a capture window, or one manual trigger. The row is
+ * the record that it happened, whether or not an image came out of it: a failure and a
+ * plan-limit skip are both history worth keeping (BR-008), and a zone whose captures
+ * stopped is only diagnosable if the failures were written down.
+ *
+ * `traffic` holds the GeoJSON HERE returned for that moment. Storing it — rather than
+ * only a rendered PNG — is what lets the zone page redraw any past cycle on a real map
+ * instead of showing a flat picture, and it is the same shape the live preview already
+ * renders, so one component draws both.
+ *
+ * `filePath` stays null until the Playwright renderer lands. Null means "no image yet",
+ * never "no data": the cycle is still complete and still displayable from `traffic`.
+ */
+export const captureStatusEnum = pgEnum('capture_status', [
+  'pending',
+  'processing',
+  'done',
+  'failed',
+  'skipped_limit',
+])
+
+export const captureTriggerEnum = pgEnum('capture_trigger', ['manual', 'scheduled'])
+
+export const captures = pgTable(
+  'captures',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    zoneId: uuid('zone_id')
+      .notNull()
+      .references(() => zones.id, { onDelete: 'cascade' }),
+    /**
+     * Null for a manual capture, and null again once the window that produced it is
+     * deleted — ON DELETE SET NULL rather than CASCADE, because the frame still
+     * happened and deleting a schedule must not erase the history it produced.
+     */
+    scheduleId: uuid('schedule_id').references(() => schedules.id, { onDelete: 'set null' }),
+
+    status: captureStatusEnum('status').notNull().default('pending'),
+    trigger: captureTriggerEnum('trigger').notNull(),
+
+    /**
+     * The road class actually collected, after BR-022's cap. Stored per capture because
+     * it can differ from the zone's own class the moment a plan changes, and a frame
+     * has to stay explainable years later without replaying the plan history.
+     */
+    roadClass: roadClassEnum('road_class').notNull(),
+
+    /** HERE's FeatureCollection for this moment. Null while pending or on failure. */
+    traffic: jsonb('traffic'),
+    roadsCount: integer('roads_count'),
+    /** Mean jam factor across the collected roads — the number a trend line plots. */
+    jamFactorAvg: numeric('jam_factor_avg', { precision: 4, scale: 2 }),
+
+    /** R2 object path (BR-011). Null until an image is rendered. */
+    filePath: text('file_path'),
+    fileSize: integer('file_size'),
+    /** BR-023 — the style used, kept for history, never replayed automatically. */
+    styleUsed: jsonb('style_used'),
+
+    /** Why a `failed` row failed. Operators cannot diagnose what was not written down. */
+    error: text('error'),
+
+    /** When the traffic was sampled, not when the row was written. */
+    capturedAt: timestamp('captured_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // The zone page reads its own history newest-first; this is that query.
+    index('captures_zone_captured_idx').on(t.zoneId, t.capturedAt),
+    // BR-006 counts a user's captures for the current WIB day.
+    index('captures_user_captured_idx').on(t.userId, t.capturedAt),
+    index('captures_schedule_idx').on(t.scheduleId),
+  ],
+)
+
+export type CaptureRow = typeof captures.$inferSelect

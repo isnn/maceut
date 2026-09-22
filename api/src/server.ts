@@ -2,6 +2,7 @@ import { app } from './app'
 import { config, missingIntegrationKeys } from './config/env'
 import { closeDb } from './lib/drizzle-client'
 import { closeQueue } from './lib/rabbitmq-client'
+import { startScheduler, stopScheduler } from './schedulers/capture.scheduler'
 
 const server = app.listen(config.port, () => {
   console.log(`[api] listening on :${config.port} (${config.nodeEnv})`)
@@ -14,10 +15,18 @@ const server = app.listen(config.port, () => {
   if (missing.r2.length) console.warn(`[api] R2 not configured — missing ${missing.r2.join(', ')}`)
   if (missing.here.length) console.warn(`[api] HERE not configured — missing ${missing.here.join(', ')}`)
   if (missing.r2.length || missing.here.length) console.warn('[api] run `npm run env:check` for details')
+
+  // In-process by design (CLAUDE.md): the scheduler only publishes jobs, so it is
+  // cheap, and keeping it here avoids a fourth container needing its own health check
+  // and deploy. It assumes ONE api instance — two replicas would each fire every
+  // window. That is a real constraint to remove with a Postgres lock before scaling
+  // out, not something to discover in production.
+  startScheduler()
 })
 
 async function shutdown(signal: string) {
   console.log(`[api] ${signal} — shutting down`)
+  stopScheduler()
   server.close(async () => {
     await Promise.allSettled([closeDb(), closeQueue()])
     process.exit(0)

@@ -14,6 +14,7 @@ import { PLAN_LIMITS, isUpgrade, type Plan, type PlatformRole } from '../types/p
 import * as planService from './plan.service'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
+import * as captureRepo from '../repositories/capture.repository'
 
 /**
  * User records and platform administration (F-21, F-22).
@@ -193,9 +194,10 @@ export async function listUsers(params: ListUsersParams): Promise<ListUsersResul
 
   // Two grouped queries for the whole page, not two per row — the directory lists
   // every account, so per-row counting would slow down with every signup.
-  const [zoneCounts, scheduleCounts] = await Promise.all([
+  const [zoneCounts, scheduleCounts, captureCounts] = await Promise.all([
     zoneRepo.countsByUser(),
     scheduleRepo.countsByUser(),
+    captureRepo.countsToday(),
   ])
 
   return {
@@ -209,7 +211,7 @@ export async function listUsers(params: ListUsersParams): Promise<ListUsersResul
           zonesPaused: z?.paused ?? 0,
           schedulesActiveCount: sc?.active ?? 0,
           schedulesPaused: sc?.paused ?? 0,
-          capturesToday: null,
+          capturesToday: captureCounts.get(row.id) ?? 0,
           storageUsedGb: null,
         },
       }
@@ -309,6 +311,7 @@ export async function getPlatformStats(): Promise<{
     zoneRepo.countAllCollecting(),
     scheduleRepo.countAllActive(),
   ])
+  const capturesToday = await captureRepo.countAllToday()
 
   return {
     totalUsers: total,
@@ -317,9 +320,8 @@ export async function getPlatformStats(): Promise<{
     estimatedSeats,
     zonesCollecting,
     schedulesActive,
-    // No table counts these yet (CAP-01). Null travels to the UI as "—" rather than
-    // a zero, which would claim nothing was captured — a different statement.
-    capturesToday: null,
+    capturesToday,
+    // Still unmeasured: storage is only known once images are rendered into R2.
     storageUsedGb: null,
   }
 }

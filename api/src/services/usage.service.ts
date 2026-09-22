@@ -1,6 +1,7 @@
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as userRepo from '../repositories/user.repository'
+import * as captureRepo from '../repositories/capture.repository'
 import { NotFoundError } from '../errors'
 import { PLAN_LIMITS, type Plan } from '../types/plan'
 import { framesPerDay, type CaptureInterval } from '../types/schedule'
@@ -29,7 +30,7 @@ export interface UsageSummary {
   framesPerDay: number
   capturesLimit: number
 
-  /** Null until the captures table exists. */
+  /** Measured since the captures table landed. */
   capturesToday: number | null
   rendersThisMonth: number | null
   storageUsedGb: number | null
@@ -92,6 +93,9 @@ export async function getUsage(userId: string): Promise<UsageSummary> {
 
   const activeSchedules = schedules.filter((s) => s.status === 'active')
 
+  // BR-006 counts per WIB calendar day, and excludes rows that record a refusal.
+  const capturesToday = await captureRepo.countForWibDay(userId, new Date())
+
   // The busiest day, not the sum across the week — the daily limit is per day, and a
   // window that only runs on Sunday costs Monday nothing.
   let busiestDay = 0
@@ -118,7 +122,7 @@ export async function getUsage(userId: string): Promise<UsageSummary> {
     framesPerDay: busiestDay,
     capturesLimit: limits.capturesLimit,
 
-    capturesToday: null,
+    capturesToday,
     rendersThisMonth: null,
     storageUsedGb: null,
     storageLimitGb: limits.storageGb,

@@ -26,6 +26,10 @@ vi.mock('../repositories/schedule.repository', () => ({
   countsByUser: vi.fn(async () => new Map()),
   countAllActive: vi.fn(async () => 0),
 }))
+vi.mock('../repositories/capture.repository', () => ({
+  countsToday: vi.fn(async () => new Map()),
+  countAllToday: vi.fn(async () => 0),
+}))
 vi.mock('../lib/auth', () => ({
   auth: { api: { signUpEmail: vi.fn() } },
 }))
@@ -39,6 +43,7 @@ import { auth } from '../lib/auth'
 import * as userRepo from '../repositories/user.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
+import * as captureRepo from '../repositories/capture.repository'
 import {
   changeOwnPlan,
   changePlan,
@@ -82,6 +87,8 @@ beforeEach(() => {
   vi.mocked(userRepo.listWithPlans).mockResolvedValue({ rows: [row()], total: 1 } as never)
   vi.mocked(zoneRepo.countsByUser).mockResolvedValue(new Map())
   vi.mocked(scheduleRepo.countsByUser).mockResolvedValue(new Map())
+  vi.mocked(captureRepo.countsToday).mockResolvedValue(new Map())
+  vi.mocked(captureRepo.countAllToday).mockResolvedValue(0)
 })
 
 describe('completeOnboarding', () => {
@@ -167,11 +174,18 @@ describe('listUsers — usage is measured, not guessed', () => {
     expect(users[0]!.usage.schedulesActiveCount).toBe(0)
   })
 
-  it('leaves captures and storage null — nothing counts them yet', async () => {
+  it('counts today’s captures per account', async () => {
+    vi.mocked(captureRepo.countsToday).mockResolvedValue(new Map([[USER, 4]]))
+
     const { users } = await listUsers({ page: 1, limit: 25 })
 
-    // Zero would assert the account captured nothing, which is a different claim.
-    expect(users[0]!.usage.capturesToday).toBeNull()
+    expect(users[0]!.usage.capturesToday).toBe(4)
+  })
+
+  it('leaves storage null — nothing measures it until images exist', async () => {
+    const { users } = await listUsers({ page: 1, limit: 25 })
+
+    // Zero would assert the account stored nothing, which is a different claim.
     expect(users[0]!.usage.storageUsedGb).toBeNull()
   })
 
@@ -200,11 +214,14 @@ describe('getPlatformStats', () => {
     expect(stats.schedulesActive).toBe(7)
   })
 
-  it('still reports captures and storage as unmeasured', async () => {
-    const stats = await getPlatformStats()
+  it('counts captures taken today platform-wide', async () => {
+    vi.mocked(captureRepo.countAllToday).mockResolvedValue(31)
 
-    expect(stats.capturesToday).toBeNull()
-    expect(stats.storageUsedGb).toBeNull()
+    expect((await getPlatformStats()).capturesToday).toBe(31)
+  })
+
+  it('still reports storage as unmeasured', async () => {
+    expect((await getPlatformStats()).storageUsedGb).toBeNull()
   })
 
   it('excludes internal accounts from the customer count', async () => {

@@ -59,8 +59,17 @@ export function framesPerDay(window: WindowShape): number {
   const end = parseTime(window.end)
   if (start === null || end === null) return 0
 
-  const hours = Math.max(Math.floor((end - start) / 60), 0)
-  return hours * INTERVAL_PER_HOUR[window.interval]
+  // Counted the same way the scheduler fires: every minute in [start, end) where
+  // (minute - start) is a whole number of steps. The end is exclusive, so 07:00-09:00
+  // hourly is two frames, not three.
+  //
+  // This used to floor the window to whole hours and multiply by a per-hour rate, which
+  // agreed with the above for whole-hour windows and reported ZERO for anything
+  // shorter. A 30-minute window at 15-minute intervals fires twice and counted as free
+  // against the daily budget (BR-006) — invisible while nothing actually fired, and a
+  // way around the capture limit the moment the scheduler started.
+  const step = window.interval === '15min' ? 15 : 60
+  return Math.max(Math.ceil((end - start) / step), 0)
 }
 
 /** Frames across a whole week — what the daily budget must be compared against per day. */
