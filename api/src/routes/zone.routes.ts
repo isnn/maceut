@@ -460,6 +460,28 @@ router.get('/zones/:id/captures', captureController.listForZone)
  *       403: { description: FORBIDDEN }
  *       404: { description: NOT_FOUND }
  */
+/**
+ * @swagger
+ * /captures:
+ *   get:
+ *     summary: Siklus terbaru akun ini, lintas semua zona
+ *     description: >
+ *       Dipakai strip "Latest captures" di dashboard, yang sebelumnya array kosong
+ *       dengan komentar bahwa captures belum ada. Tidak menyertakan `traffic` — strip-nya
+ *       menampilkan waktu dan hasil, bukan geometri.
+ *     tags: [Captures]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 12, maximum: 50 }
+ *     responses:
+ *       200:
+ *         description: Siklus terbaru, dengan nama zonanya
+ *       401: { description: UNAUTHORIZED }
+ */
+router.get('/captures', captureController.recent)
+
 router.get('/captures/:id', captureController.detail)
 
 export default router

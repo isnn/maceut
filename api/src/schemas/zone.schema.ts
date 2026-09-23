@@ -53,6 +53,26 @@ export const trafficPreviewQuerySchema = z.object({
       return parts as [number, number, number, number]
     }),
   roadClass: roadClass.optional(),
+  /**
+   * The zone's outer ring as `lng,lat;lng,lat;…`, so the answer can be trimmed to the
+   * shape actually drawn. HERE only accepts a bounding box, and a box is always larger
+   * than the polygon inside it — without this the preview shows roads outside the
+   * boundary and the wizard promises data the zone will not collect.
+   *
+   * Sent as a compact string rather than GeoJSON because it rides in a query string.
+   */
+  ring: z
+    .string()
+    .optional()
+    .transform((raw, ctx) => {
+      if (!raw) return undefined
+      const points = raw.split(';').map((pair) => pair.split(',').map(Number))
+      if (points.length < 3 || points.some((p) => p.length !== 2 || p.some((n) => !Number.isFinite(n)))) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'ring harus berupa minimal 3 titik "lng,lat" dipisah ";".' })
+        return z.NEVER
+      }
+      return points as [number, number][]
+    }),
 })
 
 export type CreateZoneBody = z.infer<typeof createZoneSchema>

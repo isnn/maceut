@@ -10,6 +10,7 @@ import {
   MAX_BBOX_DEGREES,
   totalLengthMetres,
   toKm,
+  clipToPolygon,
   type BBox,
 } from './here-traffic-client'
 import { ValidationError } from '../errors'
@@ -226,5 +227,84 @@ describe('toKm', () => {
   it('rounds to two decimals, the form every screen shows', () => {
     expect(toKm(356_055.7)).toBe(356.06)
     expect(toKm(0)).toBe(0)
+  })
+})
+
+describe('clipToPolygon', () => {
+  /** A unit square from (0,0) to (1,1). */
+  const square: [number, number][] = [
+    [0, 0],
+    [1, 0],
+    [1, 1],
+    [0, 1],
+    [0, 0],
+  ]
+
+  function line(coords: [number, number][]) {
+    return {
+      type: 'FeatureCollection' as const,
+      features: coords.map((c) => ({
+        type: 'Feature' as const,
+        geometry: { type: 'LineString' as const, coordinates: [c, [c[0] + 0.01, c[1] + 0.01] as [number, number]] },
+        properties: { trafficState: 'normal' as const, color: '#4CAF50', jamFactor: 1 },
+      })),
+    }
+  }
+
+  it('keeps a segment inside the polygon', () => {
+    expect(clipToPolygon(line([[0.5, 0.5]]), square).features).toHaveLength(1)
+  })
+
+  it('drops a segment entirely outside it', () => {
+    // This is the bug it exists for: HERE is asked for a BOUNDING BOX, which is always
+    // larger than the polygon drawn inside it, so every non-rectangular zone was shown
+    // roads beyond its own boundary.
+    expect(clipToPolygon(line([[5, 5]]), square).features).toHaveLength(0)
+  })
+
+  it('keeps a segment with only one point inside', () => {
+    // Clipping exactly would cut roads mid-span and imply a road stops at the zone edge,
+    // which is worse than a short overhang.
+    const straddling = {
+      type: 'FeatureCollection' as const,
+      features: [
+        {
+          type: 'Feature' as const,
+          geometry: { type: 'LineString' as const, coordinates: [[0.9, 0.9], [2, 2]] as [number, number][] },
+          properties: { trafficState: 'normal' as const, color: '#4CAF50', jamFactor: 1 },
+        },
+      ],
+    }
+    expect(clipToPolygon(straddling, square).features).toHaveLength(1)
+  })
+
+  it('separates inside from outside across a mixed set', () => {
+    const mixed = line([
+      [0.2, 0.2],
+      [0.8, 0.8],
+      [3, 3],
+      [-1, 0.5],
+    ])
+    expect(clipToPolygon(mixed, square).features).toHaveLength(2)
+  })
+
+  it('passes everything through when the ring is not a polygon', () => {
+    // Two points cannot enclose anything; filtering on it would silently empty the map.
+    expect(clipToPolygon(line([[0.5, 0.5], [9, 9]]), [[0, 0], [1, 1]]).features).toHaveLength(2)
+  })
+
+  it('handles a concave shape, where a bbox is most wrong', () => {
+    // An L: the notch at (0.75, 0.75) is inside the bounding box but outside the shape.
+    const ell: [number, number][] = [
+      [0, 0],
+      [1, 0],
+      [1, 0.5],
+      [0.5, 0.5],
+      [0.5, 1],
+      [0, 1],
+      [0, 0],
+    ]
+    expect(clipToPolygon(line([[0.25, 0.75]]), ell).features).toHaveLength(1)
+    expect(clipToPolygon(line([[0.75, 0.75]]), ell).features).toHaveLength(0)
   })
 })

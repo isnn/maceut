@@ -252,3 +252,13 @@ export async function recordMissed(
 
   return toPublic(row)
 }
+
+export interface RecentCapture extends PublicCapture {
+  zoneName: string
+}
+
+/** The dashboard strip: this account's latest cycles across every zone. */
+export async function recentForUser(userId: string, limit = 12): Promise<RecentCapture[]> {
+  const rows = await captureRepo.recentForUser(userId, limit)
+  return rows.map((row) => ({ ...toPublic(row), zoneName: row.zoneName }))
+}

@@ -71,7 +71,12 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
     const lngs = ring.map(([lng]) => lng)
     const lats = ring.map(([, lat]) => lat)
     zonesApi
-      .getTrafficPreview([Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)])
+      .getTrafficPreview(
+        [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)],
+        undefined,
+        // Trim to the shape being drawn, not the box around it.
+        ring as [number, number][],
+      )
       .then(setTraffic)
       .catch(() => setTraffic(null))
   }, [step, geometry, withTraffic])

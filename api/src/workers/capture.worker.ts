@@ -62,6 +62,10 @@ export async function runCapture(captureId: string): Promise<void> {
       // Re-deriving it here would use the plan as it is now, not as it was when the
       // cycle was authorised.
       functionalClasses: functionalClassesFor(capture.roadClass as RoadClass),
+      // Trim to the zone the user drew. HERE only accepts a bounding box, so without
+      // this a stored capture records roads outside its own boundary — permanently,
+      // since the GeoJSON is what the snapshot browser redraws.
+      clipTo: zone.geometry.coordinates[0] as [number, number][],
     })
 
     await captureRepo.complete(captureId, {

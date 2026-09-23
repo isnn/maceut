@@ -94,6 +94,11 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **BE-15** `DELETE /internal/users/:id` + `PATCH /internal/users/:id` — hapus & ubah akun (nama, email, password, paket, role) | F-22 |
 | ✅ | **FE-02** Semua tabel: sorting + pagination + search lewat `useTableControls` bersama | permintaan user |
 | ✅ | **FE-03** Zona: panel Snapshots — panah antar siklus, peta per siklus, daftar file | permintaan user |
+| ✅ | **FE-04** Dashboard: Latest captures dari `GET /captures`; Recent renders berhenti mengarang | permintaan user |
+| ✅ | **FE-05** Traffic dipotong ke polygon zona — bbox HERE selalu lebih besar dari zonanya | permintaan user |
+| ✅ | **FE-06** Peta auto-fit ke boundary + `isolate` supaya pane Leaflet tidak menimpa komponen lain | permintaan user |
+| ✅ | **FE-07** Schedule: jendela bertumpuk di-lane; tabel Capture windows di bawah ruler | permintaan user |
+| 🔴 | **CAP-03** Render animasi (Studio) belum punya backend sama sekali — endpoint, tabel, worker | studio |
 | ✅ | **BE-16** Scheduler: jendela aktif mem-publish job tiap menit (tanpa dependency baru, ADR-023) | capture-schedule/requirements.md |
 | 🟡 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev — sekarang bisa lewat /internal/users | housekeeping |
 | 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
@@ -917,6 +922,52 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   SUNGGUHAN — bukan "—" lagi. Storage tetap null sampai ada gambar.
 
   262 test (26 baru), tsc + eslint bersih, production build lolos, tanpa error klien.
+
+[2026-09-23] Data nyata di dashboard, traffic dipotong ke zona, jendela bertumpuk.
+
+  TRAFFIC MELUBER — INI BUG NYATA, bukan soal tampilan. HERE hanya menerima BOUNDING BOX,
+  dan kotak selalu lebih besar dari polygon di dalamnya. Tidak ada satu pun pemotongan di
+  seluruh kode. Jadi setiap zona yang bukan persegi menampilkan jalan DI LUAR batasnya
+  sendiri — dan capture yang tersimpan ikut merekamnya, permanen, karena GeoJSON itulah
+  yang digambar ulang panel Snapshots.
+  `clipToPolygon` (ray casting) dipasang di TIGA tempat sekaligus, karena satu saja akan
+  membuat preview dan capture berbeda isi: preview langsung, worker, dan `deriveRoadStats`
+  — yang terakhir penting karena `roadsCount` adalah angka yang dijual wizard; kalau
+  menghitung isi kotak, yang dijanjikan bukan yang dikumpulkan.
+  Segmen disimpan kalau ADA SATU titiknya di dalam. Memotong persis akan memutus jalan di
+  tengah dan menyiratkan jalan itu berhenti di tepi zona — lebih buruk daripada sedikit
+  menjulur. Diverifikasi: segitiga setengah luas bbox → 4.809 dari 8.684 fitur.
+
+  DASHBOARD.
+  "Latest captures" dulunya `const captureTimes: string[] = []` dengan komentar bahwa
+  captures belum ada. Sekarang `GET /captures` lintas semua zona milik akun.
+  "Recent renders" MENGARANG. `studioApi.getRenders()` membuat dua render job "selesai"
+  dari nama zona akun setiap kali local storage kosong. Itu terlihat seperti riwayat dan
+  sebenarnya fiksi — lebih buruk daripada kartu kosong, karena tidak ada yang memeriksa
+  ulang angka yang kelihatan masuk akal. Render animasi memang belum punya backend sama
+  sekali; kartunya sekarang mengatakan itu. Ditiketkan CAP-03.
+  "Next capture" sekarang dibaca dari `schedules.next_fire_at` — kolom yang BENAR-BENAR
+  di-claim scheduler — bukan diturunkan ulang. Yang diturunkan terpisah adalah PREDIKSI
+  tentang apa yang seharusnya terjadi; ini apa yang AKAN terjadi. Keduanya sepakat selama
+  sama-sama dari satu aturan, tapi hanya satu yang menembak.
+
+  PETA. Dulu center-nya `coordinates[0]` — SUDUT zona di tengah layar, jadi zona besar
+  keluar dari semua sisi dan zona kecil tenggelam di kota. Sekarang `fitBounds` dengan
+  padding dan batas zoom. Dan `isolate`: Leaflet memberi pane serta kontrolnya z-index
+  sampai 1000, yang tanpa stacking context sendiri mengambang di atas dialog dan dropdown
+  — itulah "peta menimpa komponen lain". Satu kelas, semua instance beres.
+
+  SCHEDULE. Setiap jendela diposisikan absolut di SATU ruler 44px, jadi dua jendela yang
+  beririsan jam duduk bertumpuk — zona dengan jendela pagi dan jendela seharian
+  menampilkan satu bar dan diam-diam menghilangkan yang lain. Sekarang first-fit lanes:
+  tiap jendela mengambil lane pertama yang sudah selesai, diurutkan jam mulai supaya
+  jumlah lane-nya minimum.
+  Tabel "Capture windows" ditambahkan di bawah ruler, lengkap dengan sort/search/paging.
+  Ruler menjawab "kapan zona ini mengumpulkan?"; tabel menjawab "apa persisnya yang
+  disetel, dan ada yang di-pause?" — pertanyaan yang muncul justru saat ada yang berhenti.
+
+  278 test (6 baru untuk clipping), tsc + eslint bersih, production build lolos, tiga
+  halaman diverifikasi di browser tanpa error klien.
 
 ---
 

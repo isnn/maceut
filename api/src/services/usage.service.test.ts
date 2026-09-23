@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../lib/drizzle-client', () => ({ db: {}, pool: {} }))
 vi.mock('../repositories/zone.repository', () => ({ findByUserId: vi.fn() }))
-vi.mock('../repositories/schedule.repository', () => ({ findByUserId: vi.fn() }))
+vi.mock('../repositories/schedule.repository', () => ({
+  findByUserId: vi.fn(),
+  earliestDueForUser: vi.fn(async () => null),
+}))
 vi.mock('../repositories/user.repository', () => ({ findByIdWithPlan: vi.fn() }))
 vi.mock('../repositories/capture.repository', () => ({ countForWibDay: vi.fn(async () => 0) }))
 
@@ -47,6 +50,7 @@ beforeEach(() => {
   vi.mocked(zoneRepo.findByUserId).mockResolvedValue([])
   vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([])
   vi.mocked(captureRepo.countForWibDay).mockResolvedValue(0)
+  vi.mocked(scheduleRepo.earliestDueForUser).mockResolvedValue(null)
 })
 afterEach(() => vi.useRealTimers())
 
@@ -125,10 +129,22 @@ describe('getUsage', () => {
 })
 
 describe('getCollectionHealth — next capture', () => {
-  it('finds the next fire time later today', async () => {
-    // Tuesday 06:30 WIB = Monday 23:30 UTC.
-    atWib('2026-09-21T23:30:00Z')
+  /**
+   * These used to re-derive the next firing from the window. They now assert that the
+   * dashboard reads `schedules.next_fire_at` instead — the column the scheduler
+   * actually claims by.
+   *
+   * That distinction is the point: a separately derived figure is a prediction of what
+   * the system SHOULD do, and this is what it WILL do. They agreed while both came from
+   * the same rule, but only one of them fires, and a dashboard that disagrees with the
+   * scheduler is worse than no dashboard. When they can only agree, they cannot drift.
+   * The firing rule itself is pinned in capture.scheduler.test.ts.
+   */
+
+  it('shows the time the scheduler will actually fire', async () => {
+    atWib('2026-09-21T23:30:00Z') // Tue 06:30 WIB
     vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
+    vi.mocked(scheduleRepo.earliestDueForUser).mockResolvedValue(new Date('2026-09-22T00:00:00Z'))
 
     const health = await getCollectionHealth(USER)
 
@@ -136,62 +152,58 @@ describe('getCollectionHealth — next capture', () => {
     expect(health.nextCaptureNote).toContain('hari ini')
   })
 
-  it('rolls to the next hour once the first has passed', async () => {
-    // Tuesday 07:30 WIB = Tuesday 00:30 UTC. 07:00 has gone; 08:00 is next.
-    atWib('2026-09-22T00:30:00Z')
+  it('says tomorrow when the next firing is the next day in Jakarta', async () => {
+    atWib('2026-09-22T11:00:00Z') // Tue 18:00 WIB
     vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
+    vi.mocked(scheduleRepo.earliestDueForUser).mockResolvedValue(new Date('2026-09-23T00:00:00Z'))
 
-    expect((await getCollectionHealth(USER)).nextCaptureAt).toBe('08:00')
+    expect((await getCollectionHealth(USER)).nextCaptureNote).toContain('besok')
   })
 
-  it('rolls to tomorrow when the window has finished for the day', async () => {
-    // Tuesday 18:00 WIB = Tuesday 11:00 UTC — the window is done for today.
-    atWib('2026-09-22T11:00:00Z')
+  it('counts the days ahead on Jakarta’s calendar', async () => {
+    atWib('2026-09-19T03:00:00Z') // Sat 10:00 WIB
     vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
+    vi.mocked(scheduleRepo.earliestDueForUser).mockResolvedValue(new Date('2026-09-21T00:00:00Z'))
 
-    const health = await getCollectionHealth(USER)
-
-    expect(health.nextCaptureAt).toBe('07:00')
-    expect(health.nextCaptureNote).toContain('besok')
+    expect((await getCollectionHealth(USER)).nextCaptureNote).toContain('2 hari lagi')
   })
 
-  it('skips days the window does not run', async () => {
-    // Saturday 10:00 WIB (2026-09-19 is a Saturday). A Mon–Fri window next fires on
-    // Monday, two days out.
-    atWib('2026-09-19T03:00:00Z')
-    vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
-
-    const health = await getCollectionHealth(USER)
-
-    expect(health.nextCaptureAt).toBe('07:00')
-    expect(health.nextCaptureNote).toContain('2 hari lagi')
-  })
-
-  it('uses WIB, not UTC, to decide what day it is', async () => {
-    // Sunday 23:00 UTC is already Monday 06:00 in Jakarta. Reading this in UTC would
-    // say Sunday — a non-running day — and push the next capture out by a full day.
+  it('reads the clock in WIB, not UTC', async () => {
+    // Sunday 23:00 UTC is already Monday 06:00 in Jakarta, and the firing an hour later
+    // is the same Jakarta day — "today", not "tomorrow".
     atWib('2026-09-20T23:00:00Z')
     vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
+    vi.mocked(scheduleRepo.earliestDueForUser).mockResolvedValue(new Date('2026-09-21T00:00:00Z'))
 
-    const health = await getCollectionHealth(USER)
-
-    expect(health.nextCaptureNote).toContain('hari ini')
+    expect((await getCollectionHealth(USER)).nextCaptureNote).toContain('hari ini')
   })
 
-  it('fires once at the start for a daily window', async () => {
-    atWib('2026-09-21T23:30:00Z') // Tuesday 06:30 WIB
-    vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule({ interval: 'daily' })])
+  it('renders the firing time in WIB', async () => {
+    atWib('2026-09-22T00:00:00Z')
+    vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
+    // 09:30 UTC is 16:30 in Jakarta.
+    vi.mocked(scheduleRepo.earliestDueForUser).mockResolvedValue(new Date('2026-09-22T09:30:00Z'))
 
-    expect((await getCollectionHealth(USER)).nextCaptureAt).toBe('07:00')
+    expect((await getCollectionHealth(USER)).nextCaptureAt).toBe('16:30')
   })
 
   it('has nothing to report when no window is active', async () => {
     vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule({ status: 'paused' })])
+    vi.mocked(scheduleRepo.earliestDueForUser).mockResolvedValue(null)
 
     const health = await getCollectionHealth(USER)
 
     expect(health.nextCaptureAt).toBeNull()
     expect(health.nextCaptureNote).toMatch(/Belum ada jendela aktif/)
+  })
+
+  it('says so when a window is active but its firing is not computed yet', async () => {
+    // A window seeded seconds ago, before the scheduler's first pass. Saying "no active
+    // window" there would be wrong; saying nothing at all would look broken.
+    vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
+    vi.mocked(scheduleRepo.earliestDueForUser).mockResolvedValue(null)
+
+    expect((await getCollectionHealth(USER)).nextCaptureNote).toMatch(/Menunggu jadwal berikutnya/)
   })
 })
 

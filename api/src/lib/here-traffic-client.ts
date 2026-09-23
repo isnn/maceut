@@ -145,6 +145,12 @@ export interface TrafficFlowOptions {
    * Empty or omitted returns every class.
    */
   functionalClasses?: number[]
+  /**
+   * The zone's outer ring, [lng, lat]. Given, the answer is trimmed to segments that
+   * touch it — HERE only accepts a bounding box, which is always larger than the
+   * polygon drawn inside it.
+   */
+  clipTo?: [number, number][]
   signal?: AbortSignal
 }
 
@@ -214,7 +220,8 @@ export async function getTrafficFlow(bbox: BBox, opts: TrafficFlowOptions = {}):
     throw new UpstreamError('HERE', 'response was not valid JSON')
   }
 
-  return toGeoJson(payload, opts.functionalClasses)
+  const collection = toGeoJson(payload, opts.functionalClasses)
+  return opts.clipTo ? clipToPolygon(collection, opts.clipTo) : collection
 }
 
 /**
@@ -283,6 +290,45 @@ export function totalLengthMetres(collection: TrafficCollection): number {
 /** Metres to kilometres, two decimals — the form every screen shows. */
 export function toKm(metres: number): number {
   return Math.round((metres / 1000) * 100) / 100
+}
+
+/**
+ * Is this point inside the ring? Ray casting, counting edge crossings to the east.
+ *
+ * Used to keep HERE's answer inside the zone the user actually drew. HERE is asked for
+ * a BOUNDING BOX, because that is the only shape its API takes — and a bounding box is
+ * always bigger than the polygon inside it. Without this, every zone that is not a
+ * perfect rectangle showed traffic on roads outside its own boundary, and the stored
+ * captures recorded them too.
+ */
+function pointInRing(lng: number, lat: number, ring: [number, number][]): boolean {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i]!
+    const [xj, yj] = ring[j]!
+    // Strictly one edge endpoint above and one below, so a vertex is counted once.
+    const straddles = yi > lat !== yj > lat
+    if (straddles && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside
+  }
+  return inside
+}
+
+/**
+ * Keeps only the segments that touch the polygon.
+ *
+ * A segment counts as inside if ANY of its points is — clipping the geometry exactly
+ * would cut roads mid-span and leave dangling ends that imply a road stops at the
+ * zone's edge, which is worse than a short overhang. HERE's shape points are dense
+ * enough at city scale that a road crossing a zone always has a point inside it.
+ */
+export function clipToPolygon(collection: TrafficCollection, ring: [number, number][]): TrafficCollection {
+  if (ring.length < 3) return collection
+  return {
+    type: 'FeatureCollection',
+    features: collection.features.filter((f) =>
+      f.geometry.coordinates.some(([lng, lat]) => pointInRing(lng, lat, ring)),
+    ),
+  }
 }
 
 export function toGeoJson(payload: HereFlowResponse, functionalClasses?: number[]): TrafficCollection {

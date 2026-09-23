@@ -30,6 +30,17 @@ export async function create(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+/** This account's latest cycles across every zone — the dashboard strip. */
+export async function recent(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) throw new UnauthorizedError()
+    const limit = z.coerce.number().int().positive().max(50).default(12).parse(req.query.limit)
+    return res.status(200).json(ok(await captureService.recentForUser(req.userId, limit)))
+  } catch (err) {
+    next(err)
+  }
+}
+
 /** A zone's cycle history, newest first (F-07). */
 export async function listForZone(req: Request, res: Response, next: NextFunction) {
   try {

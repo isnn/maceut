@@ -124,7 +124,13 @@ export async function deriveRoadStats(
 
   try {
     const bbox = bboxOfGeometry(geometry)
-    const flow = await here.getTrafficFlow(bbox, { functionalClasses: here.functionalClassesFor(roadClass) })
+    const flow = await here.getTrafficFlow(bbox, {
+      functionalClasses: here.functionalClassesFor(roadClass),
+      // The zone's own boundary, not the box around it — otherwise `roadsCount` counts
+      // roads the zone does not contain, and the figure the wizard sold is not the
+      // figure the zone collects.
+      clipTo: geometry.coordinates[0] as [number, number][],
+    })
 
     return { roadsCount: flow.features.length, lengthKm: here.toKm(here.totalLengthMetres(flow)) }
   } catch {

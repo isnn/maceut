@@ -1,6 +1,6 @@
 import { eq, and, desc, sql } from 'drizzle-orm'
 import { db } from '../lib/drizzle-client'
-import { captures } from '../../drizzle/schema'
+import { captures, zones } from '../../drizzle/schema'
 import type { RoadClass } from '../types/plan'
 import type { TrafficCollection } from '../lib/here-traffic-client'
 
@@ -183,4 +183,43 @@ export async function countAllToday(): Promise<number> {
       ),
     )
   return rows[0]?.count ?? 0
+}
+
+/**
+ * A user's most recent cycles across every zone they own.
+ *
+ * Backs the dashboard strip, which used to be an empty array with a comment saying
+ * captures did not exist yet. `traffic` is excluded for the same reason as the per-zone
+ * list: the strip shows times and outcomes, not geometry.
+ */
+export async function recentForUser(
+  userId: string,
+  limit: number,
+): Promise<(Omit<CaptureRecord, 'traffic'> & { zoneName: string })[]> {
+  const rows = await db
+    .select({
+      id: captures.id,
+      userId: captures.userId,
+      zoneId: captures.zoneId,
+      scheduleId: captures.scheduleId,
+      status: captures.status,
+      trigger: captures.trigger,
+      roadClass: captures.roadClass,
+      roadsCount: captures.roadsCount,
+      jamFactorAvg: captures.jamFactorAvg,
+      filePath: captures.filePath,
+      fileSize: captures.fileSize,
+      styleUsed: captures.styleUsed,
+      error: captures.error,
+      scheduledFor: captures.scheduledFor,
+      capturedAt: captures.capturedAt,
+      createdAt: captures.createdAt,
+      zoneName: zones.name,
+    })
+    .from(captures)
+    .innerJoin(zones, eq(zones.id, captures.zoneId))
+    .where(eq(captures.userId, userId))
+    .orderBy(desc(captures.capturedAt))
+    .limit(limit)
+  return rows
 }

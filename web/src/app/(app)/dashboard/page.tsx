@@ -10,16 +10,25 @@ import { buttonClass } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import * as dashboardApi from '@/features/dashboard/api'
 import * as zonesApi from '@/features/zones/api'
-import * as studioApi from '@/features/studio/api'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import type { CollectionHealth, UsageSummary } from '@/features/dashboard/api'
 import type { Zone } from '@/features/zones/types'
-import type { RenderJob } from '@/features/studio/api'
 
-const RENDER_STATUS_LABEL: Record<RenderJob['status'], string> = {
-  ready: 'Ready',
-  rendering: 'Rendering',
+/** Short labels for the strip — a 144px tile is no place for a sentence. */
+const CAPTURE_STATUS_SHORT: Record<zonesApi.CaptureStatus, string> = {
+  pending: 'Queued',
+  processing: 'Collecting',
+  done: 'Collected',
   failed: 'Failed',
+  skipped_limit: 'Over limit',
+  missed: 'Missed',
+}
+
+/** "19:27" in WIB — the strip is a timeline, so the clock is what matters. */
+function captureTime(iso: string): string {
+  return new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })
+    .format(new Date(iso))
+    .replace('.', ':')
 }
 
 export default function DashboardPage() {
@@ -27,20 +36,20 @@ export default function DashboardPage() {
   const [usage, setUsage] = useState<UsageSummary | null>(null)
   const [health, setHealth] = useState<CollectionHealth | null>(null)
   const [zones, setZones] = useState<Zone[]>([])
-  const [renders, setRenders] = useState<RenderJob[]>([])
+  const [captures, setCaptures] = useState<zonesApi.RecentCapture[] | null>(null)
 
   const load = useCallback(async () => {
     const [usage, health] = await Promise.all([dashboardApi.getUsage(), dashboardApi.getCollectionHealth()])
     const zones = await zonesApi.getZones()
-    const renders = await studioApi.getRenders(Object.fromEntries(zones.map((z) => [z.id, z.name])))
-    return { usage, health, zones, renders }
+    const captures = await zonesApi.getRecentCaptures(12)
+    return { usage, health, zones, captures }
   }, [])
 
   const apply = useCallback((data: Awaited<ReturnType<typeof load>>) => {
     setUsage(data.usage)
     setHealth(data.health)
     setZones(data.zones)
-    setRenders(data.renders)
+    setCaptures(data.captures)
   }, [])
 
   useEffect(() => {
@@ -60,11 +69,6 @@ export default function DashboardPage() {
       </div>
     )
   }
-
-  // Captures do not exist yet (CAP-01), so there is no strip to build. Once they do,
-  // this comes from GET /captures rather than being generated from a count.
-  const captureTimes: string[] = []
-  const remainingCaptures = 0
 
   return (
     <div className="space-y-xl">
@@ -166,19 +170,36 @@ export default function DashboardPage() {
               </Link>
             </div>
             <div className="bg-card border border-border rounded-lg p-lg">
-              <div className="flex gap-md overflow-x-auto">
-                {captureTimes.map((time) => (
-                  <div key={time} className="shrink-0 w-32">
-                    <div className="h-20 rounded-md bg-canvas-secondary border border-divider" />
-                    <p className="text-caption text-text-secondary mt-xs tabular-nums">{time}</p>
-                  </div>
-                ))}
-                {remainingCaptures > 0 && (
-                  <div className="shrink-0 w-24 h-20 rounded-md bg-canvas-secondary border border-divider flex items-center justify-center text-body font-semibold text-text-muted tabular-nums">
-                    +{remainingCaptures}
-                  </div>
-                )}
-              </div>
+              {captures === null ? (
+                <div className="h-24 bg-canvas-secondary rounded-md animate-pulse" />
+              ) : captures.length === 0 ? (
+                <p className="text-body text-text-secondary">
+                  No cycles yet. A zone collects when one of its capture windows comes round.
+                </p>
+              ) : (
+                <div className="flex gap-md overflow-x-auto pb-xs">
+                  {captures.map((capture) => (
+                    <Link key={capture.id} href={`/zones/${capture.zoneId}`} className="shrink-0 w-36 no-underline group">
+                      <div
+                        className={cn(
+                          'h-20 rounded-md border flex items-center justify-center transition-colors',
+                          capture.status === 'done'
+                            ? 'bg-canvas-secondary border-divider group-hover:border-primary'
+                            : 'bg-warning-bg/40 border-warning-icon/30'
+                        )}
+                      >
+                        <span className="text-caption text-text-secondary tabular-nums">
+                          {capture.status === 'done'
+                            ? `${capture.roadsCount?.toLocaleString('id-ID') ?? '—'} roads`
+                            : CAPTURE_STATUS_SHORT[capture.status]}
+                        </span>
+                      </div>
+                      <p className="text-caption text-text-primary mt-xs tabular-nums">{captureTime(capture.capturedAt)}</p>
+                      <p className="text-micro text-text-muted truncate">{capture.zoneName}</p>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
         </div>
@@ -187,35 +208,17 @@ export default function DashboardPage() {
         <div className="space-y-lg">
           <Card className="p-lg">
             <h2 className="text-heading-sm text-text-primary mb-md">Recent renders</h2>
-            <ul className="space-y-md">
-              {renders.length === 0 && <li className="text-caption text-text-muted">No animations rendered yet.</li>}
-              {renders.map((render) => (
-                <li key={render.id}>
-                  <div className="flex items-start justify-between gap-sm">
-                    <div className="min-w-0">
-                      <p className="text-label font-medium text-text-primary truncate">{render.title}</p>
-                      <p className="text-micro text-text-muted mt-xs">
-                        {render.frames} frames · {render.format.toUpperCase()}
-                      </p>
-                    </div>
-                    <span
-                      className={cn(
-                        'text-micro font-semibold rounded-xs px-sm py-xs shrink-0',
-                        render.status === 'ready' ? 'bg-success-bg text-success-text' : 'bg-warning-bg text-warning-text'
-                      )}
-                    >
-                      {RENDER_STATUS_LABEL[render.status]}
-                    </span>
-                  </div>
-                  {render.status === 'rendering' && (
-                    <div className="mt-sm">
-                      <ProgressBar value={render.progress} max={100} />
-                      <p className="text-micro text-text-muted mt-xs">{render.progress}% complete</p>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
+            {/*
+              Animation rendering has no backend yet — no endpoint, no table, no worker. This
+              card used to call studioApi.getRenders(), which INVENTED two finished render jobs
+              from the account's zone names whenever local storage was empty. It looked like
+              history and was fiction, which is worse than an empty card: nobody re-checks a
+              number that looks plausible.
+            */}
+            <p className="text-caption text-text-muted">
+              Animation rendering isn&rsquo;t built yet. Captures are collecting in the meantime &mdash; open a zone to
+              step through its snapshots.
+            </p>
           </Card>
 
           <Card className="p-lg">

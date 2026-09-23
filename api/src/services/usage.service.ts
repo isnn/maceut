@@ -65,17 +65,6 @@ function nowInWibMinutes(now: Date): number {
   return (now.getUTCHours() * 60 + now.getUTCMinutes() + WIB_OFFSET_MINUTES) % (24 * 60)
 }
 
-/** 0 = Monday … 6 = Sunday, matching how windows store their days. */
-function wibWeekday(now: Date): number {
-  const wib = new Date(now.getTime() + WIB_OFFSET_MINUTES * 60_000)
-  return (wib.getUTCDay() + 6) % 7
-}
-
-function parseHHMM(value: string): number | null {
-  const m = /^(\d{2}):(\d{2})$/.exec(value)
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null
-}
-
 function formatHHMM(minutes: number): string {
   const h = Math.floor(minutes / 60) % 24
   return `${String(h).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
@@ -143,40 +132,15 @@ export async function getCollectionHealth(userId: string): Promise<CollectionHea
   const active = schedules.filter((s) => s.status === 'active')
   const collecting = zones.filter((z) => z.status === 'collecting')
 
-  // --- next capture, derived from the windows themselves ---
+  // --- next capture: the instant the scheduler will actually act on ---
+  //
+  // Read from `schedules.next_fire_at` rather than re-derived from the window. The
+  // scheduler claims rows by that column, so anything computed separately here would be
+  // a prediction of what the system *should* do; this is what it *will* do. They agreed
+  // while both were derived from the same rule — but only one of them is the thing that
+  // fires, and a dashboard that disagrees with the scheduler is worse than no dashboard.
   const now = new Date()
-  const nowMinutes = nowInWibMinutes(now)
-  const today = wibWeekday(now)
-
-  let next: { at: number; dayOffset: number } | null = null
-
-  for (let offset = 0; offset < 8; offset++) {
-    const day = (today + offset) % 7
-
-    for (const s of active) {
-      if (!s.days.includes(day)) continue
-
-      const start = parseHHMM(s.startTime)
-      const end = parseHHMM(s.endTime)
-      if (start === null || end === null) continue
-
-      // Candidate fire times inside the window. Daily fires once, at the start.
-      const step = s.interval === '15min' ? 15 : 60
-      const candidates: number[] =
-        s.interval === 'daily'
-          ? [start]
-          : Array.from({ length: Math.max(Math.ceil((end - start) / step), 0) }, (_, i) => start + i * step)
-
-      for (const at of candidates) {
-        // Today, only times still ahead of us count.
-        if (offset === 0 && at <= nowMinutes) continue
-        if (!next || offset < next.dayOffset || (offset === next.dayOffset && at < next.at)) {
-          next = { at, dayOffset: offset }
-        }
-      }
-    }
-    if (next) break
-  }
+  const nextFire = await scheduleRepo.earliestDueForUser(userId)
 
   // --- roads reporting, from what HERE told us when each zone was made ---
   const withRoads = collecting.filter((z) => z.roadsCount !== null)
@@ -191,24 +155,29 @@ export async function getCollectionHealth(userId: string): Promise<CollectionHea
   const status: CollectionHealth['status'] =
     active.length === 0 ? 'idle' : pausedCount > 0 ? 'degraded' : 'healthy'
 
-  const upcoming = next as { at: number; dayOffset: number } | null
-
   function describeNext(): string {
-    if (!upcoming) {
-      return active.length === 0 ? 'Belum ada jendela aktif' : 'Tidak ada jadwal dalam 7 hari ke depan'
+    if (!nextFire) {
+      return active.length === 0 ? 'Belum ada jendela aktif' : 'Menunggu jadwal berikutnya dihitung'
     }
-    const when =
-      upcoming.dayOffset === 0 ? 'hari ini' : upcoming.dayOffset === 1 ? 'besok' : `${upcoming.dayOffset} hari lagi`
+    // Compared in Jakarta, because "today" and "tomorrow" are the user's days.
+    const dayOffset = wibDayOffset(now, nextFire)
+    const when = dayOffset === 0 ? 'hari ini' : dayOffset === 1 ? 'besok' : `${dayOffset} hari lagi`
     return `${when} · ${collecting.length} zona`
   }
 
   return {
     status,
-    nextCaptureAt: upcoming ? formatHHMM(upcoming.at) : null,
+    nextCaptureAt: nextFire ? formatHHMM(nowInWibMinutes(nextFire)) : null,
     nextCaptureNote: describeNext(),
     roadsReporting,
     missedCaptures: null,
     peakIndex: null,
     peakAt: null,
   }
+}
+
+/** Whole days between two instants, counted on Jakarta's calendar. */
+function wibDayOffset(from: Date, to: Date): number {
+  const dayOf = (d: Date) => Math.floor((d.getTime() + WIB_OFFSET_MINUTES * 60_000) / 86_400_000)
+  return Math.max(dayOf(to) - dayOf(from), 0)
 }

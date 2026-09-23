@@ -237,3 +237,13 @@ export async function earliestDue(): Promise<Date | null> {
   const value = rows[0]?.next
   return value ? new Date(value) : null
 }
+
+/** The soonest one of this user's windows is due — what the dashboard shows. */
+export async function earliestDueForUser(userId: string): Promise<Date | null> {
+  const rows = await db
+    .select({ next: sql<string | null>`min(${schedules.nextFireAt})` })
+    .from(schedules)
+    .where(and(eq(schedules.userId, userId), eq(schedules.status, 'active')))
+  const value = rows[0]?.next
+  return value ? new Date(value) : null
+}

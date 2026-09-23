@@ -123,9 +123,16 @@ export interface TrafficPreview {
 export async function getTrafficPreview(
   bbox: [number, number, number, number],
   roadClass?: RoadClass,
+  /**
+   * The drawn ring. Given, the answer is trimmed to it — HERE only accepts a bounding
+   * box, and a box is always larger than the polygon inside it, so without this the
+   * preview shows roads the zone will never collect.
+   */
+  ring?: [number, number][],
 ): Promise<TrafficPreview> {
   const params = new URLSearchParams({ bbox: bbox.join(',') })
   if (roadClass) params.set('roadClass', roadClass)
+  if (ring && ring.length >= 3) params.set('ring', ring.map(([lng, lat]) => `${lng},${lat}`).join(';'))
   return apiClient.get<TrafficPreview>(`/traffic/preview?${params.toString()}`)
 }
 
@@ -158,6 +165,15 @@ export interface Capture {
 /** One cycle with the traffic it collected — what the arrows load. */
 export interface CaptureDetail extends Capture {
   traffic: TrafficPreview | null
+}
+
+export interface RecentCapture extends Capture {
+  zoneName: string
+}
+
+/** This account's latest cycles across every zone — the dashboard strip. */
+export async function getRecentCaptures(limit = 12): Promise<RecentCapture[]> {
+  return apiClient.get<RecentCapture[]>(`/captures?limit=${limit}`)
 }
 
 export async function getZoneCaptures(zoneId: string, limit = 50): Promise<Capture[]> {
