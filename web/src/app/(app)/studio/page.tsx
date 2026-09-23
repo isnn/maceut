@@ -19,15 +19,23 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
-import { Alert } from '@/components/ui/Alert'
+import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { IconArrowLeft, IconArrowRight, IconPlay, IconPause } from '@/components/ui/icons'
 import { cn, formatNumber } from '@/lib/utils'
 import { TRAFFIC_COLORS } from '@/lib/constants'
-import { MapCanvas } from '@/features/zones/components/MapCanvas'
 import * as zonesApi from '@/features/zones/api'
 import * as studioApi from '@/features/studio/api'
 import type { Frame, SlimTraffic } from '@/features/studio/api'
+import {
+  STYLE_PRESETS,
+  renderCapture,
+  downloadCanvas,
+  recordAnimation,
+  downloadBlob,
+  preferredVideoType,
+  type RenderLayers,
+} from '@/features/studio/render'
 import type { Zone } from '@/features/zones/types'
 
 /** Playback speeds, as milliseconds between frames. */
@@ -80,6 +88,18 @@ export default function StudioPage() {
    * not guaranteed to be the value React painted with.
    */
   const [traffics, setTraffics] = useState<Record<string, SlimTraffic | null>>({})
+
+  const [styleId, setStyleId] = useState(STYLE_PRESETS[0]!.id)
+  const [layers, setLayers] = useState<RenderLayers>({
+    basemap: true,
+    timestamp: true,
+    legend: false,
+    boundary: false,
+  })
+  const [exporting, setExporting] = useState<null | { label: string; done: number; total: number }>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
+  // Off-screen: the exported image is rendered at its own size, not the preview's.
+  const exportCanvas = useRef<HTMLCanvasElement | null>(null)
   /** In-flight ids, so a prefetch and a play tick cannot both fetch the same frame. */
   const inFlight = useRef(new Set<string>())
 
@@ -133,6 +153,7 @@ export default function StudioPage() {
     if (next && !(next.id in traffics)) void ensureLoaded(next.id)
   }, [frame, frames, current, traffics, ensureLoaded])
 
+
   useEffect(() => {
     if (!playing || frames.length === 0) return
     const timer = setTimeout(() => {
@@ -141,7 +162,106 @@ export default function StudioPage() {
     return () => clearTimeout(timer)
   }, [playing, current, frames.length, speed])
 
-  const zone = zones?.find((z) => z.id === zoneId) ?? null
+  // Checked once on the client. MediaRecorder is absent in some browsers and in SSR,
+  // and a disabled button that explains itself beats one that fails when pressed.
+  const previewCanvas = useRef<HTMLCanvasElement | null>(null)
+  const [previewBusy, setPreviewBusy] = useState(false)
+
+  const canRecord = typeof window !== 'undefined' && preferredVideoType() !== null
+
+  const selectedZone = zones?.find((z) => z.id === zoneId) ?? null
+  const zoneRing = selectedZone?.geometry.coordinates[0] as [number, number][] | undefined
+  const zoneLabel = selectedZone?.name ?? 'zone'
+
+  const style = STYLE_PRESETS.find((p) => p.id === styleId) ?? STYLE_PRESETS[0]!
+
+  /** Everything renderCapture needs for one frame, minus the canvas. */
+  const renderInputFor = useCallback(
+    (f: Frame, traffic: SlimTraffic | null, width: number, height: number) => ({
+      traffic,
+      ring: zoneRing,
+      capturedAt: f.capturedAt,
+      zoneName: zoneLabel,
+      style,
+      layers,
+      width,
+      height,
+    }),
+    [style, layers, zoneRing, zoneLabel],
+  )
+
+  useEffect(() => {
+    const canvas = previewCanvas.current
+    if (!canvas || !frame) return
+    let cancelled = false
+    setPreviewBusy(true)
+    // 960×600 is the preview's own resolution; the export renders at 1600×1000 so the
+    // file does not depend on how wide the browser happens to be.
+    renderCapture(canvas, renderInputFor(frame, traffics[frame.id] ?? null, 960, 600)).finally(() => {
+      if (!cancelled) setPreviewBusy(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [frame, traffics, renderInputFor])
+
+  /**
+   * Exports the frame on screen as a PNG.
+   *
+   * Rendered at 1600×1000 rather than whatever the preview happens to be, so the file
+   * does not change size with the browser window.
+   */
+  const exportPng = useCallback(async () => {
+    if (!frame) return
+    setExportError(null)
+    setExporting({ label: 'Rendering image', done: 0, total: 1 })
+    try {
+      const canvas = exportCanvas.current ?? document.createElement('canvas')
+      exportCanvas.current = canvas
+      const traffic = traffics[frame.id] ?? (await studioApi.getFrameTraffic(frame.id).catch(() => null))
+      await renderCapture(canvas, renderInputFor(frame, traffic, 1600, 1000))
+      await downloadCanvas(canvas, `${zoneLabel}-${frame.capturedAt.slice(0, 16)}.png`.replace(/[/\\:*?"<>|]/g, '-'))
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Could not export the image.')
+    } finally {
+      setExporting(null)
+    }
+  }, [frame, traffics, renderInputFor, zoneLabel])
+
+  /**
+   * Records every frame of the day into a WebM.
+   *
+   * Each frame's geometry is fetched as it is reached rather than all at once — a day
+   * can be dozens of frames and each is hundreds of kilobytes.
+   */
+  const exportAnimation = useCallback(async () => {
+    if (frames.length === 0) return
+    setExportError(null)
+    setPlaying(false)
+    try {
+      const canvas = exportCanvas.current ?? document.createElement('canvas')
+      exportCanvas.current = canvas
+
+      const blob = await recordAnimation({
+        canvas,
+        frameCount: frames.length,
+        holdMs: SPEEDS[speed]!.ms,
+        onProgress: (done, total) => setExporting({ label: 'Recording animation', done, total }),
+        paint: async (i) => {
+          const f = frames[i]!
+          const traffic = traffics[f.id] ?? (await studioApi.getFrameTraffic(f.id).catch(() => null))
+          await renderCapture(canvas, renderInputFor(f, traffic, 1600, 1000))
+        },
+      })
+      downloadBlob(blob, `${zoneLabel}-${day}.webm`.replace(/[/\\:*?"<>|]/g, '-'))
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Could not record the animation.')
+    } finally {
+      setExporting(null)
+    }
+  }, [frames, traffics, speed, day, renderInputFor, zoneLabel])
+
+  const zone = selectedZone
   const traffic = frame ? (traffics[frame.id] ?? null) : null
   const loadingFrame = frame ? !(frame.id in traffics) : false
 
@@ -218,15 +338,15 @@ export default function StudioPage() {
         <div className="grid grid-cols-1 laptop:grid-cols-[minmax(0,1fr)_320px] gap-xl items-start">
           <div className="space-y-lg min-w-0">
             <Card className="p-lg space-y-lg">
-              <div className="relative">
-                <MapCanvas
-                  polygon={zone?.geometry}
-                  slimTraffic={traffic}
-                  className="h-[28rem] rounded-md overflow-hidden"
-                />
-                {loadingFrame && (
-                  <span className="absolute top-md right-md z-[500] text-micro font-semibold bg-canvas text-text-secondary border border-border rounded-xs px-sm py-xs">
-                    Loading frame…
+              {/* The preview IS the renderer, not Leaflet with a CSS filter over it. A separate
+                  preview would look close and export differently, and the difference would only
+                  ever be discovered after someone shipped the file. Panning lives on the zone
+                  page; here, fidelity is worth more. */}
+              <div className="relative rounded-md overflow-hidden" style={{ background: style.background }}>
+                <canvas ref={previewCanvas} className="w-full block" style={{ aspectRatio: '8 / 5' }} />
+                {(loadingFrame || previewBusy) && (
+                  <span className="absolute top-md right-md text-micro font-semibold bg-canvas text-text-secondary border border-border rounded-xs px-sm py-xs">
+                    {loadingFrame ? 'Loading frame…' : 'Drawing…'}
                   </span>
                 )}
               </div>
@@ -376,19 +496,69 @@ export default function StudioPage() {
               </dl>
             </Card>
 
-            {/*
-              Export is not built. Turning frames into a file needs the render pipeline —
-              a headless browser drawing each frame and an encoder stitching them — and
-              none of that exists yet (CAP-02, CAP-03). The old version showed a "Render
-              animation" button that wrote a fake job to local storage and reported
-              success, which is the kind of thing that gets believed.
-            */}
-            <Card className="p-lg">
-              <p className="text-label text-text-secondary mb-sm">Export</p>
-              <Alert variant="warning">
-                Exporting to GIF or MP4 isn&rsquo;t built yet — it needs the render pipeline that also produces
-                branded capture images. Playback here is live from stored traffic data.
-              </Alert>
+            <Card className="p-lg space-y-md">
+              <p className="text-label text-text-secondary">Style</p>
+              <Select
+                value={styleId}
+                onValueChange={setStyleId}
+                options={STYLE_PRESETS.map((s) => ({ value: s.id, label: s.name }))}
+                aria-label="Image style"
+              />
+            
+              {/* What appears in the exported image. The two looks in the brief differ by
+                  exactly these switches — one carries the timestamp block, one does not. */}
+              <div className="border-t border-divider pt-md space-y-sm">
+                <p className="text-label text-text-secondary">Layers</p>
+                {(
+                  [
+                    ['basemap', 'Basemap'],
+                    ['timestamp', 'Timestamp'],
+                    ['legend', 'Legend'],
+                    ['boundary', 'Zone boundary'],
+                  ] as [keyof RenderLayers, string][]
+                ).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-sm text-body text-text-secondary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={layers[key]}
+                      onChange={(e) => setLayers((l) => ({ ...l, [key]: e.target.checked }))}
+                      className="shrink-0"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            
+              <div className="border-t border-divider pt-md space-y-sm">
+                <p className="text-label text-text-secondary">Export</p>
+                <Button className="w-full" onClick={exportPng} disabled={exporting !== null || !frame}>
+                  Download this frame (PNG)
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  onClick={exportAnimation}
+                  disabled={exporting !== null || frames.length < 2 || !canRecord}
+                  title={canRecord ? undefined : 'This browser cannot record video'}
+                >
+                  Record animation ({frames.length} frames)
+                </Button>
+            
+                {exporting && (
+                  <div className="pt-sm">
+                    <ProgressBar value={exporting.done} max={exporting.total} />
+                    <p className="text-micro text-text-muted mt-xs tabular-nums">
+                      {exporting.label} — {exporting.done} / {exporting.total}
+                    </p>
+                  </div>
+                )}
+                {exportError && <p className="text-caption text-danger-text">{exportError}</p>}
+                {!canRecord && (
+                  <p className="text-caption text-text-muted">
+                    Animation recording needs MediaRecorder, which this browser doesn&rsquo;t offer. Still images work.
+                  </p>
+                )}
+              </div>
             </Card>
           </div>
         </div>

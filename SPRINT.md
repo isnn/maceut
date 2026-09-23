@@ -102,7 +102,8 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-09** Zona: peringatan hapus pindah ke dialog; panel "Snapshots" jadi "Captures" + tabel planned vs actual | permintaan user |
 | ✅ | **FE-10** Studio: playback frame nyata dari capture tersimpan (peta, transport, scrubber) | mockup 3m |
 | ✅ | **FE-11** Detail zona: legenda jam factor, Trigger jadi Auto/Manual, kolom Time diisi | permintaan user |
-| 🔴 | **CAP-03** EKSPOR animasi (GIF/MP4) — butuh render pipeline yang sama dengan CAP-02 | studio |
+| ✅ | **FE-12** Studio: renderer canvas — PNG per frame, WebM animasi, 5 style, toggle layer | permintaan user |
+| 🔴 | **CAP-02** Playwright: render otomatis PNG per capture ke R2 (BR-009/BR-018) — canvas renderer siap dipakai ulang | zone-management Phase 3 |
 | ✅ | **BE-16** Scheduler: jendela aktif mem-publish job tiap menit (tanpa dependency baru, ADR-023) | capture-schedule/requirements.md |
 | 🟡 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev — sekarang bisa lewat /internal/users | housekeeping |
 | 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
@@ -1104,6 +1105,43 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   sebelumnya. Ketahuan hanya karena screenshot masih menampilkan "Window".
 
   284 test, tsc + eslint bersih, build lolos.
+
+[2026-09-23f] Studio bisa menggambar dan mengekspor. Tanpa dependency baru.
+
+  RENDERER CANVAS SENDIRI, bukan screenshot DOM. Dua alasan: screenshot butuh pustaka yang
+  belum ada, dan canvas Leaflet ter-taint begitu ada satu sumber tanpa header CORS —
+  `toBlob` gagal di langkah TERAKHIR, setelah semua kerjanya selesai. Menggambar tile
+  sendiri membuat canvas-nya bersih. Dicek dulu sebelum menulis apa pun: tile OSM
+  mengirim `access-control-allow-origin: *`, itu yang membuat semuanya mungkin.
+
+  PREVIEW-NYA ADALAH RENDERER-NYA. Bukan Leaflet dengan filter CSS di atasnya. Preview
+  terpisah akan terlihat mirip dan mengekspor berbeda, dan bedanya baru ketahuan setelah
+  seseorang mengirimkan filenya. Pan/zoom tetap ada di halaman zona; di sini kesetiaan
+  lebih berharga.
+
+  URUTAN FILTER MENIPU, dan sempat salah. `brightness` SEBELUM `invert` menggelapkan peta
+  terang, lalu invert membuatnya terang lagi — hasilnya abu-abu pucat, kebalikan dari yang
+  dimaksud. Ketahuan dari screenshot, bukan dari kode. Sekarang invert dulu untuk membalik
+  petanya jadi gelap, baru diredupkan.
+  Filter hanya dipakai pada BASEMAP. Kalau global, warna traffic ikut lewat filter, dan
+  merah "congested" yang sudah di-hue-rotate bukan lagi merah yang dijanjikan legenda.
+
+  ANIMASI pakai `captureStream(0)` + `requestFrame()` — perekam mengambil frame hanya saat
+  disuruh, jadi tile yang lambat tidak meregangkan apa pun dan yang cepat tidak
+  menghasilkan belasan frame nyaris identik. Merekam real-time akan membuat hasilnya
+  bergantung pada jaringan, dan itu bukan sifat yang diinginkan siapa pun dari sebuah
+  ekspor. WebM karena itu yang bisa direkam browser tanpa pustaka; MP4 butuh encoder,
+  pertanyaan dependency yang sama dengan render server-side.
+
+  LIMA STYLE dan empat toggle layer (basemap, timestamp, legend, batas zona). Dua gambar
+  rujukan user berbeda tepat pada sakelar itu — satu membawa blok timestamp, satu tidak.
+
+  ⚠️ INI TIDAK MENGGANTIKAN CAP-02. Render hanya terjadi saat seseorang membuka Studio dan
+  menekan ekspor. Capture terjadwal tetap belum menghasilkan PNG otomatis di R2 (BR-009).
+  Saat renderer server-side dibangun, ia harus MENJALANKAN kode ini di halaman internal,
+  bukan menulis ulang gambarnya — kalau tidak, keduanya perlahan berhenti mirip.
+
+  284 test, tsc + eslint bersih, build lolos, diverifikasi lewat screenshot.
 
 ---
 
