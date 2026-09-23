@@ -23,7 +23,7 @@ import { Pagination, SortableTh, Table, TableWrap, Td } from '@/components/ui/Ta
 import { useTableControls } from '@/components/ui/useTableControls'
 import { IconArrowLeft, IconArrowRight, IconClock } from '@/components/ui/icons'
 import { cn, formatNumber } from '@/lib/utils'
-import { ROAD_CLASS_LABEL } from '@/lib/constants'
+import { ROAD_CLASS_LABEL, TRAFFIC_COLORS } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import { MapCanvas } from './MapCanvas'
 import * as zonesApi from '../api'
@@ -58,6 +58,38 @@ function lateness(capture: zonesApi.Capture): string | null {
   if (capture.lateBySeconds === null || capture.lateBySeconds < 60) return null
   const minutes = Math.round(capture.lateBySeconds / 60)
   return minutes < 60 ? `${minutes} min late` : `${Math.round(minutes / 60)} h late`
+}
+
+/**
+ * BR-017's four bands, with the jam-factor range each covers.
+ *
+ * The map draws coloured lines and, until now, nothing said what the colours meant —
+ * green and orange are guessable, but the boundary between "slow" and "heavy" is not,
+ * and neither is the fact that 10 means the road is closed. The ranges are the same
+ * constants the server colours segments with, so a legend cannot drift from the map.
+ */
+const JAM_BANDS = [
+  { label: 'Normal', range: '0 – 3.9', color: TRAFFIC_COLORS.normal! },
+  { label: 'Slow', range: '4 – 5.9', color: TRAFFIC_COLORS.slow! },
+  { label: 'Heavy', range: '6 – 7.9', color: TRAFFIC_COLORS.heavy! },
+  { label: 'Congested', range: '8 – 10', color: TRAFFIC_COLORS.congested! },
+] as const
+
+function JamLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-lg">
+      <span className="text-label text-text-secondary">Jam factor</span>
+      {JAM_BANDS.map((band) => (
+        <span key={band.label} className="flex items-center gap-sm">
+          <span aria-hidden className="w-6 h-[3px] rounded-full shrink-0" style={{ background: band.color }} />
+          <span className="text-caption text-text-secondary">
+            {band.label}
+            <span className="text-text-muted tabular-nums"> {band.range}</span>
+          </span>
+        </span>
+      ))}
+    </div>
+  )
 }
 
 /** "23 Sep 10:27" in WIB — enough to compare two columns without repeating the year. */
@@ -114,7 +146,7 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
     rows: cycles,
     searchOn: (c) => [c.status, c.trigger],
     sortOn: {
-      planned: (c) => c.scheduledFor,
+      planned: (c) => c.scheduledFor ?? c.capturedAt,
       actual: (c) => c.capturedAt,
       status: (c) => c.status,
       trigger: (c) => c.trigger,
@@ -254,21 +286,28 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
 
           {selected && (
             <>
-              <span
-                className={cn(
-                  'inline-block text-micro font-semibold rounded-xs px-sm py-xs',
-                  STATUS_STYLE[selected.status],
-                )}
-              >
-                {STATUS_LABEL[selected.status]}
-              </span>
+              {/* Only when something went wrong. On a collected cycle the map below says so
+                  already, and the table carries status for every row. */}
+              {selected.status !== 'done' && (
+                <span
+                  className={cn(
+                    'inline-block text-micro font-semibold rounded-xs px-sm py-xs',
+                    STATUS_STYLE[selected.status],
+                  )}
+                >
+                  {STATUS_LABEL[selected.status]}
+                </span>
+              )}
 
               {selected.status === 'done' ? (
-                <MapCanvas
-                  polygon={zone.geometry}
-                  trafficGeoJSON={traffic ?? undefined}
-                  className="h-80 rounded-md overflow-hidden"
-                />
+                <div className="space-y-md">
+                  <MapCanvas
+                    polygon={zone.geometry}
+                    trafficGeoJSON={traffic ?? undefined}
+                    className="h-80 rounded-md overflow-hidden"
+                  />
+                  <JamLegend />
+                </div>
               ) : (
                 <div className="h-80 rounded-md bg-canvas-secondary flex items-center justify-center text-center px-xl">
                   <p className="text-body text-text-secondary max-w-[48ch]">
@@ -294,27 +333,9 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
                   hint="0 clear · 10 closed"
                 />
                 <Figure label="Road class" value={ROAD_CLASS_LABEL[selected.roadClass]} />
-                <Figure label="Trigger" value={selected.trigger === 'scheduled' ? 'Window' : 'Manual'} />
+                <Figure label="Trigger" value={selected.trigger === 'scheduled' ? 'Auto' : 'Manual'} />
               </dl>
 
-              <div className="border-t border-divider pt-lg">
-                <p className="text-label text-text-secondary mb-sm">Files collected</p>
-                {selected.filePath ? (
-                  <p className="text-body text-text-primary break-all">
-                    {selected.filePath}
-                    {selected.fileSize !== null && (
-                      <span className="text-caption text-text-muted ml-sm">
-                        {(selected.fileSize / 1024).toFixed(0)} KB
-                      </span>
-                    )}
-                  </p>
-                ) : (
-                  <p className="text-body text-text-secondary">
-                    No image file yet — the map above is drawn from this cycle&rsquo;s stored traffic data. Rendered
-                    PNGs arrive with the capture engine.
-                  </p>
-                )}
-              </div>
             </>
           )}
         </Card>
@@ -334,14 +355,14 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
             direction={table.sort?.direction ?? 'asc'}
             onSort={() => table.toggleSort('planned')}
           >
-            Time planned
+            Time
           </SortableTh>
           <SortableTh
             active={table.sort?.key === 'actual'}
             direction={table.sort?.direction ?? 'asc'}
             onSort={() => table.toggleSort('actual')}
           >
-            Time actual
+            Collected at
           </SortableTh>
           <SortableTh
             active={table.sort?.key === 'status'}
@@ -389,7 +410,10 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
                     )}
                   >
                     <Td className="tabular-nums whitespace-nowrap">
-                      {c.scheduledFor ? shortWib(c.scheduledFor) : <span className="text-text-muted">&mdash;</span>}
+                      {/* A manual capture has no schedule to be measured against, but it is not
+                          timeless — it was due the moment someone asked for it. Its own time beats a
+                          dash, which reads like missing data. */}
+                      {shortWib(c.scheduledFor ?? c.capturedAt)}
                     </Td>
                     <Td className="tabular-nums whitespace-nowrap">
                       {c.status === 'missed' ? (
@@ -409,7 +433,7 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
                       </span>
                     </Td>
                     <Td className="text-text-secondary">
-                      {c.trigger === 'scheduled' ? 'Window' : 'Manual'}
+                      {c.trigger === 'scheduled' ? 'Auto' : 'Manual'}
                     </Td>
                     <Td className="text-right tabular-nums text-text-secondary">
                       {c.roadsCount === null ? <span className="text-text-muted">&mdash;</span> : formatNumber(c.roadsCount)}

@@ -101,6 +101,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-08** Dashboard: rail tidak lagi terdorong keluar layar; cadence nyata; angka seragam | permintaan user |
 | ✅ | **FE-09** Zona: peringatan hapus pindah ke dialog; panel "Snapshots" jadi "Captures" + tabel planned vs actual | permintaan user |
 | ✅ | **FE-10** Studio: playback frame nyata dari capture tersimpan (peta, transport, scrubber) | mockup 3m |
+| ✅ | **FE-11** Detail zona: legenda jam factor, Trigger jadi Auto/Manual, kolom Time diisi | permintaan user |
 | 🔴 | **CAP-03** EKSPOR animasi (GIF/MP4) — butuh render pipeline yang sama dengan CAP-02 | studio |
 | ✅ | **BE-16** Scheduler: jendela aktif mem-publish job tiap menit (tanpa dependency baru, ADR-023) | capture-schedule/requirements.md |
 | 🟡 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev — sekarang bisa lewat /internal/users | housekeeping |
@@ -1071,6 +1072,38 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   ber-kunci, bukan reset.
 
   284 test, tsc + eslint bersih, build lolos, diverifikasi lewat screenshot.
+
+[2026-09-23e] Detail zona: legenda, kata yang dimengerti, dan kolom yang tidak kosong.
+
+  LEGENDA JAM FACTOR di bawah peta. Peta menggambar garis berwarna dan tidak ada yang
+  menjelaskan artinya — hijau dan oranye bisa ditebak, tapi batas antara "slow" dan
+  "heavy" tidak, dan bahwa 10 berarti jalan tertutup juga tidak. Rentangnya memakai
+  konstanta warna yang sama dengan yang dipakai server mewarnai ruas, jadi legendanya
+  tidak bisa melenceng dari petanya. BR-019 mewajibkan legenda di setiap gambar capture;
+  ini membuatnya konsisten sejak sekarang.
+
+  "WINDOW" JADI "AUTO". "Window" itu kosakata kita untuk jadwal; yang ingin diketahui
+  pembaca adalah apakah ini jalan sendiri atau karena seseorang menekan tombol.
+
+  "FILES COLLECTED" DIHAPUS. Belum ada yang menulis file, jadi bloknya adalah paragraf
+  yang menjelaskan kekosongannya sendiri di setiap siklus. Kalau renderer datang
+  (CAP-02), tempatnya kembali dengan isi.
+
+  BADGE "COLLECTED" DI ATAS PETA DIHAPUS — untuk siklus yang berhasil, petanya sendiri
+  sudah mengatakan itu, dan tabel membawa status untuk setiap baris. Badge-nya tetap
+  muncul kalau ada yang SALAH, karena di situ ia baru memberi informasi.
+
+  KOLOM "TIME PLANNED" JADI "TIME", dan capture manual mengisinya dengan waktunya sendiri
+  alih-alih "—". Capture manual memang tidak punya jadwal untuk diukur, tapi bukan berarti
+  tanpa waktu: ia jatuh tempo saat orangnya meminta. Tanda "—" terbaca seperti data
+  hilang. Kolom kedua jadi "Collected at". Kunci sortir ikut aturan yang sama, kalau tidak
+  kolomnya akan diurutkan berdasarkan nilai yang tidak lagi ditampilkan.
+
+  ⚠️ Catatan proses: dua suntingan pertama SEMPAT HILANG karena skrip-nya melempar di
+  assertion berikutnya sebelum menulis file — pola yang sama sudah menggigit dua kali
+  sebelumnya. Ketahuan hanya karena screenshot masih menampilkan "Window".
+
+  284 test, tsc + eslint bersih, build lolos.
 
 ---
 
