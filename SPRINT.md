@@ -100,7 +100,8 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-07** Schedule: jendela bertumpuk di-lane; tabel Capture windows di bawah ruler | permintaan user |
 | ✅ | **FE-08** Dashboard: rail tidak lagi terdorong keluar layar; cadence nyata; angka seragam | permintaan user |
 | ✅ | **FE-09** Zona: peringatan hapus pindah ke dialog; panel "Snapshots" jadi "Captures" + tabel planned vs actual | permintaan user |
-| 🔴 | **CAP-03** Render animasi (Studio) belum punya backend sama sekali — endpoint, tabel, worker | studio |
+| ✅ | **FE-10** Studio: playback frame nyata dari capture tersimpan (peta, transport, scrubber) | mockup 3m |
+| 🔴 | **CAP-03** EKSPOR animasi (GIF/MP4) — butuh render pipeline yang sama dengan CAP-02 | studio |
 | ✅ | **BE-16** Scheduler: jendela aktif mem-publish job tiap menit (tanpa dependency baru, ADR-023) | capture-schedule/requirements.md |
 | 🟡 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev — sekarang bisa lewat /internal/users | housekeeping |
 | 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
@@ -1035,6 +1036,41 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   tengah.
 
   284 test hijau, eslint bersih, build lolos, diverifikasi lewat screenshot.
+
+[2026-09-23d] Studio memutar capture sungguhan. Penolakan API akhirnya menyebut rutenya.
+
+  STUDIO DULU MENGARANG TRAFFIC-NYA SENDIRI. `getFrames` membangkitkan kurva Gaussian —
+  puncak pagi 07:36, puncak sore lebih landai, dasar 18 semalaman — lalu scrubber-nya
+  bergerak melewati angka yang tidak pernah menyentuh jalan. Terbaca meyakinkan, dan
+  itulah yang membuatnya lebih buruk daripada layar kosong. Tombol "Render animation"
+  menulis job palsu ke localStorage dan melaporkan sukses.
+  Sekarang setiap frame adalah satu capture `done` milik zona itu, diputar di peta yang
+  sama dengan halaman zona.
+
+  UKURAN PAYLOAD MEMAKSA DESAINNYA. Satu capture ~2 MB; sehari 20 frame = 41 MB kalau
+  dikirim di muka. Ditambah proyeksi `?slim=1` yang membuang semua yang bukan garis dan
+  warna — nama jalan, jam factor per ruas, functional class — dan memotong koordinat ke
+  5 desimal (~1 meter, jauh lebih halus daripada garis setebal 4 piksel). 2,07 MB → 575 KB,
+  3,6×. Frame diambil satu per satu saat playback sampai ke sana, frame berikutnya
+  di-prefetch, yang sudah dimuat di-cache.
+
+  EKSPOR TIDAK DIBANGUN, dan kartunya mengatakan itu. Mengubah frame jadi file butuh
+  render pipeline yang sama dengan gambar capture bermerek (CAP-02). Lebih baik satu
+  kalimat jujur daripada tombol yang menulis job palsu lalu bilang berhasil.
+
+  PENOLAKAN API DULU SENYAP. `errorHandler` mengembalikan 4xx tanpa mencatat apa pun,
+  jadi "Input tidak valid" yang sampai ke browser tidak menyebut rute mana pun dan tidak
+  ada apa-apa di log untuk dicocokkan. Sekarang satu baris per penolakan: kode, method,
+  path, pesan. Cukup untuk menemukan, tidak cukup untuk mengubur crash sungguhan. Itu
+  juga yang akhirnya membuktikan error di atas BUKAN dari API — melainkan bundle basi
+  hasil hot-reload saat penulisan ulang, hilang setelah `.next` dibersihkan.
+
+  Dua pelanggaran React ditangkap lint saat menulis player-nya: membaca `ref` saat render
+  (nilai yang dibaca belum tentu yang dipakai React menggambar) dan `setState` sinkron di
+  dalam effect. Keduanya diperbaiki dengan cara yang sama seperti sebelumnya — state
+  ber-kunci, bukan reset.
+
+  284 test, tsc + eslint bersih, build lolos, diverifikasi lewat screenshot.
 
 ---
 

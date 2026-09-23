@@ -262,3 +262,50 @@ export async function recentForUser(userId: string, limit = 12): Promise<RecentC
   const rows = await captureRepo.recentForUser(userId, limit)
   return rows.map((row) => ({ ...toPublic(row), zoneName: row.zoneName }))
 }
+
+/**
+ * A capture's traffic, stripped to what a player needs to draw it.
+ *
+ * Playback loads a frame per second, and a full capture is ~2 MB — twenty frames is
+ * 40 MB of geometry for an animation nobody is inspecting road-by-road. The player
+ * draws coloured lines and nothing else, so everything that is not a line or a colour
+ * goes: street names, jam factors, traffic-state labels, functional classes.
+ *
+ * Coordinates drop to five decimals, which is about a metre at this latitude — far finer
+ * than a line stroked four pixels wide on a city-scale map, and it removes a third of
+ * the bytes on its own.
+ *
+ * The full shape stays available on the same endpoint without `slim`, because the zone's
+ * Captures panel DOES let you inspect one cycle closely.
+ */
+export interface SlimTraffic {
+  type: 'FeatureCollection'
+  features: { c: [number, number][]; k: string }[]
+}
+
+export function slimTraffic(traffic: unknown): SlimTraffic {
+  const collection = traffic as { features?: { geometry?: { coordinates?: [number, number][] }; properties?: { color?: string } }[] } | null
+  const round = (n: number) => Math.round(n * 1e5) / 1e5
+
+  return {
+    type: 'FeatureCollection',
+    features: (collection?.features ?? []).flatMap((f) => {
+      const coords = f.geometry?.coordinates
+      if (!coords || coords.length < 2) return []
+      return [{ c: coords.map(([lng, lat]) => [round(lng), round(lat)] as [number, number]), k: f.properties?.color ?? '#4CAF50' }]
+    }),
+  }
+}
+
+export interface PlaybackFrame extends PublicCapture {
+  traffic: SlimTraffic | null
+}
+
+/** One frame for the Studio player — same row, far fewer bytes. */
+export async function getPlaybackFrame(userId: string, captureId: string): Promise<PlaybackFrame> {
+  const row = await captureRepo.findById(captureId)
+  if (!row) throw new NotFoundError('Capture')
+  if (row.userId !== userId) throw new ForbiddenError('Capture ini bukan milik Anda.')
+
+  return { ...toPublic(row), traffic: row.traffic ? slimTraffic(row.traffic) : null }
+}

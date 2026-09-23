@@ -45,6 +45,12 @@ function FitToPolygon({ latLngs }: { latLngs: LatLngExpression[] | null }) {
 interface MapCanvasProps {
   polygon?: ZoneGeometry | LatLngExpression[]
   trafficGeoJSON?: TrafficPreview
+  /**
+   * Playback geometry: lines and colours only. Accepted alongside the full shape rather
+   * than instead of it, because the zone page inspects one cycle closely while the
+   * Studio player runs through dozens — one map draws both.
+   */
+  slimTraffic?: { features: { c: [number, number][]; k: string }[] } | null
   /** Enables the drawing surface; zoom and pan are always on. */
   interactive?: boolean
   /**
@@ -61,6 +67,7 @@ interface MapCanvasProps {
 export function MapCanvas({
   polygon,
   trafficGeoJSON,
+  slimTraffic,
   interactive = false,
   scrollWheelZoom,
   center,
@@ -96,6 +103,13 @@ export function MapCanvas({
         {latLngs && latLngs.length >= 3 && (
           <Polygon positions={latLngs} pathOptions={{ color: '#5A35F3', fillOpacity: 0.15, weight: 2 }} />
         )}
+        {slimTraffic?.features.map((feature, idx) => (
+          <Polyline
+            key={`slim-${idx}`}
+            positions={feature.c.map(([lng, lat]) => [lat, lng] as LatLngExpression)}
+            pathOptions={{ color: feature.k, weight: 4 }}
+          />
+        ))}
         {trafficGeoJSON?.features.map((feature, i) => (
           <Polyline
             key={i}

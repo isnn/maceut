@@ -12,8 +12,10 @@ import { config } from '../config/env'
  * an unexpected error's message can carry internals (a query, a file path, a
  * connection string) and must not reach the client.
  */
-export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
+export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
   if (err instanceof ZodError) {
+    console.warn(`[VALIDATION_ERROR] ${req.method} ${req.originalUrl} — ${err.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`)
+
     const details: Record<string, string> = {}
     for (const issue of err.issues) {
       const key = issue.path.join('.') || '_'
@@ -28,6 +30,12 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   }
 
   if (err instanceof AppError) {
+    // Refusals were returned silently, so a 422 reaching the browser named no route and
+    // there was nothing in the logs to match it against — a client-side
+    // "Input tidak valid" with no way to find out which request produced it. Logged at
+    // one line: enough to locate, not enough to bury real crashes.
+    console.warn(`[${err.code}] ${req.method} ${req.originalUrl} — ${err.message}`)
+
     const body: ErrorResponse = {
       success: false,
       error: { code: err.code, message: err.message, ...(err.details ? { details: err.details } : {}) },

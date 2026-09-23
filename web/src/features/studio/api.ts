@@ -1,137 +1,93 @@
-// TODO: replace with real fetch through @/lib/api-client once api/ + worker exist
-// (GET /captures?zoneId=&date=, POST /renders, GET /renders).
+/**
+ * Studio playback, over the captures a zone has actually collected.
+ *
+ * This file used to generate its own traffic: a Gaussian morning peak, a softer evening
+ * one, a flat overnight base. It read convincingly and was entirely invented — the
+ * scrubber moved through a curve that had never touched a road. Every frame here now
+ * comes from a real cycle.
+ *
+ * Frames are listed without their geometry and fetched one at a time as the player
+ * reaches them. A capture is about 2 MB, so a twenty-frame day would be 40 MB up front;
+ * the slim projection is ~575 KB and only the frames actually played are ever loaded.
+ */
 
-export type RenderFormat = 'gif' | 'mp4' | 'webm'
-export type RenderStatus = 'ready' | 'rendering' | 'failed'
+import { apiClient } from '@/lib/api-client'
+import * as zonesApi from '@/features/zones/api'
 
-/** One captured frame in the Studio strip (3m). */
+/** Lines and colours only — what the player draws, nothing it doesn't. */
+export interface SlimTraffic {
+  type: 'FeatureCollection'
+  features: { c: [number, number][]; k: string }[]
+}
+
 export interface Frame {
   id: string
   zoneId: string
   /** "HH:mm" in Asia/Jakarta. */
   time: string
-  /** Congestion index 0-100 shown under the player. */
-  index: number
   capturedAt: string
+  /** Mean jam factor, 0–10. Null when the cycle collected nothing. */
+  jamFactorAvg: number | null
+  roadsCount: number | null
 }
 
-export interface RenderJob {
-  id: string
-  zoneId: string
-  title: string
-  frames: number
-  format: RenderFormat
-  status: RenderStatus
-  /** 0-100 while status is "rendering". */
-  progress: number
-  createdAt: string
+/** "HH:mm" in Jakarta, which is the clock every capture window is written against. */
+function wibClock(iso: string): string {
+  return new Intl.DateTimeFormat('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Jakarta',
+  })
+    .format(new Date(iso))
+    .replace('.', ':')
 }
 
-const MOCK_LATENCY_MS = 300
-const RENDERS_KEY = 'maceut_mock_renders'
-
-function delay<T>(value: T): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), MOCK_LATENCY_MS))
+/** The Jakarta calendar date of an instant, as "YYYY-MM-DD". */
+export function wibDate(iso: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Jakarta',
+  }).format(new Date(iso))
 }
 
 /**
- * Deterministic index curve for a day: quiet overnight, a hard morning peak
- * around 07:00-08:00 and a softer evening one, so the scrubber reads like real
- * traffic rather than noise.
+ * Every playable frame a zone has, oldest first.
+ *
+ * Only `done` cycles: a frame that failed or was missed has no traffic to draw, and
+ * silently including it would make the player stall on a blank map with no explanation.
+ * The Captures table on the zone page is where those are accounted for.
+ *
+ * Oldest first because playback runs forward through time, unlike every other list in
+ * the app, which shows newest first.
  */
-function indexForHour(hour: number): number {
-  const morning = 78 * Math.exp(-((hour - 7.6) ** 2) / 2.2)
-  const evening = 61 * Math.exp(-((hour - 17.8) ** 2) / 3.4)
-  const base = 18
-  return Math.min(99, Math.round(base + morning + evening))
+export async function getFrames(zoneId: string): Promise<Frame[]> {
+  // 100 is the endpoint's ceiling, and it is the right ceiling: a day of 15-minute
+  // captures inside a working window is well under that, and asking for more was a 422
+  // the player surfaced as "Input tidak valid" with no clue where it came from.
+  const captures = await zonesApi.getZoneCaptures(zoneId, 100)
+
+  return captures
+    .filter((c) => c.status === 'done')
+    .map((c) => ({
+      id: c.id,
+      zoneId: c.zoneId,
+      time: wibClock(c.capturedAt),
+      capturedAt: c.capturedAt,
+      jamFactorAvg: c.jamFactorAvg,
+      roadsCount: c.roadsCount,
+    }))
+    .sort((a, b) => (a.capturedAt < b.capturedAt ? -1 : 1))
 }
 
-export async function getFrames(zoneId: string, fromHour = 6, toHour = 20): Promise<Frame[]> {
-  const frames: Frame[] = []
-  for (let hour = fromHour; hour <= toHour; hour++) {
-    frames.push({
-      id: `${zoneId}-${hour}`,
-      zoneId,
-      time: `${String(hour).padStart(2, '0')}:00`,
-      index: indexForHour(hour),
-      capturedAt: new Date().toISOString(),
-    })
-  }
-  return delay(frames)
+/** The days this zone has frames for, newest day first. */
+export function daysWithFrames(frames: Frame[]): string[] {
+  return [...new Set(frames.map((f) => wibDate(f.capturedAt)))].sort().reverse()
 }
 
-function readRenders(): RenderJob[] {
-  if (typeof window === 'undefined') return []
-  const raw = window.localStorage.getItem(RENDERS_KEY)
-  return raw ? (JSON.parse(raw) as RenderJob[]) : []
-}
-
-function writeRenders(renders: RenderJob[]) {
-  window.localStorage.setItem(RENDERS_KEY, JSON.stringify(renders))
-}
-
-export async function getRenders(zoneNames: Record<string, string> = {}): Promise<RenderJob[]> {
-  const stored = readRenders()
-  if (stored.length > 0) return delay(stored)
-
-  const [firstZoneId, secondZoneId] = Object.keys(zoneNames)
-  if (!firstZoneId) return delay([])
-  const seeded: RenderJob[] = [
-    {
-      id: 'seed-1',
-      zoneId: firstZoneId,
-      title: `${zoneNames[firstZoneId]} · 5 Sep`,
-      frames: 14,
-      format: 'mp4',
-      status: 'ready',
-      progress: 100,
-      createdAt: '2026-09-05T09:10:00.000Z',
-    },
-    {
-      id: 'seed-2',
-      zoneId: secondZoneId ?? firstZoneId,
-      title: `${zoneNames[secondZoneId ?? firstZoneId]} · minggu 36`,
-      frames: 98,
-      format: 'gif',
-      status: 'ready',
-      progress: 100,
-      createdAt: '2026-09-04T11:00:00.000Z',
-    },
-    {
-      id: 'seed-3',
-      zoneId: firstZoneId,
-      title: `${zoneNames[firstZoneId]} · minggu 36`,
-      frames: 62,
-      format: 'mp4',
-      status: 'rendering',
-      progress: 62,
-      createdAt: '2026-09-05T09:40:00.000Z',
-    },
-  ]
-  writeRenders(seeded)
-  return delay(seeded)
-}
-
-export async function createRender(input: {
-  zoneId: string
-  title: string
-  frames: number
-  format: RenderFormat
-}): Promise<RenderJob> {
-  const job: RenderJob = {
-    id: `${Date.now()}`,
-    zoneId: input.zoneId,
-    title: input.title,
-    frames: input.frames,
-    format: input.format,
-    status: 'rendering',
-    progress: 5,
-    createdAt: new Date().toISOString(),
-  }
-  writeRenders([job, ...readRenders()])
-  // Stand in for the worker finishing the encode.
-  setTimeout(() => {
-    writeRenders(readRenders().map((r) => (r.id === job.id ? { ...r, status: 'ready', progress: 100 } : r)))
-  }, 4000)
-  return delay(job)
+/** One frame's geometry. Cached by the caller — the same frame is replayed constantly. */
+export async function getFrameTraffic(captureId: string): Promise<SlimTraffic | null> {
+  const detail = await apiClient.get<{ traffic: SlimTraffic | null }>(`/captures/${captureId}?slim=1`)
+  return detail.traffic
 }

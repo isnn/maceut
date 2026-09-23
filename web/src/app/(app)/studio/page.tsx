@@ -1,362 +1,424 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+/**
+ * Studio — plays a zone's day back on the map (3m, F-07).
+ *
+ * Every frame is a real capture. The previous version generated its own traffic curve
+ * (a Gaussian morning peak, a softer evening one, a flat overnight base) and scrubbed
+ * through numbers that had never touched a road. It looked convincing, which is what
+ * made it worse than an empty screen.
+ *
+ * Geometry is fetched one frame at a time as playback reaches it, with the next frame
+ * prefetched and everything played kept in a cache. A capture is ~2 MB full and ~575 KB
+ * slimmed, so loading a whole day up front would be tens of megabytes for an animation
+ * nobody inspects road-by-road.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { Input, FormLabel } from '@/components/ui/Input'
+import { Button, buttonClass } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
-import { IconMapPin, IconPause, IconPlay, IconRotate } from '@/components/ui/icons'
+import { Alert } from '@/components/ui/Alert'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { buttonClass } from '@/components/ui/Button'
-import { TrafficSchematic, TrafficLegend } from '@/components/shared/TrafficSchematic'
-import { cn } from '@/lib/utils'
-import { PLAN_LIMITS } from '@/lib/constants'
-import { useCurrentUser } from '@/features/auth/hooks/useAuth'
+import { IconArrowLeft, IconArrowRight, IconPlay, IconPause } from '@/components/ui/icons'
+import { cn, formatNumber } from '@/lib/utils'
+import { TRAFFIC_COLORS } from '@/lib/constants'
+import { MapCanvas } from '@/features/zones/components/MapCanvas'
 import * as zonesApi from '@/features/zones/api'
 import * as studioApi from '@/features/studio/api'
-import type { Frame, RenderFormat } from '@/features/studio/api'
+import type { Frame, SlimTraffic } from '@/features/studio/api'
 import type { Zone } from '@/features/zones/types'
 
-type View = 'grid' | 'player'
-type Overlay = 'full' | 'timestamp' | 'clean'
+/** Playback speeds, as milliseconds between frames. */
+const SPEEDS = [
+  { label: '0.5×', ms: 2000 },
+  { label: '1×', ms: 1000 },
+  { label: '2×', ms: 500 },
+  { label: '4×', ms: 250 },
+]
 
-const SPEEDS = [2, 6, 12]
-const PLAYBACK_RATE = [1, 4, 12]
-const OVERLAY_LABEL: Record<Overlay, string> = {
-  full: 'Timestamp + index',
-  timestamp: 'Timestamp only',
-  clean: 'Clean',
+/**
+ * BR-017's bands, over the mean jam factor of a frame.
+ *
+ * The same four states the map itself uses, so the bar under the player and the colours
+ * on it cannot tell different stories.
+ */
+function bandFor(jam: number): { label: string; color: string } {
+  if (jam >= 8) return { label: 'Congested', color: TRAFFIC_COLORS.congested! }
+  if (jam >= 6) return { label: 'Heavy', color: TRAFFIC_COLORS.heavy! }
+  if (jam >= 4) return { label: 'Slow', color: TRAFFIC_COLORS.slow! }
+  return { label: 'Normal', color: TRAFFIC_COLORS.normal! }
 }
-const POSITIONS = ['Top left', 'Top right', 'Bottom left', 'Bottom right']
+
+function formatDay(day: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    timeZone: 'Asia/Jakarta',
+  }).format(new Date(`${day}T00:00:00+07:00`))
+}
 
 export default function StudioPage() {
-  const { user } = useCurrentUser()
-  const [zones, setZones] = useState<Zone[]>([])
-  const [zoneId, setZoneId] = useState('')
-  const [frames, setFrames] = useState<Frame[]>([])
-  const [view, setView] = useState<View>('player')
+  const [zones, setZones] = useState<Zone[] | null>(null)
+  const [zoneId, setZoneId] = useState<string>('')
+  // Keyed by the zone it belongs to, so switching zones needs no reset: a result whose
+  // key no longer matches is simply not this zone's, and the page falls back to loading.
+  const [loadedFrames, setLoadedFrames] = useState<{ zoneId: string; frames: Frame[] } | null>(null)
+  const [day, setDay] = useState<string>('')
+
   const [current, setCurrent] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [rate, setRate] = useState(4)
-  const [fps, setFps] = useState(6)
-  const [overlay, setOverlay] = useState<Overlay>('full')
-  const [title, setTitle] = useState('')
-  const [position, setPosition] = useState(POSITIONS[0])
-  const [format, setFormat] = useState<RenderFormat>('mp4')
-  const [rendering, setRendering] = useState(false)
-  const [rendered, setRendered] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [speed, setSpeed] = useState(1)
 
-  const plan = user?.plan ?? 'free'
-  const zone = zones.find((z) => z.id === zoneId)
+  /**
+   * Geometry already fetched. Playback revisits the same frames constantly and a day is
+   * a few dozen at most, so holding them is far cheaper than re-fetching each loop.
+   *
+   * State rather than a ref because the render reads it — a ref read during render is
+   * not guaranteed to be the value React painted with.
+   */
+  const [traffics, setTraffics] = useState<Record<string, SlimTraffic | null>>({})
+  /** In-flight ids, so a prefetch and a play tick cannot both fetch the same frame. */
+  const inFlight = useRef(new Set<string>())
 
   useEffect(() => {
-    if (!user) return
     zonesApi.getZones().then((next) => {
       setZones(next)
-      if (next[0]) {
-        setZoneId(next[0].id)
-        setTitle(`${next[0].name} · morning peak`)
-      }
+      if (next.length > 0) setZoneId((z) => z || next[0]!.id)
     })
-  }, [user])
+  }, [])
 
   useEffect(() => {
     if (!zoneId) return
-    studioApi.getFrames(zoneId).then((next) => {
-      setFrames(next)
+    let cancelled = false
+    studioApi.getFrames(zoneId).then((frames) => {
+      if (cancelled) return
+      setTraffics({})
+      inFlight.current.clear()
+      setLoadedFrames({ zoneId, frames })
+      setDay(studioApi.daysWithFrames(frames)[0] ?? '')
       setCurrent(0)
+      setPlaying(false)
     })
+    return () => {
+      cancelled = true
+    }
   }, [zoneId])
 
-  // Frame advance while playing; rate multiplies the 1 s base tick.
+  const allFrames = loadedFrames?.zoneId === zoneId ? loadedFrames.frames : null
+
+  const days = useMemo(() => (allFrames ? studioApi.daysWithFrames(allFrames) : []), [allFrames])
+  const frames = useMemo(
+    () => (allFrames ?? []).filter((f) => studioApi.wibDate(f.capturedAt) === day),
+    [allFrames, day],
+  )
+
+  const frame = frames[current] ?? null
+
+  /** Loads a frame's geometry into the cache, once. */
+  const ensureLoaded = useCallback(async (id: string) => {
+    if (inFlight.current.has(id)) return
+    inFlight.current.add(id)
+    const traffic = await studioApi.getFrameTraffic(id).catch(() => null)
+    setTraffics((prev) => (id in prev ? prev : { ...prev, [id]: traffic }))
+  }, [])
+
+  // The current frame, and the next one so playback does not stall at each step.
+  useEffect(() => {
+    if (!frame) return
+    if (!(frame.id in traffics)) void ensureLoaded(frame.id)
+    const next = frames[current + 1]
+    if (next && !(next.id in traffics)) void ensureLoaded(next.id)
+  }, [frame, frames, current, traffics, ensureLoaded])
+
   useEffect(() => {
     if (!playing || frames.length === 0) return
-    timerRef.current = setInterval(() => {
-      setCurrent((c) => (c + 1) % frames.length)
-    }, 1000 / rate)
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
-  }, [playing, rate, frames.length])
+    const timer = setTimeout(() => {
+      setCurrent((i) => (i + 1 >= frames.length ? 0 : i + 1))
+    }, SPEEDS[speed]!.ms)
+    return () => clearTimeout(timer)
+  }, [playing, current, frames.length, speed])
 
-  const render = useCallback(async () => {
-    if (!zone) return
-    setRendering(true)
-    setRendered(false)
-    await studioApi.createRender({ zoneId: zone.id, title, frames: frames.length, format })
-    setRendering(false)
-    setRendered(true)
-  }, [zone, title, frames.length, format])
+  const zone = zones?.find((z) => z.id === zoneId) ?? null
+  const traffic = frame ? (traffics[frame.id] ?? null) : null
+  const loadingFrame = frame ? !(frame.id in traffics) : false
 
-  if (!user) return <div className="h-96 bg-canvas-secondary rounded-lg animate-pulse" />
+  if (zones === null) {
+    return <div className="h-96 bg-canvas-secondary rounded-lg animate-pulse" />
+  }
 
   if (zones.length === 0) {
     return (
       <EmptyState
-        title="No frames to play yet"
-        description="Studio replays frames that have already been captured. Create a zone and its collection windows first."
+        title="No zones yet"
+        description="Studio replays what a zone has collected. Create one and give it a capture window first."
         action={
-          <Link
-            href="/zones/new"
-            className={buttonClass()}
-          >
-            Create zone
+          <Link href="/zones/new" className={buttonClass()}>
+            Create a zone
           </Link>
         }
       />
     )
   }
 
-  const frame = frames[current]
-  const durationSec = frames.length > 0 ? Number((frames.length / fps).toFixed(1)) : 0
-  const estimatedMb = Number((frames.length * 0.13).toFixed(1))
-
   return (
-    <div className="space-y-lg">
-      <div className="flex flex-wrap items-center gap-md">
-        <h1 className="text-page-title font-bold text-text-primary">Studio</h1>
-        <div className="ml-auto flex items-center gap-sm">
-          <span className="text-label text-text-secondary">Zone</span>
-          {/* Sized to the zone name, bounded so a long one can't eat the row. */}
+    <div className="space-y-xl">
+      <div className="flex flex-wrap items-end justify-between gap-md">
+        <div>
+          <h1 className="text-page-title font-bold text-text-primary">Studio</h1>
+          <p className="text-body text-text-secondary mt-xs">
+            Play a zone&rsquo;s day back, frame by frame, from what it actually collected.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-md">
           <Select
-            aria-label="Zone"
-            icon={<IconMapPin size={16} />}
             value={zoneId}
             onValueChange={setZoneId}
             options={zones.map((z) => ({ value: z.id, label: z.name }))}
-            className="w-auto min-w-[11rem] max-w-[20rem]"
+            className="w-56"
+            aria-label="Zone"
           />
+          {days.length > 0 && (
+            <Select
+              value={day}
+              onValueChange={(next) => {
+                setDay(next)
+                setCurrent(0)
+                setPlaying(false)
+              }}
+              options={days.map((d) => ({ value: d, label: formatDay(d) }))}
+              className="w-44"
+              aria-label="Day"
+            />
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 laptop:grid-cols-[1fr_320px] gap-xl items-start">
-        <div className="bg-card border border-border rounded-lg p-lg space-y-md">
-          <div className="flex flex-wrap items-center justify-between gap-md">
-            <div className="flex bg-canvas-secondary border border-border rounded-md p-[3px]">
-              {(['grid', 'player'] as View[]).map((option) => (
-                <button
-                  key={option}
-                  onClick={() => setView(option)}
-                  className={cn(
-                    'px-md h-9 rounded-sm text-label transition-colors',
-                    view === option ? 'bg-canvas text-text-primary font-semibold shadow-elevation-2' : 'text-text-secondary'
-                  )}
-                >
-                  {option === 'grid' ? 'Grid' : 'Player'}
-                </button>
-              ))}
-            </div>
-            <button className="text-label text-info hover:underline">Share link</button>
-          </div>
-
-          {view === 'player' && frame ? (
-            <>
-              <div className="relative rounded-md overflow-hidden border border-divider bg-canvas-secondary">
-                <TrafficSchematic showBoundary />
-                {overlay !== 'clean' && (
-                  <div className="absolute left-lg bottom-lg bg-black/70 text-white rounded-md px-md py-sm">
-                    <p className="text-label font-semibold">{title || zone?.name}</p>
-                    <p className="text-micro tabular-nums opacity-80">
-                      {frame.time} · 5 Sep 2026{overlay === 'full' && ` · index ${frame.index}`}
-                    </p>
-                  </div>
+      {allFrames === null ? (
+        <div className="h-96 bg-canvas-secondary rounded-lg animate-pulse" />
+      ) : frames.length === 0 ? (
+        <EmptyState
+          title="Nothing collected yet"
+          description={
+            zone
+              ? `${zone.name} has no completed captures to play. Set a capture window, or run one from the zone page.`
+              : 'No completed captures to play.'
+          }
+          action={
+            zone ? (
+              <Link href={`/zones/${zone.id}`} className={buttonClass('secondary')}>
+                Open zone
+              </Link>
+            ) : undefined
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-1 laptop:grid-cols-[minmax(0,1fr)_320px] gap-xl items-start">
+          <div className="space-y-lg min-w-0">
+            <Card className="p-lg space-y-lg">
+              <div className="relative">
+                <MapCanvas
+                  polygon={zone?.geometry}
+                  slimTraffic={traffic}
+                  className="h-[28rem] rounded-md overflow-hidden"
+                />
+                {loadingFrame && (
+                  <span className="absolute top-md right-md z-[500] text-micro font-semibold bg-canvas text-text-secondary border border-border rounded-xs px-sm py-xs">
+                    Loading frame…
+                  </span>
                 )}
-                <TrafficLegend className="absolute right-lg bottom-lg bg-black/70 rounded-md px-md py-sm [&_span]:text-white" />
               </div>
 
+              {/* Transport */}
               <div className="flex flex-wrap items-center gap-md">
-                <Button variant="secondary" onClick={() => setPlaying((p) => !p)}>
-                  {playing ? <IconPause /> : <IconPlay />}
-                  {playing ? 'Pause' : 'Play'}
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setPlaying(false)
+                    setCurrent((i) => Math.max(i - 1, 0))
+                  }}
+                  disabled={current === 0}
+                  aria-label="Previous frame"
+                >
+                  <IconArrowLeft size={16} />
+                </Button>
+                <Button onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
+                  {playing ? <IconPause size={16} /> : <IconPlay size={16} />}
+                  <span className="ml-sm">{playing ? 'Pause' : 'Play'}</span>
                 </Button>
                 <Button
                   variant="secondary"
                   onClick={() => {
                     setPlaying(false)
-                    setCurrent(0)
+                    setCurrent((i) => Math.min(i + 1, frames.length - 1))
                   }}
+                  disabled={current >= frames.length - 1}
+                  aria-label="Next frame"
                 >
-                  <IconRotate />
-                  Restart
+                  <IconArrowRight size={16} />
                 </Button>
-                <div className="flex bg-canvas-secondary border border-border rounded-md p-[3px]">
-                  {PLAYBACK_RATE.map((option) => (
+
+                <div className="flex gap-xs ml-auto">
+                  {SPEEDS.map((s, i) => (
                     <button
-                      key={option}
-                      onClick={() => setRate(option)}
+                      key={s.label}
+                      onClick={() => setSpeed(i)}
                       className={cn(
-                        'px-md h-8 rounded-sm text-label tabular-nums transition-colors',
-                        rate === option ? 'bg-canvas text-text-primary font-semibold shadow-elevation-2' : 'text-text-secondary'
+                        'text-micro font-semibold rounded-xs px-sm py-xs transition-colors',
+                        speed === i
+                          ? 'bg-primary text-on-primary'
+                          : 'bg-canvas-secondary text-text-muted hover:text-text-primary',
                       )}
                     >
-                      {option}×
+                      {s.label}
                     </button>
                   ))}
                 </div>
-                <span className="text-caption text-text-secondary tabular-nums ml-auto">
-                  Frame {current + 1} / {frames.length} · {frame.time} · index {frame.index}
-                </span>
               </div>
 
-              {/* Scrubber */}
               <div>
                 <input
                   type="range"
                   min={0}
                   max={frames.length - 1}
                   value={current}
-                  aria-label="Frame position"
                   onChange={(e) => {
                     setPlaying(false)
                     setCurrent(Number(e.target.value))
                   }}
-                  className="w-full accent-[#5A35F3]"
+                  aria-label="Frame position"
+                  className="w-full accent-primary"
                 />
-                <div className="flex mt-xs">
-                  {frames.map((f, i) => (
+                <p className="text-caption text-text-muted mt-xs tabular-nums">
+                  Frame {current + 1} of {frames.length}
+                  {frame && (
+                    <>
+                      <span aria-hidden> · </span>
+                      {frame.time} WIB
+                      {frame.jamFactorAvg !== null && (
+                        <>
+                          <span aria-hidden> · </span>
+                          jam {frame.jamFactorAvg.toFixed(2)}
+                        </>
+                      )}
+                    </>
+                  )}
+                </p>
+              </div>
+            </Card>
+
+            {/* The day at a glance: every frame's congestion, and where you are in it. */}
+            <Card className="p-lg">
+              <p className="text-label text-text-secondary mb-md">Congestion through the day</p>
+              <div className="flex items-end gap-[2px] h-24">
+                {frames.map((f, i) => {
+                  const jam = f.jamFactorAvg ?? 0
+                  const band = bandFor(jam)
+                  return (
                     <button
                       key={f.id}
-                      onClick={() => setCurrent(i)}
-                      title={`${f.time} · index ${f.index}`}
-                      className="flex-1 group"
-                    >
-                      <span
-                        className={cn('block rounded-sm transition-colors', i === current ? 'bg-primary' : 'bg-border group-hover:bg-text-muted')}
-                        style={{ height: `${6 + (f.index / 100) * 26}px` }}
-                      />
-                      <span className="block text-micro text-text-muted tabular-nums mt-xs">
-                        {i % 2 === 0 ? f.time.slice(0, 2) : ''}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                      onClick={() => {
+                        setPlaying(false)
+                        setCurrent(i)
+                      }}
+                      title={`${f.time} · jam ${jam.toFixed(2)}`}
+                      aria-label={`Jump to ${f.time}`}
+                      className={cn(
+                        'flex-1 min-w-[3px] rounded-t-xs transition-opacity',
+                        i === current ? 'opacity-100' : 'opacity-45 hover:opacity-80',
+                      )}
+                      style={{
+                        // 10 is HERE's ceiling, so the bar is a share of "road closed"
+                        // rather than of whatever the busiest frame happened to be.
+                        height: `${Math.max((jam / 10) * 100, 4)}%`,
+                        background: band.color,
+                      }}
+                    />
+                  )
+                })}
               </div>
-            </>
-          ) : (
-            <div className="grid grid-cols-2 tablet:grid-cols-4 gap-md">
-              {frames.map((f, i) => (
-                <button
-                  key={f.id}
-                  onClick={() => {
-                    setCurrent(i)
-                    setView('player')
-                  }}
-                  className={cn(
-                    'text-left rounded-md border overflow-hidden transition-colors',
-                    i === current ? 'border-primary bg-primary-soft/30' : 'border-border hover:border-text-muted'
-                  )}
-                >
-                  <TrafficSchematic className="h-24 w-full" />
-                  <span className="flex items-center justify-between px-sm py-xs bg-canvas">
-                    <span className="text-caption text-text-primary tabular-nums">{f.time}</span>
-                    <span className="text-micro text-text-muted tabular-nums">{f.index}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+              <div className="flex justify-between text-micro text-text-muted mt-sm tabular-nums">
+                <span>{frames[0]?.time}</span>
+                <span>{frames[frames.length - 1]?.time}</span>
+              </div>
+            </Card>
+          </div>
+
+          <div className="space-y-lg">
+            <Card className="p-lg space-y-md">
+              <p className="text-label text-text-secondary">This frame</p>
+              {frame ? (
+                <dl className="space-y-md">
+                  <Row label="Time" value={`${frame.time} WIB`} />
+                  <Row
+                    label="Avg jam factor"
+                    value={frame.jamFactorAvg === null ? '—' : frame.jamFactorAvg.toFixed(2)}
+                    hint={frame.jamFactorAvg === null ? undefined : bandFor(frame.jamFactorAvg).label}
+                  />
+                  <Row
+                    label="Roads"
+                    value={frame.roadsCount === null ? '—' : formatNumber(frame.roadsCount)}
+                  />
+                </dl>
+              ) : (
+                <p className="text-body text-text-secondary">No frame selected.</p>
+              )}
+            </Card>
+
+            <Card className="p-lg">
+              <p className="text-label text-text-secondary mb-sm">Day summary</p>
+              <dl className="space-y-md">
+                <Row label="Frames" value={String(frames.length)} />
+                <Row label="Busiest" value={busiest(frames)} />
+                <Row label="Quietest" value={quietest(frames)} />
+              </dl>
+            </Card>
+
+            {/*
+              Export is not built. Turning frames into a file needs the render pipeline —
+              a headless browser drawing each frame and an encoder stitching them — and
+              none of that exists yet (CAP-02, CAP-03). The old version showed a "Render
+              animation" button that wrote a fake job to local storage and reported
+              success, which is the kind of thing that gets believed.
+            */}
+            <Card className="p-lg">
+              <p className="text-label text-text-secondary mb-sm">Export</p>
+              <Alert variant="warning">
+                Exporting to GIF or MP4 isn&rsquo;t built yet — it needs the render pipeline that also produces
+                branded capture images. Playback here is live from stored traffic data.
+              </Alert>
+            </Card>
+          </div>
         </div>
+      )}
+    </div>
+  )
+}
 
-        {/* Animation panel */}
-        <Card className="p-lg space-y-lg">
-          <h2 className="text-heading-sm text-text-primary">Animation</h2>
+function busiest(frames: Frame[]): string {
+  const scored = frames.filter((f) => f.jamFactorAvg !== null)
+  if (scored.length === 0) return '—'
+  const top = scored.reduce((a, b) => (a.jamFactorAvg! >= b.jamFactorAvg! ? a : b))
+  return `${top.time} · ${top.jamFactorAvg!.toFixed(2)}`
+}
 
-          <div className="space-y-xs">
-            <FormLabel>Speed</FormLabel>
-            <div className="flex bg-canvas-secondary border border-border rounded-md p-[3px]">
-              {SPEEDS.map((option) => (
-                <button
-                  key={option}
-                  onClick={() => setFps(option)}
-                  className={cn(
-                    'flex-1 h-9 rounded-sm text-label tabular-nums transition-colors',
-                    fps === option ? 'bg-canvas text-text-primary font-semibold shadow-elevation-2' : 'text-text-secondary'
-                  )}
-                >
-                  {option} fps
-                </button>
-              ))}
-            </div>
-          </div>
+function quietest(frames: Frame[]): string {
+  const scored = frames.filter((f) => f.jamFactorAvg !== null)
+  if (scored.length === 0) return '—'
+  const low = scored.reduce((a, b) => (a.jamFactorAvg! <= b.jamFactorAvg! ? a : b))
+  return `${low.time} · ${low.jamFactorAvg!.toFixed(2)}`
+}
 
-          <div className="space-y-xs">
-            <FormLabel htmlFor="overlay">Overlay</FormLabel>
-            <Select
-              id="overlay"
-              value={overlay}
-              onValueChange={(v) => setOverlay(v as Overlay)}
-              options={(Object.keys(OVERLAY_LABEL) as Overlay[]).map((option) => ({
-                value: option,
-                label: OVERLAY_LABEL[option],
-              }))}
-              className="w-full"
-            />
-          </div>
-
-          <div className="space-y-xs">
-            <FormLabel htmlFor="anim-title">Title</FormLabel>
-            <Input id="anim-title" value={title} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-
-          <div className="space-y-xs">
-            <FormLabel htmlFor="position">Position</FormLabel>
-            <Select
-              id="position"
-              value={position}
-              onValueChange={setPosition}
-              options={POSITIONS.map((option) => ({ value: option, label: option }))}
-              className="w-full"
-            />
-          </div>
-
-          <div className="space-y-xs">
-            <FormLabel>Format</FormLabel>
-            <div className="flex bg-canvas-secondary border border-border rounded-md p-[3px]">
-              {(['gif', 'mp4', 'webm'] as RenderFormat[]).map((option) => {
-                const locked = option === 'webm' && plan !== 'premium'
-                return (
-                  <button
-                    key={option}
-                    onClick={() => !locked && setFormat(option)}
-                    className={cn(
-                      'flex-1 h-9 rounded-sm text-label uppercase transition-colors',
-                      format === option ? 'bg-canvas text-text-primary font-semibold shadow-elevation-2' : 'text-text-secondary',
-                      locked && 'opacity-50 cursor-not-allowed'
-                    )}
-                  >
-                    {option}
-                  </button>
-                )
-              })}
-            </div>
-            {plan !== 'premium' && <p className="text-micro text-text-muted">WebM is available on the Premium plan.</p>}
-          </div>
-
-          <div className="border-t border-divider pt-lg">
-            <p className="text-caption text-text-secondary">
-              <span className="font-semibold text-text-primary tabular-nums">{frames.length} frames</span> ready ·{' '}
-              <span className="tabular-nums">{durationSec}s</span> at {fps} fps · est.{' '}
-              <span className="tabular-nums">{estimatedMb} MB</span>
-            </p>
-            <p className="text-micro text-text-muted mt-xs">
-              Frame retention on your plan: {PLAN_LIMITS[plan].historyLabel}
-            </p>
-            <Button className="w-full mt-md" onClick={render} disabled={rendering || frames.length === 0}>
-              {rendering ? 'Submitting…' : 'Render animation'}
-            </Button>
-            {rendered && (
-              <p className="text-caption text-success-text mt-sm">
-                Render started — it will appear under “Recent renders” on the Dashboard.
-              </p>
-            )}
-            <button className="w-full text-label text-text-secondary hover:text-text-primary mt-md transition-colors">
-              Save as preset
-            </button>
-          </div>
-        </Card>
-      </div>
+function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-md">
+      <dt className="text-body text-text-secondary">{label}</dt>
+      <dd className="text-right">
+        <span className="text-body font-semibold text-text-primary tabular-nums">{value}</span>
+        {hint && <span className="block text-micro text-text-muted">{hint}</span>}
+      </dd>
     </div>
   )
 }

@@ -67,6 +67,12 @@ export async function detail(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.userId) throw new UnauthorizedError()
     const id = idParam.parse(req.params.id)
+    // `?slim=1` returns lines and colours only — what the Studio player draws. A full
+    // capture is ~2 MB, and a twenty-frame playback of those is 40 MB of geometry
+    // nobody is inspecting road by road.
+    if (req.query.slim === '1') {
+      return res.status(200).json(ok(await captureService.getPlaybackFrame(req.userId, id)))
+    }
     return res.status(200).json(ok(await captureService.getCapture(req.userId, id)))
   } catch (err) {
     next(err)
