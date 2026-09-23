@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * The zone's cycle history, one snapshot at a time (F-07).
+ * The zone's capture history — one cycle at a time, then all of them (F-07).
  *
  * A cycle is one firing of a capture window, or one manual capture. The arrows step
  * through them newest-first and everything on the panel follows the selection — the
@@ -19,6 +19,8 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { Pagination, SortableTh, Table, TableWrap, Td } from '@/components/ui/Table'
+import { useTableControls } from '@/components/ui/useTableControls'
 import { IconArrowLeft, IconArrowRight, IconClock } from '@/components/ui/icons'
 import { cn, formatNumber } from '@/lib/utils'
 import { ROAD_CLASS_LABEL } from '@/lib/constants'
@@ -58,6 +60,19 @@ function lateness(capture: zonesApi.Capture): string | null {
   return minutes < 60 ? `${minutes} min late` : `${Math.round(minutes / 60)} h late`
 }
 
+/** "23 Sep 10:27" in WIB — enough to compare two columns without repeating the year. */
+function shortWib(iso: string): string {
+  return new Intl.DateTimeFormat('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Jakarta',
+  })
+    .format(new Date(iso))
+    .replace(/\./g, ':')
+}
+
 /** "22 Sep 2026 19:27 WIB" — BR-018's format, which the rendered image will also use. */
 function formatWib(iso: string): string {
   return new Intl.DateTimeFormat('id-ID', {
@@ -72,7 +87,7 @@ function formatWib(iso: string): string {
     .replace(/\./g, ':') + ' WIB'
 }
 
-export function ZoneSnapshots({ zone }: { zone: Zone }) {
+export function ZoneCaptures({ zone }: { zone: Zone }) {
   const [cycles, setCycles] = useState<zonesApi.Capture[] | null>(null)
   const [index, setIndex] = useState(0)
   const [detail, setDetail] = useState<zonesApi.CaptureDetail | null>(null)
@@ -91,6 +106,25 @@ export function ZoneSnapshots({ zone }: { zone: Zone }) {
   useEffect(() => {
     load()
   }, [load])
+
+  // The full history as a list. The stepper answers "what did this look like at 07:00?";
+  // the table answers "did everything that was supposed to run actually run?" — which is
+  // the question when a zone has gone quiet, and a one-at-a-time view cannot show it.
+  const table = useTableControls<zonesApi.Capture>({
+    rows: cycles,
+    searchOn: (c) => [c.status, c.trigger],
+    sortOn: {
+      planned: (c) => c.scheduledFor,
+      actual: (c) => c.capturedAt,
+      status: (c) => c.status,
+      trigger: (c) => c.trigger,
+      roads: (c) => c.roadsCount,
+      jam: (c) => c.jamFactorAvg,
+    },
+    defaultDirection: { planned: 'desc', actual: 'desc', roads: 'desc', jam: 'desc' },
+    initialSort: { key: 'actual', direction: 'desc' },
+    pageSize: 10,
+  })
 
   const selected = cycles?.[index] ?? null
 
@@ -145,7 +179,7 @@ export function ZoneSnapshots({ zone }: { zone: Zone }) {
     <section className="space-y-md">
       <div className="flex flex-wrap items-center justify-between gap-md">
         <div>
-          <h2 className="text-section-title text-text-primary">Snapshots</h2>
+          <h2 className="text-section-title text-text-primary">Captures</h2>
           <p className="text-caption text-text-muted mt-xs">
             Every cycle this zone has collected, newest first.
           </p>
@@ -172,7 +206,7 @@ export function ZoneSnapshots({ zone }: { zone: Zone }) {
             <button
               onClick={() => setIndex((i) => Math.min(i + 1, cycles.length - 1))}
               disabled={index >= cycles.length - 1}
-              aria-label="Older snapshot"
+              aria-label="Older capture"
               className={cn(
                 'w-10 h-10 rounded-sm border border-border flex items-center justify-center transition-colors',
                 'hover:bg-canvas-secondary focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
@@ -207,7 +241,7 @@ export function ZoneSnapshots({ zone }: { zone: Zone }) {
             <button
               onClick={() => setIndex((i) => Math.max(i - 1, 0))}
               disabled={index <= 0}
-              aria-label="Newer snapshot"
+              aria-label="Newer capture"
               className={cn(
                 'w-10 h-10 rounded-sm border border-border flex items-center justify-center transition-colors',
                 'hover:bg-canvas-secondary focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
@@ -284,6 +318,120 @@ export function ZoneSnapshots({ zone }: { zone: Zone }) {
             </>
           )}
         </Card>
+      )}
+
+      {/* Planned beside actual is the point of this table. `capturedAt` alone cannot tell
+          an on-time frame from one taken after an outage, and for traffic data that
+          difference is the whole value of the frame. */}
+      {cycles !== null && cycles.length > 0 && (
+        <>
+          <TableWrap>
+            <Table>
+              <thead>
+                <tr>
+          <SortableTh
+            active={table.sort?.key === 'planned'}
+            direction={table.sort?.direction ?? 'asc'}
+            onSort={() => table.toggleSort('planned')}
+          >
+            Time planned
+          </SortableTh>
+          <SortableTh
+            active={table.sort?.key === 'actual'}
+            direction={table.sort?.direction ?? 'asc'}
+            onSort={() => table.toggleSort('actual')}
+          >
+            Time actual
+          </SortableTh>
+          <SortableTh
+            active={table.sort?.key === 'status'}
+            direction={table.sort?.direction ?? 'asc'}
+            onSort={() => table.toggleSort('status')}
+          >
+            Status
+          </SortableTh>
+          <SortableTh
+            active={table.sort?.key === 'trigger'}
+            direction={table.sort?.direction ?? 'asc'}
+            onSort={() => table.toggleSort('trigger')}
+          >
+            Trigger
+          </SortableTh>
+          <SortableTh
+            className="text-right"
+            active={table.sort?.key === 'roads'}
+            direction={table.sort?.direction ?? 'asc'}
+            onSort={() => table.toggleSort('roads')}
+          >
+            Roads
+          </SortableTh>
+          <SortableTh
+            className="text-right"
+            active={table.sort?.key === 'jam'}
+            direction={table.sort?.direction ?? 'asc'}
+            onSort={() => table.toggleSort('jam')}
+          >
+            Avg jam
+          </SortableTh>
+                </tr>
+              </thead>
+              <tbody>
+                {table.visible.map((c) => (
+                  <tr
+                    key={c.id}
+                    onClick={() => {
+                      const at = cycles.findIndex((x) => x.id === c.id)
+                      if (at >= 0) setIndex(at)
+                    }}
+                    className={cn(
+                      'cursor-pointer transition-colors',
+                      c.id === selected?.id ? 'bg-primary-soft/40' : 'hover:bg-canvas-secondary/60'
+                    )}
+                  >
+                    <Td className="tabular-nums whitespace-nowrap">
+                      {c.scheduledFor ? shortWib(c.scheduledFor) : <span className="text-text-muted">&mdash;</span>}
+                    </Td>
+                    <Td className="tabular-nums whitespace-nowrap">
+                      {c.status === 'missed' ? (
+                        <span className="text-text-muted">never ran</span>
+                      ) : (
+                        <>
+                          {shortWib(c.capturedAt)}
+                          {lateness(c) && (
+                            <span className="block text-micro text-warning-text">{lateness(c)}</span>
+                          )}
+                        </>
+                      )}
+                    </Td>
+                    <Td>
+                      <span className={cn('text-micro font-semibold rounded-xs px-sm py-xs', STATUS_STYLE[c.status])}>
+                        {STATUS_LABEL[c.status]}
+                      </span>
+                    </Td>
+                    <Td className="text-text-secondary">
+                      {c.trigger === 'scheduled' ? 'Window' : 'Manual'}
+                    </Td>
+                    <Td className="text-right tabular-nums text-text-secondary">
+                      {c.roadsCount === null ? <span className="text-text-muted">&mdash;</span> : formatNumber(c.roadsCount)}
+                    </Td>
+                    <Td className="text-right tabular-nums text-text-secondary">
+                      {c.jamFactorAvg === null ? <span className="text-text-muted">&mdash;</span> : c.jamFactorAvg.toFixed(2)}
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </TableWrap>
+          <Pagination
+            page={table.page}
+            pageCount={table.pageCount}
+            pageSize={table.pageSize}
+            onPage={table.setPage}
+            matchCount={table.matchCount}
+            totalCount={table.totalCount}
+            noun="captures"
+          />
+        </>
       )}
     </section>
   )

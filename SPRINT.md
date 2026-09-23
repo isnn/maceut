@@ -99,6 +99,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-06** Peta auto-fit ke boundary + `isolate` supaya pane Leaflet tidak menimpa komponen lain | permintaan user |
 | ✅ | **FE-07** Schedule: jendela bertumpuk di-lane; tabel Capture windows di bawah ruler | permintaan user |
 | ✅ | **FE-08** Dashboard: rail tidak lagi terdorong keluar layar; cadence nyata; angka seragam | permintaan user |
+| ✅ | **FE-09** Zona: peringatan hapus pindah ke dialog; panel "Snapshots" jadi "Captures" + tabel planned vs actual | permintaan user |
 | 🔴 | **CAP-03** Render animasi (Studio) belum punya backend sama sekali — endpoint, tabel, worker | studio |
 | ✅ | **BE-16** Scheduler: jendela aktif mem-publish job tiap menit (tanpa dependency baru, ADR-023) | capture-schedule/requirements.md |
 | 🟡 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev — sekarang bisa lewat /internal/users | housekeeping |
@@ -1005,6 +1006,35 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
   284 test (6 baru untuk cadence), tsc + eslint bersih, build lolos, diverifikasi dengan
   screenshot di viewport yang sama dengan laporan user.
+
+[2026-09-23c] Peringatan hapus pindah ke dialognya. Panel Captures dapat tabel.
+
+  ZONA. Baris "Deleting a zone keeps its captures…" berdiri permanen di bawah tabel,
+  padahal dialog konfirmasinya SUDAH mengatakan hal yang sama. Jadi itu duplikasi yang
+  terbaca di setiap kunjungan ke halaman zona, termasuk saat tidak ada yang mau dihapus.
+  Barisnya dihapus; karena kini dialog itu satu-satunya tempat, kalimatnya dilengkapi:
+  jendela capture berhenti SEKETIKA, yang sudah terkumpul disimpan 30 hari, dan ini tidak
+  bisa dibatalkan.
+
+  DETAIL ZONA. "Snapshots" jadi "Captures" — satu kata untuk satu hal, sama dengan yang
+  dipakai API, database, dan sisa antarmuka.
+  Ditambah tabel seluruh riwayat dengan kolom TIME PLANNED dan TIME ACTUAL bersebelahan.
+  Itu inti tabelnya: `capturedAt` sendirian tidak bisa membedakan frame tepat waktu dari
+  frame yang diambil setelah sistem mati, dan untuk data lalu lintas perbedaan itulah
+  seluruh nilai frame-nya. Yang terlewat berbunyi "never ran" di kolom actual, bukan
+  waktu palsu. Capture manual menampilkan "—" di kolom planned — memang tidak ada jadwal
+  yang dilanggar.
+  Stepper menjawab "jam 07:00 tadi kelihatan seperti apa?"; tabel menjawab "apakah semua
+  yang seharusnya jalan benar-benar jalan?" — pertanyaan yang muncul justru saat zona
+  mendadak sepi, dan tidak bisa dijawab tampilan satu-per-satu. Baris tabel mengklik ke
+  stepper, jadi keduanya satu tampilan bukan dua.
+
+  ⚠️ Capture LAMA tetap menyimpan traffic yang belum terpotong — pemotongan baru berlaku
+  sejak commit sebelumnya, dan GeoJSON tersimpan tidak ditulis ulang. Segmen yang
+  melintasi tepi zona juga sengaja disimpan utuh; memotongnya pas akan memutus jalan di
+  tengah.
+
+  284 test hijau, eslint bersih, build lolos, diverifikasi lewat screenshot.
 
 ---
 

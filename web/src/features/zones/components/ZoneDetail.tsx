@@ -17,7 +17,7 @@ import { PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import { MapCanvas } from './MapCanvas'
 import { RoadClassPicker, ROAD_CLASS_ORDER } from './RoadClassPicker'
-import { ZoneSnapshots } from './ZoneSnapshots'
+import { ZoneCaptures } from './ZoneCaptures'
 import * as zonesApi from '../api'
 import * as schedulesApi from '@/features/schedules/api'
 import { DAY_LABEL, INTERVAL_LABEL, framesPerDay, type CaptureWindow } from '@/features/schedules/types'
@@ -252,7 +252,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
         </div>
       </div>
 
-      <ZoneSnapshots zone={zone} />
+      <ZoneCaptures zone={zone} />
 
       {/* The windows that actually make this zone collect — without them a zone
           sits idle, which is invisible from its attributes alone. */}

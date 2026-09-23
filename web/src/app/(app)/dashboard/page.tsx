@@ -266,7 +266,7 @@ export default function DashboardPage() {
             */}
             <p className="text-caption text-text-muted">
               Animation rendering isn&rsquo;t built yet. Captures are collecting in the meantime &mdash; open a zone to
-              step through its snapshots.
+              step through its captures.
             </p>
           </Card>
 

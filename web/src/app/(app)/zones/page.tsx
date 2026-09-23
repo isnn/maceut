@@ -273,16 +273,13 @@ export default function ZonesPage() {
             noun="zones"
             onClearSearch={table.search ? () => table.setSearch('') : undefined}
           />
-          <p className="text-caption text-text-muted">
-            Deleting a zone keeps its captures and animations for 30 days, then removes them.
-          </p>
         </>
       )}
 
       <ConfirmDialog
         open={pendingDelete !== null}
         title={`Delete “${pendingDelete?.name ?? ''}”?`}
-        description="Captures and animations for this zone are kept for 30 days, then removed. Its capture windows stop too."
+        description="Its capture windows stop immediately. Captures and animations already collected are kept for 30 days, then removed. This cannot be undone."
         confirmLabel="Delete zone"
         destructive
         pending={deleting}
