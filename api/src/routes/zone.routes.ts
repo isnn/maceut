@@ -44,7 +44,7 @@ router.use(['/zones', '/zones/:id', '/traffic', '/captures', '/captures/:id'], a
  *           nullable: true
  *           description: Null jika HERE belum dikonfigurasi — artinya "belum diketahui", bukan nol.
  *         lengthKm: { type: number, nullable: true }
- *         cadence: { type: string, example: Belum dijadwalkan }
+ *         cadence: { type: string, nullable: true, example: Hourly · 07:00–09:00, description: null = tidak ada jendela aktif; kalimatnya urusan UI }
  *         createdAt: { type: string, format: date-time }
  */
 

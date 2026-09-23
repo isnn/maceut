@@ -49,7 +49,17 @@ export interface CollectionHealth {
   status: 'healthy' | 'degraded' | 'idle'
   /** "HH:mm" in WIB, from the active windows. Null when nothing is scheduled. */
   nextCaptureAt: string | null
-  nextCaptureNote: string
+  /**
+   * Whole days from now until that firing, on Jakarta's calendar. 0 = today.
+   * Null alongside a null `nextCaptureAt`.
+   *
+   * Structured rather than a sentence: this used to return Indonesian prose — "5 hari
+   * lagi · 13 zona" — straight into an English interface. Phrasing belongs to whoever
+   * is doing the speaking, and that is not the API.
+   */
+  nextCaptureInDays: number | null
+  /** How many zones that firing covers. */
+  zonesCollecting: number
   /** Summed from zones' roadsCount; null while HERE is unavailable. */
   roadsReporting: number | null
   /** Null until captures exist. */
@@ -155,20 +165,14 @@ export async function getCollectionHealth(userId: string): Promise<CollectionHea
   const status: CollectionHealth['status'] =
     active.length === 0 ? 'idle' : pausedCount > 0 ? 'degraded' : 'healthy'
 
-  function describeNext(): string {
-    if (!nextFire) {
-      return active.length === 0 ? 'Belum ada jendela aktif' : 'Menunggu jadwal berikutnya dihitung'
-    }
-    // Compared in Jakarta, because "today" and "tomorrow" are the user's days.
-    const dayOffset = wibDayOffset(now, nextFire)
-    const when = dayOffset === 0 ? 'hari ini' : dayOffset === 1 ? 'besok' : `${dayOffset} hari lagi`
-    return `${when} · ${collecting.length} zona`
-  }
+
 
   return {
     status,
     nextCaptureAt: nextFire ? formatHHMM(nowInWibMinutes(nextFire)) : null,
-    nextCaptureNote: describeNext(),
+    // Compared in Jakarta, because "today" and "tomorrow" are the user's days.
+    nextCaptureInDays: nextFire ? wibDayOffset(now, nextFire) : null,
+    zonesCollecting: collecting.length,
     roadsReporting,
     missedCaptures: null,
     peakIndex: null,

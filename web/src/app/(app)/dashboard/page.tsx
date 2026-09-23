@@ -7,12 +7,43 @@ import { ZoneStatusPill } from '@/components/ui/Badge'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { buttonClass } from '@/components/ui/Button'
-import { cn } from '@/lib/utils'
+import { cn, formatNumber, formatKm } from '@/lib/utils'
 import * as dashboardApi from '@/features/dashboard/api'
 import * as zonesApi from '@/features/zones/api'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import type { CollectionHealth, UsageSummary } from '@/features/dashboard/api'
 import type { Zone } from '@/features/zones/types'
+
+/**
+ * How many zones the dashboard lists before deferring to the Zones page.
+ *
+ * It listed every one, so an account with a dozen pushed Latest captures off the bottom
+ * of the page and left the right-hand rail floating beside a column of near-identical
+ * rows. The dashboard is a summary; the full list already has its own page with search,
+ * sorting and paging.
+ */
+const ZONES_ON_DASHBOARD = 5
+
+/**
+ * When the next capture lands, in words.
+ *
+ * The API used to send this as a finished sentence, in Indonesian, into an English
+ * interface. It now sends the day count and the zone count, and the phrasing happens
+ * here — where the rest of the copy already lives.
+ */
+function nextCaptureNote(health: CollectionHealth): string {
+  if (health.nextCaptureInDays === null) {
+    return health.zonesCollecting === 0 ? 'No zones collecting yet' : 'Waiting for the next firing to be scheduled'
+  }
+  const when =
+    health.nextCaptureInDays === 0
+      ? 'today'
+      : health.nextCaptureInDays === 1
+        ? 'tomorrow'
+        : `in ${health.nextCaptureInDays} days`
+  const zones = `${health.zonesCollecting} ${health.zonesCollecting === 1 ? 'zone' : 'zones'}`
+  return `${when} · ${zones}`
+}
 
 /** Short labels for the strip — a 144px tile is no place for a sentence. */
 const CAPTURE_STATUS_SHORT: Record<zonesApi.CaptureStatus, string> = {
@@ -76,7 +107,10 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-page-title font-bold text-text-primary">Dashboard</h1>
           <p className="text-body text-text-secondary mt-xs">
-            Hi {user.fullName?.split(' ')[0] || user.email} — here&rsquo;s your workspace today.
+            {/* Explicit string: JSX collapsed the space before the dash, so this read
+                "Hi Table— here's" rather than "Hi Table — here's". */}
+            Hi {user.fullName?.split(' ')[0] || user.email}
+            {' — '}here&rsquo;s your workspace today.
           </p>
         </div>
         <Link
@@ -119,14 +153,21 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 laptop:grid-cols-[1fr_340px] gap-xl items-start">
-        <div className="space-y-xl">
+      {/*
+        `min-w-0` on the left column is load-bearing, not tidiness. A grid item defaults
+        to `min-width: auto`, which refuses to shrink below its content — and the capture
+        strip below is eight 144px tiles wide. Without it the 1fr column expands past the
+        container and shoves the 340px rail off the side of the screen, taking Collection
+        health's values with it.
+      */}
+      <div className="grid grid-cols-1 laptop:grid-cols-[minmax(0,1fr)_340px] gap-xl items-start">
+        <div className="space-y-xl min-w-0">
           {/* Zones */}
           <section>
             <div className="flex items-center justify-between mb-md">
               <h2 className="text-section-title text-text-primary">Your zones</h2>
               <Link href="/zones" className="text-body text-info no-underline hover:underline">
-                Manage all
+                {zones.length > ZONES_ON_DASHBOARD ? `Manage all ${zones.length}` : 'Manage all'}
               </Link>
             </div>
             {zones.length === 0 ? (
@@ -144,19 +185,27 @@ export default function DashboardPage() {
               />
             ) : (
               <ul className="bg-card border border-border rounded-lg divide-y divide-divider">
-                {zones.map((zone) => (
+                {zones.slice(0, ZONES_ON_DASHBOARD).map((zone) => (
                   <li key={zone.id} className="flex items-center justify-between gap-md px-lg py-md">
                     <div className="min-w-0">
                       <p className="text-body font-semibold text-text-primary truncate">{zone.name}</p>
                       <p className="text-caption text-text-muted mt-xs">
-                        {zone.cadence}
-                        {zone.roadsCount !== null && ` · ${zone.roadsCount} roads`}
-                        {zone.lengthKm !== null && ` · ${zone.lengthKm} km`}
+                        {zone.cadence ?? 'Not scheduled'}
+                        {zone.roadsCount !== null && ` · ${formatNumber(zone.roadsCount)} roads`}
+                        {zone.lengthKm !== null && ` · ${formatKm(zone.lengthKm)}`}
                       </p>
                     </div>
                     <ZoneStatusPill status={zone.status} />
                   </li>
                 ))}
+                  {zones.length > ZONES_ON_DASHBOARD && (
+                    <li className="px-lg py-md">
+                      <Link href="/zones" className="text-caption text-info no-underline hover:underline">
+                        {zones.length - ZONES_ON_DASHBOARD} more{' '}
+                        {zones.length - ZONES_ON_DASHBOARD === 1 ? 'zone' : 'zones'}
+                      </Link>
+                    </li>
+                  )}
               </ul>
             )}
           </section>
@@ -190,7 +239,7 @@ export default function DashboardPage() {
                       >
                         <span className="text-caption text-text-secondary tabular-nums">
                           {capture.status === 'done'
-                            ? `${capture.roadsCount?.toLocaleString('id-ID') ?? '—'} roads`
+                            ? `${capture.roadsCount === null ? '—' : formatNumber(capture.roadsCount)} roads`
                             : CAPTURE_STATUS_SHORT[capture.status]}
                         </span>
                       </div>
@@ -237,10 +286,14 @@ export default function DashboardPage() {
               </span>
             </div>
             <dl className="space-y-md">
-              <HealthRow label="Next capture" value={health.nextCaptureAt ?? '—'} note={health.nextCaptureNote} />
+              <HealthRow
+                label="Next capture"
+                value={health.nextCaptureAt ?? '—'}
+                note={nextCaptureNote(health)}
+              />
               <HealthRow
                 label="Roads reporting"
-                value={health.roadsReporting === null ? '—' : String(health.roadsReporting)}
+                value={health.roadsReporting === null ? '—' : formatNumber(health.roadsReporting)}
                 note={health.roadsReporting === null ? 'Waiting on traffic data' : undefined}
               />
               <HealthRow

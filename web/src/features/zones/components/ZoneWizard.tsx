@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { FormLabel, Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
 import { RoadClassBadge } from '@/components/ui/Badge'
-import { cn } from '@/lib/utils'
+import { cn, formatNumber, formatKm } from '@/lib/utils'
 import { IconCheck } from '@/components/ui/icons'
 import { PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { ApiError } from '@/types/api'
@@ -267,7 +267,7 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
               label="Roads inside"
               value={
                 matched
-                  ? `${matched.roads.toLocaleString('id-ID')} · ${matched.lengthKm.toLocaleString('id-ID')} km`
+                  ? `${formatNumber(matched.roads)} · ${formatKm(matched.lengthKm)}`
                   : '—'
               }
             />

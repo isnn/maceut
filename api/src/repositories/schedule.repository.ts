@@ -247,3 +247,50 @@ export async function earliestDueForUser(userId: string): Promise<Date | null> {
   const value = rows[0]?.next
   return value ? new Date(value) : null
 }
+
+export interface ZoneCadence {
+  activeWindows: number
+  /** The finest interval any of the zone's active windows uses. */
+  finestInterval: CaptureInterval
+  /** Earliest start and latest end across them, "HH:mm". */
+  earliestStart: string
+  latestEnd: string
+}
+
+/**
+ * What each zone is actually scheduled to do — one grouped query for a whole page.
+ *
+ * Zones list their cadence, and it used to be a hardcoded string saying nothing was
+ * scheduled, which stayed wrong even after a zone had been collecting hourly for days.
+ * Zones with no active window are simply absent from the map, which the caller reads as
+ * "not scheduled" — the one case where that answer is true.
+ */
+export async function cadenceByZone(userId: string): Promise<Map<string, ZoneCadence>> {
+  const rows = await db
+    .select({
+      zoneId: schedules.zoneId,
+      count: sql<number>`count(*)::int`,
+      // '15min' < 'daily' < 'hourly' alphabetically, which is not the order we want, so
+      // the finest interval is picked by an explicit rank rather than by min() on text.
+      finest: sql<number>`min(case ${schedules.interval}
+        when '15min' then 0 when 'hourly' then 1 else 2 end)`,
+      earliestStart: sql<string>`min(${schedules.startTime})`,
+      latestEnd: sql<string>`max(${schedules.endTime})`,
+    })
+    .from(schedules)
+    .where(and(eq(schedules.userId, userId), eq(schedules.status, 'active')))
+    .groupBy(schedules.zoneId)
+
+  const byRank: CaptureInterval[] = ['15min', 'hourly', 'daily']
+  return new Map(
+    rows.map((r) => [
+      r.zoneId,
+      {
+        activeWindows: r.count,
+        finestInterval: byRank[r.finest] ?? 'daily',
+        earliestStart: r.earliestStart,
+        latestEnd: r.latestEnd,
+      },
+    ]),
+  )
+}

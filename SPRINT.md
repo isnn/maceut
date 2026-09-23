@@ -98,6 +98,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-05** Traffic dipotong ke polygon zona — bbox HERE selalu lebih besar dari zonanya | permintaan user |
 | ✅ | **FE-06** Peta auto-fit ke boundary + `isolate` supaya pane Leaflet tidak menimpa komponen lain | permintaan user |
 | ✅ | **FE-07** Schedule: jendela bertumpuk di-lane; tabel Capture windows di bawah ruler | permintaan user |
+| ✅ | **FE-08** Dashboard: rail tidak lagi terdorong keluar layar; cadence nyata; angka seragam | permintaan user |
 | 🔴 | **CAP-03** Render animasi (Studio) belum punya backend sama sekali — endpoint, tabel, worker | studio |
 | ✅ | **BE-16** Scheduler: jendela aktif mem-publish job tiap menit (tanpa dependency baru, ADR-023) | capture-schedule/requirements.md |
 | 🟡 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev — sekarang bisa lewat /internal/users | housekeeping |
@@ -968,6 +969,42 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
   278 test (6 baru untuk clipping), tsc + eslint bersih, production build lolos, tiga
   halaman diverifikasi di browser tanpa error klien.
+
+[2026-09-23b] Dashboard: rail terdorong keluar layar, cadence bohong, angka tidak seragam.
+
+  RAIL KELUAR LAYAR — penyebabnya spesifik, bukan sekadar CSS berantakan. Item grid
+  default-nya `min-width: auto`, artinya MENOLAK menyusut di bawah lebar kontennya. Strip
+  "Latest captures" di kolom kiri adalah delapan kartu 144px berdampingan, jadi kolom 1fr
+  melebar melewati containernya dan mendorong rail 340px keluar dari layar — membawa
+  serta semua NILAI di Collection health, yang rata-kanan. Labelnya kelihatan, angkanya
+  tidak. Perbaikannya `minmax(0,1fr)` + `min-w-0`.
+
+  CADENCE BOHONG, bukan cuma salah bahasa. `cadence` adalah konstanta
+  'Belum dijadwalkan' — teks Indonesia di antarmuka Inggris, DAN permanen salah: zona
+  yang sudah mengumpulkan tiap jam berhari-hari tetap melaporkan tidak ada jadwal.
+  Sekarang diturunkan dari jendela aktif yang sungguhan, satu query GROUP BY untuk
+  seluruh daftar: "Every 15 min · 19:27–19:57", "Hourly · 4 windows", atau `null` —
+  dan `null` berarti tidak ada jendela aktif, satu-satunya kasus di mana "not scheduled"
+  memang benar.
+  Kalimatnya dikembalikan ke UI. Catatan Collection health juga mengirim prosa Indonesia
+  ("5 hari lagi · 13 zona") ke antarmuka Inggris; API sekarang mengirim `nextCaptureInDays`
+  dan `zonesCollecting`, UI yang merangkainya. Menyusun kalimat bukan tugas API.
+
+  ANGKA TIDAK SERAGAM, dan itu betul-betul membingungkan. Satu layar menampilkan
+  `11652 roads` (tanpa pemisah), `9.645 roads` (id-ID), dan `501.69 km` — jadi TITIK
+  berarti "ribuan" sekaligus "koma desimal" di layar yang sama, dan "9.645" terbaca
+  sembilan-koma-enam. Satu helper `formatNumber`/`formatKm` dipakai di semua tempat;
+  empat call site berarti empat kesempatan memilih locale berbeda, dan begitulah ini
+  terjadi.
+
+  Dua lagi dari screenshot: JSX menelan spasi sebelum em-dash sehingga sapaannya berbunyi
+  "Hi Table— here's" (diperbaiki dengan `{' — '}` eksplisit), dan daftar zona tidak
+  dibatasi — akun dengan 13 zona mendorong "Latest captures" keluar halaman dan
+  meninggalkan rail mengambang di samping kolom baris yang nyaris sama semua. Dibatasi 5
+  dengan "8 more zones"; daftar lengkapnya sudah punya halaman sendiri.
+
+  284 test (6 baru untuk cadence), tsc + eslint bersih, build lolos, diverifikasi dengan
+  screenshot di viewport yang sama dengan laporan user.
 
 ---
 

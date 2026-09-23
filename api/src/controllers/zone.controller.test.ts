@@ -11,6 +11,11 @@ vi.mock('better-auth/node', () => ({
   },
   fromNodeHeaders: (h: unknown) => h,
 }))
+// Zones report their cadence from the windows pointing at them, so the zone endpoints
+// now read this too.
+vi.mock('../repositories/schedule.repository', () => ({
+  cadenceByZone: vi.fn(async () => new Map()),
+}))
 vi.mock('../repositories/user.repository', () => ({
   findById: vi.fn(),
   findByIdWithPlan: vi.fn(),

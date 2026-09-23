@@ -24,7 +24,8 @@ export interface Zone {
   roadsCount: number | null
   lengthKm: number | null
   /** Human label for the zone's cadence, e.g. "Per jam" (set on Schedule). */
-  cadence: string
+  /** Null when no active window points at this zone. */
+  cadence: string | null
   createdAt: string
 }
 

@@ -19,7 +19,9 @@ export interface CollectionHealth {
   status: 'healthy' | 'degraded' | 'idle'
   /** "HH:mm" WIB, derived from the active windows. Null when nothing is scheduled. */
   nextCaptureAt: string | null
-  nextCaptureNote: string
+  /** Whole days until that firing on Jakarta's calendar; 0 = today. */
+  nextCaptureInDays: number | null
+  zonesCollecting: number
   roadsReporting: number | null
   missedCaptures: number | null
   peakIndex: number | null

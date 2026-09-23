@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { UpgradeModal } from '@/components/ui/UpgradeModal'
-import { cn } from '@/lib/utils'
+import { cn, formatNumber, formatKm } from '@/lib/utils'
 import { PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
 import * as zonesApi from '../api'
 import type { RoadClass, ZoneGeometry } from '../types'
@@ -109,7 +109,7 @@ export function RoadClassPicker({ value, onChange, geometry, plan }: RoadClassPi
             <span className="block text-micro text-text-muted mt-xs">{ROAD_CLASS_DESCRIPTION[option]}</span>
             <span className="block text-micro text-text-secondary mt-xs tabular-nums">
               {count
-                ? `${count.roads.toLocaleString('id-ID')} roads · ${count.lengthKm.toLocaleString('id-ID')} km`
+                ? `${formatNumber(count.roads)} roads · ${formatKm(count.lengthKm)}`
                 : countsFailed
                   ? 'Road count unavailable'
                   : 'Counting roads…'}

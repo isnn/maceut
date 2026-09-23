@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { IconArrowLeft, IconArrowRight, IconClock } from '@/components/ui/icons'
-import { cn } from '@/lib/utils'
+import { cn, formatNumber } from '@/lib/utils'
 import { ROAD_CLASS_LABEL } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import { MapCanvas } from './MapCanvas'
@@ -253,7 +253,7 @@ export function ZoneSnapshots({ zone }: { zone: Zone }) {
               )}
 
               <dl className="grid grid-cols-2 tablet:grid-cols-4 gap-lg">
-                <Figure label="Roads" value={selected.roadsCount?.toLocaleString('id-ID') ?? '—'} />
+                <Figure label="Roads" value={selected.roadsCount === null ? '—' : formatNumber(selected.roadsCount)} />
                 <Figure
                   label="Avg jam factor"
                   value={selected.jamFactorAvg === null ? '—' : selected.jamFactorAvg.toFixed(2)}

@@ -1,4 +1,6 @@
 import * as zoneRepo from '../repositories/zone.repository'
+import * as scheduleRepo from '../repositories/schedule.repository'
+import type { CaptureInterval } from '../types/schedule'
 import * as here from '../lib/here-traffic-client'
 import { isHereConfigured } from '../config/env'
 import { NotFoundError, ForbiddenError, ZoneNameTakenError, RoadClassNotAllowedError, ValidationError } from '../errors'
@@ -26,15 +28,38 @@ export interface PublicZone {
   /** Null when HERE is unconfigured — "not known", which the UI renders as "—". */
   roadsCount: number | null
   lengthKm: number | null
-  /** Human label for the zone's cadence. Fixed until schedules exist. */
-  cadence: string
+  /**
+   * What this zone is scheduled to do, in words. Null when no active window points at
+   * it — absence rather than a sentence, so the UI decides how to phrase "not
+   * scheduled" in its own language.
+   */
+  cadence: string | null
   createdAt: string
 }
 
-/** Shown until the schedules feature can report a real cadence. */
-const NO_SCHEDULE_CADENCE = 'Belum dijadwalkan'
+const INTERVAL_WORD: Record<CaptureInterval, string> = {
+  '15min': 'Every 15 min',
+  hourly: 'Hourly',
+  daily: 'Daily',
+}
 
-export function toPublic(zone: ZoneRecord): PublicZone {
+/**
+ * A one-line description of a zone's schedule, from its actual windows.
+ *
+ * This used to be the constant string "Belum dijadwalkan" — Indonesian copy in an
+ * English interface, and, worse, permanently wrong: a zone collecting hourly for days
+ * still reported that nothing was scheduled. Display copy was never the API's to
+ * invent; what it owes the caller is the facts.
+ */
+function describeCadence(cadence?: scheduleRepo.ZoneCadence): string | null {
+  if (!cadence || cadence.activeWindows === 0) return null
+  const word = INTERVAL_WORD[cadence.finestInterval]
+  return cadence.activeWindows === 1
+    ? `${word} · ${cadence.earliestStart}–${cadence.latestEnd}`
+    : `${word} · ${cadence.activeWindows} windows`
+}
+
+export function toPublic(zone: ZoneRecord, cadence?: scheduleRepo.ZoneCadence): PublicZone {
   return {
     id: zone.id,
     name: zone.name,
@@ -44,7 +69,7 @@ export function toPublic(zone: ZoneRecord): PublicZone {
     areaKm2: zone.areaKm2,
     roadsCount: zone.roadsCount,
     lengthKm: zone.lengthKm,
-    cadence: NO_SCHEDULE_CADENCE,
+    cadence: describeCadence(cadence),
     createdAt: zone.createdAt.toISOString(),
   }
 }
@@ -180,11 +205,19 @@ export async function createZone(userId: string, plan: Plan, input: CreateZoneIn
 }
 
 export async function getZonesForUser(userId: string): Promise<PublicZone[]> {
-  return (await zoneRepo.findByUserId(userId)).map(toPublic)
+  // One grouped query for the whole list rather than one per zone — the list is every
+  // zone the account owns, so per-zone lookups would get slower with each new zone.
+  const [zones, cadences] = await Promise.all([
+    zoneRepo.findByUserId(userId),
+    scheduleRepo.cadenceByZone(userId),
+  ])
+  return zones.map((zone) => toPublic(zone, cadences.get(zone.id)))
 }
 
 export async function getZone(userId: string, zoneId: string): Promise<PublicZone> {
-  return toPublic(await ownedZone(userId, zoneId))
+  const zone = await ownedZone(userId, zoneId)
+  const cadences = await scheduleRepo.cadenceByZone(userId)
+  return toPublic(zone, cadences.get(zone.id))
 }
 
 export interface UpdateZoneInput {

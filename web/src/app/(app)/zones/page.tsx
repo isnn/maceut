@@ -237,7 +237,7 @@ export default function ZonesPage() {
                     </Td>
                     <Td className="text-right tabular-nums">{zone.areaKm2} km²</Td>
                     <Td className="text-right tabular-nums">{zone.roadsCount ?? '—'}</Td>
-                    <Td className="text-text-secondary">{zone.cadence}</Td>
+                    <Td className="text-text-secondary">{zone.cadence ?? <span className="text-text-muted">Not scheduled</span>}</Td>
                     <Td>
                       <ZoneStatusPill status={zone.status} />
                     </Td>

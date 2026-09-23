@@ -149,7 +149,7 @@ describe('getCollectionHealth — next capture', () => {
     const health = await getCollectionHealth(USER)
 
     expect(health.nextCaptureAt).toBe('07:00')
-    expect(health.nextCaptureNote).toContain('hari ini')
+    expect(health.nextCaptureInDays).toBe(0)
   })
 
   it('says tomorrow when the next firing is the next day in Jakarta', async () => {
@@ -157,7 +157,7 @@ describe('getCollectionHealth — next capture', () => {
     vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
     vi.mocked(scheduleRepo.earliestDueForUser).mockResolvedValue(new Date('2026-09-23T00:00:00Z'))
 
-    expect((await getCollectionHealth(USER)).nextCaptureNote).toContain('besok')
+    expect((await getCollectionHealth(USER)).nextCaptureInDays).toBe(1)
   })
 
   it('counts the days ahead on Jakarta’s calendar', async () => {
@@ -165,7 +165,7 @@ describe('getCollectionHealth — next capture', () => {
     vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
     vi.mocked(scheduleRepo.earliestDueForUser).mockResolvedValue(new Date('2026-09-21T00:00:00Z'))
 
-    expect((await getCollectionHealth(USER)).nextCaptureNote).toContain('2 hari lagi')
+    expect((await getCollectionHealth(USER)).nextCaptureInDays).toBe(2)
   })
 
   it('reads the clock in WIB, not UTC', async () => {
@@ -175,7 +175,7 @@ describe('getCollectionHealth — next capture', () => {
     vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
     vi.mocked(scheduleRepo.earliestDueForUser).mockResolvedValue(new Date('2026-09-21T00:00:00Z'))
 
-    expect((await getCollectionHealth(USER)).nextCaptureNote).toContain('hari ini')
+    expect((await getCollectionHealth(USER)).nextCaptureInDays).toBe(0)
   })
 
   it('renders the firing time in WIB', async () => {
@@ -194,16 +194,16 @@ describe('getCollectionHealth — next capture', () => {
     const health = await getCollectionHealth(USER)
 
     expect(health.nextCaptureAt).toBeNull()
-    expect(health.nextCaptureNote).toMatch(/Belum ada jendela aktif/)
+    expect(health.nextCaptureInDays).toBeNull()
   })
 
-  it('says so when a window is active but its firing is not computed yet', async () => {
-    // A window seeded seconds ago, before the scheduler's first pass. Saying "no active
-    // window" there would be wrong; saying nothing at all would look broken.
+  it('reports no day when a window is active but its firing is not computed yet', async () => {
+    // A window seeded seconds ago, before the scheduler's first pass. The UI tells those
+    // two cases apart by `zonesCollecting`; the API stopped phrasing either of them.
     vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
     vi.mocked(scheduleRepo.earliestDueForUser).mockResolvedValue(null)
 
-    expect((await getCollectionHealth(USER)).nextCaptureNote).toMatch(/Menunggu jadwal berikutnya/)
+    expect((await getCollectionHealth(USER)).nextCaptureInDays).toBeNull()
   })
 })
 
