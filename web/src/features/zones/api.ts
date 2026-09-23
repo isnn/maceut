@@ -131,7 +131,7 @@ export async function getTrafficPreview(
 
 // --- captures: one row per cycle a zone collects (F-07) -------------------------
 
-export type CaptureStatus = 'pending' | 'processing' | 'done' | 'failed' | 'skipped_limit'
+export type CaptureStatus = 'pending' | 'processing' | 'done' | 'failed' | 'skipped_limit' | 'missed'
 export type CaptureTrigger = 'manual' | 'scheduled'
 
 export interface Capture {
@@ -148,6 +148,10 @@ export interface Capture {
   filePath: string | null
   fileSize: number | null
   error: string | null
+  /** When it was due. Null for manual captures, which are due when asked. */
+  scheduledFor: string | null
+  /** Seconds between due and collected. Null when there was nothing to be late for. */
+  lateBySeconds: number | null
   capturedAt: string
 }
 

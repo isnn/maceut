@@ -356,7 +356,7 @@ router.post('/zones/:id/captures', captureController.create)
  *         id: { type: string, format: uuid }
  *         zoneId: { type: string, format: uuid }
  *         scheduleId: { type: string, format: uuid, nullable: true, description: null untuk capture manual }
- *         status: { type: string, enum: [pending, processing, done, failed, skipped_limit] }
+ *         status: { type: string, enum: [pending, processing, done, failed, skipped_limit, missed], description: missed = sistem tidak aktif saat jatuh tempo; tidak dicoba, jadi bukan kegagalan }
  *         trigger: { type: string, enum: [manual, scheduled] }
  *         roadClass: { type: string, enum: [nasional, nasional_provinsi, semua] }
  *         roadsCount: { type: integer, nullable: true }
@@ -364,6 +364,15 @@ router.post('/zones/:id/captures', captureController.create)
  *         filePath: { type: string, nullable: true, description: Path R2; null = belum ada gambar, BUKAN belum ada data }
  *         fileSize: { type: integer, nullable: true }
  *         error: { type: string, nullable: true }
+ *         scheduledFor:
+ *           type: string
+ *           format: date-time
+ *           nullable: true
+ *           description: Kapan siklus ini SEHARUSNYA jalan. Null untuk capture manual.
+ *         lateBySeconds:
+ *           type: integer
+ *           nullable: true
+ *           description: Selisih jatuh tempo dan pengambilan. Fakta, bukan tebakan, karena keduanya disimpan.
  *         capturedAt: { type: string, format: date-time }
  */
 

@@ -112,6 +112,8 @@ const schema = z.object({
 
   RABBITMQ_URL: requiredStr('RABBITMQ_URL'),
   RABBITMQ_QUEUE_CAPTURE: z.string().trim().default('capture-jobs'),
+  /** How many captures the worker runs at once. Raise for throughput, lower if HERE rate-limits. */
+  CAPTURE_CONCURRENCY: z.coerce.number().int().positive().max(32).default(4),
   RABBITMQ_QUEUE_DEAD_LETTER: z.string().trim().default('capture-dead-letter'),
 
   // Optional at boot — see rule 2 above.
@@ -201,6 +203,7 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
 
     rabbitmqUrl: e.RABBITMQ_URL,
     rabbitmqQueueCapture: e.RABBITMQ_QUEUE_CAPTURE,
+    captureConcurrency: e.CAPTURE_CONCURRENCY,
     rabbitmqQueueDeadLetter: e.RABBITMQ_QUEUE_DEAD_LETTER,
 
     r2AccountId: e.R2_ACCOUNT_ID,

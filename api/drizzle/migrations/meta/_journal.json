@@ -57,6 +57,13 @@
       "when": 1790079598537,
       "tag": "0007_captures",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790133586358,
+      "tag": "0008_next_fire_at",
+      "breakpoints": true
     }
   ]
 }

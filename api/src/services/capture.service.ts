@@ -32,6 +32,16 @@ export interface PublicCapture {
   filePath: string | null
   fileSize: number | null
   error: string | null
+  /** The instant it was due. Null for manual captures, which are due when asked. */
+  scheduledFor: string | null
+  /**
+   * Seconds between due and collected. Null when there was nothing to be late for.
+   *
+   * A fact rather than a guess, because both instants are stored — `capturedAt` alone
+   * cannot tell an on-time frame from one taken after an outage, and for traffic data
+   * that difference is the whole value of the frame.
+   */
+  lateBySeconds: number | null
   capturedAt: string
 }
 
@@ -52,6 +62,10 @@ export function toPublic(row: AnyCaptureRow): PublicCapture {
     filePath: row.filePath,
     fileSize: row.fileSize,
     error: row.error,
+    scheduledFor: row.scheduledFor?.toISOString() ?? null,
+    lateBySeconds: row.scheduledFor
+      ? Math.round((row.capturedAt.getTime() - row.scheduledFor.getTime()) / 1000)
+      : null,
     capturedAt: row.capturedAt.toISOString(),
   }
 }
@@ -76,7 +90,12 @@ export interface EnqueueResult {
 export async function enqueueCapture(
   userId: string,
   zoneId: string,
-  opts: { trigger: captureRepo.CaptureTrigger; scheduleId?: string | null } = { trigger: 'manual' },
+  opts: {
+    trigger: captureRepo.CaptureTrigger
+    scheduleId?: string | null
+    /** The instant this was due, for scheduled cycles. Drives the lateness figure. */
+    scheduledFor?: Date | null
+  } = { trigger: 'manual' },
 ): Promise<EnqueueResult> {
   const zone = await zoneRepo.findById(zoneId)
   if (!zone) throw new NotFoundError('Zone')
@@ -100,6 +119,7 @@ export async function enqueueCapture(
       scheduleId: opts.scheduleId ?? null,
       trigger: opts.trigger,
       roadClass,
+      scheduledFor: opts.scheduledFor ?? null,
       status: 'skipped_limit',
       error: `Batas ${limit} capture per hari sudah tercapai.`,
     })
@@ -112,6 +132,7 @@ export async function enqueueCapture(
     scheduleId: opts.scheduleId ?? null,
     trigger: opts.trigger,
     roadClass,
+    scheduledFor: opts.scheduledFor ?? null,
     status: 'pending',
   })
 
@@ -176,4 +197,58 @@ export async function getCapture(userId: string, captureId: string): Promise<Cap
   if (row.userId !== userId) throw new ForbiddenError('Capture ini bukan milik Anda.')
 
   return { ...toPublic(row), traffic: row.traffic ?? null }
+}
+
+export interface MissedInput {
+  scheduleId: string
+  /** The firing that was due when the system was unavailable. */
+  scheduledFor: Date
+  /** How many firings the outage swallowed, this one included. */
+  occurrences: number
+  lateBySeconds: number
+}
+
+/**
+ * Records firings the system was down for, without taking them.
+ *
+ * Deliberately not fired late. The value of a 07:00 frame is that it is from 07:00 — one
+ * collected at 11:40 is a different and misleading answer, and it would spend the
+ * account's daily quota on something nobody asked for. Nor is it silently dropped, which
+ * is what happened before: the window stayed active, the dashboard kept predicting the
+ * next capture, and the zone just had a hole in it.
+ *
+ * One row per outage per window, not one per swallowed firing. A five-hour gap on a
+ * 15-minute window is twenty rows of identical noise; one row saying "20 firings missed"
+ * is the same information in a form somebody will actually read.
+ *
+ * `missed` counts against nothing — not the daily limit (BR-006), because no capture was
+ * taken, and not the failure count, because nothing was attempted.
+ */
+export async function recordMissed(
+  userId: string,
+  zoneId: string,
+  input: MissedInput,
+): Promise<PublicCapture> {
+  const zone = await zoneRepo.findById(zoneId)
+  if (!zone) throw new NotFoundError('Zone')
+
+  const account = await userRepo.findByIdWithPlan(userId)
+  const roadClass = effectiveRoadClass(zone.roadClass as RoadClass, account?.plan ?? 'free')
+
+  const minutes = Math.round(input.lateBySeconds / 60)
+  const row = await captureRepo.create({
+    userId,
+    zoneId,
+    scheduleId: input.scheduleId,
+    trigger: 'scheduled',
+    roadClass,
+    status: 'missed',
+    scheduledFor: input.scheduledFor,
+    error:
+      input.occurrences > 1
+        ? `${input.occurrences} jadwal terlewat — sistem tidak aktif selama ${minutes} menit.`
+        : `Jadwal terlewat — sistem tidak aktif selama ${minutes} menit.`,
+  })
+
+  return toPublic(row)
 }

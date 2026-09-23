@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { firesAt, wibMinutes, wibWeekday, type FirableWindow } from './capture.scheduler'
+import {
+  firesAt,
+  nextFireAfter,
+  countFiringsBetween,
+  wibMinutes,
+  wibWeekday,
+  type FirableWindow,
+} from './capture.scheduler'
 
 /**
  * These pin the one thing that must never drift: when a window fires.
@@ -97,5 +104,63 @@ describe('firesAt', () => {
 
   it('never fires when the window has no days', () => {
     expect(firesAt(window({ days: [] }), wib('2026-09-22T00:00:00Z'))).toBe(false)
+  })
+})
+
+describe('nextFireAfter', () => {
+  it('agrees with firesAt by construction', () => {
+    // It is derived by asking firesAt, not by a second formula — so whatever it returns
+    // must be a minute firesAt accepts. A second derivation is how framesPerDay drifted.
+    const w = window({ startTime: '07:27', endTime: '09:27', interval: '15min' })
+    let cursor = wib('2026-09-21T23:00:00Z')
+    for (let i = 0; i < 12; i++) {
+      const next = nextFireAfter(w, cursor)
+      expect(next).not.toBeNull()
+      expect(firesAt(w, next!)).toBe(true)
+      cursor = next!
+    }
+  })
+
+  it('finds the first firing of the window', () => {
+    expect(nextFireAfter(window(), wib('2026-09-21T23:00:00Z'))?.toISOString()).toBe('2026-09-22T00:00:00.000Z')
+  })
+
+  it('moves to the next step inside the window', () => {
+    expect(nextFireAfter(window(), wib('2026-09-22T00:00:00Z'))?.toISOString()).toBe('2026-09-22T01:00:00.000Z')
+  })
+
+  it('rolls to the next running day once the window closes', () => {
+    // 09:00 WIB Tuesday — done for the day, so tomorrow's 07:00.
+    expect(nextFireAfter(window(), wib('2026-09-22T02:00:00Z'))?.toISOString()).toBe('2026-09-23T00:00:00.000Z')
+  })
+
+  it('skips a whole weekend', () => {
+    // Friday 18:00 WIB on a Mon–Fri window → Monday 07:00 WIB.
+    expect(nextFireAfter(window(), wib('2026-09-18T11:00:00Z'))?.toISOString()).toBe('2026-09-21T00:00:00.000Z')
+  })
+
+  it('returns null when the window runs on no day', () => {
+    expect(nextFireAfter(window({ days: [] }), wib('2026-09-22T00:00:00Z'))).toBeNull()
+  })
+})
+
+describe('countFiringsBetween', () => {
+  it('counts what an outage swallowed', () => {
+    // 07:00–09:00 hourly, down from 07:00 to 12:00 WIB → 07:00 and 08:00 missed.
+    expect(countFiringsBetween(window(), wib('2026-09-22T00:00:00Z'), wib('2026-09-22T05:00:00Z'))).toBe(2)
+  })
+
+  it('counts a 15-minute window’s firings across the same gap', () => {
+    const w = window({ interval: '15min' })
+    expect(countFiringsBetween(w, wib('2026-09-22T00:00:00Z'), wib('2026-09-22T05:00:00Z'))).toBe(8)
+  })
+
+  it('is zero when the outage missed nothing', () => {
+    // 10:00–11:00 WIB sits outside a 07:00–09:00 window.
+    expect(countFiringsBetween(window(), wib('2026-09-22T03:00:00Z'), wib('2026-09-22T04:00:00Z'))).toBe(0)
+  })
+
+  it('is capped, so a year-long gap cannot spin', () => {
+    expect(countFiringsBetween(window({ interval: '15min' }), wib('2026-01-01T00:00:00Z'), wib('2026-12-31T00:00:00Z'), 50)).toBe(50)
   })
 })

@@ -76,84 +76,199 @@ export function firesAt(window: FirableWindow, now: Date): boolean {
   return (minute - start) % step === 0
 }
 
-let lastHandledMinute: string | null = null
-let timer: NodeJS.Timeout | null = null
-
-/** A stable key for "which minute is this", in UTC so it cannot repeat. */
-function minuteKey(now: Date): string {
-  return now.toISOString().slice(0, 16)
-}
-
 /**
- * One pass: find the windows due this minute and start a cycle for each.
+ * The next minute this window fires, strictly after `after`.
  *
- * Exported so it can be tested, and so an operator can trigger a pass by hand while
- * diagnosing a zone that is not collecting.
+ * Derived by walking forward and asking `firesAt` — not by a second formula. That is
+ * deliberate: a separate derivation is a second definition of the same rule, and this
+ * codebase has already had two such definitions drift (`framesPerDay` floored windows
+ * to whole hours and disagreed with firing for months). Built this way they cannot
+ * disagree, because there is only one rule.
+ *
+ * Cost is bounded and trivial: whole non-matching days are skipped, so the worst case
+ * is 7 day-checks plus one day of minutes. It runs once per firing, not per tick.
+ *
+ * Returns null when the window fires on no day at all.
  */
-export async function tick(now: Date = new Date()): Promise<{ fired: number; skipped: number }> {
-  const key = minuteKey(now)
-  if (lastHandledMinute === key) return { fired: 0, skipped: 0 }
-  lastHandledMinute = key
+export function nextFireAfter(window: FirableWindow, after: Date): Date | null {
+  // Start at the top of the next minute — `after` is the moment we just fired.
+  const cursor = new Date(Math.floor(after.getTime() / MINUTE) * MINUTE + MINUTE)
 
-  const active = await scheduleRepo.findAllActive()
-  let fired = 0
-  let skipped = 0
-
-  for (const window of active) {
-    if (
-      !firesAt(
-        {
-          startTime: window.startTime,
-          endTime: window.endTime,
-          interval: window.interval as CaptureInterval,
-          days: window.days,
-        },
-        now,
-      )
-    ) {
+  for (let day = 0; day <= 7; day++) {
+    if (!window.days.includes(wibWeekday(cursor))) {
+      // Jump to 00:00 WIB of the next day rather than testing 1,440 dead minutes.
+      const minutesLeft = 24 * 60 - wibMinutes(cursor)
+      cursor.setTime(cursor.getTime() + minutesLeft * MINUTE)
       continue
     }
 
+    const endOfDay = 24 * 60 - wibMinutes(cursor)
+    for (let i = 0; i < endOfDay; i++) {
+      if (firesAt(window, cursor)) return new Date(cursor)
+      cursor.setTime(cursor.getTime() + MINUTE)
+    }
+  }
+  return null
+}
+
+/**
+ * How many times a window would have fired in a span it was down for.
+ *
+ * Used on recovery to say "12 firings missed between 07:00 and 12:00" rather than
+ * either firing them all — which would flood the queue with frames whose moment has
+ * passed and burn the account's daily limit — or saying nothing at all.
+ */
+export function countFiringsBetween(window: FirableWindow, from: Date, to: Date, cap = 500): number {
+  let count = 0
+  let cursor: Date | null = new Date(from.getTime() - MINUTE)
+  while (count < cap) {
+    cursor = nextFireAfter(window, cursor)
+    if (!cursor || cursor > to) break
+    count++
+  }
+  return count
+}
+
+let timer: NodeJS.Timeout | null = null
+let running = false
+
+/** How late a firing may be and still be worth taking. */
+const GRACE_MS = 5 * 60_000
+
+/** Never sleep longer than this, so a window created moments ago is picked up. */
+const MAX_SLEEP_MS = 60_000
+
+function windowOf(row: scheduleRepo.ScheduleRecord): FirableWindow {
+  return {
+    startTime: row.startTime,
+    endTime: row.endTime,
+    interval: row.interval as CaptureInterval,
+    days: row.days,
+  }
+}
+
+/**
+ * Gives a next firing to windows that have none — new ones, and everything that existed
+ * before `next_fire_at` did.
+ *
+ * Seeding never fires. A window migrated in at noon with a 07:00 slot must not fire at
+ * noon just because its column was empty; it gets tomorrow's 07:00 and waits. Deploying
+ * this must be uneventful.
+ */
+export async function seedUnseeded(now: Date = new Date()): Promise<number> {
+  const rows = await scheduleRepo.findUnseeded()
+  for (const row of rows) {
+    await scheduleRepo.setNextFireAt(row.id, nextFireAfter(windowOf(row), now))
+  }
+  if (rows.length > 0) console.log(`[scheduler] seeded ${rows.length} window(s) with a next firing`)
+  return rows.length
+}
+
+export interface TickResult {
+  fired: number
+  refused: number
+  missed: number
+}
+
+/**
+ * One pass: claim what is due, fire what is still worth firing, record what is not.
+ *
+ * A firing more than the grace period late is NOT taken. The value of a 07:00 frame is
+ * that it is from 07:00 — one collected at 11:40 after an outage is a different and
+ * misleading answer, and it would also spend the account's daily quota on a frame it
+ * never asked for. Those become `missed` rows instead: not a failure, because nothing
+ * was attempted, and not a refusal, because the plan did not object. A gap you can see
+ * beats a gap you cannot.
+ */
+export async function tick(now: Date = new Date()): Promise<TickResult> {
+  const due = await scheduleRepo.claimDue(now)
+  const result: TickResult = { fired: 0, refused: 0, missed: 0 }
+
+  for (const row of due) {
+    const window = windowOf(row)
+
+    // Move the window on before anything else can fail. A window whose next firing is
+    // never written would look unseeded forever.
+    const next = nextFireAfter(window, now)
+    await scheduleRepo.setNextFireAt(row.id, next)
+
+    const lateBy = now.getTime() - row.dueAt.getTime()
+
     try {
-      const result = await captureService.enqueueCapture(window.userId, window.zoneId, {
+      if (lateBy > GRACE_MS) {
+        // How many firings the outage swallowed, recorded as one row rather than
+        // hundreds — enough to diagnose, bounded enough to read.
+        const skipped = countFiringsBetween(window, row.dueAt, now)
+        await captureService.recordMissed(row.userId, row.zoneId, {
+          scheduleId: row.id,
+          scheduledFor: row.dueAt,
+          occurrences: skipped,
+          lateBySeconds: Math.round(lateBy / 1000),
+        })
+        result.missed++
+        continue
+      }
+
+      const outcome = await captureService.enqueueCapture(row.userId, row.zoneId, {
         trigger: 'scheduled',
-        scheduleId: window.id,
+        scheduleId: row.id,
+        scheduledFor: row.dueAt,
       })
-      if (result.queued) fired++
-      else skipped++
+      if (outcome.queued) result.fired++
+      else result.refused++
     } catch (err) {
-      // One zone failing must not stop the rest of this minute's windows. The capture
-      // row records the failure; this line is for the operator watching logs.
+      // One account's problem must not stop everyone else's windows this minute.
       console.error(
-        `[scheduler] window ${window.id} (zone ${window.zoneId}) failed:`,
+        `[scheduler] window ${row.id} (zone ${row.zoneId}) failed:`,
         err instanceof Error ? err.message : err,
       )
     }
   }
 
-  if (fired > 0 || skipped > 0) {
-    console.log(`[scheduler] ${key} — ${fired} queued, ${skipped} refused by plan limit`)
+  if (result.fired || result.refused || result.missed) {
+    console.log(
+      `[scheduler] ${now.toISOString().slice(0, 16)} — ${result.fired} queued, ` +
+        `${result.refused} refused by plan, ${result.missed} missed`,
+    )
   }
-  return { fired, skipped }
+  return result
 }
 
-/** Milliseconds until the top of the next minute. */
-function untilNextMinute(now: Date): number {
-  return MINUTE - (now.getTime() % MINUTE)
+/**
+ * Milliseconds to wait before looking again.
+ *
+ * Sleeps until the soonest window is actually due rather than waking every minute to
+ * usually find nothing — which is only possible because the next firing is a column
+ * instead of something held in memory. Capped so a window created seconds ago does not
+ * wait behind one scheduled for next Tuesday.
+ */
+async function sleepFor(now: Date): Promise<number> {
+  const earliest = await scheduleRepo.earliestDue()
+  if (!earliest) return MAX_SLEEP_MS
+  return Math.max(250, Math.min(earliest.getTime() - now.getTime(), MAX_SLEEP_MS))
 }
 
 export function startScheduler(): void {
   if (timer) return
 
-  const run = () => {
-    void tick().catch((err) => console.error('[scheduler] tick failed:', err))
-    // Re-aligned every pass rather than a fixed interval, so firings stay on the minute
-    // instead of drifting a second later each hour.
-    timer = setTimeout(run, untilNextMinute(new Date()))
+  const run = async () => {
+    if (running) return
+    running = true
+    try {
+      await seedUnseeded()
+      await tick()
+    } catch (err) {
+      console.error('[scheduler] pass failed:', err instanceof Error ? err.message : err)
+    } finally {
+      running = false
+    }
+
+    const delay = await sleepFor(new Date()).catch(() => MAX_SLEEP_MS)
+    timer = setTimeout(() => void run(), delay)
   }
 
-  console.log('[scheduler] started — capture windows fire on the minute, Asia/Jakarta')
-  timer = setTimeout(run, untilNextMinute(new Date()))
+  console.log('[scheduler] started — firing times live in Postgres, Asia/Jakarta')
+  timer = setTimeout(() => void run(), 250)
 }
 
 export function stopScheduler(): void {

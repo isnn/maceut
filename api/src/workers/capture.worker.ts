@@ -79,9 +79,12 @@ export async function runCapture(captureId: string): Promise<void> {
 }
 
 export async function registerCaptureConsumer(ch: Channel): Promise<void> {
-  // One at a time: each job makes an upstream HERE request, and letting a burst of
-  // windows fire in parallel is how a rate limit gets hit for free.
-  await ch.prefetch(1)
+  // A handful at a time. One would serialise every account's captures behind each
+  // other — with many users on hourly windows, the 07:00 burst would drain in single
+  // file and the last frame would be minutes late. Unbounded would hit HERE's rate
+  // limit for free. This is the dial to turn when throughput becomes the complaint,
+  // and to turn down if HERE starts refusing.
+  await ch.prefetch(config.captureConcurrency)
 
   await ch.consume(config.rabbitmqQueueCapture, (msg: ConsumeMessage | null) => {
     if (!msg) return
@@ -102,5 +105,5 @@ export async function registerCaptureConsumer(ch: Channel): Promise<void> {
     })()
   })
 
-  console.log(`[worker] consuming ${config.rabbitmqQueueCapture} (prefetch 1)`)
+  console.log(`[worker] consuming ${config.rabbitmqQueueCapture} (prefetch ${config.captureConcurrency})`)
 }

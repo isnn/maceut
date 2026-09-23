@@ -19,6 +19,11 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     restart: unless-stopped
+    # The queue declares durable queues and persistent messages, which is only true
+    # for as long as the data directory survives. Without this, a container recreate
+    # discards every queued capture and the code's promise is silently untrue.
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -86,3 +91,4 @@ services:
 
 volumes:
   postgres_data:
+  rabbitmq_data:

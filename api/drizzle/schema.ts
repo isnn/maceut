@@ -126,6 +126,13 @@ export const schedules = pgTable(
      */
     status: scheduleStatusEnum('status').notNull().default('active'),
 
+    /**
+     * When this window next fires — the clock, kept in the database rather than in the
+     * scheduler's memory. NULL means "not computed yet": the scheduler seeds it without
+     * firing, so deploying this does not make every existing window fire at once.
+     */
+    nextFireAt: timestamp('next_fire_at', { withTimezone: true }),
+
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -161,6 +168,8 @@ export const captureStatusEnum = pgEnum('capture_status', [
   'done',
   'failed',
   'skipped_limit',
+  /** The system was down when this was due. Not attempted, so not a failure. */
+  'missed',
 ])
 
 export const captureTriggerEnum = pgEnum('capture_trigger', ['manual', 'scheduled'])
@@ -206,6 +215,14 @@ export const captures = pgTable(
 
     /** Why a `failed` row failed. Operators cannot diagnose what was not written down. */
     error: text('error'),
+
+    /**
+     * The instant this cycle was due. Null for manual captures, which are due when
+     * asked. Lateness is `capturedAt - scheduledFor`, which is only a fact because both
+     * are stored — `capturedAt` alone cannot tell an on-time frame from one taken forty
+     * minutes late after an outage.
+     */
+    scheduledFor: timestamp('scheduled_for', { withTimezone: true }),
 
     /** When the traffic was sampled, not when the row was written. */
     capturedAt: timestamp('captured_at', { withTimezone: true }).notNull().defaultNow(),

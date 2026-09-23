@@ -7,7 +7,7 @@ import type { TrafficCollection } from '../lib/here-traffic-client'
 /** Capture data access. Rules live in the service (BR-007). */
 
 export type CaptureRecord = typeof captures.$inferSelect
-export type CaptureStatus = 'pending' | 'processing' | 'done' | 'failed' | 'skipped_limit'
+export type CaptureStatus = 'pending' | 'processing' | 'done' | 'failed' | 'skipped_limit' | 'missed'
 export type CaptureTrigger = 'manual' | 'scheduled'
 
 export interface CreateCaptureRow {
@@ -19,6 +19,8 @@ export interface CreateCaptureRow {
   status?: CaptureStatus
   error?: string | null
   capturedAt?: Date
+  /** The instant this cycle was due. Null for manual captures. */
+  scheduledFor?: Date | null
 }
 
 export async function create(input: CreateCaptureRow): Promise<CaptureRecord> {
@@ -32,6 +34,7 @@ export async function create(input: CreateCaptureRow): Promise<CaptureRecord> {
       roadClass: input.roadClass,
       status: input.status ?? 'pending',
       error: input.error ?? null,
+      scheduledFor: input.scheduledFor ?? null,
       ...(input.capturedAt ? { capturedAt: input.capturedAt } : {}),
     })
     .returning()
@@ -99,6 +102,7 @@ export async function listByZone(
       fileSize: captures.fileSize,
       styleUsed: captures.styleUsed,
       error: captures.error,
+      scheduledFor: captures.scheduledFor,
       capturedAt: captures.capturedAt,
       createdAt: captures.createdAt,
     })
@@ -134,7 +138,8 @@ export async function countForWibDay(userId: string, when: Date): Promise<number
       and(
         eq(captures.userId, userId),
         sql`(${captures.capturedAt} AT TIME ZONE 'Asia/Jakarta')::date = (${when.toISOString()}::timestamptz AT TIME ZONE 'Asia/Jakarta')::date`,
-        sql`${captures.status} <> 'skipped_limit'`,
+        // Neither a refusal nor a firing the system was down for consumed quota.
+        sql`${captures.status} NOT IN ('skipped_limit', 'missed')`,
       ),
     )
   return rows[0]?.count ?? 0
@@ -159,7 +164,7 @@ export async function countsToday(): Promise<Map<string, number>> {
     .where(
       and(
         sql`(${captures.capturedAt} AT TIME ZONE 'Asia/Jakarta')::date = (now() AT TIME ZONE 'Asia/Jakarta')::date`,
-        sql`${captures.status} <> 'skipped_limit'`,
+        sql`${captures.status} NOT IN ('skipped_limit', 'missed')`,
       ),
     )
     .groupBy(captures.userId)
@@ -174,7 +179,7 @@ export async function countAllToday(): Promise<number> {
     .where(
       and(
         sql`(${captures.capturedAt} AT TIME ZONE 'Asia/Jakarta')::date = (now() AT TIME ZONE 'Asia/Jakarta')::date`,
-        sql`${captures.status} <> 'skipped_limit'`,
+        sql`${captures.status} NOT IN ('skipped_limit', 'missed')`,
       ),
     )
   return rows[0]?.count ?? 0

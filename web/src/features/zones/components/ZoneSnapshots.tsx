@@ -33,6 +33,7 @@ const STATUS_LABEL: Record<zonesApi.CaptureStatus, string> = {
   done: 'Collected',
   failed: 'Failed',
   skipped_limit: 'Skipped — daily limit',
+  missed: 'Missed — system was down',
 }
 
 const STATUS_STYLE: Record<zonesApi.CaptureStatus, string> = {
@@ -41,6 +42,20 @@ const STATUS_STYLE: Record<zonesApi.CaptureStatus, string> = {
   done: 'bg-success-bg text-success-text',
   failed: 'bg-danger-bg text-danger-text',
   skipped_limit: 'bg-warning-bg text-warning-text',
+  missed: 'bg-warning-bg text-warning-text',
+}
+
+/**
+ * Lateness, only when it is worth saying.
+ *
+ * A couple of seconds between due and collected is the pipeline working; showing "2s
+ * late" on every row would train people to ignore the field, so it stays quiet until
+ * the delay is real.
+ */
+function lateness(capture: zonesApi.Capture): string | null {
+  if (capture.lateBySeconds === null || capture.lateBySeconds < 60) return null
+  const minutes = Math.round(capture.lateBySeconds / 60)
+  return minutes < 60 ? `${minutes} min late` : `${Math.round(minutes / 60)} h late`
 }
 
 /** "22 Sep 2026 19:27 WIB" — BR-018's format, which the rendered image will also use. */
@@ -178,6 +193,12 @@ export function ZoneSnapshots({ zone }: { zone: Zone }) {
                   <>
                     <span aria-hidden> · </span>
                     {selected.trigger === 'scheduled' ? 'Scheduled' : 'Manual'}
+                    {lateness(selected) && (
+                      <>
+                        <span aria-hidden> · </span>
+                        <span className="text-warning-text">{lateness(selected)}</span>
+                      </>
+                    )}
                   </>
                 )}
               </p>
@@ -221,6 +242,12 @@ export function ZoneSnapshots({ zone }: { zone: Zone }) {
                       (selected.status === 'pending' || selected.status === 'processing'
                         ? 'This cycle is still collecting. It appears here once the worker finishes.'
                         : 'No traffic was recorded for this cycle.')}
+                    {selected.status === 'missed' && selected.scheduledFor && (
+                      <span className="block text-caption text-text-muted mt-md">
+                        Due {formatWib(selected.scheduledFor)}. Nothing was collected — a frame taken hours late
+                        describes a different moment, so it is recorded rather than faked.
+                      </span>
+                    )}
                   </p>
                 </div>
               )}

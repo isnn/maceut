@@ -113,10 +113,18 @@ export interface UpdateScheduleRow {
   status?: ScheduleStatus
 }
 
+/**
+ * Edits a window, and always clears its next firing.
+ *
+ * Retiming, changing the interval, or resuming after a pause all make a stored
+ * `next_fire_at` wrong — a window resumed after a week would otherwise be due in the
+ * past and fire the moment it came back. NULL means "recompute me", and the scheduler
+ * reseeds it on its next pass without firing.
+ */
 export async function update(id: string, patch: UpdateScheduleRow): Promise<ScheduleRecord | undefined> {
   const rows = await db
     .update(schedules)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...patch, nextFireAt: null, updatedAt: new Date() })
     .where(eq(schedules.id, id))
     .returning()
   return rows[0]
@@ -128,4 +136,104 @@ export async function softDelete(id: string): Promise<void> {
     .update(schedules)
     .set({ status: 'deleted', updatedAt: new Date() })
     .where(eq(schedules.id, id))
+}
+
+export interface DueWindow extends ScheduleRecord {
+  /** The instant this firing was due — `next_fire_at` as it was before the claim. */
+  dueAt: Date
+}
+
+/**
+ * Atomically claims every window that is due, and returns when each was due.
+ *
+ * Two Postgres details make this the lock, and both matter:
+ *
+ * `FOR UPDATE SKIP LOCKED` on the inner select — two API instances running this at the
+ * same instant take disjoint sets instead of blocking on each other, so adding a replica
+ * doubles throughput rather than doubling captures. This is what removes the "one API
+ * instance only" constraint the in-memory scheduler had.
+ *
+ * The join against that snapshot — `RETURNING` on an UPDATE yields the NEW row, so
+ * reading `next_fire_at` back from it would return what we just wrote, not what the
+ * window was due at. The subquery holds the pre-update value.
+ *
+ * Claimed rows are left with `next_fire_at = NULL`, meaning "needs recomputing", and the
+ * caller sets it — the caller knows the firing rule and SQL must not learn a second copy
+ * of it. If the process dies in between, the row simply looks unseeded and is re-seeded
+ * on the next boot: a missed firing rather than a duplicate one, which is the right way
+ * to fail.
+ */
+export async function claimDue(now: Date): Promise<DueWindow[]> {
+  const result = await db.execute(sql`
+    UPDATE ${schedules} AS s
+       SET next_fire_at = NULL
+      FROM (
+        SELECT id, next_fire_at AS due_at
+          FROM ${schedules}
+         WHERE status = 'active'
+           AND next_fire_at IS NOT NULL
+           AND next_fire_at <= ${now.toISOString()}::timestamptz
+         FOR UPDATE SKIP LOCKED
+      ) AS due
+     WHERE s.id = due.id
+    RETURNING s.*, due.due_at
+  `)
+
+  // Raw SQL bypasses Drizzle's column mapping, so these arrive snake_case. Spreading
+  // the row straight through left `startTime` undefined and the scheduler threw on the
+  // first window it claimed — mapped explicitly so the shape is checked here rather
+  // than discovered at runtime.
+  interface DueRow {
+    id: string
+    user_id: string
+    zone_id: string
+    label: string
+    start_time: string
+    end_time: string
+    interval: string
+    days: number[]
+    status: string
+    next_fire_at: string | null
+    created_at: string
+    updated_at: string
+    due_at: string
+  }
+
+  return (result.rows as unknown as DueRow[]).map((r) => ({
+    id: r.id,
+    userId: r.user_id,
+    zoneId: r.zone_id,
+    label: r.label,
+    startTime: r.start_time,
+    endTime: r.end_time,
+    interval: r.interval as CaptureInterval,
+    days: r.days,
+    status: r.status as ScheduleStatus,
+    nextFireAt: r.next_fire_at ? new Date(r.next_fire_at) : null,
+    createdAt: new Date(r.created_at),
+    updatedAt: new Date(r.updated_at),
+    dueAt: new Date(r.due_at),
+  }))
+}
+
+/** Active windows whose next firing has never been computed (fresh, or just migrated). */
+export async function findUnseeded(): Promise<ScheduleRecord[]> {
+  return db
+    .select()
+    .from(schedules)
+    .where(and(eq(schedules.status, 'active'), sql`${schedules.nextFireAt} IS NULL`))
+}
+
+export async function setNextFireAt(id: string, next: Date | null): Promise<void> {
+  await db.update(schedules).set({ nextFireAt: next }).where(eq(schedules.id, id))
+}
+
+/** The soonest a window is due, so the scheduler can sleep until then rather than poll. */
+export async function earliestDue(): Promise<Date | null> {
+  const rows = await db
+    .select({ next: sql<Date | null>`min(${schedules.nextFireAt})` })
+    .from(schedules)
+    .where(eq(schedules.status, 'active'))
+  const value = rows[0]?.next
+  return value ? new Date(value) : null
 }
