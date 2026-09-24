@@ -1238,6 +1238,27 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   mengubah aspect ratio canvas (738×461 → 738×738), drag-to-pan menggeser peta dan
   memunculkan tombol Reset, nol error console. tsc + eslint bersih.
 
+[2026-09-24c] Studio: kolom kanan jadi drawer terkunci, readout pindah ke bawah peta.
+
+  Peta DIKUNCI seperti sidebar drawer. Di laptop ke atas, kolom kanan `sticky` dengan
+  `max-h-[calc(100vh-2rem)]` dan bagian kontrolnya (Timeframe, Map theme, Congestion
+  theme, Zoom position, Overlay, Output size) `overflow-y-auto` menggulir sendiri —
+  peta tetap di tempat saat rail digulir. Kartu Export `shrink-0` di luar area gulir,
+  jadi tersemat di bawah drawer dan selalu terjangkau tanpa harus melewati semua
+  kontrol dulu.
+
+  "THIS FRAME" DAN "DAY SUMMARY" PINDAH KE BAWAH PETA (kolom kiri, berdampingan di
+  tablet+). Keduanya adalah readout dari apa yang ada di layar; kolom kanan sekarang
+  murni laci kontrol style, jadi readout tidak seharusnya di sana.
+
+  ZOOM diperluas dari maksimal +3 jadi +10. `computeViewport` sudah meng-clamp zoom
+  absolut ke 18, jadi offset besar aman.
+
+  DIVERIFIKASI browser (viewport 1400×900): rail bagian dalam menggulir sendiri
+  (scrollHeight 1331 > clientHeight 628) sementara canvas peta diam; sticky drawer
+  aktif saat halaman digulir; Export tetap di bawah; slider zoom `max=10` menampilkan
+  "+10" dan memperbesar peta. Nol error console. tsc + eslint bersih.
+
 ---
 
 ## Decisions This Sprint

@@ -694,38 +694,46 @@ export default function StudioPage() {
                 <span>{dayFrames[dayFrames.length - 1]?.time}</span>
               </div>
             </Card>
+
+            {/* This frame + Day summary describe what's on screen, so they sit under the
+                map — the right column is a controls drawer, and these are readouts. */}
+            <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
+              <Card className="p-lg space-y-md">
+                <p className="text-label text-text-secondary">This frame</p>
+                {frame ? (
+                  <dl className="space-y-md">
+                    <Row label="Time" value={`${frame.time} WIB`} />
+                    <Row
+                      label="Avg jam factor"
+                      value={frame.jamFactorAvg === null ? '—' : frame.jamFactorAvg.toFixed(2)}
+                      hint={frame.jamFactorAvg === null ? undefined : bandFor(frame.jamFactorAvg).label}
+                    />
+                    <Row
+                      label="Roads"
+                      value={frame.roadsCount === null ? '—' : formatNumber(frame.roadsCount)}
+                    />
+                  </dl>
+                ) : (
+                  <p className="text-body text-text-secondary">No frame selected.</p>
+                )}
+              </Card>
+
+              <Card className="p-lg">
+                <p className="text-label text-text-secondary mb-sm">Day summary</p>
+                <dl className="space-y-md">
+                  <Row label="Frames" value={String(frames.length)} />
+                  <Row label="Busiest" value={busiest(frames)} />
+                  <Row label="Quietest" value={quietest(frames)} />
+                </dl>
+              </Card>
+            </div>
           </div>
 
-          <div className="space-y-lg">
-            <Card className="p-lg space-y-md">
-              <p className="text-label text-text-secondary">This frame</p>
-              {frame ? (
-                <dl className="space-y-md">
-                  <Row label="Time" value={`${frame.time} WIB`} />
-                  <Row
-                    label="Avg jam factor"
-                    value={frame.jamFactorAvg === null ? '—' : frame.jamFactorAvg.toFixed(2)}
-                    hint={frame.jamFactorAvg === null ? undefined : bandFor(frame.jamFactorAvg).label}
-                  />
-                  <Row
-                    label="Roads"
-                    value={frame.roadsCount === null ? '—' : formatNumber(frame.roadsCount)}
-                  />
-                </dl>
-              ) : (
-                <p className="text-body text-text-secondary">No frame selected.</p>
-              )}
-            </Card>
-
-            <Card className="p-lg">
-              <p className="text-label text-text-secondary mb-sm">Day summary</p>
-              <dl className="space-y-md">
-                <Row label="Frames" value={String(frames.length)} />
-                <Row label="Busiest" value={busiest(frames)} />
-                <Row label="Quietest" value={quietest(frames)} />
-              </dl>
-            </Card>
-
+          {/* Style drawer: on laptop+ the map column stays put while this rail scrolls
+              inside its own viewport-height box, and the Export card is pinned to the
+              bottom so it's reachable without scrolling past every control first. */}
+          <div className="flex flex-col gap-lg min-w-0 laptop:sticky laptop:top-lg laptop:max-h-[calc(100vh-2rem)]">
+            <div className="space-y-lg laptop:flex-1 laptop:min-h-0 laptop:overflow-y-auto laptop:pr-xs">
             {/*
               What plays and what exports are the same set — narrowing this narrows both,
               so scrubbing or pressing Play IS the preview of what an export will contain.
@@ -859,7 +867,7 @@ export default function StudioPage() {
               <input
                 type="range"
                 min={-3}
-                max={3}
+                max={10}
                 step={1}
                 value={view.zoomOffset}
                 onChange={(e) => setView((v) => ({ ...v, zoomOffset: Number(e.target.value) }))}
@@ -962,8 +970,9 @@ export default function StudioPage() {
                 {outputSize.width} × {outputSize.height}
               </p>
             </Card>
+            </div>
 
-            <Card className="p-lg space-y-sm">
+            <Card className="p-lg space-y-sm shrink-0">
               <p className="text-label text-text-secondary">Export</p>
               <Button className="w-full" onClick={exportPng} disabled={exporting !== null || !frame}>
                 Download this frame (PNG)
