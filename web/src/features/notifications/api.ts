@@ -51,7 +51,7 @@ const FEED: Omit<AppNotification, 'read'>[] = [
     id: 'member-joined',
     tone: 'info',
     title: 'New member joined',
-    body: 'Dewi Anggraini joined the workspace as Editor.',
+    body: 'Zona Malioboro collected 24 frames yesterday.',
     time: 'Yesterday',
     actionLabel: 'View team',
     actionHref: '/team',

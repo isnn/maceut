@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { FormLabel, Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
 import { RoadClassBadge } from '@/components/ui/Badge'
-import { cn } from '@/lib/utils'
+import { cn, formatNumber, formatKm } from '@/lib/utils'
 import { IconCheck } from '@/components/ui/icons'
 import { PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { ApiError } from '@/types/api'
@@ -15,7 +15,7 @@ import { MapCanvas } from './MapCanvas'
 import { ZoneMapEditor, pointsToGeometry } from './ZoneMapEditor'
 import { RoadClassPicker } from './RoadClassPicker'
 import * as zonesApi from '../api'
-import type { MatchedRoad, RoadClass, Zone } from '../types'
+import type { RoadClass, Zone } from '../types'
 import type { Plan } from '@/features/auth/types'
 
 const STEPS = ['Boundary', 'Road class', 'Review']
@@ -38,11 +38,31 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
   const nameTaken = name.trim() !== '' && existingZones.some((z) => z.name.toLowerCase() === name.trim().toLowerCase())
   const area = geometry ? zonesApi.areaKm2(geometry) : 0
 
-  const matched: MatchedRoad[] = useMemo(
-    () => (geometry && roadClass ? zonesApi.matchRoads(geometry, roadClass) : []),
-    [geometry, roadClass]
-  )
-  const matchedLength = Number(matched.reduce((sum, r) => sum + r.lengthKm, 0).toFixed(1))
+  // Real counts for the drawn boundary, from HERE. Fetched once per geometry, not per
+  // class: one answer carries all three tiers, so switching class costs nothing.
+  //
+  // Keyed by the bbox it answers for, so redrawing the boundary needs no reset: a
+  // result that no longer matches is ignored and the row reads "—" again.
+  const bboxKey = useMemo(() => (geometry ? zonesApi.bboxOf(geometry).join(',') : null), [geometry])
+  const [roadCounts, setRoadCounts] =
+    useState<{ key: string; counts: zonesApi.RoadClassCounts['counts'] } | null>(null)
+
+  useEffect(() => {
+    if (!bboxKey) return
+    let cancelled = false
+    const bbox = bboxKey.split(',').map(Number) as [number, number, number, number]
+    zonesApi
+      .getRoadClassCounts(bbox)
+      .then((res) => !cancelled && setRoadCounts({ key: bboxKey, counts: res.counts }))
+      .catch(() => {
+        // Counts are a convenience on the review rail; the zone still saves without them.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [bboxKey])
+
+  const matched = roadClass && roadCounts?.key === bboxKey ? roadCounts.counts[roadClass] : undefined
 
 
   useEffect(() => {
@@ -51,7 +71,12 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
     const lngs = ring.map(([lng]) => lng)
     const lats = ring.map(([, lat]) => lat)
     zonesApi
-      .getTrafficPreview([Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)])
+      .getTrafficPreview(
+        [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)],
+        undefined,
+        // Trim to the shape being drawn, not the box around it.
+        ring as [number, number][],
+      )
       .then(setTraffic)
       .catch(() => setTraffic(null))
   }, [step, geometry, withTraffic])
@@ -62,7 +87,7 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
     setSubmitting(true)
     setError(null)
     try {
-      await zonesApi.createZone({ name: name.trim(), geometry, roadClass }, plan)
+      await zonesApi.createZone({ name: name.trim(), geometry, roadClass })
       router.push('/schedule')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
@@ -240,7 +265,11 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
             <RailRow label="Area drawn" value={points.length >= 3 ? `${area} km² · ${points.length} points` : '—'} />
             <RailRow
               label="Roads inside"
-              value={roadClass ? `${matched.length} · ${matchedLength} km` : '—'}
+              value={
+                matched
+                  ? `${formatNumber(matched.roads)} · ${formatKm(matched.lengthKm)}`
+                  : '—'
+              }
             />
             {roadClass && <RailRow label="Road class" value={ROAD_CLASS_LABEL[roadClass]} />}
             {step === 2 && <RailRow label="Zone slot" value={`${existingZones.length + 1} of ${PLAN_LIMITS[plan].zonesLimit}`} />}

@@ -9,13 +9,15 @@ import { Alert } from '@/components/ui/Alert'
 import { RoadClassBadge, ZoneStatusPill } from '@/components/ui/Badge'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
+import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
+import { useTableControls } from '@/components/ui/useTableControls'
 import { IconArrowLeft } from '@/components/ui/icons'
 import { cn, formatDate } from '@/lib/utils'
 import { PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import { MapCanvas } from './MapCanvas'
 import { RoadClassPicker, ROAD_CLASS_ORDER } from './RoadClassPicker'
+import { ZoneCaptures } from './ZoneCaptures'
 import * as zonesApi from '../api'
 import * as schedulesApi from '@/features/schedules/api'
 import { DAY_LABEL, INTERVAL_LABEL, framesPerDay, type CaptureWindow } from '@/features/schedules/types'
@@ -28,6 +30,24 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
   const [zone, setZone] = useState<Zone | null>(null)
   const [siblings, setSiblings] = useState<Zone[]>([])
   const [windows, setWindows] = useState<CaptureWindow[]>([])
+
+  // A zone can hold up to 50 windows on Premium, well past what anyone can scan in
+  // one list — so this gets the same search, sort and paging as every other table.
+  const windowTable = useTableControls<CaptureWindow>({
+    rows: windows,
+    searchOn: (w) => [w.label],
+    sortOn: {
+      label: (w) => w.label.toLowerCase(),
+      hours: (w) => w.start,
+      interval: (w) => w.interval,
+      frames: (w) => framesPerDay(w),
+      // Active first when ascending: what is running belongs at the top, not
+      // wherever 'active' happens to fall alphabetically against 'paused'.
+      status: (w) => (w.active ? 0 : 1),
+    },
+    defaultDirection: { frames: 'desc' },
+    pageSize: 8,
+  })
   const [notFound, setNotFound] = useState(false)
 
   const [editing, setEditing] = useState(false)
@@ -42,15 +62,15 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
   const load = useCallback(async () => {
     const [found, all, allWindows] = await Promise.all([
       zonesApi.getZone(zoneId).catch(() => null),
-      zonesApi.getZones(plan),
-      schedulesApi.getWindows(plan),
+      zonesApi.getZones(),
+      schedulesApi.getWindows(),
     ])
     return {
       found,
       siblings: all.filter((z) => z.id !== zoneId),
       windows: allWindows.filter((w) => w.zoneId === zoneId),
     }
-  }, [zoneId, plan])
+  }, [zoneId])
 
   const apply = useCallback(
     (data: { found: Zone | null; siblings: Zone[]; windows: CaptureWindow[] }) => {
@@ -110,7 +130,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
     setSaving(true)
     setError(null)
     try {
-      const updated = await zonesApi.updateZone(zone!.id, { name: name.trim(), roadClass }, plan)
+      const updated = await zonesApi.updateZone(zone!.id, { name: name.trim(), roadClass })
       setZone(updated)
       setEditing(false)
     } catch (err) {
@@ -218,8 +238,8 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                   </span>
                 </Row>
                 <Row label="Area">{zone.areaKm2} km²</Row>
-                <Row label="Roads collected">{zone.roadsCount}</Row>
-                <Row label="Total length">{zone.lengthKm} km</Row>
+                <Row label="Roads collected">{zone.roadsCount ?? '—'}</Row>
+                <Row label="Total length">{zone.lengthKm === null ? '—' : `${zone.lengthKm} km`}</Row>
                 <Row label="Capture cadence">{zone.cadence}</Row>
                 <Row label="Created">{formatDate(zone.createdAt)}</Row>
               </dl>
@@ -232,14 +252,31 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
         </div>
       </div>
 
+      <ZoneCaptures zone={zone} />
+
       {/* The windows that actually make this zone collect — without them a zone
           sits idle, which is invisible from its attributes alone. */}
       <section className="space-y-md">
         <div className="flex flex-wrap items-center justify-between gap-md">
           <h2 className="text-section-title text-text-primary">Capture windows</h2>
-          <Link href="/schedule" className="text-body text-info no-underline hover:underline">
-            Manage on Schedule
-          </Link>
+          <div className="flex items-center gap-md ml-auto">
+            {/* Only worth showing once there is enough to look through. */}
+            {windows.length > 3 && (
+              <Input
+                type="search"
+                placeholder="Search windows…"
+                value={windowTable.search}
+                onChange={(e) => windowTable.setSearch(e.target.value)}
+                className="w-full tablet:w-56"
+              />
+            )}
+            <Link
+              href="/schedule"
+              className="text-body text-info no-underline hover:underline whitespace-nowrap"
+            >
+              Manage on Schedule
+            </Link>
+          </div>
         </div>
 
         {windows.length === 0 ? (
@@ -252,67 +289,110 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
             </Link>
           </div>
         ) : (
-          <TableWrap>
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Window</Th>
-                  <Th>Hours</Th>
-                  <Th>Interval</Th>
-                  <Th>Days</Th>
-                  <Th className="text-right">Frames / day</Th>
-                  <Th>Status</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {windows.map((w) => (
-                  <tr key={w.id} className="hover:bg-canvas-secondary/60 transition-colors">
-                    <Td>
-                      <p className="font-semibold text-text-primary">{w.label}</p>
-                      <p className="text-caption text-text-muted mt-xs tabular-nums">
-                        {w.capturedFrames} frames captured
-                      </p>
-                    </Td>
-                    <Td className="tabular-nums text-text-secondary">
-                      {w.start}–{w.end}
-                    </Td>
-                    <Td className="text-text-secondary">{INTERVAL_LABEL[w.interval]}</Td>
-                    <Td>
-                      <span className="flex gap-xs">
-                        {DAY_LABEL.map((label, index) => (
-                          <span
-                            key={`${w.id}-${index}`}
-                            title={w.days.includes(index) ? 'Collecting' : 'Not collecting'}
-                            className={cn(
-                              'w-5 h-5 rounded-xs text-micro flex items-center justify-center',
-                              w.days.includes(index)
-                                ? 'bg-primary-soft text-[#5A35F3] font-semibold'
-                                : 'bg-canvas-secondary text-text-muted'
-                            )}
-                          >
-                            {label}
-                          </span>
-                        ))}
-                      </span>
-                    </Td>
-                    <Td className="text-right tabular-nums">{framesPerDay(w)}</Td>
-                    <Td>
-                      <span
-                        className={cn(
-                          'text-micro font-semibold rounded-xs px-sm py-xs whitespace-nowrap',
-                          w.active
-                            ? 'bg-success-bg text-success-text'
-                            : 'bg-canvas-secondary text-text-muted border border-border'
-                        )}
-                      >
-                        {w.active ? 'Active' : 'Paused'}
-                      </span>
-                    </Td>
+          <>
+            <TableWrap>
+              <Table>
+                <thead>
+                  <tr>
+                    <SortableTh
+                      active={windowTable.sort?.key === 'label'}
+                      direction={windowTable.sort?.direction ?? 'asc'}
+                      onSort={() => windowTable.toggleSort('label')}
+                    >
+                      Window
+                    </SortableTh>
+                    <SortableTh
+                      active={windowTable.sort?.key === 'hours'}
+                      direction={windowTable.sort?.direction ?? 'asc'}
+                      onSort={() => windowTable.toggleSort('hours')}
+                    >
+                      Hours
+                    </SortableTh>
+                    <SortableTh
+                      active={windowTable.sort?.key === 'interval'}
+                      direction={windowTable.sort?.direction ?? 'asc'}
+                      onSort={() => windowTable.toggleSort('interval')}
+                    >
+                      Interval
+                    </SortableTh>
+                    <Th>Days</Th>
+                    <SortableTh
+                      className="text-right"
+                      active={windowTable.sort?.key === 'frames'}
+                      direction={windowTable.sort?.direction ?? 'asc'}
+                      onSort={() => windowTable.toggleSort('frames')}
+                    >
+                      Frames / day
+                    </SortableTh>
+                    <SortableTh
+                      active={windowTable.sort?.key === 'status'}
+                      direction={windowTable.sort?.direction ?? 'asc'}
+                      onSort={() => windowTable.toggleSort('status')}
+                    >
+                      Status
+                    </SortableTh>
                   </tr>
-                ))}
-              </tbody>
-            </Table>
-          </TableWrap>
+                </thead>
+                <tbody>
+                    {windowTable.visible.map((w) => (
+                    <tr key={w.id} className="hover:bg-canvas-secondary/60 transition-colors">
+                      <Td>
+                        <p className="font-semibold text-text-primary">{w.label}</p>
+                        <p className="text-caption text-text-muted mt-xs tabular-nums">
+                          {w.capturedFrames} frames captured
+                        </p>
+                      </Td>
+                      <Td className="tabular-nums text-text-secondary">
+                        {w.start}–{w.end}
+                      </Td>
+                      <Td className="text-text-secondary">{INTERVAL_LABEL[w.interval]}</Td>
+                      <Td>
+                        <span className="flex gap-xs">
+                          {DAY_LABEL.map((label, index) => (
+                            <span
+                              key={`${w.id}-${index}`}
+                              title={w.days.includes(index) ? 'Collecting' : 'Not collecting'}
+                              className={cn(
+                                'w-5 h-5 rounded-xs text-micro flex items-center justify-center',
+                                w.days.includes(index)
+                                  ? 'bg-primary-soft text-[#5A35F3] font-semibold'
+                                  : 'bg-canvas-secondary text-text-muted'
+                              )}
+                            >
+                              {label}
+                            </span>
+                          ))}
+                        </span>
+                      </Td>
+                      <Td className="text-right tabular-nums">{framesPerDay(w)}</Td>
+                      <Td>
+                        <span
+                          className={cn(
+                            'text-micro font-semibold rounded-xs px-sm py-xs whitespace-nowrap',
+                            w.active
+                              ? 'bg-success-bg text-success-text'
+                              : 'bg-canvas-secondary text-text-muted border border-border'
+                          )}
+                        >
+                          {w.active ? 'Active' : 'Paused'}
+                        </span>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </TableWrap>
+            <Pagination
+              page={windowTable.page}
+              pageCount={windowTable.pageCount}
+              pageSize={windowTable.pageSize}
+              onPage={windowTable.setPage}
+              matchCount={windowTable.matchCount}
+              totalCount={windowTable.totalCount}
+              noun="windows"
+              onClearSearch={windowTable.search ? () => windowTable.setSearch('') : undefined}
+            />
+          </>
         )}
 
         {zone.status === 'paused' && windows.length > 0 && (

@@ -1,37 +1,57 @@
 'use client'
 
+/**
+ * Step 2 of sign-up: confirm the account is ready, then go.
+ *
+ * This used to be a plan picker. With no billing behind it, picking "Premium" was not
+ * a sale — it was a form that handed out premium limits to anyone who read the pricing
+ * page. Every account now starts on Free and staff grant paid plans from
+ * /internal/users, so there is nothing here for the new account to decide.
+ *
+ * The step is kept rather than skipped because it does real work: it marks
+ * onboardingDone, and it is the one moment to say what Free actually includes and what
+ * to do first. Dropping someone straight onto an empty dashboard answers neither.
+ */
+
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Logo } from '@/components/ui/Logo'
-import { PlanCards } from '@/features/marketing/components/PlanCards'
+import { Button } from '@/components/ui/Button'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
-import { PLAN_LABEL } from '@/lib/constants'
+import { PLAN_LABEL, PLAN_LIMITS } from '@/lib/constants'
+import { ApiError } from '@/types/api'
 import * as authApi from '@/features/auth/api'
-import type { Plan } from '@/features/auth/types'
 
 export default function OnboardingPage() {
   const { user, loading } = useCurrentUser()
   const router = useRouter()
   const logout = useLogout()
-  const [pendingPlan, setPendingPlan] = useState<Plan | null>(null)
+  const [starting, setStarting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (loading) return
     if (!user) router.replace('/login')
-    // Staff accounts aren't customers — there's no plan for them to choose.
+    // Staff accounts aren't customers — there's no plan for them to start on.
     else if (user.role === 'internal') router.replace('/internal')
   }, [loading, user, router])
 
   if (loading || !user || user.role === 'internal') return null
 
-  // The plan chosen at sign-up is pre-selected; picking a card commits it.
-  const plan: Plan = pendingPlan ?? user.plan
+  const limits = PLAN_LIMITS.free
 
-  async function choosePlan(next: Plan) {
-    setPendingPlan(next)
-    await authApi.updatePlan(next)
-    await authApi.completeOnboarding()
-    router.push('/dashboard')
+  async function start() {
+    setStarting(true)
+    setError(null)
+    try {
+      await authApi.completeOnboarding()
+      router.push('/dashboard')
+    } catch (err) {
+      // Previously this failure was swallowed: the button stayed in its pending state
+      // with nothing on screen explaining why nothing happened.
+      setError(err instanceof ApiError ? err.message : 'Could not finish setting up your account. Please try again.')
+      setStarting(false)
+    }
   }
 
   return (
@@ -40,57 +60,66 @@ export default function OnboardingPage() {
         <div className="mx-auto max-w-[1180px] px-xl h-16 flex items-center gap-lg">
           <Logo href="/onboarding" />
           <span className="ml-auto text-caption text-text-secondary">{user.email}</span>
-          <button onClick={() => logout()} className="text-caption text-text-secondary hover:text-text-primary transition-colors">
+          <button
+            onClick={() => logout()}
+            className="text-caption text-text-secondary hover:text-text-primary transition-colors"
+          >
             Sign out
           </button>
         </div>
       </header>
 
-      <main className="flex-1 mx-auto w-full max-w-[1180px] px-xl py-section">
-        <div className="grid grid-cols-1 laptop:grid-cols-[1fr_320px] gap-xl items-start">
-          <div>
-            <h1 className="text-page-title font-bold text-text-primary">Choose your plan</h1>
-            <p className="mt-xs text-body text-text-secondary mb-xl">
-              Start free and upgrade when you need more zones or more frequent captures.
-            </p>
-            <PlanCards
-              selected={plan}
-              onSelect={choosePlan}
-              pendingPlan={pendingPlan}
-              actionLabel={(p) => (p === 'free' ? 'Start free' : `Choose ${PLAN_LABEL[p]}`)}
-            />
-            <div className="mt-xl flex items-center justify-between">
-              <button
-                onClick={() => router.push('/register')}
-                className="text-body text-text-secondary hover:text-text-primary transition-colors"
-              >
-                Back to details
-              </button>
-              <span className="text-caption text-text-muted">No card needed for Free</span>
-            </div>
-          </div>
+      <main className="flex-1 mx-auto w-full max-w-[720px] px-xl py-section">
+        <p className="text-label text-text-secondary">Step 2 of 2</p>
+        <h1 className="text-page-title font-bold text-text-primary mt-xs">
+          You&rsquo;re set up, {user.fullName?.split(' ')[0] || 'there'}
+        </h1>
+        <p className="mt-xs text-body text-text-secondary">
+          Your account is on the {PLAN_LABEL.free} plan. Nothing to pay, nothing to choose &mdash; draw a zone and it
+          starts collecting.
+        </p>
 
-          <aside className="bg-card border border-border rounded-lg p-xl space-y-lg">
-            <div>
-              <p className="text-label text-text-secondary">Account</p>
-              <p className="text-body text-text-primary font-medium">{user.fullName || user.email}</p>
-              <p className="text-caption text-text-muted">{user.email}</p>
-            </div>
-            <div className="border-t border-divider pt-lg">
-              <p className="text-label text-text-secondary">Organisation</p>
-              <p className="text-body text-text-primary font-medium">{user.organisation || '—'}</p>
-            </div>
-            <div className="border-t border-divider pt-lg">
-              <p className="text-label text-text-secondary">What happens next</p>
-              <p className="text-body text-text-primary font-medium">Straight to your dashboard</p>
-              <p className="text-caption text-text-muted mt-xs">
-                Draw your first zone from there — it starts collecting once you set its capture windows on the
-                Schedule page.
-              </p>
-            </div>
-          </aside>
+        <section className="mt-xl bg-card border border-border rounded-lg divide-y divide-divider">
+          <IncludedRow
+            label="Zones"
+            value={`${limits.zonesLimit} ${limits.zonesLimit === 1 ? 'zone' : 'zones'}`}
+            note="An area you draw on the map. Traffic is collected inside its boundary."
+          />
+          <IncludedRow
+            label="Capture windows"
+            value={`${limits.schedulesLimit} active`}
+            note="The hours a zone collects — for example weekdays, 07:00 to 09:00."
+          />
+          <IncludedRow
+            label="Captures"
+            value={`${limits.capturesLimit} per day`}
+            note="Counted per day in WIB, across every zone."
+          />
+          <IncludedRow label="Road data" value="Jalan Nasional" note="Arterial roads between cities and metro areas." />
+        </section>
+
+        <div className="mt-xl flex items-center gap-lg">
+          <Button onClick={start} disabled={starting}>
+            {starting ? 'Finishing…' : 'Go to dashboard'}
+          </Button>
+          <span className="text-caption text-text-muted">
+            Need more zones or finer intervals? Contact us and we&rsquo;ll move you up a plan.
+          </span>
         </div>
+        {error && <p className="mt-md text-caption text-danger-text">{error}</p>}
       </main>
+    </div>
+  )
+}
+
+function IncludedRow({ label, value, note }: { label: string; value: string; note: string }) {
+  return (
+    <div className="p-lg flex items-baseline gap-lg">
+      <p className="text-label text-text-secondary w-40 shrink-0">{label}</p>
+      <div>
+        <p className="text-body text-text-primary font-semibold">{value}</p>
+        <p className="text-caption text-text-muted mt-xs">{note}</p>
+      </div>
     </div>
   )
 }

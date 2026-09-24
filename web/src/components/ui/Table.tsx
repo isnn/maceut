@@ -1,4 +1,4 @@
-import { HTMLAttributes, ThHTMLAttributes, TdHTMLAttributes } from 'react'
+import { HTMLAttributes, ThHTMLAttributes, TdHTMLAttributes, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { IconArrowDown, IconArrowUp } from './icons'
 
@@ -69,5 +69,100 @@ export function SortableTh({ active, direction, onSort, className, children, ...
         </span>
       </button>
     </th>
+  )
+}
+
+/**
+ * Page controls under a table.
+ *
+ * Renders even on a single page, showing only the count. A control that appears and
+ * disappears as rows are filtered makes the page jump under the pointer, and the
+ * "showing X of Y" line is worth having either way — it is what tells someone a search
+ * is active when the box has scrolled out of view.
+ */
+export function Pagination({
+  page,
+  pageCount,
+  pageSize,
+  onPage,
+  matchCount,
+  totalCount,
+  noun = 'rows',
+  onClearSearch,
+}: {
+  page: number
+  pageCount: number
+  /** Must match the hook's page size, or the "showing X–Y" range lies. */
+  pageSize: number
+  onPage: (next: number) => void
+  matchCount: number
+  totalCount: number
+  /** Plural noun for the count line, e.g. "zones", "accounts". */
+  noun?: string
+  /** Offered when a search is hiding rows, so the way back is one click. */
+  onClearSearch?: () => void
+}) {
+  const filtered = matchCount !== totalCount
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-md text-caption text-text-muted">
+      <span className="flex items-center gap-sm">
+        Showing {matchCount === 0 ? 0 : (page - 1) * pageSize + 1}&ndash;{Math.min(page * pageSize, matchCount)} of{' '}
+        {matchCount} {noun}
+        {filtered && (
+          <>
+            <span aria-hidden>·</span>
+            <span>{totalCount} total</span>
+            {onClearSearch && (
+              <button onClick={onClearSearch} className="text-info hover:underline">
+                Clear
+              </button>
+            )}
+          </>
+        )}
+      </span>
+
+      {pageCount > 1 && (
+        <span className="flex items-center gap-sm">
+          <PageButton onClick={() => onPage(page - 1)} disabled={page <= 1} label="Previous page">
+            Previous
+          </PageButton>
+          <span className="tabular-nums px-sm">
+            Page {page} of {pageCount}
+          </span>
+          <PageButton onClick={() => onPage(page + 1)} disabled={page >= pageCount} label="Next page">
+            Next
+          </PageButton>
+        </span>
+      )}
+    </div>
+  )
+}
+
+function PageButton({
+  onClick,
+  disabled,
+  label,
+  children,
+}: {
+  onClick: () => void
+  disabled: boolean
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className={cn(
+        'px-md py-xs rounded-sm border border-border transition-colors',
+        'hover:bg-canvas-secondary hover:text-text-primary',
+        'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+        'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent',
+      )}
+    >
+      {children}
+    </button>
   )
 }
