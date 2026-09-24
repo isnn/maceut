@@ -184,6 +184,26 @@ export async function getCapture(captureId: string): Promise<CaptureDetail> {
   return apiClient.get<CaptureDetail>(`/captures/${captureId}`)
 }
 
+/** Lines and colours only — what a map draws, nothing it doesn't. */
+export interface SlimTraffic {
+  type: 'FeatureCollection'
+  features: { c: [number, number][]; k: string }[]
+}
+
+/**
+ * A capture's traffic, stripped for display rather than inspection.
+ *
+ * The stepper on this page used to call `getCapture` (the full ~2 MB shape, with street
+ * names, per-segment jam factors and functional classes) for every arrow press, with no
+ * prefetch — each step blocked on a fresh multi-megabyte fetch. Studio hit the same wall
+ * first and solved it with `?slim=1`, which is ~575 KB; both callers now share it, so a
+ * future change to what "slim" means only has to happen once.
+ */
+export async function getCaptureTrafficSlim(captureId: string): Promise<SlimTraffic | null> {
+  const detail = await apiClient.get<{ traffic: SlimTraffic | null }>(`/captures/${captureId}?slim=1`)
+  return detail.traffic
+}
+
 export interface EnqueuedCapture {
   capture: Capture
   /** False when the daily plan limit refused it (BR-008). */

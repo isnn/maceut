@@ -386,23 +386,28 @@ export async function renderCapture(canvas: HTMLCanvasElement, input: RenderInpu
   if (input.layers.legend) drawLegend(ctx, input)
 }
 
-/** Saves a canvas as a PNG the browser downloads. */
-export function downloadCanvas(canvas: HTMLCanvasElement, filename: string): Promise<void> {
+/**
+ * The canvas as a PNG blob, or a rejected promise if export was blocked.
+ *
+ * Split out from `downloadCanvas` so the multi-image export can reuse it: bundling
+ * several frames into one ZIP needs the bytes, not a triggered download for each.
+ */
+export function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
         reject(new Error('Canvas could not be exported — a tile may have blocked cross-origin reads.'))
         return
       }
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      a.click()
-      URL.revokeObjectURL(url)
-      resolve()
+      resolve(blob)
     }, 'image/png')
   })
+}
+
+/** Saves a canvas as a PNG the browser downloads. */
+export async function downloadCanvas(canvas: HTMLCanvasElement, filename: string): Promise<void> {
+  const blob = await canvasToPngBlob(canvas)
+  downloadBlob(blob, filename)
 }
 
 /** The best container this browser will record. Null when it records none. */

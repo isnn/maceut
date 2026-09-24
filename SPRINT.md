@@ -103,6 +103,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-10** Studio: playback frame nyata dari capture tersimpan (peta, transport, scrubber) | mockup 3m |
 | ✅ | **FE-11** Detail zona: legenda jam factor, Trigger jadi Auto/Manual, kolom Time diisi | permintaan user |
 | ✅ | **FE-12** Studio: renderer canvas — PNG per frame, WebM animasi, 5 style, toggle layer | permintaan user |
+| ✅ | **FE-13** Studio: rentang waktu (start/end), ekspor banyak gambar (ZIP), viewer capture lebih cepat | permintaan user |
 | 🔴 | **CAP-02** Playwright: render otomatis PNG per capture ke R2 (BR-009/BR-018) — canvas renderer siap dipakai ulang | zone-management Phase 3 |
 | ✅ | **BE-16** Scheduler: jendela aktif mem-publish job tiap menit (tanpa dependency baru, ADR-023) | capture-schedule/requirements.md |
 | 🟡 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev — sekarang bisa lewat /internal/users | housekeeping |
@@ -1142,6 +1143,57 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   bukan menulis ulang gambarnya — kalau tidak, keduanya perlahan berhenti mirip.
 
   284 test, tsc + eslint bersih, build lolos, diverifikasi lewat screenshot.
+
+[2026-09-24] Studio: rentang waktu, ekspor banyak gambar, viewer capture lebih cepat.
+
+  VIEWER CAPTURE (stepper di halaman zona) SELAMA INI LAMBAN — bukan perasaan, terukur.
+  Setiap panah memanggil `getCapture` (bentuk PENUH: nama jalan, jam factor per ruas,
+  functional class) — 2,07 MB — TANPA prefetch, jadi setiap langkah menunggu satu
+  request multi-megabyte baru. Studio sudah memecahkan masalah yang sama persis musim
+  lalu dengan proyeksi `?slim=1` (575 KB) plus cache; perbaikan ini cuma memakai solusi
+  yang sama di tempat kedua. `SlimTraffic` dan fetcher-nya dipindah ke `zones/api.ts`
+  supaya kedua pemanggil berbagi SATU sumber, bukan dua salinan yang bisa melenceng.
+  Prefetch-nya dua arah (tetangga lebih tua DAN lebih baru), beda dari Studio yang cuma
+  prefetch maju — stepper di sini dipakai bolak-balik, bukan diputar satu arah.
+
+  RENTANG WAKTU diikat ke ID capture SUNGGUHAN, bukan jam bebas. Capture jatuh di waktu
+  tidak beraturan — manual jam 19:33, jadwal berikutnya 19:42 — jadi rentang berbasis jam
+  bebas harus menebak capture mana yang "termasuk" pada batasnya. Mengikat ke frame nyata
+  berarti setiap pilihan di dropdown adalah sesuatu yang benar-benar ada.
+  Disimpan sebagai {day, startId, endId} dan di-kunci ke hari — bukan di-reset lewat
+  effect. Rentang yang hari-nya tidak cocok lagi bukan rentang hari ini, jadi pembacaan
+  jatuh balik ke hari penuh dengan sendirinya. Pola yang sama dengan `loadedFrames` untuk
+  ganti zona sebelumnya. Menghindari peringatan lint "setState sinkron dalam effect" yang
+  sudah tiga kali muncul sesi ini — kali ini dihindari dari awal, bukan diperbaiki
+  belakangan.
+
+  BAGAN "CONGESTION THROUGH THE DAY" tetap menampilkan SELURUH hari, bukan cuma rentang
+  terpilih — batang di luar rentang diredupkan dan tidak bisa diklik. Itulah preview-nya:
+  menyempitkan rentang adalah pilihan yang terlihat DIBANDINGKAN hari penuh, bukan operasi
+  pada data yang hilang dari pandangan.
+
+  EKSPOR BANYAK GAMBAR = SATU FILE ZIP, bukan banyak download terpisah. Memicu N download
+  berturut-turut persis yang dihentikan pemblokir pop-up, dan orangnya harus menyetujui
+  satu-satu. Ditulis penulis ZIP sendiri (`studio/zip.ts`, metode STORE, tanpa kompresi,
+  tanpa dependency baru) — PNG sudah terkompresi, mengompres ulang byte terkompresi tidak
+  memberi apa-apa. DIUJI dengan `unzip` sungguhan (file teks) DAN dengan modul `zipfile`
+  Python yang independen atas hasil ekspor SUNGGUHAN (3 capture nyata → basemap nyata →
+  traffic nyata → PNG nyata): `testzip()` bersih, tiga PNG ~228 KB dengan signature yang
+  benar. Bukan cuma "kode-nya terlihat benar" — jalur render-ke-zip lengkap dijalankan
+  dan hasilnya diperiksa byte demi byte.
+
+  GAYA (STYLE) YANG DIPILIH SUDAH IKUT SETIAP EKSPOR sejak sesi sebelumnya (`renderInputFor`
+  membawa `style` ke ketiganya: PNG, ZIP, animasi) — dicek ulang, masih benar, tidak ada
+  kerja tambahan diperlukan untuk permintaan itu.
+
+  "LIHAT HASIL AKHIR SEBELUM EKSPOR" tidak dibuat sebagai layar preview terpisah. Yang
+  diputar dan yang diekspor adalah SATU set frame yang sama (`frames`, hasil irisan
+  rentang) — men-scrub atau menekan Play SUDAH ADALAH preview-nya, karena preview itu
+  sendiri adalah renderer yang sama persis yang dipakai ekspor (keputusan dari sesi
+  sebelumnya, dipertahankan). Layar preview kedua akan berisiko menunjukkan sesuatu yang
+  tidak benar-benar dihasilkan ekspor.
+
+  284 test, tsc + eslint bersih, production build lolos.
 
 ---
 

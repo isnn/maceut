@@ -14,7 +14,7 @@
  * forth costs one request each way at most.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
@@ -122,8 +122,17 @@ function formatWib(iso: string): string {
 export function ZoneCaptures({ zone }: { zone: Zone }) {
   const [cycles, setCycles] = useState<zonesApi.Capture[] | null>(null)
   const [index, setIndex] = useState(0)
-  const [detail, setDetail] = useState<zonesApi.CaptureDetail | null>(null)
-  const [detailFor, setDetailFor] = useState<string | null>(null)
+  /**
+   * Traffic already fetched, keyed by capture id.
+   *
+   * This used to fetch the FULL capture (~2 MB — street names, per-segment jam factors,
+   * functional classes) on every arrow press, with no prefetch: each step blocked on a
+   * fresh multi-megabyte request. Studio hit the same wall and solved it with the slim
+   * projection (~575 KB) plus a cache; this is that same fix, applied here because
+   * stepping is bidirectional — both neighbours are worth having ready, not just "next".
+   */
+  const [traffics, setTraffics] = useState<Record<string, zonesApi.SlimTraffic | null>>({})
+  const inFlight = useRef(new Set<string>())
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -160,28 +169,24 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
 
   const selected = cycles?.[index] ?? null
 
-  // Fetch the traffic for whichever cycle the arrows landed on. Keyed by id so a
-  // result that arrives after another press is ignored rather than flashing the
-  // wrong map.
-  useEffect(() => {
-    if (!selected || selected.status !== 'done') return
-    if (detailFor === selected.id) return
+  /** Loads a cycle's traffic into the cache, once. */
+  const ensureLoaded = useCallback(async (id: string) => {
+    if (inFlight.current.has(id)) return
+    inFlight.current.add(id)
+    const traffic = await zonesApi.getCaptureTrafficSlim(id).catch(() => null)
+    setTraffics((prev) => (id in prev ? prev : { ...prev, [id]: traffic }))
+  }, [])
 
-    let cancelled = false
-    zonesApi
-      .getCapture(selected.id)
-      .then((d) => {
-        if (cancelled) return
-        setDetail(d)
-        setDetailFor(d.id)
-      })
-      .catch(() => {
-        if (!cancelled) setDetailFor(selected.id)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [selected, detailFor])
+  // The selected cycle, and both neighbours the arrows can reach next — prefetched so
+  // pressing an arrow twice in a row is instant the second time, in either direction.
+  useEffect(() => {
+    if (!selected || !cycles) return
+    if (selected.status === 'done' && !(selected.id in traffics)) void ensureLoaded(selected.id)
+    const older = cycles[index + 1]
+    const newer = cycles[index - 1]
+    if (older?.status === 'done' && !(older.id in traffics)) void ensureLoaded(older.id)
+    if (newer?.status === 'done' && !(newer.id in traffics)) void ensureLoaded(newer.id)
+  }, [selected, cycles, index, traffics, ensureLoaded])
 
   async function runNow() {
     setRunning(true)
@@ -205,7 +210,8 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
     }
   }
 
-  const traffic = detail && detailFor === selected?.id ? detail.traffic : null
+  const traffic = selected ? (traffics[selected.id] ?? null) : null
+  const loadingTraffic = selected?.status === 'done' && !(selected.id in traffics)
 
   return (
     <section className="space-y-md">
@@ -301,11 +307,18 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
 
               {selected.status === 'done' ? (
                 <div className="space-y-md">
-                  <MapCanvas
-                    polygon={zone.geometry}
-                    trafficGeoJSON={traffic ?? undefined}
-                    className="h-80 rounded-md overflow-hidden"
-                  />
+                  <div className="relative">
+                    <MapCanvas
+                      polygon={zone.geometry}
+                      slimTraffic={traffic}
+                      className="h-80 rounded-md overflow-hidden"
+                    />
+                    {loadingTraffic && (
+                      <span className="absolute top-md right-md z-[500] text-micro font-semibold bg-canvas text-text-secondary border border-border rounded-xs px-sm py-xs">
+                        Loading…
+                      </span>
+                    )}
+                  </div>
                   <JamLegend />
                 </div>
               ) : (

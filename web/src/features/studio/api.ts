@@ -11,14 +11,10 @@
  * the slim projection is ~575 KB and only the frames actually played are ever loaded.
  */
 
-import { apiClient } from '@/lib/api-client'
 import * as zonesApi from '@/features/zones/api'
 
-/** Lines and colours only — what the player draws, nothing it doesn't. */
-export interface SlimTraffic {
-  type: 'FeatureCollection'
-  features: { c: [number, number][]; k: string }[]
-}
+/** The zone-detail page's Captures stepper fetches the same shape (`?slim=1`). */
+export type { SlimTraffic } from '@/features/zones/api'
 
 export interface Frame {
   id: string
@@ -87,7 +83,4 @@ export function daysWithFrames(frames: Frame[]): string[] {
 }
 
 /** One frame's geometry. Cached by the caller — the same frame is replayed constantly. */
-export async function getFrameTraffic(captureId: string): Promise<SlimTraffic | null> {
-  const detail = await apiClient.get<{ traffic: SlimTraffic | null }>(`/captures/${captureId}?slim=1`)
-  return detail.traffic
-}
+export const getFrameTraffic = zonesApi.getCaptureTrafficSlim

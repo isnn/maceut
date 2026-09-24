@@ -30,12 +30,14 @@ import type { Frame, SlimTraffic } from '@/features/studio/api'
 import {
   STYLE_PRESETS,
   renderCapture,
+  canvasToPngBlob,
   downloadCanvas,
   recordAnimation,
   downloadBlob,
   preferredVideoType,
   type RenderLayers,
 } from '@/features/studio/render'
+import { buildZip } from '@/features/studio/zip'
 import type { Zone } from '@/features/zones/types'
 
 /** Playback speeds, as milliseconds between frames. */
@@ -76,7 +78,7 @@ export default function StudioPage() {
   const [loadedFrames, setLoadedFrames] = useState<{ zoneId: string; frames: Frame[] } | null>(null)
   const [day, setDay] = useState<string>('')
 
-  const [current, setCurrent] = useState(0)
+  const [rawCurrent, setCurrent] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(1)
 
@@ -130,10 +132,70 @@ export default function StudioPage() {
   const allFrames = loadedFrames?.zoneId === zoneId ? loadedFrames.frames : null
 
   const days = useMemo(() => (allFrames ? studioApi.daysWithFrames(allFrames) : []), [allFrames])
-  const frames = useMemo(
+
+  /** Every completed capture on the selected day, oldest first — the full playable range. */
+  const dayFrames = useMemo(
     () => (allFrames ?? []).filter((f) => studioApi.wibDate(f.capturedAt) === day),
     [allFrames, day],
   )
+
+  /**
+   * The playback/export range within the day, bounded by two capture ids rather than
+   * two clock times. Captures land at irregular moments — a manual one at 19:33, the
+   * next scheduled one at 19:42 — so a time-of-day range would have to guess which
+   * frame a boundary "belongs" to. Anchoring to real frames means every choice in the
+   * picker is something that actually exists.
+   *
+   * Keyed on the day rather than reset by an effect: a chosen range whose `day` no
+   * longer matches the selected day is simply not this day's range, and the read below
+   * falls back to the full day on its own — the same pattern `loadedFrames` already uses
+   * for the zone switch. No effect means no render where the range briefly points at
+   * frames that no longer exist.
+   */
+  const [range, setRange] = useState<{ day: string; startId: string; endId: string } | null>(null)
+
+  function setRangeStartId(id: string) {
+    const idx = dayFrames.findIndex((f) => f.id === id)
+    // Keeps the range the right way round: pushing the start past the end drags the end
+    // along with it, rather than producing an empty range.
+    const endId = idx > rangeEndIdx ? id : (rangeEndId ?? id)
+    setRange({ day, startId: id, endId })
+  }
+  function setRangeEndId(id: string) {
+    const idx = dayFrames.findIndex((f) => f.id === id)
+    const startId = idx < rangeStartIdx ? id : (rangeStartId ?? id)
+    setRange({ day, startId, endId: id })
+  }
+  function resetRange() {
+    setRange(null)
+  }
+
+  const rangeStartId = range?.day === day ? range.startId : (dayFrames[0]?.id ?? null)
+  const rangeEndId = range?.day === day ? range.endId : (dayFrames[dayFrames.length - 1]?.id ?? null)
+
+  const rangeStartIdx = Math.max(
+    dayFrames.findIndex((f) => f.id === rangeStartId),
+    0,
+  )
+  const rangeEndIdxFound = dayFrames.findIndex((f) => f.id === rangeEndId)
+  const rangeEndIdx = rangeEndIdxFound === -1 ? dayFrames.length - 1 : rangeEndIdxFound
+
+  /**
+   * What actually plays and exports — the day, narrowed to the selected range. Every
+   * export (single PNG, image set, animation) reads from this and nothing else, so the
+   * range the person set is exactly what they get: no separate "export scope" that could
+   * silently disagree with what the range picker shows.
+   */
+  const frames = useMemo(
+    () => dayFrames.slice(rangeStartIdx, rangeEndIdx + 1),
+    [dayFrames, rangeStartIdx, rangeEndIdx],
+  )
+
+  // The range can shrink out from under the raw position — narrowing the end past where
+  // playback was, say. Clamped at the point of use rather than reset by an effect, so
+  // nudging one boundary does not throw the viewer back to the start of the range, and
+  // no render sees `current` pointing past the frames that now exist.
+  const current = Math.min(rawCurrent, Math.max(frames.length - 1, 0))
 
   const frame = frames[current] ?? null
 
@@ -205,6 +267,17 @@ export default function StudioPage() {
     }
   }, [frame, traffics, renderInputFor])
 
+  /** A frame's traffic — from the cache if playback already loaded it, fetched otherwise. */
+  const trafficFor = useCallback(
+    (f: Frame) => traffics[f.id] ?? studioApi.getFrameTraffic(f.id).catch(() => null),
+    [traffics],
+  )
+
+  /** A filename-safe stamp for one export. */
+  function stampFor(iso: string): string {
+    return iso.slice(0, 16).replace(/[:T]/g, '-')
+  }
+
   /**
    * Exports the frame on screen as a PNG.
    *
@@ -218,20 +291,51 @@ export default function StudioPage() {
     try {
       const canvas = exportCanvas.current ?? document.createElement('canvas')
       exportCanvas.current = canvas
-      const traffic = traffics[frame.id] ?? (await studioApi.getFrameTraffic(frame.id).catch(() => null))
-      await renderCapture(canvas, renderInputFor(frame, traffic, 1600, 1000))
-      await downloadCanvas(canvas, `${zoneLabel}-${frame.capturedAt.slice(0, 16)}.png`.replace(/[/\\:*?"<>|]/g, '-'))
+      await renderCapture(canvas, renderInputFor(frame, await trafficFor(frame), 1600, 1000))
+      await downloadCanvas(canvas, `${zoneLabel}-${stampFor(frame.capturedAt)}.png`.replace(/[/\\:*?"<>|]/g, '-'))
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Could not export the image.')
     } finally {
       setExporting(null)
     }
-  }, [frame, traffics, renderInputFor, zoneLabel])
+  }, [frame, renderInputFor, trafficFor, zoneLabel])
 
   /**
-   * Records every frame of the day into a WebM.
+   * Renders every frame in the selected range as a PNG and bundles them into one ZIP.
    *
-   * Each frame's geometry is fetched as it is reached rather than all at once — a day
+   * One file rather than one download per frame: triggering N downloads in a loop is
+   * what popup blockers exist to stop, and a person would have to approve each one by
+   * hand. The ZIP writer has no external dependency — see studio/zip.ts.
+   */
+  const exportImages = useCallback(async () => {
+    if (frames.length === 0) return
+    setExportError(null)
+    setPlaying(false)
+    try {
+      const canvas = exportCanvas.current ?? document.createElement('canvas')
+      exportCanvas.current = canvas
+      const entries: { name: string; data: Uint8Array }[] = []
+
+      for (let i = 0; i < frames.length; i++) {
+        const f = frames[i]!
+        await renderCapture(canvas, renderInputFor(f, await trafficFor(f), 1600, 1000))
+        const blob = await canvasToPngBlob(canvas)
+        entries.push({ name: `${String(i + 1).padStart(2, '0')}-${stampFor(f.capturedAt)}.png`, data: new Uint8Array(await blob.arrayBuffer()) })
+        setExporting({ label: 'Rendering images', done: i + 1, total: frames.length })
+      }
+
+      downloadBlob(buildZip(entries), `${zoneLabel}-${day}-images.zip`.replace(/[/\\:*?"<>|]/g, '-'))
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Could not export the images.')
+    } finally {
+      setExporting(null)
+    }
+  }, [frames, renderInputFor, trafficFor, zoneLabel, day])
+
+  /**
+   * Records the selected range into a WebM.
+   *
+   * Each frame's geometry is fetched as it is reached rather than all at once — a range
    * can be dozens of frames and each is hundreds of kilobytes.
    */
   const exportAnimation = useCallback(async () => {
@@ -249,8 +353,7 @@ export default function StudioPage() {
         onProgress: (done, total) => setExporting({ label: 'Recording animation', done, total }),
         paint: async (i) => {
           const f = frames[i]!
-          const traffic = traffics[f.id] ?? (await studioApi.getFrameTraffic(f.id).catch(() => null))
-          await renderCapture(canvas, renderInputFor(f, traffic, 1600, 1000))
+          await renderCapture(canvas, renderInputFor(f, await trafficFor(f), 1600, 1000))
         },
       })
       downloadBlob(blob, `${zoneLabel}-${day}.webm`.replace(/[/\\:*?"<>|]/g, '-'))
@@ -259,10 +362,9 @@ export default function StudioPage() {
     } finally {
       setExporting(null)
     }
-  }, [frames, traffics, speed, day, renderInputFor, zoneLabel])
+  }, [frames, speed, day, renderInputFor, trafficFor, zoneLabel])
 
   const zone = selectedZone
-  const traffic = frame ? (traffics[frame.id] ?? null) : null
   const loadingFrame = frame ? !(frame.id in traffics) : false
 
   if (zones === null) {
@@ -429,25 +531,38 @@ export default function StudioPage() {
               </div>
             </Card>
 
-            {/* The day at a glance: every frame's congestion, and where you are in it. */}
+            {/*
+              The day at a glance: every frame's congestion, and which of them are in the
+              selected range. Bars for the whole day are always drawn — not just the
+              range — so narrowing the Timeframe controls is visibly a choice against the
+              full day, not an operation on data that has vanished from view.
+            */}
             <Card className="p-lg">
               <p className="text-label text-text-secondary mb-md">Congestion through the day</p>
               <div className="flex items-end gap-[2px] h-24">
-                {frames.map((f, i) => {
+                {dayFrames.map((f, dayIdx) => {
                   const jam = f.jamFactorAvg ?? 0
                   const band = bandFor(jam)
+                  const inRange = dayIdx >= rangeStartIdx && dayIdx <= rangeEndIdx
+                  const rangeIdx = dayIdx - rangeStartIdx
                   return (
                     <button
                       key={f.id}
                       onClick={() => {
+                        if (!inRange) return
                         setPlaying(false)
-                        setCurrent(i)
+                        setCurrent(rangeIdx)
                       }}
-                      title={`${f.time} · jam ${jam.toFixed(2)}`}
+                      disabled={!inRange}
+                      title={inRange ? `${f.time} · jam ${jam.toFixed(2)}` : `${f.time} · outside the selected range`}
                       aria-label={`Jump to ${f.time}`}
                       className={cn(
                         'flex-1 min-w-[3px] rounded-t-xs transition-opacity',
-                        i === current ? 'opacity-100' : 'opacity-45 hover:opacity-80',
+                        !inRange
+                          ? 'opacity-[0.12] cursor-default'
+                          : rangeIdx === current
+                            ? 'opacity-100'
+                            : 'opacity-45 hover:opacity-80',
                       )}
                       style={{
                         // 10 is HERE's ceiling, so the bar is a share of "road closed"
@@ -460,8 +575,8 @@ export default function StudioPage() {
                 })}
               </div>
               <div className="flex justify-between text-micro text-text-muted mt-sm tabular-nums">
-                <span>{frames[0]?.time}</span>
-                <span>{frames[frames.length - 1]?.time}</span>
+                <span>{dayFrames[0]?.time}</span>
+                <span>{dayFrames[dayFrames.length - 1]?.time}</span>
               </div>
             </Card>
           </div>
@@ -494,6 +609,55 @@ export default function StudioPage() {
                 <Row label="Busiest" value={busiest(frames)} />
                 <Row label="Quietest" value={quietest(frames)} />
               </dl>
+            </Card>
+
+            {/*
+              What plays and what exports are the same set — narrowing this narrows both,
+              so scrubbing or pressing Play IS the preview of what an export will contain.
+              A separate "preview" surface would risk showing something export does not
+              actually produce.
+            */}
+            <Card className="p-lg space-y-md">
+              <p className="text-label text-text-secondary">Timeframe</p>
+              <p className="text-caption text-text-muted">
+                {frames.length} of {dayFrames.length} frames selected
+                {dayFrames[0] && dayFrames[dayFrames.length - 1] && (
+                  <>
+                    {' '}
+                    ({dayFrames[0].time}–{dayFrames[dayFrames.length - 1].time} available)
+                  </>
+                )}
+                .
+              </p>
+              <div className="grid grid-cols-2 gap-sm">
+                <div className="space-y-xs">
+                  <label className="text-micro text-text-muted" htmlFor="range-start">
+                    Start
+                  </label>
+                  <Select
+                    value={rangeStartId ?? ''}
+                    onValueChange={setRangeStartId}
+                    options={dayFrames.map((f) => ({ value: f.id, label: f.time }))}
+                    aria-label="Range start"
+                  />
+                </div>
+                <div className="space-y-xs">
+                  <label className="text-micro text-text-muted" htmlFor="range-end">
+                    End
+                  </label>
+                  <Select
+                    value={rangeEndId ?? ''}
+                    onValueChange={setRangeEndId}
+                    options={dayFrames.map((f) => ({ value: f.id, label: f.time }))}
+                    aria-label="Range end"
+                  />
+                </div>
+              </div>
+              {frames.length !== dayFrames.length && (
+                <button onClick={resetRange} className="text-caption text-info hover:underline">
+                  Reset to full day
+                </button>
+              )}
             </Card>
 
             <Card className="p-lg space-y-md">
@@ -537,13 +701,21 @@ export default function StudioPage() {
                 <Button
                   variant="secondary"
                   className="w-full"
+                  onClick={exportImages}
+                  disabled={exporting !== null || frames.length === 0}
+                >
+                  Export images in range ({frames.length}) as ZIP
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="w-full"
                   onClick={exportAnimation}
                   disabled={exporting !== null || frames.length < 2 || !canRecord}
                   title={canRecord ? undefined : 'This browser cannot record video'}
                 >
                   Record animation ({frames.length} frames)
                 </Button>
-            
+
                 {exporting && (
                   <div className="pt-sm">
                     <ProgressBar value={exporting.done} max={exporting.total} />
