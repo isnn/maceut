@@ -104,6 +104,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-11** Detail zona: legenda jam factor, Trigger jadi Auto/Manual, kolom Time diisi | permintaan user |
 | ✅ | **FE-12** Studio: renderer canvas — PNG per frame, WebM animasi, 5 style, toggle layer | permintaan user |
 | ✅ | **FE-13** Studio: rentang waktu (start/end), ekspor banyak gambar (ZIP), viewer capture lebih cepat | permintaan user |
+| ✅ | **FE-14** Studio: panel style dipecah 5 bagian (map theme, congestion theme, zoom position, overlay, output size); tema satelit + artistik, pan/zoom manual | permintaan user |
 | 🔴 | **CAP-02** Playwright: render otomatis PNG per capture ke R2 (BR-009/BR-018) — canvas renderer siap dipakai ulang | zone-management Phase 3 |
 | ✅ | **BE-16** Scheduler: jendela aktif mem-publish job tiap menit (tanpa dependency baru, ADR-023) | capture-schedule/requirements.md |
 | 🟡 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev — sekarang bisa lewat /internal/users | housekeeping |
@@ -1194,6 +1195,48 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   tidak benar-benar dihasilkan ekspor.
 
   284 test, tsc + eslint bersih, production build lolos.
+
+[2026-09-24b] Studio: panel style dipecah 5 bagian — map theme, congestion theme, zoom position, overlay, output size.
+
+  PARADIGMA STYLE BERUBAH dari satu daftar preset datar (`STYLE_PRESETS`) menjadi lima
+  konsep terpisah, mengikuti pola panel Map Style di maptoposter.tarmizi.id yang dijadikan
+  acuan: Map theme (Standard: Dark/Daylight/Satellite, Artistic: Default/Cyber Glitch/
+  Midnight Neon/Sakura Bloom), Congestion theme, Zoom position, Overlay, Output size.
+  `render.ts` ditulis ulang total di sekitar bentuk ini — lihat `MAP_THEMES`,
+  `CONGESTION_THEMES`, `OUTPUT_SIZES`, `RenderView`, `RenderOverlay`.
+
+  MAP THEME DAN CONGESTION THEME SENGAJA DIPISAH. BR-017 memberi arti sungguhan pada
+  empat warna traffic (hijau=lancar, merah=macet); tema kosmetik peta yang menyentuh
+  warna itu diam-diam akan merusak arti itu. Congestion theme "Standard" adalah pemetaan
+  identitas hex→hex — itu BUKAN placeholder, itu intinya: hanya map theme yang diganti
+  tidak mengubah arti macet, mengubah congestion theme adalah pilihan eksplisit terpisah
+  untuk menukar arti demi tampilan.
+
+  SATELIT PAKAI ESRI WORLD IMAGERY GRATIS (server.arcgisonline.com), bukan HERE atau
+  sumber berbayar — tanpa API key, CORS `Access-Control-Allow-Origin: *` dicek dengan
+  curl SEBELUM dipasang, sama seperti OSM dicek dulu waktu Studio pertama dibangun.
+  Urutan path-nya `{z}/{y}/{x}`, TERBALIK dari OSM yang `{z}/{x}/{y}` — kalau tertukar,
+  bukan error, tapi diam-diam menggambar tile belahan bumi yang salah.
+
+  ZOOM DAN PAN DISIMPAN RELATIF, bukan absolut — zoom sebagai offset dari zoom auto-fit,
+  pan sebagai fraksi lebar/tinggi canvas, bukan pixel. Alasannya menjaga aturan yang
+  sudah ada sejak Studio pertama: preview ADALAH renderer yang sama persis dengan
+  ekspor. Pan dalam pixel yang diset sambil melihat preview 960 lebar akan mendarat di
+  tempat lain sama sekali di ekspor 1920 lebar; fraksi tidak tergantung resolusi.
+  Drag-to-pan di canvas preview pakai Pointer Events native, tanpa dependency baru.
+
+  BUG DITEMUKAN SAAT VERIFIKASI (dan langsung diperbaiki): `renderCapture` menggambar
+  tile basemap satu per satu begitu tiap `loadTile()` selesai, jadi dua render yang
+  tumpang tindih (ganti tema cepat sementara tile lama masih di-fetch) bisa saling
+  menimpa canvas yang sama — tile dari render lama mendarat SETELAH render baru selesai.
+  Diperbaiki dengan buffer offscreen: preview digambar ke canvas terpisah dulu, baru
+  di-blit ke canvas yang terlihat hanya kalau effect-nya masih berlaku (bukan stale).
+
+  DIVERIFIKASI lewat browser sungguhan (akun + zona + 4 capture nyata lewat API):
+  5 section render berurutan, tema Midnight Neon terlihat berbeda dari Dark biasa,
+  tile satelit sungguhan termuat (bukan blank/tainted canvas), Output size Square
+  mengubah aspect ratio canvas (738×461 → 738×738), drag-to-pan menggeser peta dan
+  memunculkan tombol Reset, nol error console. tsc + eslint bersih.
 
 ---
 

@@ -12,6 +12,12 @@
  * prefetched and everything played kept in a cache. A capture is ~2 MB full and ~575 KB
  * slimmed, so loading a whole day up front would be tens of megabytes for an animation
  * nobody inspects road-by-road.
+ *
+ * The style rail is five sections — map theme, congestion theme, zoom position, overlay,
+ * output size — mirroring a poster tool's Map Style panel rather than one flat preset
+ * list. Map theme and congestion theme are kept deliberately separate: BR-017's traffic
+ * colours carry real meaning, and a cosmetic map re-skin must never silently touch them
+ * (see the "standard" congestion theme's comment in render.ts).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -19,6 +25,7 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
+import { Checkbox } from '@/components/ui/Input'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { IconArrowLeft, IconArrowRight, IconPlay, IconPause } from '@/components/ui/icons'
@@ -28,14 +35,23 @@ import * as zonesApi from '@/features/zones/api'
 import * as studioApi from '@/features/studio/api'
 import type { Frame, SlimTraffic } from '@/features/studio/api'
 import {
-  STYLE_PRESETS,
+  MAP_THEMES,
+  CONGESTION_THEMES,
+  OUTPUT_SIZES,
+  MIN_OUTPUT_PX,
+  MAX_OUTPUT_PX,
+  DEFAULT_VIEW,
   renderCapture,
   canvasToPngBlob,
   downloadCanvas,
   recordAnimation,
   downloadBlob,
   preferredVideoType,
-  type RenderLayers,
+  type MapThemeCategory,
+  type TextPosition,
+  type RenderOverlay,
+  type RenderView,
+  type RenderInput,
 } from '@/features/studio/render'
 import { buildZip } from '@/features/studio/zip'
 import type { Zone } from '@/features/zones/types'
@@ -47,6 +63,32 @@ const SPEEDS = [
   { label: '2×', ms: 500 },
   { label: '4×', ms: 250 },
 ]
+
+/** The five overlay-text anchor points, laid out on a 3×3 grid. */
+const POSITIONS: { id: TextPosition; label: string; row: number; col: number }[] = [
+  { id: 'top-left', label: 'TL', row: 1, col: 1 },
+  { id: 'top-right', label: 'TR', row: 1, col: 3 },
+  { id: 'center', label: 'C', row: 2, col: 2 },
+  { id: 'bottom-left', label: 'BL', row: 3, col: 1 },
+  { id: 'bottom-right', label: 'BR', row: 3, col: 3 },
+]
+
+const DEFAULT_OVERLAY: RenderOverlay = { showText: true, textPosition: 'bottom-right', legend: false, boundary: false }
+
+/** A preview never needs export resolution — it needs the export's aspect ratio, capped small. */
+function previewDims(size: { width: number; height: number }): { width: number; height: number } {
+  const maxDim = 960
+  if (size.width >= size.height) {
+    const width = Math.min(size.width, maxDim)
+    return { width, height: Math.round((width / size.width) * size.height) }
+  }
+  const height = Math.min(size.height, maxDim)
+  return { height, width: Math.round((height / size.height) * size.width) }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}
 
 /**
  * BR-017's bands, over the mean jam factor of a frame.
@@ -91,13 +133,16 @@ export default function StudioPage() {
    */
   const [traffics, setTraffics] = useState<Record<string, SlimTraffic | null>>({})
 
-  const [styleId, setStyleId] = useState(STYLE_PRESETS[0]!.id)
-  const [layers, setLayers] = useState<RenderLayers>({
-    basemap: true,
-    timestamp: true,
-    legend: false,
-    boundary: false,
-  })
+  // --- style rail state ---------------------------------------------------------
+  const [themeId, setThemeId] = useState(MAP_THEMES[0]!.id)
+  const [showBasemap, setShowBasemap] = useState(true)
+  const [congestionId, setCongestionId] = useState(CONGESTION_THEMES[0]!.id)
+  const [view, setView] = useState<RenderView>(DEFAULT_VIEW)
+  const [overlay, setOverlay] = useState<RenderOverlay>(DEFAULT_OVERLAY)
+  const [outputSizeId, setOutputSizeId] = useState('classic')
+  const [customWidth, setCustomWidth] = useState(1600)
+  const [customHeight, setCustomHeight] = useState(1000)
+
   const [exporting, setExporting] = useState<null | { label: string; done: number; total: number }>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   // Off-screen: the exported image is rendered at its own size, not the preview's.
@@ -215,7 +260,6 @@ export default function StudioPage() {
     if (next && !(next.id in traffics)) void ensureLoaded(next.id)
   }, [frame, frames, current, traffics, ensureLoaded])
 
-
   useEffect(() => {
     if (!playing || frames.length === 0) return
     const timer = setTimeout(() => {
@@ -235,37 +279,102 @@ export default function StudioPage() {
   const zoneRing = selectedZone?.geometry.coordinates[0] as [number, number][] | undefined
   const zoneLabel = selectedZone?.name ?? 'zone'
 
-  const style = STYLE_PRESETS.find((p) => p.id === styleId) ?? STYLE_PRESETS[0]!
+  const theme = MAP_THEMES.find((t) => t.id === themeId) ?? MAP_THEMES[0]!
+  const congestion = CONGESTION_THEMES.find((c) => c.id === congestionId) ?? CONGESTION_THEMES[0]!
+
+  const outputSize = useMemo(() => {
+    if (outputSizeId === 'custom') {
+      return { width: clamp(customWidth, MIN_OUTPUT_PX, MAX_OUTPUT_PX), height: clamp(customHeight, MIN_OUTPUT_PX, MAX_OUTPUT_PX) }
+    }
+    return OUTPUT_SIZES.find((s) => s.id === outputSizeId) ?? OUTPUT_SIZES[3]!
+  }, [outputSizeId, customWidth, customHeight])
+
+  function selectThemeCategory(next: MapThemeCategory) {
+    if (next === theme.category) return
+    const first = MAP_THEMES.find((t) => t.category === next)
+    if (first) setThemeId(first.id)
+  }
 
   /** Everything renderCapture needs for one frame, minus the canvas. */
   const renderInputFor = useCallback(
-    (f: Frame, traffic: SlimTraffic | null, width: number, height: number) => ({
+    (f: Frame, traffic: SlimTraffic | null, width: number, height: number): RenderInput => ({
       traffic,
       ring: zoneRing,
       capturedAt: f.capturedAt,
       zoneName: zoneLabel,
-      style,
-      layers,
+      theme,
+      showBasemap,
+      congestion,
+      overlay,
+      view,
       width,
       height,
     }),
-    [style, layers, zoneRing, zoneLabel],
+    [theme, showBasemap, congestion, overlay, view, zoneRing, zoneLabel],
   )
+
+  // Off-screen: `renderCapture` paints tiles incrementally as each one loads, so two
+  // overlapping renders (a fast theme switch mid-fetch, say) can interleave their
+  // `drawImage` calls on a shared canvas — a later tile from a stale run landing after
+  // a newer run has already finished. Rendering into a scratch canvas and blitting the
+  // result only if this effect is still current keeps a stale run from ever touching
+  // what's on screen.
+  const previewOffscreen = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
     const canvas = previewCanvas.current
     if (!canvas || !frame) return
     let cancelled = false
     setPreviewBusy(true)
-    // 960×600 is the preview's own resolution; the export renders at 1600×1000 so the
-    // file does not depend on how wide the browser happens to be.
-    renderCapture(canvas, renderInputFor(frame, traffics[frame.id] ?? null, 960, 600)).finally(() => {
-      if (!cancelled) setPreviewBusy(false)
-    })
+    // The preview renders at a scaled-down version of the chosen output size's own
+    // aspect ratio — never a fixed 960×600 — so what's on screen is what will export,
+    // just smaller.
+    const dims = previewDims(outputSize)
+    const offscreen = previewOffscreen.current ?? document.createElement('canvas')
+    previewOffscreen.current = offscreen
+    renderCapture(offscreen, renderInputFor(frame, traffics[frame.id] ?? null, dims.width, dims.height))
+      .then(() => {
+        if (cancelled) return
+        canvas.width = offscreen.width
+        canvas.height = offscreen.height
+        canvas.getContext('2d')?.drawImage(offscreen, 0, 0)
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewBusy(false)
+      })
     return () => {
       cancelled = true
     }
-  }, [frame, traffics, renderInputFor])
+  }, [frame, traffics, renderInputFor, outputSize])
+
+  // --- drag-to-pan on the preview canvas -----------------------------------------
+  const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
+
+  function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragRef.current = { x: e.clientX, y: e.clientY, panX: view.panX, panY: view.panY }
+    setDragging(true)
+  }
+  function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    const drag = dragRef.current
+    const canvas = previewCanvas.current
+    if (!drag || !canvas) return
+    const rect = canvas.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return
+    const dx = (e.clientX - drag.x) / rect.width
+    const dy = (e.clientY - drag.y) / rect.height
+    setView((v) => ({ ...v, panX: clamp(drag.panX + dx, -0.6, 0.6), panY: clamp(drag.panY + dy, -0.6, 0.6) }))
+  }
+  function handlePointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
+    dragRef.current = null
+    setDragging(false)
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {
+      // Capture may already be released — nothing to do.
+    }
+  }
 
   /** A frame's traffic — from the cache if playback already loaded it, fetched otherwise. */
   const trafficFor = useCallback(
@@ -279,10 +388,8 @@ export default function StudioPage() {
   }
 
   /**
-   * Exports the frame on screen as a PNG.
-   *
-   * Rendered at 1600×1000 rather than whatever the preview happens to be, so the file
-   * does not change size with the browser window.
+   * Exports the frame on screen as a PNG, at the selected output size — not whatever
+   * the preview happens to be, so the file does not change with the browser window.
    */
   const exportPng = useCallback(async () => {
     if (!frame) return
@@ -291,14 +398,14 @@ export default function StudioPage() {
     try {
       const canvas = exportCanvas.current ?? document.createElement('canvas')
       exportCanvas.current = canvas
-      await renderCapture(canvas, renderInputFor(frame, await trafficFor(frame), 1600, 1000))
+      await renderCapture(canvas, renderInputFor(frame, await trafficFor(frame), outputSize.width, outputSize.height))
       await downloadCanvas(canvas, `${zoneLabel}-${stampFor(frame.capturedAt)}.png`.replace(/[/\\:*?"<>|]/g, '-'))
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Could not export the image.')
     } finally {
       setExporting(null)
     }
-  }, [frame, renderInputFor, trafficFor, zoneLabel])
+  }, [frame, renderInputFor, trafficFor, zoneLabel, outputSize])
 
   /**
    * Renders every frame in the selected range as a PNG and bundles them into one ZIP.
@@ -318,7 +425,7 @@ export default function StudioPage() {
 
       for (let i = 0; i < frames.length; i++) {
         const f = frames[i]!
-        await renderCapture(canvas, renderInputFor(f, await trafficFor(f), 1600, 1000))
+        await renderCapture(canvas, renderInputFor(f, await trafficFor(f), outputSize.width, outputSize.height))
         const blob = await canvasToPngBlob(canvas)
         entries.push({ name: `${String(i + 1).padStart(2, '0')}-${stampFor(f.capturedAt)}.png`, data: new Uint8Array(await blob.arrayBuffer()) })
         setExporting({ label: 'Rendering images', done: i + 1, total: frames.length })
@@ -330,7 +437,7 @@ export default function StudioPage() {
     } finally {
       setExporting(null)
     }
-  }, [frames, renderInputFor, trafficFor, zoneLabel, day])
+  }, [frames, renderInputFor, trafficFor, zoneLabel, day, outputSize])
 
   /**
    * Records the selected range into a WebM.
@@ -353,7 +460,7 @@ export default function StudioPage() {
         onProgress: (done, total) => setExporting({ label: 'Recording animation', done, total }),
         paint: async (i) => {
           const f = frames[i]!
-          await renderCapture(canvas, renderInputFor(f, await trafficFor(f), 1600, 1000))
+          await renderCapture(canvas, renderInputFor(f, await trafficFor(f), outputSize.width, outputSize.height))
         },
       })
       downloadBlob(blob, `${zoneLabel}-${day}.webm`.replace(/[/\\:*?"<>|]/g, '-'))
@@ -362,7 +469,7 @@ export default function StudioPage() {
     } finally {
       setExporting(null)
     }
-  }, [frames, speed, day, renderInputFor, trafficFor, zoneLabel])
+  }, [frames, speed, day, renderInputFor, trafficFor, zoneLabel, outputSize])
 
   const zone = selectedZone
   const loadingFrame = frame ? !(frame.id in traffics) : false
@@ -442,10 +549,18 @@ export default function StudioPage() {
             <Card className="p-lg space-y-lg">
               {/* The preview IS the renderer, not Leaflet with a CSS filter over it. A separate
                   preview would look close and export differently, and the difference would only
-                  ever be discovered after someone shipped the file. Panning lives on the zone
-                  page; here, fidelity is worth more. */}
-              <div className="relative rounded-md overflow-hidden" style={{ background: style.background }}>
-                <canvas ref={previewCanvas} className="w-full block" style={{ aspectRatio: '8 / 5' }} />
+                  ever be discovered after someone shipped the file. Drag the canvas to pan; the
+                  zoom slider and Reset live in the Zoom position section. */}
+              <div className="relative rounded-md overflow-hidden" style={{ background: theme.background }}>
+                <canvas
+                  ref={previewCanvas}
+                  className="w-full block"
+                  style={{ aspectRatio: `${outputSize.width} / ${outputSize.height}`, cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                />
                 {(loadingFrame || previewBusy) && (
                   <span className="absolute top-md right-md text-micro font-semibold bg-canvas text-text-secondary border border-border rounded-xs px-sm py-xs">
                     {loadingFrame ? 'Loading frame…' : 'Drawing…'}
@@ -660,77 +775,231 @@ export default function StudioPage() {
               )}
             </Card>
 
+            {/* 1. Map theme — the basemap's colour identity: a literal Standard rendering,
+                or an Artistic mood. Traffic colours are untouched here on purpose. */}
             <Card className="p-lg space-y-md">
-              <p className="text-label text-text-secondary">Style</p>
-              <Select
-                value={styleId}
-                onValueChange={setStyleId}
-                options={STYLE_PRESETS.map((s) => ({ value: s.id, label: s.name }))}
-                aria-label="Image style"
-              />
-            
-              {/* What appears in the exported image. The two looks in the brief differ by
-                  exactly these switches — one carries the timestamp block, one does not. */}
-              <div className="border-t border-divider pt-md space-y-sm">
-                <p className="text-label text-text-secondary">Layers</p>
-                {(
-                  [
-                    ['basemap', 'Basemap'],
-                    ['timestamp', 'Timestamp'],
-                    ['legend', 'Legend'],
-                    ['boundary', 'Zone boundary'],
-                  ] as [keyof RenderLayers, string][]
-                ).map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-sm text-body text-text-secondary cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={layers[key]}
-                      onChange={(e) => setLayers((l) => ({ ...l, [key]: e.target.checked }))}
-                      className="shrink-0"
-                    />
-                    {label}
-                  </label>
+              <p className="text-label text-text-secondary">Map theme</p>
+              <div className="flex gap-xs">
+                {(['standard', 'artistic'] as const).map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => selectThemeCategory(cat)}
+                    className={cn(
+                      'flex-1 text-micro font-semibold rounded-xs px-sm py-xs capitalize transition-colors',
+                      theme.category === cat
+                        ? 'bg-primary text-on-primary'
+                        : 'bg-canvas-secondary text-text-muted hover:text-text-primary',
+                    )}
+                  >
+                    {cat}
+                  </button>
                 ))}
               </div>
-            
-              <div className="border-t border-divider pt-md space-y-sm">
-                <p className="text-label text-text-secondary">Export</p>
-                <Button className="w-full" onClick={exportPng} disabled={exporting !== null || !frame}>
-                  Download this frame (PNG)
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  onClick={exportImages}
-                  disabled={exporting !== null || frames.length === 0}
-                >
-                  Export images in range ({frames.length}) as ZIP
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  onClick={exportAnimation}
-                  disabled={exporting !== null || frames.length < 2 || !canRecord}
-                  title={canRecord ? undefined : 'This browser cannot record video'}
-                >
-                  Record animation ({frames.length} frames)
-                </Button>
-
-                {exporting && (
-                  <div className="pt-sm">
-                    <ProgressBar value={exporting.done} max={exporting.total} />
-                    <p className="text-micro text-text-muted mt-xs tabular-nums">
-                      {exporting.label} — {exporting.done} / {exporting.total}
-                    </p>
-                  </div>
-                )}
-                {exportError && <p className="text-caption text-danger-text">{exportError}</p>}
-                {!canRecord && (
-                  <p className="text-caption text-text-muted">
-                    Animation recording needs MediaRecorder, which this browser doesn&rsquo;t offer. Still images work.
-                  </p>
-                )}
+              <div className="grid grid-cols-2 gap-sm">
+                {MAP_THEMES.filter((t) => t.category === theme.category).map((t) => {
+                  const active = t.id === themeId
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setThemeId(t.id)}
+                      className={cn(
+                        'rounded-md border p-sm text-left transition-colors',
+                        active ? 'border-primary bg-primary-soft/40' : 'border-border hover:bg-canvas-secondary',
+                      )}
+                    >
+                      <div className="h-10 rounded-xs mb-xs relative overflow-hidden" style={{ background: t.background }}>
+                        {t.wash && (
+                          <div
+                            className="absolute inset-0"
+                            style={{
+                              background: t.wash.color,
+                              opacity: Math.min(t.wash.opacity * 2.5, 1),
+                              mixBlendMode: t.wash.blend as React.CSSProperties['mixBlendMode'],
+                            }}
+                          />
+                        )}
+                      </div>
+                      <span className="text-caption text-text-primary">{t.name}</span>
+                    </button>
+                  )
+                })}
               </div>
+              <label className="flex items-center gap-sm cursor-pointer">
+                <Checkbox checked={showBasemap} onChange={(e) => setShowBasemap(e.target.checked)} />
+                <span className="text-label text-text-secondary">Show basemap</span>
+              </label>
+            </Card>
+
+            {/* 2. Congestion theme — a separate, opt-in recolour of BR-017's four bands.
+                Standard is the identity map: choosing it is choosing to keep the meaning. */}
+            <Card className="p-lg space-y-sm">
+              <p className="text-label text-text-secondary">Congestion theme</p>
+              <Select
+                value={congestionId}
+                onValueChange={setCongestionId}
+                options={CONGESTION_THEMES.map((c) => ({ value: c.id, label: c.name }))}
+                aria-label="Congestion theme"
+              />
+              <p className="text-caption text-text-muted">
+                Standard keeps the normal/slow/heavy/congested colours as-is. The others trade that meaning for a look.
+              </p>
+            </Card>
+
+            {/* 3. Zoom position — how far in, and where, the framing sits. Drag the preview
+                above to pan; the zoom slider steps in from the automatic fit. */}
+            <Card className="p-lg space-y-sm">
+              <p className="text-label text-text-secondary">Zoom position</p>
+              <div className="flex items-center justify-between text-micro text-text-muted">
+                <span>Wider</span>
+                <span className="tabular-nums">{view.zoomOffset === 0 ? 'Auto fit' : `${view.zoomOffset > 0 ? '+' : ''}${view.zoomOffset}`}</span>
+                <span>Closer</span>
+              </div>
+              <input
+                type="range"
+                min={-3}
+                max={3}
+                step={1}
+                value={view.zoomOffset}
+                onChange={(e) => setView((v) => ({ ...v, zoomOffset: Number(e.target.value) }))}
+                aria-label="Zoom"
+                className="w-full accent-primary"
+              />
+              <p className="text-caption text-text-muted">Drag the preview to reposition it.</p>
+              {(view.panX !== 0 || view.panY !== 0 || view.zoomOffset !== 0) && (
+                <button onClick={() => setView(DEFAULT_VIEW)} className="text-caption text-info hover:underline">
+                  Reset zoom &amp; position
+                </button>
+              )}
+            </Card>
+
+            {/* 4. Overlay — the caption block (name/date/time/day) and the legend, shown
+                or hidden and placed independently. */}
+            <Card className="p-lg space-y-md">
+              <p className="text-label text-text-secondary">Overlay</p>
+              <label className="flex items-center gap-sm cursor-pointer">
+                <Checkbox checked={overlay.showText} onChange={(e) => setOverlay((o) => ({ ...o, showText: e.target.checked }))} />
+                <span className="text-body text-text-secondary">Show text</span>
+              </label>
+              <div className={cn('grid grid-cols-3 grid-rows-3 gap-xs w-28 h-28 mx-auto', !overlay.showText && 'opacity-40')}>
+                {POSITIONS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    disabled={!overlay.showText}
+                    onClick={() => setOverlay((o) => ({ ...o, textPosition: p.id }))}
+                    style={{ gridColumn: p.col, gridRow: p.row }}
+                    className={cn(
+                      'rounded-xs border text-micro font-semibold flex items-center justify-center transition-colors',
+                      overlay.textPosition === p.id
+                        ? 'border-primary bg-primary-soft/40 text-primary'
+                        : 'border-border text-text-muted hover:bg-canvas-secondary',
+                    )}
+                    aria-label={`Text position: ${p.label}`}
+                    title={p.label}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div className="border-t border-divider pt-md space-y-sm">
+                <label className="flex items-center gap-sm cursor-pointer">
+                  <Checkbox checked={overlay.legend} onChange={(e) => setOverlay((o) => ({ ...o, legend: e.target.checked }))} />
+                  <span className="text-body text-text-secondary">Legend</span>
+                </label>
+                <label className="flex items-center gap-sm cursor-pointer">
+                  <Checkbox checked={overlay.boundary} onChange={(e) => setOverlay((o) => ({ ...o, boundary: e.target.checked }))} />
+                  <span className="text-body text-text-secondary">Zone boundary</span>
+                </label>
+              </div>
+            </Card>
+
+            {/* 5. Output size — a poster preset, or a custom size within bounds. Classic
+                1600×1000 is kept as a preset so an export made before this change and one
+                made after it can still match. */}
+            <Card className="p-lg space-y-sm">
+              <p className="text-label text-text-secondary">Output size</p>
+              <Select
+                value={outputSizeId}
+                onValueChange={setOutputSizeId}
+                options={[...OUTPUT_SIZES.map((s) => ({ value: s.id, label: s.name })), { value: 'custom', label: 'Custom' }]}
+                aria-label="Output size"
+              />
+              {outputSizeId === 'custom' && (
+                <div className="grid grid-cols-2 gap-sm">
+                  <div className="space-y-xs">
+                    <label className="text-micro text-text-muted" htmlFor="custom-width">
+                      Width
+                    </label>
+                    <input
+                      id="custom-width"
+                      type="number"
+                      min={MIN_OUTPUT_PX}
+                      max={MAX_OUTPUT_PX}
+                      value={customWidth}
+                      onChange={(e) => setCustomWidth(Number(e.target.value))}
+                      className="w-full h-9 px-sm rounded-xs border border-border bg-canvas text-body text-text-primary tabular-nums"
+                    />
+                  </div>
+                  <div className="space-y-xs">
+                    <label className="text-micro text-text-muted" htmlFor="custom-height">
+                      Height
+                    </label>
+                    <input
+                      id="custom-height"
+                      type="number"
+                      min={MIN_OUTPUT_PX}
+                      max={MAX_OUTPUT_PX}
+                      value={customHeight}
+                      onChange={(e) => setCustomHeight(Number(e.target.value))}
+                      className="w-full h-9 px-sm rounded-xs border border-border bg-canvas text-body text-text-primary tabular-nums"
+                    />
+                  </div>
+                </div>
+              )}
+              <p className="text-caption text-text-muted tabular-nums">
+                {outputSize.width} × {outputSize.height}
+              </p>
+            </Card>
+
+            <Card className="p-lg space-y-sm">
+              <p className="text-label text-text-secondary">Export</p>
+              <Button className="w-full" onClick={exportPng} disabled={exporting !== null || !frame}>
+                Download this frame (PNG)
+              </Button>
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={exportImages}
+                disabled={exporting !== null || frames.length === 0}
+              >
+                Export images in range ({frames.length}) as ZIP
+              </Button>
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={exportAnimation}
+                disabled={exporting !== null || frames.length < 2 || !canRecord}
+                title={canRecord ? undefined : 'This browser cannot record video'}
+              >
+                Record animation ({frames.length} frames)
+              </Button>
+
+              {exporting && (
+                <div className="pt-sm">
+                  <ProgressBar value={exporting.done} max={exporting.total} />
+                  <p className="text-micro text-text-muted mt-xs tabular-nums">
+                    {exporting.label} — {exporting.done} / {exporting.total}
+                  </p>
+                </div>
+              )}
+              {exportError && <p className="text-caption text-danger-text">{exportError}</p>}
+              {!canRecord && (
+                <p className="text-caption text-text-muted">
+                  Animation recording needs MediaRecorder, which this browser doesn&rsquo;t offer. Still images work.
+                </p>
+              )}
             </Card>
           </div>
         </div>
