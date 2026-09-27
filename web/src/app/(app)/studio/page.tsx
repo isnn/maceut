@@ -751,9 +751,6 @@ export default function StudioPage() {
       <div className="flex flex-wrap items-end justify-between gap-md">
         <div>
           <h1 className="text-page-title font-bold text-text-primary">Studio</h1>
-          <p className="text-body text-text-secondary mt-xs">
-            Play a zone&rsquo;s captures back, frame by frame, across any stretch of days.
-          </p>
         </div>
         <div className="flex flex-wrap gap-md">
           <Select

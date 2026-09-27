@@ -57,8 +57,43 @@ function vectorTheme(spec: VectorThemeSpec): MapTheme {
     ...spec,
     basemap: 'vector',
     background: palette.bg,
-    swatch: [palette.bg, palette.roads.motorway, palette.roads.primary, palette.water],
+    swatch: distinctSwatch(palette),
   }
+}
+
+function rgbOf(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+/**
+ * Four visibly different circles for the theme card: the ground first, then greedily
+ * the palette colour farthest from those already picked. A fixed pick (ground,
+ * motorway, primary, water) gave near-identical first and last circles on dark themes
+ * whose water is a shade off the ground, and two yellows on Cyber Glitch.
+ */
+function distinctSwatch(palette: VectorPalette): string[] {
+  const pool = [palette.water, palette.parks, ...Object.values(palette.roads)]
+  const picked = [palette.bg]
+  while (picked.length < 4 && pool.length > 0) {
+    let best = 0
+    let bestScore = -1
+    pool.forEach((c, i) => {
+      const [r, g, b] = rgbOf(c)
+      const score = Math.min(
+        ...picked.map((p) => {
+          const [pr, pg, pb] = rgbOf(p)
+          return (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2
+        }),
+      )
+      if (score > bestScore) {
+        bestScore = score
+        best = i
+      }
+    })
+    picked.push(pool.splice(best, 1)[0]!)
+  }
+  return picked
 }
 
 /**
@@ -137,8 +172,8 @@ export const MAP_THEMES: MapTheme[] = [
 
   // --- artistic ---
   vectorTheme({
-    id: 'default',
-    name: 'Default',
+    id: 'charcoal',
+    name: 'Charcoal',
     category: 'artistic',
     palette: {
       bg: '#16161a',
@@ -883,26 +918,16 @@ function drawText(ctx: CanvasRenderingContext2D, input: RenderInput) {
     ctx.shadowBlur = layout.halo
   }
 
+  // No outline — the user preferred the caption slightly translucent over any halo.
+  ctx.globalAlpha = 0.9
   for (const line of layout.lines) {
     ctx.font = line.font
     setTracking(ctx, line.tracking * line.size)
-    if (halo) {
-      ctx.strokeStyle = input.theme.background
-      // Wide enough to cover the gaps the letter-spacing opens between letters. (A soft
-      // "scrim" patch behind the whole block was tried instead and read as a shadow —
-      // the user preferred this.)
-      ctx.lineWidth = Math.max(line.size * (0.3 + line.tracking), layout.halo)
-      ctx.strokeText(line.text, line.x, line.y)
-    }
     ctx.fillStyle = line.color
     ctx.fillText(line.text, line.x, line.y)
   }
 
   const { divider } = layout
-  if (halo) {
-    ctx.fillStyle = input.theme.background
-    ctx.fillRect(divider.x - layout.halo / 2, divider.y - layout.halo / 2, divider.width + layout.halo, divider.height + layout.halo)
-  }
   ctx.globalAlpha = 0.8
   ctx.fillStyle = input.theme.overlayText
   ctx.fillRect(divider.x, divider.y, divider.width, divider.height)
