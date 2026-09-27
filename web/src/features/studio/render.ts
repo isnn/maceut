@@ -817,21 +817,42 @@ function layoutCaption(ctx: CanvasRenderingContext2D, input: RenderInput): Capti
   const gap = 12 * q
   const { date, time, day } = wibParts(input.capturedAt)
 
-  const hero: CaptionLine = {
-    text: (input.overlay.title.trim() || input.zoneName).toUpperCase(),
-    font: '',
-    size: 64 * q,
+  // The title wraps onto up to three lines rather than shrinking to fit one: a long
+  // title set in a single line got so small it stopped reading as a title. It only
+  // shrinks when three lines still aren't enough, or one word alone is too wide.
+  const title = (input.overlay.title.trim() || input.zoneName).toUpperCase()
+  const maxWidth = width - pad * 2
+  let heroSize = 64 * q
+  const heroLine = (text: string, size: number): CaptionLine => ({
+    text,
+    font: `700 ${size}px ${SERIF}`,
+    size,
     tracking: 0.25,
     leading: 1.12,
     color: theme.overlayText,
+  })
+  const wrap = (size: number): CaptionLine[] => {
+    const out: string[] = []
+    let current = ''
+    for (const word of title.split(/\s+/).filter(Boolean)) {
+      const candidate = current ? `${current} ${word}` : word
+      if (current && lineWidth(ctx, heroLine(candidate, size)) > maxWidth) {
+        out.push(current)
+        current = word
+      } else {
+        current = candidate
+      }
+    }
+    if (current) out.push(current)
+    return out.map((t) => heroLine(t, size))
   }
-  // A long zone name shrinks to fit the image rather than running off it.
-  hero.font = `700 ${hero.size}px ${SERIF}`
-  const maxWidth = width - pad * 2
-  const heroWidth = lineWidth(ctx, hero)
-  if (heroWidth > maxWidth) {
-    hero.size = Math.max(hero.size * (maxWidth / heroWidth), 28 * q * 0.5)
-    hero.font = `700 ${hero.size}px ${SERIF}`
+  let heroLines = wrap(heroSize)
+  while (
+    heroSize > 14 * q &&
+    (heroLines.length > 3 || heroLines.some((l) => lineWidth(ctx, l) > maxWidth))
+  ) {
+    heroSize *= 0.92
+    heroLines = wrap(heroSize)
   }
 
   const clock: CaptionLine = {
@@ -851,12 +872,16 @@ function layoutCaption(ctx: CanvasRenderingContext2D, input: RenderInput): Capti
     color: theme.overlaySub,
   }
 
-  const lines = [hero, clock, when]
-  const widths = lines.map((l) => lineWidth(ctx, l))
   const rule = { width: 128 * q, height: Math.max(q, 1) }
-  const boxWidth = Math.max(...widths, rule.width)
-  const heights = [hero.size * hero.leading, rule.height, clock.size * clock.leading, when.size * when.leading]
-  const boxHeight = heights.reduce((a, b) => a + b, 0) + gap * (heights.length - 1)
+  const heroWidths = heroLines.map((l) => lineWidth(ctx, l))
+  const clockWidth = lineWidth(ctx, clock)
+  const whenWidth = lineWidth(ctx, when)
+  const boxWidth = Math.max(...heroWidths, clockWidth, whenWidth, rule.width)
+  // Title lines stack at their own leading; the 12px gap separates the blocks.
+  const heroHeight = heroLines.reduce((sum, l) => sum + l.size * l.leading, 0)
+  const clockHeight = clock.size * clock.leading
+  const whenHeight = when.size * when.leading
+  const boxHeight = heroHeight + gap + rule.height + gap + clockHeight + gap + whenHeight
 
   const { x: fx, y: fy, align } = overlay.text
   const anchorX = fx * width
@@ -869,13 +894,17 @@ function layoutCaption(ctx: CanvasRenderingContext2D, input: RenderInput): Capti
 
   let cursor = top
   const placed: PlacedLine[] = []
-  placed.push({ ...hero, x: xFor(widths[0]!), y: cursor + heights[0]! / 2 })
-  cursor += heights[0]! + gap
+  heroLines.forEach((l, i) => {
+    const h = l.size * l.leading
+    placed.push({ ...l, x: xFor(heroWidths[i]!), y: cursor + h / 2 })
+    cursor += h
+  })
+  cursor += gap
   const divider = { x: xFor(rule.width), y: cursor, width: rule.width, height: rule.height }
   cursor += rule.height + gap
-  placed.push({ ...clock, x: xFor(widths[1]!), y: cursor + heights[2]! / 2 })
-  cursor += heights[2]! + gap
-  placed.push({ ...when, x: xFor(widths[2]!), y: cursor + heights[3]! / 2 })
+  placed.push({ ...clock, x: xFor(clockWidth), y: cursor + clockHeight / 2 })
+  cursor += clockHeight + gap
+  placed.push({ ...when, x: xFor(whenWidth), y: cursor + whenHeight / 2 })
 
   return {
     box: { x: left, y: top, width: boxWidth, height: boxHeight },

@@ -46,9 +46,7 @@ import {
   IconAlignMiddle,
   IconAlignBottom,
   IconDownload,
-  IconChevronDown,
 } from '@/components/ui/icons'
-import { Menu } from '@base-ui/react/menu'
 import { Dialog } from '@base-ui/react/dialog'
 import { cn } from '@/lib/utils'
 import * as zonesApi from '@/features/zones/api'
@@ -854,7 +852,20 @@ export default function StudioPage() {
                   <IconArrowRight size={16} />
                 </Button>
 
-                <div className="flex gap-xs ml-auto">
+                {/* Where playback is. The date matters now that a range can span days. */}
+                <span className="flex-1 min-w-0 text-center text-caption font-semibold tabular-nums text-text-secondary truncate">
+                  Frame {current + 1} of {frames.length}
+                  {frame && (
+                    <>
+                      <span aria-hidden className="text-text-muted"> · </span>
+                      {formatDay(studioApi.wibDate(frame.capturedAt))}
+                      <span aria-hidden className="text-text-muted"> · </span>
+                      {frame.time} WIB
+                    </>
+                  )}
+                </span>
+
+                <div className="flex gap-xs">
                   {SPEEDS.map((s, i) => (
                     <button
                       key={s.label}
@@ -885,21 +896,6 @@ export default function StudioPage() {
                   aria-label="Frame position"
                   className="w-full accent-primary"
                 />
-                <p className="text-caption text-text-muted mt-xs tabular-nums">
-                  Frame {current + 1} of {frames.length}
-                  {frame && (
-                    <>
-                      <span aria-hidden> · </span>
-                      {frame.time} WIB
-                      {frame.jamFactorAvg !== null && (
-                        <>
-                          <span aria-hidden> · </span>
-                          jam {frame.jamFactorAvg.toFixed(2)}
-                        </>
-                      )}
-                    </>
-                  )}
-                </p>
               </div>
             </Card>
           </div>
@@ -1193,6 +1189,7 @@ export default function StudioPage() {
                     detail={`${o.width} × ${o.height}`}
                     active={outputSizeId === o.id}
                     onSelect={() => setOutputSizeId(o.id)}
+                    shape={o}
                   />
                 ))}
                 <SizeCard
@@ -1200,37 +1197,44 @@ export default function StudioPage() {
                   detail={otherActive ? (otherSize ? `${otherSize.width} × ${otherSize.height}` : 'Custom') : 'More sizes'}
                   active={otherActive}
                   onSelect={() => setSizesOpen(true)}
+                  shape="many"
                 />
               </div>
               {/* The exact pixels. Typing here makes the size custom. */}
-              <div className="flex items-center justify-center gap-sm rounded-xl border border-dashed border-border bg-canvas-secondary/60 px-md py-sm">
-                <BaseInput
-                  type="number"
-                  aria-label="Width in pixels"
-                  min={MIN_OUTPUT_PX}
-                  max={MAX_OUTPUT_PX}
-                  value={outputSizeId === 'custom' ? customWidth : outputSize.width}
-                  onValueChange={(value) => setCustomSize(Number(value), outputSizeId === 'custom' ? customHeight : outputSize.height)}
-                  className="w-full min-w-0 bg-transparent text-center text-heading-sm font-bold tabular-nums text-text-primary rounded-sm py-xs focus:outline-none focus-visible:bg-canvas"
-                />
-                <span aria-hidden className="text-text-muted">
-                  ×
-                </span>
-                <BaseInput
-                  type="number"
-                  aria-label="Height in pixels"
-                  min={MIN_OUTPUT_PX}
-                  max={MAX_OUTPUT_PX}
-                  value={outputSizeId === 'custom' ? customHeight : outputSize.height}
-                  onValueChange={(value) => setCustomSize(outputSizeId === 'custom' ? customWidth : outputSize.width, Number(value))}
-                  className="w-full min-w-0 bg-transparent text-center text-heading-sm font-bold tabular-nums text-text-primary rounded-sm py-xs focus:outline-none focus-visible:bg-canvas"
-                />
+              <div className="flex items-center gap-sm rounded-lg border border-dashed border-border bg-canvas-secondary/60 p-sm">
+                <label className="flex items-center gap-xs flex-1 min-w-0 rounded-md bg-canvas border border-border px-sm h-10 focus-within:border-primary transition-colors">
+                  <span className="text-micro font-semibold text-text-muted">W</span>
+                  <BaseInput
+                    type="number"
+                    aria-label="Width in pixels"
+                    min={MIN_OUTPUT_PX}
+                    max={MAX_OUTPUT_PX}
+                    value={outputSizeId === 'custom' ? customWidth : outputSize.width}
+                    onValueChange={(value) => setCustomSize(Number(value), outputSizeId === 'custom' ? customHeight : outputSize.height)}
+                    className="w-full min-w-0 bg-transparent text-body font-semibold tabular-nums text-text-primary focus:outline-none"
+                  />
+                  <span className="text-micro text-text-muted">px</span>
+                </label>
+                <span aria-hidden className="text-text-muted">×</span>
+                <label className="flex items-center gap-xs flex-1 min-w-0 rounded-md bg-canvas border border-border px-sm h-10 focus-within:border-primary transition-colors">
+                  <span className="text-micro font-semibold text-text-muted">H</span>
+                  <BaseInput
+                    type="number"
+                    aria-label="Height in pixels"
+                    min={MIN_OUTPUT_PX}
+                    max={MAX_OUTPUT_PX}
+                    value={outputSizeId === 'custom' ? customHeight : outputSize.height}
+                    onValueChange={(value) => setCustomSize(outputSizeId === 'custom' ? customWidth : outputSize.width, Number(value))}
+                    className="w-full min-w-0 bg-transparent text-body font-semibold tabular-nums text-text-primary focus:outline-none"
+                  />
+                  <span className="text-micro text-text-muted">px</span>
+                </label>
               </div>
             </section>
             </div>
 
             <div className="shrink-0 border-t border-divider p-lg space-y-sm">
-              <ExportMenu
+              <ExportDialog
                 disabled={exporting !== null || !frame}
                 items={[
                   {
@@ -1364,11 +1368,14 @@ function SizeCard({
   detail,
   active,
   onSelect,
+  shape,
 }: {
   title: string
   detail: string
   active: boolean
   onSelect: () => void
+  /** The size's proportions, drawn as a small outline — or `many` for "Other". */
+  shape: { width: number; height: number } | 'many'
 }) {
   return (
     <button
@@ -1376,15 +1383,45 @@ function SizeCard({
       onClick={onSelect}
       aria-pressed={active}
       className={cn(
-        'flex flex-col items-center gap-xs rounded-xl border px-sm py-md transition-colors',
+        'flex items-center gap-md rounded-lg border px-md py-sm text-left transition-colors',
         active
           ? 'bg-primary border-primary text-on-primary shadow-elevation-2'
-          : 'bg-canvas-secondary/60 border-divider text-text-primary hover:border-border',
+          : 'bg-canvas border-border text-text-primary hover:border-primary hover:bg-primary-soft/30',
       )}
     >
-      <span className="text-heading-sm font-bold">{title}</span>
-      <span className={cn('text-caption tabular-nums', active ? 'text-on-primary/85' : 'text-text-secondary')}>{detail}</span>
+      <ShapeGlyph shape={shape} />
+      <span className="min-w-0">
+        <span className="block text-label font-semibold truncate">{title}</span>
+        <span className={cn('block text-caption tabular-nums truncate', active ? 'text-on-primary/80' : 'text-text-muted')}>
+          {detail}
+        </span>
+      </span>
     </button>
+  )
+}
+
+/**
+ * A size's proportions at a glance: its rectangle, fitted in a 22px square. "Other"
+ * gets two stacked outlines — more than one shape behind it.
+ */
+function ShapeGlyph({ shape }: { shape: { width: number; height: number } | 'many' }) {
+  const box = 'shrink-0 grid place-items-center h-[22px] w-[22px]'
+  if (shape === 'many') {
+    return (
+      <span aria-hidden className={cn(box, 'relative')}>
+        <span className="absolute h-[14px] w-[18px] rounded-[3px] border-2 border-current opacity-50 -translate-x-[2px] -translate-y-[2px]" />
+        <span className="absolute h-[14px] w-[18px] rounded-[3px] border-2 border-current translate-x-[2px] translate-y-[2px]" />
+      </span>
+    )
+  }
+  const long = Math.max(shape.width, shape.height)
+  return (
+    <span aria-hidden className={box}>
+      <span
+        className="block rounded-[3px] border-2 border-current"
+        style={{ width: `${(shape.width / long) * 22}px`, height: `${(shape.height / long) * 22}px` }}
+      />
+    </span>
   )
 }
 
@@ -1397,50 +1434,59 @@ interface ExportItem {
 }
 
 /**
- * One Export button; the formats live in its menu. Three full-width buttons stacked in
- * the footer took more room than every other control, for a choice made once.
- * Base UI's Menu, as in `ActionMenu` — it portals, so the drawer's clipping can't cut it.
+ * One Export button; the formats are chosen in a dialog. Three full-width buttons
+ * stacked in the footer took more room than every other control, for a choice made
+ * once — and a dialog has room to say what each option will produce before it runs.
  */
-function ExportMenu({ items, disabled }: { items: ExportItem[]; disabled: boolean }) {
+function ExportDialog({ items, disabled }: { items: ExportItem[]; disabled: boolean }) {
+  const [open, setOpen] = useState(false)
   return (
-    <Menu.Root modal={false}>
-      <Menu.Trigger
-        disabled={disabled}
-        className={cn(buttonClass(), 'w-full justify-center gap-sm')}
-      >
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Trigger disabled={disabled} className={cn(buttonClass(), 'w-full justify-center gap-sm')}>
         <IconDownload size={16} />
         Export
-        <IconChevronDown size={14} className="ml-auto" />
-      </Menu.Trigger>
-      <Menu.Portal>
-        <Menu.Positioner side="top" sideOffset={8} align="end" className="z-50">
-          <Menu.Popup className="w-[20rem] bg-card border border-border rounded-lg shadow-elevation-3 p-xs">
+      </Dialog.Trigger>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
+        <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[28rem] bg-card border border-border rounded-lg p-xl shadow-elevation-3 space-y-lg">
+          <div>
+            <Dialog.Title className="text-section-title text-text-primary">Export</Dialog.Title>
+            <Dialog.Description className="text-body text-text-secondary mt-xs">
+              Choose what to download. Every option uses the style shown in the preview.
+            </Dialog.Description>
+          </div>
+          <div className="space-y-sm">
             {items.map((item) => (
-              <Menu.Item
+              <button
                 key={item.label}
+                type="button"
                 disabled={item.disabled}
-                onClick={item.onSelect}
-                className={(state) =>
-                  cn(
-                    'flex items-start justify-between gap-md w-full px-md py-sm rounded-md cursor-pointer select-none outline-none transition-colors',
-                    state.highlighted && 'bg-canvas-secondary',
-                    state.disabled && 'opacity-50 cursor-not-allowed',
-                  )
-                }
+                onClick={() => {
+                  setOpen(false)
+                  item.onSelect()
+                }}
+                className={cn(
+                  'flex items-center justify-between gap-md w-full text-left rounded-lg border border-border px-lg py-md transition-colors',
+                  'hover:border-primary hover:bg-primary-soft/40 focus:outline-none focus-visible:outline-2 focus-visible:outline-primary',
+                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-transparent',
+                )}
               >
                 <span className="min-w-0">
                   <span className="block text-body font-semibold text-text-primary">{item.label}</span>
-                  <span className="block text-caption text-text-muted">{item.detail}</span>
+                  <span className="block text-caption text-text-muted mt-xs">{item.detail}</span>
                 </span>
                 <span className="shrink-0 text-micro font-semibold text-primary bg-primary-soft rounded-xs px-sm py-xs">
                   {item.format}
                 </span>
-              </Menu.Item>
+              </button>
             ))}
-          </Menu.Popup>
-        </Menu.Positioner>
-      </Menu.Portal>
-    </Menu.Root>
+          </div>
+          <div className="flex justify-end">
+            <Dialog.Close className={buttonClass('secondary')}>Cancel</Dialog.Close>
+          </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
 
@@ -1513,6 +1559,7 @@ function SizesDialog({
                     detail={`${o.width} × ${o.height}`}
                     active={selectedId === o.id}
                     onSelect={() => onPick(o.id)}
+                    shape={o}
                   />
                 ))}
               </div>

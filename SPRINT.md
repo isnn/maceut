@@ -104,6 +104,8 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-11** Detail zona: legenda jam factor, Trigger jadi Auto/Manual, kolom Time diisi | permintaan user |
 | ✅ | **FE-12** Studio: renderer canvas — PNG per frame, WebM animasi, 5 style, toggle layer | permintaan user |
 | ✅ | **FE-13** Studio: rentang waktu (start/end), ekspor banyak gambar (ZIP), viewer capture lebih cepat | permintaan user |
+| ✅ | **FE-20** Studio: judul panjang terbungkus, teks tanpa outline (90% opasitas), modal Export, UI output size, swatch tema berbeda, Default → Charcoal | permintaan user |
+| 🔴 | **FE-21** Export async di server (tabel `exports`, antrian RabbitMQ, worker Playwright + render page internal, riwayat & progres di detail zona) — desain di plan | permintaan user |
 | ✅ | **FE-19** Studio: rentang waktu lintas hari; animasi 1:1 dengan preview (timing tepat, framing tak tergantung ukuran, bitrate sesuai resolusi) | permintaan user |
 | ✅ | **FE-18** Studio: panel satu kartu, menu Export, alignment teks, efek vignette opsional, modal ukuran; ringkasan hari pindah ke detail zona | permintaan user |
 | ✅ | **FE-17** Studio: UI panel zoom/overlay/output baru, judul bisa diubah, peta & teks dua lapis, halaman lebih lebar | permintaan user |
@@ -1464,6 +1466,38 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   hari juga tidak bisa diuji lewat app: capture selalu dicap waktu saat dijalankan, jadi
   hari kedua baru ada setelah jadwal berjalan lintas hari. Skrip uji siap diulang:
   /tmp/studio-verify/Dr.mjs.
+
+[2026-09-28] Studio: perbaikan kecil; rancangan export async.
+
+  - Deskripsi header dihapus. Detail jam di bawah scrubber dihapus; pembacaan frame pindah
+    ke baris transport sebagai "Frame 3 of 50 · Sat 27 Sep · 06:00 WIB" — tanggal perlu
+    sejak rentang bisa lintas hari.
+  - JUDUL PANJANG TERBUNGKUS hingga 3 baris (leading judul), bukan mengecil jadi satu
+    baris; hanya mengecil bila 3 baris belum cukup atau satu kata terlalu lebar. Kotak
+    hit-test drag ikut tumbuh karena memakai layout yang sama.
+  - Outline teks dihapus; caption digambar 90% opasitas (keputusan user: transparansi
+    tetap, bukan kontrol baru). Satelit tetap berbayang lembut.
+  - Export dari menu dropdown jadi MODAL berisi tiga kartu opsi (PNG / ZIP / WebM) dengan
+    detail ukuran & jumlah frame dan alasan bila nonaktif.
+  - Output size: kartu dengan glyph proporsi (persegi/potret/lanskap; "Other" dua kotak
+    bertumpuk), hierarki teks lebih jelas; kolom W/H berlabel dengan "px".
+  - Swatch kartu tema DIHITUNG: latar dulu, lalu warna palet terjauh (jarak RGB) dari
+    yang sudah dipilih — dulu pilihan tetap (latar, motorway, primary, air) membuat
+    lingkaran pertama & terakhir nyaris sama di Default/Midnight Neon, dan dua kuning di
+    Cyber Glitch. Tema "Default" diganti nama "Charcoal".
+
+  EXPORT ASYNC (FE-21, BELUM DIKERJAKAN — ronde berikutnya, keputusan user): render di
+  worker server (playwright-core + Chromium yang sudah ada di image worker) lewat halaman
+  render internal yang menjalankan renderer yang SAMA; hasil ke R2; tabel `exports`
+  (status queued/rendering/uploading/done/failed/expired, frames_done, heartbeat
+  updated_at); progres dari halaman → worker via exposeFunction → UPDATE baris (maks
+  1×/detik) → API menurunkan progress/antrian/ETA saat dibaca → browser polling 2 detik
+  selama aktif. Modal export jadi tampilan progres (bukan toast), chip di footer Studio,
+  riwayat di bagian terakhir detail zona. Risiko: host ini berulang kali OOM-kill
+  Chromium — worker harus satu export sekaligus.
+
+  VERIFIKASI: tsc + eslint bersih, /studio 200, tanpa error di log. Browser tidak
+  dijalankan (host kekurangan memori).
 
 ---
 
