@@ -342,7 +342,11 @@ export interface TextPlacement {
   align: TextAlign
 }
 
+/** A finish over the map: MapToPoster's top-and-bottom fade, or nothing. */
+export type OverlayEffect = 'none' | 'vignette'
+
 export interface RenderOverlay {
+  effect: OverlayEffect
   /** The caption's title. Empty means the zone's own name. */
   title: string
   textSize: TextSize
@@ -351,16 +355,6 @@ export interface RenderOverlay {
   boundary: boolean
 }
 
-/** Named placements behind the position picker; dragging moves freely from any of them. */
-export const TEXT_PRESETS = {
-  'top-left': { x: 0.05, y: 0.16, align: 'left' },
-  'top-right': { x: 0.95, y: 0.16, align: 'right' },
-  center: { x: 0.5, y: 0.5, align: 'center' },
-  'bottom-left': { x: 0.05, y: 0.84, align: 'left' },
-  'bottom-right': { x: 0.95, y: 0.84, align: 'right' },
-} as const satisfies Record<string, TextPlacement>
-
-export type TextPreset = keyof typeof TEXT_PRESETS
 
 // --- view (zoom / pan) ------------------------------------------------------------
 
@@ -852,8 +846,7 @@ function drawText(ctx: CanvasRenderingContext2D, input: RenderInput) {
   // city maps knock out the roads under a label. Satellite has no single ground
   // colour to use, so imagery keeps a soft dark shadow instead.
   const halo = input.theme.basemap === 'vector'
-  if (halo) drawScrim(ctx, input, layout)
-  else {
+  if (!halo) {
     ctx.shadowColor = 'rgba(0,0,0,0.55)'
     ctx.shadowBlur = layout.halo
   }
@@ -863,9 +856,10 @@ function drawText(ctx: CanvasRenderingContext2D, input: RenderInput) {
     setTracking(ctx, line.tracking * line.size)
     if (halo) {
       ctx.strokeStyle = input.theme.background
-      // A light outline only — the scrim underneath does the heavy lifting. Widened to
-      // cover the letter-spacing, this merged the big title into a hard-edged slab.
-      ctx.lineWidth = Math.max(line.size * 0.22, layout.halo * 0.5)
+      // Wide enough to cover the gaps the letter-spacing opens between letters. (A soft
+      // "scrim" patch behind the whole block was tried instead and read as a shadow —
+      // the user preferred this.)
+      ctx.lineWidth = Math.max(line.size * (0.3 + line.tracking), layout.halo)
       ctx.strokeText(line.text, line.x, line.y)
     }
     ctx.fillStyle = line.color
@@ -880,30 +874,6 @@ function drawText(ctx: CanvasRenderingContext2D, input: RenderInput) {
   ctx.globalAlpha = 0.8
   ctx.fillStyle = input.theme.overlayText
   ctx.fillRect(divider.x, divider.y, divider.width, divider.height)
-  ctx.restore()
-}
-
-/**
- * A soft, feathered patch of the ground colour behind the whole caption, so the
- * streets fade out under the text the way a printed map clears space for its title.
- *
- * A per-glyph halo can't do this: the caption's letter-spacing (0.4em) and word gaps
- * left roads showing between letters, and widening the halo to close them fused the
- * large title into a solid box with hard edges. This draws a rectangle far off-canvas
- * and keeps only its blurred shadow — one soft-edged shape, no hard edge anywhere.
- */
-function drawScrim(ctx: CanvasRenderingContext2D, input: RenderInput, layout: CaptionLayout) {
-  const colour = hexToRgba(input.theme.background, 0.88)
-  if (!colour) return
-  const { box, halo } = layout
-  const spread = halo * 2.5
-  const away = input.width * 3
-  ctx.save()
-  ctx.shadowColor = colour
-  ctx.shadowBlur = spread * 2
-  ctx.shadowOffsetX = away
-  ctx.fillStyle = '#000'
-  ctx.fillRect(box.x - spread - away, box.y - spread * 0.6, box.width + spread * 2, box.height + spread * 1.2)
   ctx.restore()
 }
 
@@ -1029,7 +999,7 @@ async function drawMap(ctx: CanvasRenderingContext2D, input: RenderInput) {
     ctx.restore()
   }
 
-  if (input.theme.basemap === 'vector') drawVignette(ctx, input)
+  if (input.overlay.effect === 'vignette') drawVignette(ctx, input)
   drawTraffic(ctx, input, v)
 }
 

@@ -84,6 +84,67 @@ export function IconPause(props: IconProps) {
   )
 }
 
+// Text alignment — horizontal: which edge the lines share.
+export function IconAlignLeft(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 6h16M4 10h10M4 14h16M4 18h10" />
+    </Svg>
+  )
+}
+
+export function IconAlignCenter(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 6h16M7 10h10M4 14h16M7 18h10" />
+    </Svg>
+  )
+}
+
+export function IconAlignRight(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 6h16M10 10h10M4 14h16M10 18h10" />
+    </Svg>
+  )
+}
+
+// Text alignment — vertical: where the block sits in its frame.
+export function IconAlignTop(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 4h16" />
+      <path d="M8 8h8M9 12h6" />
+    </Svg>
+  )
+}
+
+export function IconAlignMiddle(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 10h8M9 14h6" />
+    </Svg>
+  )
+}
+
+export function IconAlignBottom(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 12h8M9 16h6" />
+      <path d="M4 20h16" />
+    </Svg>
+  )
+}
+
+export function IconDownload(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 4v11M7 10l5 5 5-5" />
+      <path d="M4 20h16" />
+    </Svg>
+  )
+}
+
 export function IconMove(props: IconProps) {
   return (
     <Svg {...props}>

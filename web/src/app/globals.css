@@ -34,3 +34,12 @@ body {
   background: #262531;
   color: #ffffff;
 }
+
+/* A scroll container that scrolls but draws no scrollbar — Studio's tool card, where a
+   bar down the side of the controls reads as clutter rather than as a hint. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

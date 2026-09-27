@@ -104,6 +104,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-11** Detail zona: legenda jam factor, Trigger jadi Auto/Manual, kolom Time diisi | permintaan user |
 | ✅ | **FE-12** Studio: renderer canvas — PNG per frame, WebM animasi, 5 style, toggle layer | permintaan user |
 | ✅ | **FE-13** Studio: rentang waktu (start/end), ekspor banyak gambar (ZIP), viewer capture lebih cepat | permintaan user |
+| ✅ | **FE-18** Studio: panel satu kartu, menu Export, alignment teks, efek vignette opsional, modal ukuran; ringkasan hari pindah ke detail zona | permintaan user |
 | ✅ | **FE-17** Studio: UI panel zoom/overlay/output baru, judul bisa diubah, peta & teks dua lapis, halaman lebih lebar | permintaan user |
 | ✅ | **FE-16** Studio: zoom halus + roda mouse, pan bebas di semua zoom, jalan kecil dinamis, palet MapToPoster persis, congestion theme kartu, ukuran & drag teks | permintaan user |
 | ✅ | **FE-15** Studio: basemap vektor bergaya (OpenFreeMap, gaya MapToPoster), kartu tema swatch, preview di resolusi ekspor | permintaan user |
@@ -1404,6 +1405,36 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   teks) LULUS di headless Chrome. Ronde C (UI baru ini) TIDAK BISA dijalankan — host
   kehabisan memori (OOM killer mematikan tab browser berulang, ~500MB bebas dari 7,7GB,
   tanpa swap). UI baru ini BELUM dilihat di browser selain oleh user.
+
+[2026-09-27d] Studio: satu kartu alat, Export jadi menu, alignment teks eksplisit.
+
+  RINGKASAN HARI PINDAH KE DETAIL ZONA. "This frame", "Day summary" dan "Congestion
+  through the day" kini di bawah tabel Captures (`zones/components/CaptureDay.tsx`),
+  untuk hari dari capture yang dipilih di stepper; klik batang memilih capture itu.
+  Studio untuk membuat gambar — "bagaimana hari zona ini" adalah pertanyaan tentang zona.
+
+  PANEL ALAT JADI SATU KARTU: bagian-bagian dipisah garis, badan menggulir tanpa
+  scrollbar (utility `scrollbar-none` di globals.css), Export jadi footer tetap. Tiga
+  tombol export diganti SATU tombol "Export" dengan menu Base UI (This frame · PNG,
+  All frames · ZIP, Animation · WebM) — tiap item menyebut ukuran/jumlah frame, dan
+  alasan bila nonaktif.
+
+  SCRIM DIBUANG atas permintaan user (terbaca sebagai bayangan); halo huruf sebelumnya
+  kembali.
+
+  POSISI → ALIGNMENT (keputusan user): baris 1 kiri/tengah/kanan menaruh teks di sisi itu
+  DAN meratakan barisnya; baris 2 atas/tengah/bawah menaruh vertikal. Drag menggeser
+  bebas tapi TIDAK lagi mengubah alignment (versi sebelumnya menebak alignment dari posisi
+  jatuh — user tidak mau).
+
+  EFEK OVERLAY: None / Vignette (default Vignette, tampilan sebelumnya), kini berlaku untuk
+  semua tema termasuk satelit. Tab selector jadi ungu (warna primary aplikasi). Kartu
+  "Other" di Output size membuka modal berisi semua ukuran (Poster + More sizes).
+
+  VERIFIKASI: tsc + eslint bersih; /studio dan /zones 200. Browser headless TIDAK
+  dijalankan — host ~850MB tersedia, load 16 (OOM killer mematikan tab di ronde
+  sebelumnya). Satu error sesaat di log (import TEXT_PRESETS) terjadi di tengah edit dan
+  hilang setelah edit selesai.
 
 ---
 

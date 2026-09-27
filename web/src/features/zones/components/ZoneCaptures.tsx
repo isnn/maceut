@@ -26,6 +26,7 @@ import { cn, formatNumber } from '@/lib/utils'
 import { ROAD_CLASS_LABEL, TRAFFIC_COLORS } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import { MapCanvas } from './MapCanvas'
+import { CaptureDay } from './CaptureDay'
 import * as zonesApi from '../api'
 import type { Zone } from '../types'
 
@@ -467,6 +468,14 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
             matchCount={table.matchCount}
             totalCount={table.totalCount}
             noun="captures"
+          />
+          <CaptureDay
+            cycles={cycles}
+            selectedId={selected?.id ?? null}
+            onSelect={(id) => {
+              const at = cycles.findIndex((x) => x.id === id)
+              if (at >= 0) setIndex(at)
+            }}
           />
         </>
       )}

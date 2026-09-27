@@ -39,9 +39,18 @@ import {
   IconPlus,
   IconMinus,
   IconMove,
+  IconAlignLeft,
+  IconAlignCenter,
+  IconAlignRight,
+  IconAlignTop,
+  IconAlignMiddle,
+  IconAlignBottom,
+  IconDownload,
+  IconChevronDown,
 } from '@/components/ui/icons'
-import { cn, formatNumber } from '@/lib/utils'
-import { TRAFFIC_COLORS } from '@/lib/constants'
+import { Menu } from '@base-ui/react/menu'
+import { Dialog } from '@base-ui/react/dialog'
+import { cn } from '@/lib/utils'
 import * as zonesApi from '@/features/zones/api'
 import * as studioApi from '@/features/studio/api'
 import type { Frame, SlimTraffic } from '@/features/studio/api'
@@ -60,12 +69,12 @@ import {
   recordAnimation,
   downloadBlob,
   preferredVideoType,
-  TEXT_PRESETS,
   captionBox,
   panScale,
   zoomLimits,
   type MapThemeCategory,
-  type TextPreset,
+  type TextAlign,
+  type OverlayEffect,
   type TextSize,
   type RenderOverlay,
   type RenderView,
@@ -82,13 +91,23 @@ const SPEEDS = [
   { label: '4×', ms: 250 },
 ]
 
-/** The position picker's five presets, laid out on a 3×3 grid. */
-const POSITIONS: { id: TextPreset; label: string; row: number; col: number }[] = [
-  { id: 'top-left', label: 'Top left', row: 1, col: 1 },
-  { id: 'top-right', label: 'Top right', row: 1, col: 3 },
-  { id: 'center', label: 'Center', row: 2, col: 2 },
-  { id: 'bottom-left', label: 'Bottom left', row: 3, col: 1 },
-  { id: 'bottom-right', label: 'Bottom right', row: 3, col: 3 },
+/** Row one of the alignment control: the side the caption sits on, and its lines' edge. */
+const H_ALIGN: { align: TextAlign; x: number; label: string; Icon: typeof IconAlignLeft }[] = [
+  { align: 'left', x: 0.05, label: 'Align left', Icon: IconAlignLeft },
+  { align: 'center', x: 0.5, label: 'Align center', Icon: IconAlignCenter },
+  { align: 'right', x: 0.95, label: 'Align right', Icon: IconAlignRight },
+]
+
+/** Row two: where the caption sits vertically. */
+const V_ALIGN: { y: number; label: string; Icon: typeof IconAlignTop }[] = [
+  { y: 0.16, label: 'Align top', Icon: IconAlignTop },
+  { y: 0.5, label: 'Align middle', Icon: IconAlignMiddle },
+  { y: 0.84, label: 'Align bottom', Icon: IconAlignBottom },
+]
+
+const EFFECTS: { value: OverlayEffect; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'vignette', label: 'Vignette' },
 ]
 
 const TEXT_SIZES: { value: TextSize; label: string }[] = [
@@ -99,9 +118,10 @@ const TEXT_SIZES: { value: TextSize; label: string }[] = [
 ]
 
 const DEFAULT_OVERLAY: RenderOverlay = {
+  effect: 'vignette',
   title: '',
   textSize: 'medium',
-  text: TEXT_PRESETS['bottom-right'],
+  text: { x: 0.95, y: 0.84, align: 'right' },
   legend: false,
   boundary: false,
 }
@@ -136,18 +156,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
-/**
- * BR-017's bands, over the mean jam factor of a frame.
- *
- * The same four states the map itself uses, so the bar under the player and the colours
- * on it cannot tell different stories.
- */
-function bandFor(jam: number): { label: string; color: string } {
-  if (jam >= 8) return { label: 'Congested', color: TRAFFIC_COLORS.congested! }
-  if (jam >= 6) return { label: 'Heavy', color: TRAFFIC_COLORS.heavy! }
-  if (jam >= 4) return { label: 'Slow', color: TRAFFIC_COLORS.slow! }
-  return { label: 'Normal', color: TRAFFIC_COLORS.normal! }
-}
 
 function formatDay(day: string): string {
   return new Intl.DateTimeFormat('en-GB', {
@@ -338,6 +346,8 @@ export default function StudioPage() {
   const otherSize = OUTPUT_SIZES.find((o) => o.id === outputSizeId && o.group === 'more') ?? null
   const otherActive = outputSizeId === 'custom' || otherSize !== null
 
+  const [sizesOpen, setSizesOpen] = useState(false)
+
   function setCustomSize(width: number, height: number) {
     setCustomWidth(width)
     setCustomHeight(height)
@@ -505,7 +515,7 @@ export default function StudioPage() {
   // --- dragging on the preview: the caption if the pointer is on it, the map if not ---
   type Drag =
     | { kind: 'map'; x: number; y: number; panX: number; panY: number; scale: number }
-    | { kind: 'text'; x: number; y: number; cx: number; cy: number; w: number }
+    | { kind: 'text'; x: number; y: number; textX: number; textY: number }
   const dragRef = useRef<Drag | null>(null)
   const [dragging, setDragging] = useState<Drag['kind'] | null>(null)
   const [overCaption, setOverCaption] = useState(false)
@@ -536,13 +546,17 @@ export default function StudioPage() {
       // Start from where the caption is actually drawn — after clamping to the edge
       // margin — not from its stored anchor, so a caption parked against an edge moves
       // the moment it is dragged instead of after a dead zone.
+      // Start from where the caption is actually drawn — after clamping to the edge
+      // margin — measured at the edge its alignment anchors to, so a caption parked
+      // against an edge moves the moment it's dragged.
+      const { align } = overlay.text
+      const anchorX = align === 'left' ? box.x : align === 'center' ? box.x + box.width / 2 : box.x + box.width
       dragRef.current = {
         kind: 'text',
         x: e.clientX,
         y: e.clientY,
-        cx: (box.x + box.width / 2) / input.width,
-        cy: (box.y + box.height / 2) / input.height,
-        w: box.width / input.width,
+        textX: anchorX / input.width,
+        textY: (box.y + box.height / 2) / input.height,
       }
     } else {
       dragRef.current = { kind: 'map', x: e.clientX, y: e.clientY, panX: view.panX, panY: view.panY, scale: panScale(input) }
@@ -562,14 +576,11 @@ export default function StudioPage() {
     const dx = (e.clientX - drag.x) / rect.width
     const dy = (e.clientY - drag.y) / rect.height
     if (drag.kind === 'text') {
-      // The alignment follows where the caption is: left third reads left-aligned,
-      // right third right-aligned, middle centred. Keeping the alignment it started
-      // with left a caption dragged from the right corner hanging off its name's end.
-      const cx = clamp(drag.cx + dx, 0, 1)
-      const cy = clamp(drag.cy + dy, 0, 1)
-      const align = cx < 1 / 3 ? 'left' : cx > 2 / 3 ? 'right' : 'center'
-      const x = align === 'left' ? cx - drag.w / 2 : align === 'right' ? cx + drag.w / 2 : cx
-      setOverlay((o) => ({ ...o, text: { x, y: cy, align } }))
+      // Moves the caption, never its alignment — that's the user's choice in the
+      // alignment control, not something to infer from which side it was dropped on.
+      const x = clamp(drag.textX + dx, 0, 1)
+      const y = clamp(drag.textY + dy, 0, 1)
+      setOverlay((o) => ({ ...o, text: { ...o.text, x, y } }))
     } else {
       // Clamped here too, so the slide never shows more than the release will keep.
       const panX = clamp(drag.panX + dx / drag.scale, -PAN_LIMIT, PAN_LIMIT)
@@ -892,103 +903,20 @@ export default function StudioPage() {
                 </p>
               </div>
             </Card>
-
-            {/* This frame + Day summary describe what's on screen, so they sit under the
-                map — the right column is a controls drawer, and these are readouts. */}
-            <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
-              <Card className="p-lg space-y-md">
-                <SectionLabel>This frame</SectionLabel>
-                {frame ? (
-                  <dl className="space-y-md">
-                    <Row label="Time" value={`${frame.time} WIB`} />
-                    <Row
-                      label="Avg jam factor"
-                      value={frame.jamFactorAvg === null ? '—' : frame.jamFactorAvg.toFixed(2)}
-                      hint={frame.jamFactorAvg === null ? undefined : bandFor(frame.jamFactorAvg).label}
-                    />
-                    <Row
-                      label="Roads"
-                      value={frame.roadsCount === null ? '—' : formatNumber(frame.roadsCount)}
-                    />
-                  </dl>
-                ) : (
-                  <p className="text-body text-text-secondary">No frame selected.</p>
-                )}
-              </Card>
-
-              <Card className="p-lg">
-                <SectionLabel className="mb-sm">Day summary</SectionLabel>
-                <dl className="space-y-md">
-                  <Row label="Frames" value={String(frames.length)} />
-                  <Row label="Busiest" value={busiest(frames)} />
-                  <Row label="Quietest" value={quietest(frames)} />
-                </dl>
-              </Card>
-            </div>
-
-            {/*
-              The day at a glance, kept bottommost — after the frame and day readouts —
-              because it summarises the whole day rather than the moment on screen. Bars
-              for the whole day are always drawn, not just the range, so narrowing the
-              Timeframe controls is visibly a choice against the full day, not an
-              operation on data that has vanished from view.
-            */}
-            <Card className="p-lg">
-              <SectionLabel className="mb-md">Congestion through the day</SectionLabel>
-              <div className="flex items-end gap-[2px] h-24">
-                {dayFrames.map((f, dayIdx) => {
-                  const jam = f.jamFactorAvg ?? 0
-                  const band = bandFor(jam)
-                  const inRange = dayIdx >= rangeStartIdx && dayIdx <= rangeEndIdx
-                  const rangeIdx = dayIdx - rangeStartIdx
-                  return (
-                    <button
-                      key={f.id}
-                      onClick={() => {
-                        if (!inRange) return
-                        setPlaying(false)
-                        setCurrent(rangeIdx)
-                      }}
-                      disabled={!inRange}
-                      title={inRange ? `${f.time} · jam ${jam.toFixed(2)}` : `${f.time} · outside the selected range`}
-                      aria-label={`Jump to ${f.time}`}
-                      className={cn(
-                        'flex-1 min-w-[3px] rounded-t-xs transition-opacity',
-                        !inRange
-                          ? 'opacity-[0.12] cursor-default'
-                          : rangeIdx === current
-                            ? 'opacity-100'
-                            : 'opacity-45 hover:opacity-80',
-                      )}
-                      style={{
-                        // 10 is HERE's ceiling, so the bar is a share of "road closed"
-                        // rather than of whatever the busiest frame happened to be.
-                        height: `${Math.max((jam / 10) * 100, 4)}%`,
-                        background: band.color,
-                      }}
-                    />
-                  )
-                })}
-              </div>
-              <div className="flex justify-between text-micro text-text-muted mt-sm tabular-nums">
-                <span>{dayFrames[0]?.time}</span>
-                <span>{dayFrames[dayFrames.length - 1]?.time}</span>
-              </div>
-            </Card>
           </div>
 
-          {/* Style drawer: on laptop+ the map column stays put while this rail scrolls
-              inside its own viewport-height box, and the Export card is pinned to the
-              bottom so it's reachable without scrolling past every control first. */}
-          <div className="flex flex-col gap-lg min-w-0 laptop:sticky laptop:top-lg laptop:max-h-[calc(100vh-2rem)]">
-            <div className="space-y-lg laptop:flex-1 laptop:min-h-0 laptop:overflow-y-auto laptop:pr-xs">
+          {/* The tools: one card, its sections divided by rules. On laptop+ it's a drawer —
+              the map column stays put while the sections scroll (no scrollbar drawn), and
+              Export is a fixed footer, reachable without scrolling past every control. */}
+          <div className="flex flex-col min-w-0 bg-card border border-border rounded-lg overflow-hidden laptop:sticky laptop:top-lg laptop:max-h-[calc(100vh-2rem)]">
+            <div className="px-lg laptop:flex-1 laptop:min-h-0 laptop:overflow-y-auto scrollbar-none">
             {/*
               What plays and what exports are the same set — narrowing this narrows both,
               so scrubbing or pressing Play IS the preview of what an export will contain.
               A separate "preview" surface would risk showing something export does not
               actually produce.
             */}
-            <Card className="p-lg space-y-md">
+            <section className="space-y-md py-lg border-t border-divider first:border-t-0">
               <SectionLabel>Timeframe</SectionLabel>
               <div className="grid grid-cols-2 gap-sm">
                 <div className="space-y-xs">
@@ -1023,11 +951,11 @@ export default function StudioPage() {
                   Reset to full day
                 </button>
               )}
-            </Card>
+            </section>
 
             {/* 1. Map theme — the basemap's colour identity: a literal Standard rendering,
                 or an Artistic mood. Traffic colours are untouched here on purpose. */}
-            <Card className="p-lg space-y-md">
+            <section className="space-y-md py-lg border-t border-divider first:border-t-0">
               <SectionLabel>Map theme</SectionLabel>
               <Segmented
                 ariaLabel="Theme category"
@@ -1053,11 +981,11 @@ export default function StudioPage() {
                   />
                 ))}
               </div>
-            </Card>
+            </section>
 
             {/* 2. Congestion theme — a separate, opt-in recolour of BR-017's four bands.
                 Standard is the identity map: choosing it is choosing to keep the meaning. */}
-            <Card className="p-lg space-y-md">
+            <section className="space-y-md py-lg border-t border-divider first:border-t-0">
               <SectionLabel>Congestion theme</SectionLabel>
               <div className="grid grid-cols-2 gap-sm">
                 {CONGESTION_THEMES.map((c) => (
@@ -1071,11 +999,11 @@ export default function StudioPage() {
                   />
                 ))}
               </div>
-            </Card>
+            </section>
 
             {/* 3. Zoom & position — how far in, and where, the framing sits. The map
                 itself also takes a drag (pan) and the mouse wheel (zoom). */}
-            <Card className="p-lg space-y-md">
+            <section className="space-y-md py-lg border-t border-divider first:border-t-0">
               <div className="flex items-center justify-between gap-sm">
                 <SectionLabel>Zoom &amp; position</SectionLabel>
                 <div className="flex items-center gap-xs">
@@ -1126,11 +1054,11 @@ export default function StudioPage() {
                   <IconPlus size={14} />
                 </button>
               </div>
-            </Card>
+            </section>
 
             {/* 4. Overlay — the caption (its words, size and place), the legend and the
                 zone outline. */}
-            <Card className="p-lg space-y-md">
+            <section className="space-y-md py-lg border-t border-divider first:border-t-0">
               <SectionLabel>Overlay</SectionLabel>
               <div className="space-y-xs">
                 <label htmlFor="caption-title" className="text-micro font-semibold uppercase tracking-wider text-text-muted">
@@ -1157,58 +1085,44 @@ export default function StudioPage() {
                 />
               </div>
               <div className={cn('space-y-sm', overlay.textSize === 'none' && 'opacity-40 pointer-events-none')}>
-                <p className="text-micro font-semibold uppercase tracking-wider text-text-muted">Position</p>
-                {/* A miniature of the output: the five snap points, and a marker for
-                    where the caption actually is — which may be none of them once it
-                    has been dragged. */}
-                <div
-                  className="relative mx-auto rounded-md border border-border overflow-hidden max-w-full"
-                  style={{
-                    aspectRatio: `${outputSize.width} / ${outputSize.height}`,
-                    width: outputSize.width >= outputSize.height ? '100%' : `${(outputSize.width / outputSize.height) * 11}rem`,
-                    background: theme.background,
-                  }}
-                >
-                  <span
-                    aria-hidden
-                    className="absolute flex flex-col gap-[3px] pointer-events-none"
-                    style={{
-                      left: `${overlay.text.x * 100}%`,
-                      top: `${overlay.text.y * 100}%`,
-                      alignItems:
-                        overlay.text.align === 'left' ? 'flex-start' : overlay.text.align === 'center' ? 'center' : 'flex-end',
-                      transform: `translate(${overlay.text.align === 'left' ? '0' : overlay.text.align === 'center' ? '-50%' : '-100%'}, -50%)`,
-                    }}
-                  >
-                    <span className="block h-[5px] w-12 rounded-full" style={{ background: theme.overlayText }} />
-                    <span className="block h-[3px] w-8 rounded-full opacity-70" style={{ background: theme.overlayText }} />
-                    <span className="block h-[3px] w-10 rounded-full opacity-50" style={{ background: theme.overlayText }} />
-                  </span>
-                  {POSITIONS.map((p) => {
-                    const preset = TEXT_PRESETS[p.id]
-                    const active =
-                      overlay.text.x === preset.x && overlay.text.y === preset.y && overlay.text.align === preset.align
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => setOverlay((o) => ({ ...o, text: preset }))}
-                        aria-label={`Text position: ${p.label}`}
-                        aria-pressed={active}
-                        title={p.label}
-                        className={cn(
-                          'absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 transition-transform hover:scale-125',
-                          active ? 'bg-primary border-canvas' : 'bg-canvas/80 border-primary',
-                        )}
-                        style={{ left: `${preset.x * 100}%`, top: `${preset.y * 100}%` }}
-                      />
-                    )
-                  })}
+                <p className="text-micro font-semibold uppercase tracking-wider text-text-muted">Alignment</p>
+                {/* Row one sets the side AND how the lines align; row two the height. A
+                    drag moves the caption but leaves this choice alone. */}
+                <div className="grid grid-cols-3 gap-sm">
+                  {H_ALIGN.map(({ align, x, label, Icon }) => (
+                    <AlignButton
+                      key={align}
+                      label={label}
+                      active={overlay.text.align === align}
+                      onSelect={() => setOverlay((o) => ({ ...o, text: { ...o.text, x, align } }))}
+                    >
+                      <Icon size={20} />
+                    </AlignButton>
+                  ))}
+                  {V_ALIGN.map(({ y, label, Icon }) => (
+                    <AlignButton
+                      key={label}
+                      label={label}
+                      active={overlay.text.y === y}
+                      onSelect={() => setOverlay((o) => ({ ...o, text: { ...o.text, y } }))}
+                    >
+                      <Icon size={20} />
+                    </AlignButton>
+                  ))}
                 </div>
                 <p className="flex items-center justify-center gap-xs text-caption text-text-muted">
                   <IconMove size={14} />
-                  Or drag the text on the preview to place it anywhere.
+                  Drag the text on the preview to place it anywhere.
                 </p>
+              </div>
+              <div className="space-y-xs">
+                <p className="text-micro font-semibold uppercase tracking-wider text-text-muted">Effect</p>
+                <Segmented
+                  ariaLabel="Overlay effect"
+                  value={overlay.effect}
+                  onChange={(effect) => setOverlay((o) => ({ ...o, effect }))}
+                  options={EFFECTS}
+                />
               </div>
               <div className="border-t border-divider pt-md space-y-md">
                 <div className="flex items-center justify-between gap-md">
@@ -1232,12 +1146,21 @@ export default function StudioPage() {
                   />
                 </div>
               </div>
-            </Card>
+            </section>
 
             {/* 5. Output size — the three poster shapes as cards, the rest behind "Other",
                 and the exact pixels, editable, underneath. */}
-            <Card className="p-lg space-y-md">
+            <section className="space-y-md py-lg border-t border-divider first:border-t-0">
               <SectionLabel>Output size</SectionLabel>
+              <SizesDialog
+                open={sizesOpen}
+                selectedId={outputSizeId}
+                onClose={() => setSizesOpen(false)}
+                onPick={(id) => {
+                  setOutputSizeId(id)
+                  setSizesOpen(false)
+                }}
+              />
               <div className="grid grid-cols-2 gap-sm">
                 {OUTPUT_SIZES.filter((o) => o.group === 'main').map((o) => (
                   <SizeCard
@@ -1250,28 +1173,11 @@ export default function StudioPage() {
                 ))}
                 <SizeCard
                   title="Other"
-                  detail={otherActive ? (otherSize?.name ?? 'Custom') : 'More sizes'}
+                  detail={otherActive ? (otherSize ? `${otherSize.width} × ${otherSize.height}` : 'Custom') : 'More sizes'}
                   active={otherActive}
-                  onSelect={() => {
-                    if (!otherActive) setOutputSizeId(OUTPUT_SIZES.find((o) => o.group === 'more')!.id)
-                  }}
+                  onSelect={() => setSizesOpen(true)}
                 />
               </div>
-              {otherActive && (
-                <Select
-                  value={outputSizeId}
-                  onValueChange={setOutputSizeId}
-                  options={[
-                    ...OUTPUT_SIZES.filter((o) => o.group === 'more').map((o) => ({
-                      value: o.id,
-                      label: `${o.name} · ${o.width} × ${o.height}`,
-                    })),
-                    { value: 'custom', label: 'Custom' },
-                  ]}
-                  className="w-full"
-                  aria-label="More sizes"
-                />
-              )}
               {/* The exact pixels. Typing here makes the size custom. */}
               <div className="flex items-center justify-center gap-sm rounded-xl border border-dashed border-border bg-canvas-secondary/60 px-md py-sm">
                 <BaseInput
@@ -1296,34 +1202,41 @@ export default function StudioPage() {
                   className="w-full min-w-0 bg-transparent text-center text-heading-sm font-bold tabular-nums text-text-primary rounded-sm py-xs focus:outline-none focus-visible:bg-canvas"
                 />
               </div>
-            </Card>
+            </section>
             </div>
 
-            <Card className="p-lg space-y-sm shrink-0">
-              <SectionLabel>Export</SectionLabel>
-              <Button className="w-full" onClick={exportPng} disabled={exporting !== null || !frame}>
-                Download this frame (PNG)
-              </Button>
-              <Button
-                variant="secondary"
-                className="w-full"
-                onClick={exportImages}
-                disabled={exporting !== null || frames.length === 0}
-              >
-                Export images in range ({frames.length}) as ZIP
-              </Button>
-              <Button
-                variant="secondary"
-                className="w-full"
-                onClick={exportAnimation}
-                disabled={exporting !== null || frames.length < 2 || !canRecord}
-                title={canRecord ? undefined : 'This browser cannot record video'}
-              >
-                Record animation ({frames.length} frames)
-              </Button>
-
+            <div className="shrink-0 border-t border-divider p-lg space-y-sm">
+              <ExportMenu
+                disabled={exporting !== null || !frame}
+                items={[
+                  {
+                    label: 'This frame',
+                    format: 'PNG',
+                    detail: `${outputSize.width} × ${outputSize.height} image`,
+                    onSelect: exportPng,
+                  },
+                  {
+                    label: 'All frames',
+                    format: 'ZIP',
+                    detail: `${frames.length} image${frames.length === 1 ? '' : 's'} in the selected time range`,
+                    onSelect: exportImages,
+                    disabled: frames.length === 0,
+                  },
+                  {
+                    label: 'Animation',
+                    format: 'WebM',
+                    detail: !canRecord
+                      ? "This browser can't record video"
+                      : frames.length < 2
+                        ? 'Needs at least 2 frames in range'
+                        : `${frames.length} frames, ${SPEEDS[speed]!.label} speed`,
+                    onSelect: exportAnimation,
+                    disabled: frames.length < 2 || !canRecord,
+                  },
+                ]}
+              />
               {exporting && (
-                <div className="pt-sm">
+                <div className="pt-xs">
                   <ProgressBar value={exporting.done} max={exporting.total} />
                   <p className="text-micro text-text-muted mt-xs tabular-nums">
                     {exporting.label} — {exporting.done} / {exporting.total}
@@ -1331,12 +1244,7 @@ export default function StudioPage() {
                 </div>
               )}
               {exportError && <p className="text-caption text-danger-text">{exportError}</p>}
-              {!canRecord && (
-                <p className="text-caption text-text-muted">
-                  Animation recording needs MediaRecorder, which this browser doesn&rsquo;t offer. Still images work.
-                </p>
-              )}
-            </Card>
+            </div>
           </div>
         </div>
       )}
@@ -1344,19 +1252,7 @@ export default function StudioPage() {
   )
 }
 
-function busiest(frames: Frame[]): string {
-  const scored = frames.filter((f) => f.jamFactorAvg !== null)
-  if (scored.length === 0) return '—'
-  const top = scored.reduce((a, b) => (a.jamFactorAvg! >= b.jamFactorAvg! ? a : b))
-  return `${top.time} · ${top.jamFactorAvg!.toFixed(2)}`
-}
 
-function quietest(frames: Frame[]): string {
-  const scored = frames.filter((f) => f.jamFactorAvg !== null)
-  if (scored.length === 0) return '—'
-  const low = scored.reduce((a, b) => (a.jamFactorAvg! <= b.jamFactorAvg! ? a : b))
-  return `${low.time} · ${low.jamFactorAvg!.toFixed(2)}`
-}
 
 /**
  * A theme picker card: overlapping colour circles over the name, after the reference
@@ -1428,7 +1324,7 @@ function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
           className={cn(
             'flex-1 h-9 rounded-md text-label font-semibold transition-colors',
-            value === o.value ? 'bg-text-primary text-on-primary shadow-elevation-2' : 'text-text-secondary hover:text-text-primary',
+            value === o.value ? 'bg-primary text-on-primary shadow-elevation-2' : 'text-text-secondary hover:text-text-primary',
           )}
         >
           {o.label}
@@ -1468,19 +1364,147 @@ function SizeCard({
   )
 }
 
+interface ExportItem {
+  label: string
+  format: string
+  detail: string
+  onSelect: () => void
+  disabled?: boolean
+}
+
+/**
+ * One Export button; the formats live in its menu. Three full-width buttons stacked in
+ * the footer took more room than every other control, for a choice made once.
+ * Base UI's Menu, as in `ActionMenu` — it portals, so the drawer's clipping can't cut it.
+ */
+function ExportMenu({ items, disabled }: { items: ExportItem[]; disabled: boolean }) {
+  return (
+    <Menu.Root modal={false}>
+      <Menu.Trigger
+        disabled={disabled}
+        className={cn(buttonClass(), 'w-full justify-center gap-sm')}
+      >
+        <IconDownload size={16} />
+        Export
+        <IconChevronDown size={14} className="ml-auto" />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner side="top" sideOffset={8} align="end" className="z-50">
+          <Menu.Popup className="w-[20rem] bg-card border border-border rounded-lg shadow-elevation-3 p-xs">
+            {items.map((item) => (
+              <Menu.Item
+                key={item.label}
+                disabled={item.disabled}
+                onClick={item.onSelect}
+                className={(state) =>
+                  cn(
+                    'flex items-start justify-between gap-md w-full px-md py-sm rounded-md cursor-pointer select-none outline-none transition-colors',
+                    state.highlighted && 'bg-canvas-secondary',
+                    state.disabled && 'opacity-50 cursor-not-allowed',
+                  )
+                }
+              >
+                <span className="min-w-0">
+                  <span className="block text-body font-semibold text-text-primary">{item.label}</span>
+                  <span className="block text-caption text-text-muted">{item.detail}</span>
+                </span>
+                <span className="shrink-0 text-micro font-semibold text-primary bg-primary-soft rounded-xs px-sm py-xs">
+                  {item.format}
+                </span>
+              </Menu.Item>
+            ))}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  )
+}
+
+/** One cell of the alignment control. */
+function AlignButton({
+  label,
+  active,
+  onSelect,
+  children,
+}: {
+  label: string
+  active: boolean
+  onSelect: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label={label}
+      aria-pressed={active}
+      title={label}
+      className={cn(
+        'grid place-items-center h-11 rounded-md border-2 transition-colors',
+        active
+          ? 'border-primary bg-primary-soft text-primary'
+          : 'border-transparent text-text-secondary hover:bg-canvas-secondary hover:text-text-primary',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+/** Every output size, grouped, in a dialog — opened from the "Other" card. */
+function SizesDialog({
+  open,
+  selectedId,
+  onClose,
+  onPick,
+}: {
+  open: boolean
+  selectedId: string
+  onClose: () => void
+  onPick: (id: string) => void
+}) {
+  const groups: { title: string; group: 'main' | 'more' }[] = [
+    { title: 'Poster', group: 'main' },
+    { title: 'More sizes', group: 'more' },
+  ]
+  return (
+    <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
+        <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[34rem] max-h-[90vh] overflow-y-auto bg-card border border-border rounded-lg p-xl shadow-elevation-3 space-y-lg">
+          <div>
+            <Dialog.Title className="text-section-title text-text-primary">Output size</Dialog.Title>
+            <Dialog.Description className="text-body text-text-secondary mt-xs">
+              Pick the image size for every export.
+            </Dialog.Description>
+          </div>
+          {groups.map(({ title, group }) => (
+            <div key={group} className="space-y-sm">
+              <p className="text-micro font-semibold uppercase tracking-wider text-text-muted">{title}</p>
+              <div className="grid grid-cols-2 tablet:grid-cols-3 gap-sm">
+                {OUTPUT_SIZES.filter((o) => o.group === group).map((o) => (
+                  <SizeCard
+                    key={o.id}
+                    title={o.name}
+                    detail={`${o.width} × ${o.height}`}
+                    active={selectedId === o.id}
+                    onSelect={() => onPick(o.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end">
+            <Dialog.Close className={buttonClass('secondary')}>Close</Dialog.Close>
+          </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
 /** Every card's heading, in one style, so the drawer reads as one set of controls. */
 function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
   return <p className={cn('text-label font-semibold text-text-primary', className)}>{children}</p>
 }
 
-function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-md">
-      <dt className="text-body text-text-secondary">{label}</dt>
-      <dd className="text-right">
-        <span className="text-body font-semibold text-text-primary tabular-nums">{value}</span>
-        {hint && <span className="block text-micro text-text-muted">{hint}</span>}
-      </dd>
-    </div>
-  )
-}
