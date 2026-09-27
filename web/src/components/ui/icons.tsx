@@ -84,6 +84,15 @@ export function IconPause(props: IconProps) {
   )
 }
 
+export function IconMove(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 2v20M2 12h20" />
+      <path d="m9 5 3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3" />
+    </Svg>
+  )
+}
+
 export function IconRotate(props: IconProps) {
   return (
     <Svg {...props}>

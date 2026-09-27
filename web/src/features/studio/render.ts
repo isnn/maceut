@@ -302,18 +302,23 @@ export interface OutputSize {
   name: string
   width: number
   height: number
+  /** `main` sizes get their own card; `more` sit behind the "Other" card. */
+  group: 'main' | 'more'
 }
 
 /**
- * maptoposter.tarmizi.id's own preset shapes, plus the 1600×1000 size this renderer
- * shipped with first — kept as "Classic" rather than dropped, so an export made last
- * week and one made today can still match.
+ * maptoposter.tarmizi.id's three preset shapes as the main cards, the rest behind
+ * "Other" — including the 1600×1000 this renderer shipped with first, kept as
+ * "Classic" so an export made last week and one made today can still match.
  */
 export const OUTPUT_SIZES: OutputSize[] = [
-  { id: 'square', name: 'Square · 1080×1080', width: 1080, height: 1080 },
-  { id: 'portrait', name: 'Portrait · 1080×1920', width: 1080, height: 1920 },
-  { id: 'landscape', name: 'Landscape · 1920×1080', width: 1920, height: 1080 },
-  { id: 'classic', name: 'Classic · 1600×1000', width: 1600, height: 1000 },
+  { id: 'square', name: 'Square', width: 1080, height: 1080, group: 'main' },
+  { id: 'portrait', name: 'Portrait', width: 1080, height: 1920, group: 'main' },
+  { id: 'landscape', name: 'Landscape', width: 1920, height: 1080, group: 'main' },
+  { id: 'classic', name: 'Classic', width: 1600, height: 1000, group: 'more' },
+  { id: 'social', name: 'Social post 4:5', width: 1080, height: 1350, group: 'more' },
+  { id: 'a4', name: 'A4 print (300 dpi)', width: 2480, height: 3508, group: 'more' },
+  { id: '4k', name: '4K widescreen', width: 3840, height: 2160, group: 'more' },
 ]
 
 export const MIN_OUTPUT_PX = 200
@@ -338,6 +343,8 @@ export interface TextPlacement {
 }
 
 export interface RenderOverlay {
+  /** The caption's title. Empty means the zone's own name. */
+  title: string
   textSize: TextSize
   text: TextPlacement
   legend: boolean
@@ -750,7 +757,7 @@ function layoutCaption(ctx: CanvasRenderingContext2D, input: RenderInput): Capti
   const { date, time, day } = wibParts(input.capturedAt)
 
   const hero: CaptionLine = {
-    text: input.zoneName.toUpperCase(),
+    text: (input.overlay.title.trim() || input.zoneName).toUpperCase(),
     font: '',
     size: 64 * q,
     tracking: 0.25,
@@ -845,7 +852,8 @@ function drawText(ctx: CanvasRenderingContext2D, input: RenderInput) {
   // city maps knock out the roads under a label. Satellite has no single ground
   // colour to use, so imagery keeps a soft dark shadow instead.
   const halo = input.theme.basemap === 'vector'
-  if (!halo) {
+  if (halo) drawScrim(ctx, input, layout)
+  else {
     ctx.shadowColor = 'rgba(0,0,0,0.55)'
     ctx.shadowBlur = layout.halo
   }
@@ -855,9 +863,9 @@ function drawText(ctx: CanvasRenderingContext2D, input: RenderInput) {
     setTracking(ctx, line.tracking * line.size)
     if (halo) {
       ctx.strokeStyle = input.theme.background
-      // Wide enough to cover the gaps the letter-spacing opens between letters: a
-      // thinner halo let a road show through between "2026"'s digits.
-      ctx.lineWidth = Math.max(line.size * (0.3 + line.tracking), layout.halo)
+      // A light outline only — the scrim underneath does the heavy lifting. Widened to
+      // cover the letter-spacing, this merged the big title into a hard-edged slab.
+      ctx.lineWidth = Math.max(line.size * 0.22, layout.halo * 0.5)
       ctx.strokeText(line.text, line.x, line.y)
     }
     ctx.fillStyle = line.color
@@ -872,6 +880,30 @@ function drawText(ctx: CanvasRenderingContext2D, input: RenderInput) {
   ctx.globalAlpha = 0.8
   ctx.fillStyle = input.theme.overlayText
   ctx.fillRect(divider.x, divider.y, divider.width, divider.height)
+  ctx.restore()
+}
+
+/**
+ * A soft, feathered patch of the ground colour behind the whole caption, so the
+ * streets fade out under the text the way a printed map clears space for its title.
+ *
+ * A per-glyph halo can't do this: the caption's letter-spacing (0.4em) and word gaps
+ * left roads showing between letters, and widening the halo to close them fused the
+ * large title into a solid box with hard edges. This draws a rectangle far off-canvas
+ * and keeps only its blurred shadow — one soft-edged shape, no hard edge anywhere.
+ */
+function drawScrim(ctx: CanvasRenderingContext2D, input: RenderInput, layout: CaptionLayout) {
+  const colour = hexToRgba(input.theme.background, 0.88)
+  if (!colour) return
+  const { box, halo } = layout
+  const spread = halo * 2.5
+  const away = input.width * 3
+  ctx.save()
+  ctx.shadowColor = colour
+  ctx.shadowBlur = spread * 2
+  ctx.shadowOffsetX = away
+  ctx.fillStyle = '#000'
+  ctx.fillRect(box.x - spread - away, box.y - spread * 0.6, box.width + spread * 2, box.height + spread * 1.2)
   ctx.restore()
 }
 
@@ -935,10 +967,44 @@ function drawLegend(ctx: CanvasRenderingContext2D, input: RenderInput) {
 export async function renderCapture(canvas: HTMLCanvasElement, input: RenderInput): Promise<void> {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
-
   canvas.width = input.width
   canvas.height = input.height
+  await drawMap(ctx, input)
+  drawOverlays(ctx, input)
+}
 
+/**
+ * The map alone — ground, basemap, boundary, vignette, traffic — into its own canvas.
+ *
+ * The preview draws the map and the overlays on two stacked canvases, and the export
+ * draws both into one (`renderCapture`), from these same two functions. Stacked, the
+ * map can slide under a still caption while it's being dragged, and dragging the
+ * caption redraws only the small overlay layer instead of the whole map.
+ */
+export async function renderMap(canvas: HTMLCanvasElement, input: RenderInput): Promise<void> {
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  canvas.width = input.width
+  canvas.height = input.height
+  await drawMap(ctx, input)
+}
+
+/** Caption, legend and credit on a transparent canvas — synchronous, and cheap. */
+export function renderOverlays(canvas: HTMLCanvasElement, input: RenderInput) {
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  canvas.width = input.width
+  canvas.height = input.height
+  drawOverlays(ctx, input)
+}
+
+function drawOverlays(ctx: CanvasRenderingContext2D, input: RenderInput) {
+  drawText(ctx, input)
+  if (input.overlay.legend) drawLegend(ctx, input)
+  drawAttribution(ctx, input)
+}
+
+async function drawMap(ctx: CanvasRenderingContext2D, input: RenderInput) {
   ctx.fillStyle = input.theme.background
   ctx.fillRect(0, 0, input.width, input.height)
 
@@ -965,10 +1031,6 @@ export async function renderCapture(canvas: HTMLCanvasElement, input: RenderInpu
 
   if (input.theme.basemap === 'vector') drawVignette(ctx, input)
   drawTraffic(ctx, input, v)
-
-  drawText(ctx, input)
-  if (input.overlay.legend) drawLegend(ctx, input)
-  drawAttribution(ctx, input)
 }
 
 /**

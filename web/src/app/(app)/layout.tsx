@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
+import { cn } from '@/lib/utils'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useCurrentUser()
@@ -23,7 +24,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-page">
       <AppHeader />
-      <main className="mx-auto max-w-[1180px] px-xl py-xl">{children}</main>
+      {/* Studio is a canvas plus a tool drawer — it gets the room; every other page
+          keeps the reading width. */}
+      <main className={cn('mx-auto px-xl py-xl', pathname.startsWith('/studio') ? 'max-w-[1600px]' : 'max-w-[1180px]')}>
+        {children}
+      </main>
     </div>
   )
 }

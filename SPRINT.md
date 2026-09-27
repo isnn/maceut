@@ -104,6 +104,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-11** Detail zona: legenda jam factor, Trigger jadi Auto/Manual, kolom Time diisi | permintaan user |
 | ✅ | **FE-12** Studio: renderer canvas — PNG per frame, WebM animasi, 5 style, toggle layer | permintaan user |
 | ✅ | **FE-13** Studio: rentang waktu (start/end), ekspor banyak gambar (ZIP), viewer capture lebih cepat | permintaan user |
+| ✅ | **FE-17** Studio: UI panel zoom/overlay/output baru, judul bisa diubah, peta & teks dua lapis, halaman lebih lebar | permintaan user |
 | ✅ | **FE-16** Studio: zoom halus + roda mouse, pan bebas di semua zoom, jalan kecil dinamis, palet MapToPoster persis, congestion theme kartu, ukuran & drag teks | permintaan user |
 | ✅ | **FE-15** Studio: basemap vektor bergaya (OpenFreeMap, gaya MapToPoster), kartu tema swatch, preview di resolusi ekspor | permintaan user |
 | ✅ | **FE-14** Studio: panel style dipecah 5 bagian (map theme, congestion theme, zoom position, overlay, output size); tema satelit + artistik, pan/zoom manual | permintaan user |
@@ -1373,6 +1374,36 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   ekspor = preview 0 pixel beda, caption di posisi yang ditaruh) + uji manual user (drag
   di zoom tinggi, halo tanggal). tsc + eslint bersih. Roda mouse & slider ¼ langkah
   ditambahkan setelah uji user — belum diuji ulang di browser.
+
+[2026-09-27c] Studio: panel yang lebih rapi, judul bisa diubah, teks diam saat peta digeser.
+
+  PREVIEW JADI DUA KANVAS BERTUMPUK: peta di bawah (render lewat antrian, digeser CSS
+  saat drag), overlay (teks, legenda, atribusi) di atas dan digambar ulang seketika.
+  `renderCapture` untuk ekspor tetap satu gambar, dari dua fungsi yang sama
+  (`renderMap` + `renderOverlays`) — preview tetap = ekspor. Hasilnya: teks tidak ikut
+  bergeser saat peta di-drag (keluhan user), dan menggeser teks atau mengetik judul
+  hanya menggambar ulang lapisan kecil, bukan seluruh peta.
+
+  HALO TEKS DIGANTI "SCRIM": verifikasi menemukan jalan masih terlihat di sela huruf
+  tanggal yang ber-tracking lebar, dan halo yang dilebarkan membuat judul besar jadi
+  kotak padat bersisi keras. Kini satu bidang lembut warna latar di belakang seluruh
+  blok (bayangan kabur dari persegi yang digambar di luar kanvas — tanpa tepi keras),
+  plus garis tepi tipis di huruf.
+
+  UI: kartu Zoom & position — tombol reset berikon (nonaktif di posisi awal), tombol −/+
+  mengapit slider, nilai zoom di header. Overlay — kolom Title (default nama zona),
+  pemilih posisi berupa miniatur poster berwarna tema dengan 5 titik + penanda posisi
+  teks sebenarnya, petunjuk "drag the text" berikon, Legend & Zone boundary jadi switch
+  (komponen baru `ui/Switch.tsx` di atas Base UI Switch). Output size — kartu Square/
+  Portrait/Landscape + Other (Classic, Social 4:5, A4 300dpi, 4K) sesuai gambar user,
+  kotak W × H putus-putus yang bisa diketik (otomatis jadi custom). Halaman Studio kini
+  maks 1600px (halaman lain tetap 1180px), laci 360px, preview portrait dibatasi tinggi
+  layar.
+
+  VERIFIKASI: tsc + eslint bersih. Ronde B (pan 1:1, tanpa crash, lebar jalan, perataan
+  teks) LULUS di headless Chrome. Ronde C (UI baru ini) TIDAK BISA dijalankan — host
+  kehabisan memori (OOM killer mematikan tab browser berulang, ~500MB bebas dari 7,7GB,
+  tanpa swap). UI baru ini BELUM dilihat di browser selain oleh user.
 
 ---
 

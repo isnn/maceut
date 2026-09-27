@@ -25,10 +25,21 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
-import { Checkbox, Input } from '@/components/ui/Input'
+import { Input } from '@/components/ui/Input'
+import { Switch } from '@/components/ui/Switch'
+import { Input as BaseInput } from '@base-ui/react/input'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { IconArrowLeft, IconArrowRight, IconPlay, IconPause } from '@/components/ui/icons'
+import {
+  IconArrowLeft,
+  IconArrowRight,
+  IconPlay,
+  IconPause,
+  IconRotate,
+  IconPlus,
+  IconMinus,
+  IconMove,
+} from '@/components/ui/icons'
 import { cn, formatNumber } from '@/lib/utils'
 import { TRAFFIC_COLORS } from '@/lib/constants'
 import * as zonesApi from '@/features/zones/api'
@@ -42,6 +53,8 @@ import {
   MAX_OUTPUT_PX,
   DEFAULT_VIEW,
   renderCapture,
+  renderMap,
+  renderOverlays,
   canvasToPngBlob,
   downloadCanvas,
   recordAnimation,
@@ -86,6 +99,7 @@ const TEXT_SIZES: { value: TextSize; label: string }[] = [
 ]
 
 const DEFAULT_OVERLAY: RenderOverlay = {
+  title: '',
   textSize: 'medium',
   text: TEXT_PRESETS['bottom-right'],
   legend: false,
@@ -320,6 +334,16 @@ export default function StudioPage() {
     return OUTPUT_SIZES.find((s) => s.id === outputSizeId) ?? OUTPUT_SIZES[3]!
   }, [outputSizeId, customWidth, customHeight])
 
+  /** Anything not on one of the three main cards lives behind "Other". */
+  const otherSize = OUTPUT_SIZES.find((o) => o.id === outputSizeId && o.group === 'more') ?? null
+  const otherActive = outputSizeId === 'custom' || otherSize !== null
+
+  function setCustomSize(width: number, height: number) {
+    setCustomWidth(width)
+    setCustomHeight(height)
+    setOutputSizeId('custom')
+  }
+
   function selectThemeCategory(next: MapThemeCategory) {
     if (next === theme.category) return
     const first = MAP_THEMES.find((t) => t.category === next)
@@ -396,7 +420,7 @@ export default function StudioPage() {
     const input = renderInputFor(frame, traffics[frame.id] ?? null, dims.width, dims.height)
     schedulePreview(async () => {
       const offscreen = document.createElement('canvas')
-      await renderCapture(offscreen, input)
+      await renderMap(offscreen, input)
       const canvas = previewCanvas.current
       if (!canvas || !mounted.current) return
       canvas.width = offscreen.width
@@ -408,6 +432,17 @@ export default function StudioPage() {
       }
     })
   }, [frame, traffics, renderInputFor, outputSize, schedulePreview])
+
+  // The overlay layer — caption, legend, credit — redrawn straight away on its own
+  // canvas. It's cheap and synchronous, so a caption drag or a title keystroke never
+  // waits behind a map render, and the caption stays put while the map slides under it.
+  const overlayCanvas = useRef<HTMLCanvasElement | null>(null)
+  useEffect(() => {
+    const canvas = overlayCanvas.current
+    if (!canvas || !frame) return
+    const dims = previewDims(outputSize)
+    renderOverlays(canvas, renderInputFor(frame, null, dims.width, dims.height))
+  }, [frame, renderInputFor, outputSize])
 
   // The slider's real range for this zone and size — past the basemap's deepest zoom
   // the image stops changing, so offering those steps would be a dead slider.
@@ -432,7 +467,8 @@ export default function StudioPage() {
   })
   const hasPreview = frames.length > 0
   useEffect(() => {
-    const canvas = previewCanvas.current
+    // The overlay canvas is the top layer, so it's the one the wheel lands on.
+    const canvas = overlayCanvas.current
     if (!hasPreview || !canvas) return
     function onWheel(e: WheelEvent) {
       e.preventDefault()
@@ -736,25 +772,44 @@ export default function StudioPage() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 laptop:grid-cols-[minmax(0,1fr)_320px] gap-xl items-start">
+        <div className="grid grid-cols-1 laptop:grid-cols-[minmax(0,1fr)_360px] gap-xl items-start">
           <div className="space-y-lg min-w-0">
             <Card className="p-lg space-y-lg">
               {/* The preview IS the renderer, not Leaflet with a CSS filter over it. A separate
                   preview would look close and export differently, and the difference would only
                   ever be discovered after someone shipped the file. Drag the canvas to pan; the
                   zoom slider and Reset live in the Zoom position section. */}
-              <div className="relative rounded-md overflow-hidden" style={{ background: theme.background }}>
+              {/* Two stacked canvases: the map underneath (slides while dragged, renders
+                  once on release) and the overlays on top (redrawn instantly). The export
+                  composes the same two layers into one image. Width is capped by the
+                  viewport height, so a portrait poster doesn't run off the screen. */}
+              <div
+                className="relative mx-auto rounded-md overflow-hidden"
+                style={{
+                  background: theme.background,
+                  aspectRatio: `${outputSize.width} / ${outputSize.height}`,
+                  width: `min(100%, calc(72vh * ${outputSize.width / outputSize.height}))`,
+                }}
+              >
                 <canvas
                   ref={previewCanvas}
-                  className="w-full block"
-                  style={{ aspectRatio: `${outputSize.width} / ${outputSize.height}`, transform: slide ? `translate(${slide.x}px, ${slide.y}px)` : undefined, cursor: dragging === 'text' || (!dragging && overCaption) ? 'move' : dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+                  className="absolute inset-0 w-full h-full"
+                  style={{ transform: slide ? `translate(${slide.x}px, ${slide.y}px)` : undefined }}
+                />
+                <canvas
+                  ref={overlayCanvas}
+                  className="absolute inset-0 w-full h-full"
+                  style={{
+                    cursor: dragging === 'text' || (!dragging && overCaption) ? 'move' : dragging ? 'grabbing' : 'grab',
+                    touchAction: 'none',
+                  }}
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
                   onPointerCancel={handlePointerUp}
                 />
                 {(loadingFrame || previewBusy) && (
-                  <span className="absolute top-md right-md text-micro font-semibold bg-canvas text-text-secondary border border-border rounded-xs px-sm py-xs">
+                  <span className="absolute top-md right-md text-micro font-semibold bg-canvas text-text-secondary border border-border rounded-xs px-sm py-xs pointer-events-none">
                     {loadingFrame ? 'Loading frame…' : 'Drawing…'}
                   </span>
                 )}
@@ -1018,36 +1073,80 @@ export default function StudioPage() {
               </div>
             </Card>
 
-            {/* 3. Zoom position — how far in, and where, the framing sits. Drag the preview
-                above to pan; the zoom slider steps in from the automatic fit. */}
-            <Card className="p-lg space-y-sm">
-              <SectionLabel>Zoom position</SectionLabel>
-              <div className="flex items-center justify-between text-micro text-text-muted">
-                <span>Wider</span>
-                <span className="tabular-nums">{zoomLabel}</span>
-                <span>Closer</span>
+            {/* 3. Zoom & position — how far in, and where, the framing sits. The map
+                itself also takes a drag (pan) and the mouse wheel (zoom). */}
+            <Card className="p-lg space-y-md">
+              <div className="flex items-center justify-between gap-sm">
+                <SectionLabel>Zoom &amp; position</SectionLabel>
+                <div className="flex items-center gap-xs">
+                  <span className="text-micro font-semibold tabular-nums text-text-secondary bg-canvas-secondary rounded-xs px-sm py-xs">
+                    {zoomLabel}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setView(DEFAULT_VIEW)}
+                    disabled={view.panX === 0 && view.panY === 0 && view.zoomOffset === 0}
+                    aria-label="Reset zoom and position"
+                    title="Reset zoom and position"
+                    className="grid place-items-center h-8 w-8 rounded-md text-text-secondary hover:bg-canvas-secondary hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                  >
+                    <IconRotate size={16} />
+                  </button>
+                </div>
               </div>
-              <input
-                type="range"
-                min={zoomRange.min}
-                max={zoomRange.max}
-                step={0.25}
-                value={zoomOffset}
-                onChange={(e) => setView((v) => ({ ...v, zoomOffset: Number(e.target.value) }))}
-                aria-label="Zoom"
-                className="w-full accent-primary"
-              />
-              {(view.panX !== 0 || view.panY !== 0 || view.zoomOffset !== 0) && (
-                <button onClick={() => setView(DEFAULT_VIEW)} className="text-caption text-info hover:underline">
-                  Reset zoom &amp; position
+              <div className="flex items-center gap-sm">
+                <button
+                  type="button"
+                  onClick={() => setView((v) => ({ ...v, zoomOffset: clamp(zoomOffset - 0.5, zoomRange.min, zoomRange.max) }))}
+                  disabled={zoomOffset <= zoomRange.min}
+                  aria-label="Zoom out"
+                  title="Zoom out"
+                  className="grid place-items-center h-8 w-8 shrink-0 rounded-md border border-border text-text-secondary hover:text-text-primary hover:bg-canvas-secondary disabled:opacity-30 transition-colors"
+                >
+                  <IconMinus size={14} />
                 </button>
-              )}
+                <input
+                  type="range"
+                  min={zoomRange.min}
+                  max={zoomRange.max}
+                  step={0.25}
+                  value={zoomOffset}
+                  onChange={(e) => setView((v) => ({ ...v, zoomOffset: Number(e.target.value) }))}
+                  aria-label="Zoom"
+                  className="flex-1 min-w-0 accent-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => setView((v) => ({ ...v, zoomOffset: clamp(zoomOffset + 0.5, zoomRange.min, zoomRange.max) }))}
+                  disabled={zoomOffset >= zoomRange.max}
+                  aria-label="Zoom in"
+                  title="Zoom in"
+                  className="grid place-items-center h-8 w-8 shrink-0 rounded-md border border-border text-text-secondary hover:text-text-primary hover:bg-canvas-secondary disabled:opacity-30 transition-colors"
+                >
+                  <IconPlus size={14} />
+                </button>
+              </div>
             </Card>
 
-            {/* 4. Overlay — the caption block (name/date/time/day) and the legend, shown
-                or hidden and placed independently. */}
+            {/* 4. Overlay — the caption (its words, size and place), the legend and the
+                zone outline. */}
             <Card className="p-lg space-y-md">
               <SectionLabel>Overlay</SectionLabel>
+              <div className="space-y-xs">
+                <label htmlFor="caption-title" className="text-micro font-semibold uppercase tracking-wider text-text-muted">
+                  Title
+                </label>
+                <Input
+                  id="caption-title"
+                  value={overlay.title}
+                  onChange={(e) => {
+                    const title = e.target.value
+                    setOverlay((o) => ({ ...o, title }))
+                  }}
+                  placeholder={zoneLabel}
+                  maxLength={60}
+                />
+              </div>
               <div className="space-y-xs">
                 <p className="text-micro font-semibold uppercase tracking-wider text-text-muted">Text size</p>
                 <Segmented
@@ -1057,14 +1156,34 @@ export default function StudioPage() {
                   options={TEXT_SIZES}
                 />
               </div>
-              <div className="space-y-xs">
+              <div className={cn('space-y-sm', overlay.textSize === 'none' && 'opacity-40 pointer-events-none')}>
                 <p className="text-micro font-semibold uppercase tracking-wider text-text-muted">Position</p>
+                {/* A miniature of the output: the five snap points, and a marker for
+                    where the caption actually is — which may be none of them once it
+                    has been dragged. */}
                 <div
-                  className={cn(
-                    'grid grid-cols-3 grid-rows-3 gap-xs w-28 h-28 mx-auto',
-                    overlay.textSize === 'none' && 'opacity-40',
-                  )}
+                  className="relative mx-auto rounded-md border border-border overflow-hidden max-w-full"
+                  style={{
+                    aspectRatio: `${outputSize.width} / ${outputSize.height}`,
+                    width: outputSize.width >= outputSize.height ? '100%' : `${(outputSize.width / outputSize.height) * 11}rem`,
+                    background: theme.background,
+                  }}
                 >
+                  <span
+                    aria-hidden
+                    className="absolute flex flex-col gap-[3px] pointer-events-none"
+                    style={{
+                      left: `${overlay.text.x * 100}%`,
+                      top: `${overlay.text.y * 100}%`,
+                      alignItems:
+                        overlay.text.align === 'left' ? 'flex-start' : overlay.text.align === 'center' ? 'center' : 'flex-end',
+                      transform: `translate(${overlay.text.align === 'left' ? '0' : overlay.text.align === 'center' ? '-50%' : '-100%'}, -50%)`,
+                    }}
+                  >
+                    <span className="block h-[5px] w-12 rounded-full" style={{ background: theme.overlayText }} />
+                    <span className="block h-[3px] w-8 rounded-full opacity-70" style={{ background: theme.overlayText }} />
+                    <span className="block h-[3px] w-10 rounded-full opacity-50" style={{ background: theme.overlayText }} />
+                  </span>
                   {POSITIONS.map((p) => {
                     const preset = TEXT_PRESETS[p.id]
                     const active =
@@ -1073,80 +1192,110 @@ export default function StudioPage() {
                       <button
                         key={p.id}
                         type="button"
-                        disabled={overlay.textSize === 'none'}
                         onClick={() => setOverlay((o) => ({ ...o, text: preset }))}
-                        style={{ gridColumn: p.col, gridRow: p.row }}
-                        className={cn(
-                          'rounded-xs border transition-colors',
-                          active ? 'border-primary bg-primary-soft' : 'border-border hover:bg-canvas-secondary',
-                        )}
                         aria-label={`Text position: ${p.label}`}
                         aria-pressed={active}
                         title={p.label}
+                        className={cn(
+                          'absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 transition-transform hover:scale-125',
+                          active ? 'bg-primary border-canvas' : 'bg-canvas/80 border-primary',
+                        )}
+                        style={{ left: `${preset.x * 100}%`, top: `${preset.y * 100}%` }}
                       />
                     )
                   })}
                 </div>
+                <p className="flex items-center justify-center gap-xs text-caption text-text-muted">
+                  <IconMove size={14} />
+                  Or drag the text on the preview to place it anywhere.
+                </p>
               </div>
-              <div className="border-t border-divider pt-md space-y-sm">
-                <label className="flex items-center gap-sm cursor-pointer">
-                  <Checkbox checked={overlay.legend} onChange={(e) => setOverlay((o) => ({ ...o, legend: e.target.checked }))} />
-                  <span className="text-body text-text-secondary">Legend</span>
-                </label>
-                <label className="flex items-center gap-sm cursor-pointer">
-                  <Checkbox checked={overlay.boundary} onChange={(e) => setOverlay((o) => ({ ...o, boundary: e.target.checked }))} />
-                  <span className="text-body text-text-secondary">Zone boundary</span>
-                </label>
+              <div className="border-t border-divider pt-md space-y-md">
+                <div className="flex items-center justify-between gap-md">
+                  <label htmlFor="toggle-legend" className="text-body text-text-primary">
+                    Legend
+                  </label>
+                  <Switch
+                    id="toggle-legend"
+                    checked={overlay.legend}
+                    onCheckedChange={(legend) => setOverlay((o) => ({ ...o, legend }))}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-md">
+                  <label htmlFor="toggle-boundary" className="text-body text-text-primary">
+                    Zone boundary
+                  </label>
+                  <Switch
+                    id="toggle-boundary"
+                    checked={overlay.boundary}
+                    onCheckedChange={(boundary) => setOverlay((o) => ({ ...o, boundary }))}
+                  />
+                </div>
               </div>
             </Card>
 
-            {/* 5. Output size — a poster preset, or a custom size within bounds. Classic
-                1600×1000 is kept as a preset so an export made before this change and one
-                made after it can still match. */}
-            <Card className="p-lg space-y-sm">
+            {/* 5. Output size — the three poster shapes as cards, the rest behind "Other",
+                and the exact pixels, editable, underneath. */}
+            <Card className="p-lg space-y-md">
               <SectionLabel>Output size</SectionLabel>
-              <Select
-                value={outputSizeId}
-                onValueChange={setOutputSizeId}
-                options={[...OUTPUT_SIZES.map((s) => ({ value: s.id, label: s.name })), { value: 'custom', label: 'Custom' }]}
-                className="w-full"
-                aria-label="Output size"
-              />
-              {outputSizeId === 'custom' && (
-                <div className="grid grid-cols-2 gap-sm">
-                  <div className="space-y-xs">
-                    <label className="text-micro font-semibold uppercase tracking-wider text-text-muted" htmlFor="custom-width">
-                      Width
-                    </label>
-                    <Input
-                      id="custom-width"
-                      type="number"
-                      min={MIN_OUTPUT_PX}
-                      max={MAX_OUTPUT_PX}
-                      value={customWidth}
-                      onChange={(e) => setCustomWidth(Number(e.target.value))}
-                      className="tabular-nums"
-                    />
-                  </div>
-                  <div className="space-y-xs">
-                    <label className="text-micro font-semibold uppercase tracking-wider text-text-muted" htmlFor="custom-height">
-                      Height
-                    </label>
-                    <Input
-                      id="custom-height"
-                      type="number"
-                      min={MIN_OUTPUT_PX}
-                      max={MAX_OUTPUT_PX}
-                      value={customHeight}
-                      onChange={(e) => setCustomHeight(Number(e.target.value))}
-                      className="tabular-nums"
-                    />
-                  </div>
-                </div>
+              <div className="grid grid-cols-2 gap-sm">
+                {OUTPUT_SIZES.filter((o) => o.group === 'main').map((o) => (
+                  <SizeCard
+                    key={o.id}
+                    title={o.name}
+                    detail={`${o.width} × ${o.height}`}
+                    active={outputSizeId === o.id}
+                    onSelect={() => setOutputSizeId(o.id)}
+                  />
+                ))}
+                <SizeCard
+                  title="Other"
+                  detail={otherActive ? (otherSize?.name ?? 'Custom') : 'More sizes'}
+                  active={otherActive}
+                  onSelect={() => {
+                    if (!otherActive) setOutputSizeId(OUTPUT_SIZES.find((o) => o.group === 'more')!.id)
+                  }}
+                />
+              </div>
+              {otherActive && (
+                <Select
+                  value={outputSizeId}
+                  onValueChange={setOutputSizeId}
+                  options={[
+                    ...OUTPUT_SIZES.filter((o) => o.group === 'more').map((o) => ({
+                      value: o.id,
+                      label: `${o.name} · ${o.width} × ${o.height}`,
+                    })),
+                    { value: 'custom', label: 'Custom' },
+                  ]}
+                  className="w-full"
+                  aria-label="More sizes"
+                />
               )}
-              <p className="text-caption text-text-muted tabular-nums">
-                {outputSize.width} × {outputSize.height}
-              </p>
+              {/* The exact pixels. Typing here makes the size custom. */}
+              <div className="flex items-center justify-center gap-sm rounded-xl border border-dashed border-border bg-canvas-secondary/60 px-md py-sm">
+                <BaseInput
+                  type="number"
+                  aria-label="Width in pixels"
+                  min={MIN_OUTPUT_PX}
+                  max={MAX_OUTPUT_PX}
+                  value={outputSizeId === 'custom' ? customWidth : outputSize.width}
+                  onValueChange={(value) => setCustomSize(Number(value), outputSizeId === 'custom' ? customHeight : outputSize.height)}
+                  className="w-full min-w-0 bg-transparent text-center text-heading-sm font-bold tabular-nums text-text-primary rounded-sm py-xs focus:outline-none focus-visible:bg-canvas"
+                />
+                <span aria-hidden className="text-text-muted">
+                  ×
+                </span>
+                <BaseInput
+                  type="number"
+                  aria-label="Height in pixels"
+                  min={MIN_OUTPUT_PX}
+                  max={MAX_OUTPUT_PX}
+                  value={outputSizeId === 'custom' ? customHeight : outputSize.height}
+                  onValueChange={(value) => setCustomSize(outputSizeId === 'custom' ? customWidth : outputSize.width, Number(value))}
+                  className="w-full min-w-0 bg-transparent text-center text-heading-sm font-bold tabular-nums text-text-primary rounded-sm py-xs focus:outline-none focus-visible:bg-canvas"
+                />
+              </div>
             </Card>
             </div>
 
@@ -1286,6 +1435,36 @@ function Segmented<T extends string>({
         </button>
       ))}
     </div>
+  )
+}
+
+/** An output-size card: the shape's name over its pixels, after the user's reference. */
+function SizeCard({
+  title,
+  detail,
+  active,
+  onSelect,
+}: {
+  title: string
+  detail: string
+  active: boolean
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+      className={cn(
+        'flex flex-col items-center gap-xs rounded-xl border px-sm py-md transition-colors',
+        active
+          ? 'bg-primary border-primary text-on-primary shadow-elevation-2'
+          : 'bg-canvas-secondary/60 border-divider text-text-primary hover:border-border',
+      )}
+    >
+      <span className="text-heading-sm font-bold">{title}</span>
+      <span className={cn('text-caption tabular-nums', active ? 'text-on-primary/85' : 'text-text-secondary')}>{detail}</span>
+    </button>
   )
 }
 
