@@ -25,7 +25,7 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
-import { Checkbox } from '@/components/ui/Input'
+import { Checkbox, Input } from '@/components/ui/Input'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { IconArrowLeft, IconArrowRight, IconPlay, IconPause } from '@/components/ui/icons'
@@ -75,9 +75,18 @@ const POSITIONS: { id: TextPosition; label: string; row: number; col: number }[]
 
 const DEFAULT_OVERLAY: RenderOverlay = { showText: true, textPosition: 'bottom-right', legend: false, boundary: false }
 
-/** A preview never needs export resolution — it needs the export's aspect ratio, capped small. */
+/**
+ * The preview renders at the export's own size, displayed smaller by CSS.
+ *
+ * It used to be capped at 960px, and that was not just blurrier: `fitZoom` picks the
+ * tile zoom from the pixel size, so a 960px preview chose a lower zoom than the
+ * 1600px export and showed less street detail than the file actually contained. At
+ * the real size the two pick the same zoom and the preview is the export, pixel for
+ * pixel. The cap only bites on very large Custom sizes, where rendering every frame
+ * at 4000px would stall playback.
+ */
 function previewDims(size: { width: number; height: number }): { width: number; height: number } {
-  const maxDim = 960
+  const maxDim = 2400
   if (size.width >= size.height) {
     const width = Math.min(size.width, maxDim)
     return { width, height: Math.round((width / size.width) * size.height) }
@@ -135,7 +144,6 @@ export default function StudioPage() {
 
   // --- style rail state ---------------------------------------------------------
   const [themeId, setThemeId] = useState(MAP_THEMES[0]!.id)
-  const [showBasemap, setShowBasemap] = useState(true)
   const [congestionId, setCongestionId] = useState(CONGESTION_THEMES[0]!.id)
   const [view, setView] = useState<RenderView>(DEFAULT_VIEW)
   const [overlay, setOverlay] = useState<RenderOverlay>(DEFAULT_OVERLAY)
@@ -303,23 +311,21 @@ export default function StudioPage() {
       capturedAt: f.capturedAt,
       zoneName: zoneLabel,
       theme,
-      showBasemap,
       congestion,
       overlay,
       view,
       width,
       height,
     }),
-    [theme, showBasemap, congestion, overlay, view, zoneRing, zoneLabel],
+    [theme, congestion, overlay, view, zoneRing, zoneLabel],
   )
 
-  // Off-screen: `renderCapture` paints tiles incrementally as each one loads, so two
-  // overlapping renders (a fast theme switch mid-fetch, say) can interleave their
-  // `drawImage` calls on a shared canvas — a later tile from a stale run landing after
-  // a newer run has already finished. Rendering into a scratch canvas and blitting the
-  // result only if this effect is still current keeps a stale run from ever touching
-  // what's on screen.
-  const previewOffscreen = useRef<HTMLCanvasElement | null>(null)
+  // Off-screen, and a NEW scratch canvas per run: `renderCapture` paints tiles as each
+  // one loads, so two overlapping renders (a fast theme switch mid-fetch, say) must
+  // never share a canvas. The first fix reused one scratch canvas across runs, and a
+  // stale run's late tile still landed on it — after that run had restored its
+  // context, so without the theme's filter: a bright unfiltered strip on a dark map.
+  // One canvas per run means a stale run can only ever draw on a canvas nobody reads.
 
   useEffect(() => {
     const canvas = previewCanvas.current
@@ -330,8 +336,7 @@ export default function StudioPage() {
     // aspect ratio — never a fixed 960×600 — so what's on screen is what will export,
     // just smaller.
     const dims = previewDims(outputSize)
-    const offscreen = previewOffscreen.current ?? document.createElement('canvas')
-    previewOffscreen.current = offscreen
+    const offscreen = document.createElement('canvas')
     renderCapture(offscreen, renderInputFor(frame, traffics[frame.id] ?? null, dims.width, dims.height))
       .then(() => {
         if (cancelled) return
@@ -646,14 +651,48 @@ export default function StudioPage() {
               </div>
             </Card>
 
+            {/* This frame + Day summary describe what's on screen, so they sit under the
+                map — the right column is a controls drawer, and these are readouts. */}
+            <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
+              <Card className="p-lg space-y-md">
+                <SectionLabel>This frame</SectionLabel>
+                {frame ? (
+                  <dl className="space-y-md">
+                    <Row label="Time" value={`${frame.time} WIB`} />
+                    <Row
+                      label="Avg jam factor"
+                      value={frame.jamFactorAvg === null ? '—' : frame.jamFactorAvg.toFixed(2)}
+                      hint={frame.jamFactorAvg === null ? undefined : bandFor(frame.jamFactorAvg).label}
+                    />
+                    <Row
+                      label="Roads"
+                      value={frame.roadsCount === null ? '—' : formatNumber(frame.roadsCount)}
+                    />
+                  </dl>
+                ) : (
+                  <p className="text-body text-text-secondary">No frame selected.</p>
+                )}
+              </Card>
+
+              <Card className="p-lg">
+                <SectionLabel className="mb-sm">Day summary</SectionLabel>
+                <dl className="space-y-md">
+                  <Row label="Frames" value={String(frames.length)} />
+                  <Row label="Busiest" value={busiest(frames)} />
+                  <Row label="Quietest" value={quietest(frames)} />
+                </dl>
+              </Card>
+            </div>
+
             {/*
-              The day at a glance: every frame's congestion, and which of them are in the
-              selected range. Bars for the whole day are always drawn — not just the
-              range — so narrowing the Timeframe controls is visibly a choice against the
-              full day, not an operation on data that has vanished from view.
+              The day at a glance, kept bottommost — after the frame and day readouts —
+              because it summarises the whole day rather than the moment on screen. Bars
+              for the whole day are always drawn, not just the range, so narrowing the
+              Timeframe controls is visibly a choice against the full day, not an
+              operation on data that has vanished from view.
             */}
             <Card className="p-lg">
-              <p className="text-label text-text-secondary mb-md">Congestion through the day</p>
+              <SectionLabel className="mb-md">Congestion through the day</SectionLabel>
               <div className="flex items-end gap-[2px] h-24">
                 {dayFrames.map((f, dayIdx) => {
                   const jam = f.jamFactorAvg ?? 0
@@ -694,39 +733,6 @@ export default function StudioPage() {
                 <span>{dayFrames[dayFrames.length - 1]?.time}</span>
               </div>
             </Card>
-
-            {/* This frame + Day summary describe what's on screen, so they sit under the
-                map — the right column is a controls drawer, and these are readouts. */}
-            <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
-              <Card className="p-lg space-y-md">
-                <p className="text-label text-text-secondary">This frame</p>
-                {frame ? (
-                  <dl className="space-y-md">
-                    <Row label="Time" value={`${frame.time} WIB`} />
-                    <Row
-                      label="Avg jam factor"
-                      value={frame.jamFactorAvg === null ? '—' : frame.jamFactorAvg.toFixed(2)}
-                      hint={frame.jamFactorAvg === null ? undefined : bandFor(frame.jamFactorAvg).label}
-                    />
-                    <Row
-                      label="Roads"
-                      value={frame.roadsCount === null ? '—' : formatNumber(frame.roadsCount)}
-                    />
-                  </dl>
-                ) : (
-                  <p className="text-body text-text-secondary">No frame selected.</p>
-                )}
-              </Card>
-
-              <Card className="p-lg">
-                <p className="text-label text-text-secondary mb-sm">Day summary</p>
-                <dl className="space-y-md">
-                  <Row label="Frames" value={String(frames.length)} />
-                  <Row label="Busiest" value={busiest(frames)} />
-                  <Row label="Quietest" value={quietest(frames)} />
-                </dl>
-              </Card>
-            </div>
           </div>
 
           {/* Style drawer: on laptop+ the map column stays put while this rail scrolls
@@ -741,7 +747,7 @@ export default function StudioPage() {
               actually produce.
             */}
             <Card className="p-lg space-y-md">
-              <p className="text-label text-text-secondary">Timeframe</p>
+              <SectionLabel>Timeframe</SectionLabel>
               <p className="text-caption text-text-muted">
                 {frames.length} of {dayFrames.length} frames selected
                 {dayFrames[0] && dayFrames[dayFrames.length - 1] && (
@@ -754,10 +760,12 @@ export default function StudioPage() {
               </p>
               <div className="grid grid-cols-2 gap-sm">
                 <div className="space-y-xs">
-                  <label className="text-micro text-text-muted" htmlFor="range-start">
+                  <label className="text-micro font-semibold uppercase tracking-wider text-text-muted" htmlFor="range-start">
                     Start
                   </label>
                   <Select
+                    id="range-start"
+                    className="w-full"
                     value={rangeStartId ?? ''}
                     onValueChange={setRangeStartId}
                     options={dayFrames.map((f) => ({ value: f.id, label: f.time }))}
@@ -765,10 +773,12 @@ export default function StudioPage() {
                   />
                 </div>
                 <div className="space-y-xs">
-                  <label className="text-micro text-text-muted" htmlFor="range-end">
+                  <label className="text-micro font-semibold uppercase tracking-wider text-text-muted" htmlFor="range-end">
                     End
                   </label>
                   <Select
+                    id="range-end"
+                    className="w-full"
                     value={rangeEndId ?? ''}
                     onValueChange={setRangeEndId}
                     options={dayFrames.map((f) => ({ value: f.id, label: f.time }))}
@@ -786,24 +796,30 @@ export default function StudioPage() {
             {/* 1. Map theme — the basemap's colour identity: a literal Standard rendering,
                 or an Artistic mood. Traffic colours are untouched here on purpose. */}
             <Card className="p-lg space-y-md">
-              <p className="text-label text-text-secondary">Map theme</p>
-              <div className="flex gap-xs">
+              <SectionLabel>Map theme</SectionLabel>
+              <div role="tablist" aria-label="Theme category" className="flex p-xs rounded-lg bg-canvas-secondary">
                 {(['standard', 'artistic'] as const).map((cat) => (
                   <button
                     key={cat}
                     type="button"
+                    role="tab"
+                    aria-selected={theme.category === cat}
                     onClick={() => selectThemeCategory(cat)}
                     className={cn(
-                      'flex-1 text-micro font-semibold rounded-xs px-sm py-xs capitalize transition-colors',
+                      'flex-1 h-9 rounded-md text-label font-semibold capitalize transition-colors',
                       theme.category === cat
-                        ? 'bg-primary text-on-primary'
-                        : 'bg-canvas-secondary text-text-muted hover:text-text-primary',
+                        ? 'bg-text-primary text-on-primary shadow-elevation-2'
+                        : 'text-text-secondary hover:text-text-primary',
                     )}
                   >
                     {cat}
                   </button>
                 ))}
               </div>
+
+              <p className="text-micro font-semibold uppercase tracking-wider text-text-muted">
+                {theme.category} theme
+              </p>
               <div className="grid grid-cols-2 gap-sm">
                 {MAP_THEMES.filter((t) => t.category === theme.category).map((t) => {
                   const active = t.id === themeId
@@ -812,42 +828,42 @@ export default function StudioPage() {
                       key={t.id}
                       type="button"
                       onClick={() => setThemeId(t.id)}
+                      aria-pressed={active}
                       className={cn(
-                        'rounded-md border p-sm text-left transition-colors',
-                        active ? 'border-primary bg-primary-soft/40' : 'border-border hover:bg-canvas-secondary',
+                        'flex flex-col items-center gap-sm rounded-lg border px-sm py-md transition-colors',
+                        active
+                          ? 'border-text-primary bg-canvas-secondary'
+                          : t.category === 'artistic'
+                            ? 'border-divider bg-canvas-secondary/60 hover:border-border'
+                            : 'border-transparent hover:bg-canvas-secondary/60',
                       )}
                     >
-                      <div className="h-10 rounded-xs mb-xs relative overflow-hidden" style={{ background: t.background }}>
-                        {t.wash && (
-                          <div
-                            className="absolute inset-0"
-                            style={{
-                              background: t.wash.color,
-                              opacity: Math.min(t.wash.opacity * 2.5, 1),
-                              mixBlendMode: t.wash.blend as React.CSSProperties['mixBlendMode'],
-                            }}
+                      <span className="flex" aria-hidden>
+                        {t.swatch.map((color, i) => (
+                          <span
+                            key={color + i}
+                            className={cn('h-7 w-7 rounded-full ring-2 ring-canvas', i > 0 && '-ml-sm')}
+                            style={{ background: color }}
                           />
-                        )}
-                      </div>
-                      <span className="text-caption text-text-primary">{t.name}</span>
+                        ))}
+                      </span>
+                      <span className="text-label font-semibold text-text-primary">{t.name}</span>
                     </button>
                   )
                 })}
               </div>
-              <label className="flex items-center gap-sm cursor-pointer">
-                <Checkbox checked={showBasemap} onChange={(e) => setShowBasemap(e.target.checked)} />
-                <span className="text-label text-text-secondary">Show basemap</span>
-              </label>
+              <p className="text-caption italic text-text-muted">{theme.caption}</p>
             </Card>
 
             {/* 2. Congestion theme — a separate, opt-in recolour of BR-017's four bands.
                 Standard is the identity map: choosing it is choosing to keep the meaning. */}
             <Card className="p-lg space-y-sm">
-              <p className="text-label text-text-secondary">Congestion theme</p>
+              <SectionLabel>Congestion theme</SectionLabel>
               <Select
                 value={congestionId}
                 onValueChange={setCongestionId}
                 options={CONGESTION_THEMES.map((c) => ({ value: c.id, label: c.name }))}
+                className="w-full"
                 aria-label="Congestion theme"
               />
               <p className="text-caption text-text-muted">
@@ -858,7 +874,7 @@ export default function StudioPage() {
             {/* 3. Zoom position — how far in, and where, the framing sits. Drag the preview
                 above to pan; the zoom slider steps in from the automatic fit. */}
             <Card className="p-lg space-y-sm">
-              <p className="text-label text-text-secondary">Zoom position</p>
+              <SectionLabel>Zoom position</SectionLabel>
               <div className="flex items-center justify-between text-micro text-text-muted">
                 <span>Wider</span>
                 <span className="tabular-nums">{view.zoomOffset === 0 ? 'Auto fit' : `${view.zoomOffset > 0 ? '+' : ''}${view.zoomOffset}`}</span>
@@ -885,7 +901,7 @@ export default function StudioPage() {
             {/* 4. Overlay — the caption block (name/date/time/day) and the legend, shown
                 or hidden and placed independently. */}
             <Card className="p-lg space-y-md">
-              <p className="text-label text-text-secondary">Overlay</p>
+              <SectionLabel>Overlay</SectionLabel>
               <label className="flex items-center gap-sm cursor-pointer">
                 <Checkbox checked={overlay.showText} onChange={(e) => setOverlay((o) => ({ ...o, showText: e.target.checked }))} />
                 <span className="text-body text-text-secondary">Show text</span>
@@ -927,41 +943,42 @@ export default function StudioPage() {
                 1600×1000 is kept as a preset so an export made before this change and one
                 made after it can still match. */}
             <Card className="p-lg space-y-sm">
-              <p className="text-label text-text-secondary">Output size</p>
+              <SectionLabel>Output size</SectionLabel>
               <Select
                 value={outputSizeId}
                 onValueChange={setOutputSizeId}
                 options={[...OUTPUT_SIZES.map((s) => ({ value: s.id, label: s.name })), { value: 'custom', label: 'Custom' }]}
+                className="w-full"
                 aria-label="Output size"
               />
               {outputSizeId === 'custom' && (
                 <div className="grid grid-cols-2 gap-sm">
                   <div className="space-y-xs">
-                    <label className="text-micro text-text-muted" htmlFor="custom-width">
+                    <label className="text-micro font-semibold uppercase tracking-wider text-text-muted" htmlFor="custom-width">
                       Width
                     </label>
-                    <input
+                    <Input
                       id="custom-width"
                       type="number"
                       min={MIN_OUTPUT_PX}
                       max={MAX_OUTPUT_PX}
                       value={customWidth}
                       onChange={(e) => setCustomWidth(Number(e.target.value))}
-                      className="w-full h-9 px-sm rounded-xs border border-border bg-canvas text-body text-text-primary tabular-nums"
+                      className="tabular-nums"
                     />
                   </div>
                   <div className="space-y-xs">
-                    <label className="text-micro text-text-muted" htmlFor="custom-height">
+                    <label className="text-micro font-semibold uppercase tracking-wider text-text-muted" htmlFor="custom-height">
                       Height
                     </label>
-                    <input
+                    <Input
                       id="custom-height"
                       type="number"
                       min={MIN_OUTPUT_PX}
                       max={MAX_OUTPUT_PX}
                       value={customHeight}
                       onChange={(e) => setCustomHeight(Number(e.target.value))}
-                      className="w-full h-9 px-sm rounded-xs border border-border bg-canvas text-body text-text-primary tabular-nums"
+                      className="tabular-nums"
                     />
                   </div>
                 </div>
@@ -973,7 +990,7 @@ export default function StudioPage() {
             </div>
 
             <Card className="p-lg space-y-sm shrink-0">
-              <p className="text-label text-text-secondary">Export</p>
+              <SectionLabel>Export</SectionLabel>
               <Button className="w-full" onClick={exportPng} disabled={exporting !== null || !frame}>
                 Download this frame (PNG)
               </Button>
@@ -1029,6 +1046,11 @@ function quietest(frames: Frame[]): string {
   if (scored.length === 0) return '—'
   const low = scored.reduce((a, b) => (a.jamFactorAvg! <= b.jamFactorAvg! ? a : b))
   return `${low.time} · ${low.jamFactorAvg!.toFixed(2)}`
+}
+
+/** Every card's heading, in one style, so the drawer reads as one set of controls. */
+function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <p className={cn('text-label font-semibold text-text-primary', className)}>{children}</p>
 }
 
 function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {

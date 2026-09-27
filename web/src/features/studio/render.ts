@@ -14,137 +14,228 @@
  */
 
 import type { SlimTraffic } from './api'
+import { drawVectorBasemap, type VectorPalette } from './vector-tiles'
 
 const TILE_SIZE = 256
 
 // --- map themes ------------------------------------------------------------------
 
 export type MapThemeCategory = 'standard' | 'artistic'
-export type BasemapSource = 'osm' | 'satellite'
+export type BasemapSource = 'vector' | 'satellite'
 
 export interface MapTheme {
   id: string
   name: string
   category: MapThemeCategory
   basemap: BasemapSource
-  /** CSS filter applied to the basemap tiles only — traffic and text sit above it. */
-  basemapFilter: string
-  /** Canvas ground colour, visible where no tile has loaded and behind transparent PNG edges. */
+  /** The street map's colours — every vector theme is this palette and nothing else. */
+  palette?: VectorPalette
+  /** CSS filter over the satellite imagery. Raster only: vector themes are coloured by palette. */
+  rasterFilter?: string
+  /** Canvas ground, under the basemap and wherever a tile failed to load. */
   background: string
-  /** Multiplies the road stroke width — artistic looks read better with a bolder line. */
+  /**
+   * The line under each traffic road, 2px wider. MapToPoster draws its route line the
+   * same way: over a map this dense, a coloured line needs an edge in the ground colour
+   * or it dissolves into the streets around it.
+   */
+  casing: string
+  /** Multiplies the traffic stroke width. */
   strokeScale: number
   overlayText: string
   overlaySub: string
-  /**
-   * A colour wash over the finished composition — basemap, traffic and text alike —
-   * blended in rather than applied as a filter. A CSS filter on the basemap alone
-   * cannot touch the traffic lines without also breaking the "standard" congestion
-   * colours (see CONGESTION_THEMES), so an artistic identity that wants to tint
-   * everything has to be a glaze applied last, over the whole canvas.
-   */
-  wash?: { color: string; blend: GlobalCompositeOperation; opacity: number }
+  /** Four colours for the overlapping circles on the theme's picker card. */
+  swatch: string[]
+  /** One line describing the look, shown under the picker for the selected theme. */
+  caption: string
+}
+
+type VectorThemeSpec = Omit<MapTheme, 'basemap' | 'swatch' | 'background'> & { palette: VectorPalette }
+
+/** A vector theme's card swatch is its own palette: ground, motorway, primary, water. */
+function vectorTheme(spec: VectorThemeSpec): MapTheme {
+  const { palette } = spec
+  return {
+    ...spec,
+    basemap: 'vector',
+    background: palette.bg,
+    swatch: [palette.bg, palette.roads.motorway, palette.roads.primary, palette.water],
+  }
 }
 
 /**
- * Standard/Artistic mirrors the reference the brief named
- * (maptoposter.tarmizi.id's Map Style panel): standard themes are a literal
- * representation of the basemap and are safe defaults; artistic ones commit to a
- * mood. Every dark theme is OSM's own tiles run through a CSS filter — the same
- * `invert → hue-rotate → dim` trick the live app map already uses in
- * `.maceut-map-dark` — so "dark" means the same thing everywhere in the product.
+ * Standard/Artistic mirrors maptoposter.tarmizi.id's Map Style panel, and so does the
+ * way a theme is built: a palette over OpenStreetMap's vector roads, water and parks
+ * (see vector-tiles.ts). Standard is the plain reading; Artistic commits to a mood.
+ * Cyber Glitch's palette is adapted from MapToPoster's MIT-licensed `cyber_noir`
+ * (github.com/dimartarmizi/map-to-poster).
  *
- * Order for the filter chain matters and is easy to get backwards: `invert` must
- * come before `brightness`/`contrast`, or a dark result gets re-lightened. That bug
- * shipped once already (see the SPRINT.md entry for 2026-09-23) and is exactly why
- * this comment exists.
+ * The previous generation of themes pushed OSM's raster tiles through CSS filter chains
+ * (invert → hue-rotate → dim). That could darken a map but never recolour its roads by
+ * class, and the small streets were lost in the process — which is exactly what this
+ * replaced. Only Satellite, being a photograph, still uses a filter.
  */
 export const MAP_THEMES: MapTheme[] = [
   // --- standard ---
-  {
+  vectorTheme({
     id: 'dark',
     name: 'Dark',
     category: 'standard',
-    basemap: 'osm',
-    basemapFilter: 'invert(1) hue-rotate(180deg) brightness(0.45) contrast(1.25) saturate(0.35)',
-    background: '#050505',
+    palette: {
+      bg: '#0d0e12',
+      water: '#1a2230',
+      parks: '#14181a',
+      roads: {
+        default: '#23252c',
+        minor: '#2c2f37',
+        tertiary: '#3a3d46',
+        secondary: '#4a4e58',
+        primary: '#62666f',
+        motorway: '#7c808a',
+      },
+    },
+    casing: '#0d0e12',
     strokeScale: 1,
     overlayText: '#ffffff',
     overlaySub: 'rgba(255,255,255,0.72)',
-  },
-  {
+    caption: 'Every street at night, dimmed so the traffic leads.',
+  }),
+  vectorTheme({
     id: 'daylight',
     name: 'Daylight',
     category: 'standard',
-    basemap: 'osm',
-    basemapFilter: 'saturate(0.5) brightness(1.03)',
-    background: '#f2f2f0',
+    palette: {
+      bg: '#f3f3f1',
+      water: '#dde3e8',
+      parks: '#e6e9e2',
+      roads: {
+        default: '#cfd0d3',
+        minor: '#bcbdc1',
+        tertiary: '#909297',
+        secondary: '#6e7075',
+        primary: '#4d4f55',
+        motorway: '#2f3136',
+      },
+    },
+    casing: '#f3f3f1',
     strokeScale: 1,
     overlayText: '#14171c',
     overlaySub: 'rgba(20,23,28,0.7)',
-  },
+    caption: 'Ink-grey streets on pale paper — the classic city print.',
+  }),
   {
     id: 'satellite',
     name: 'Satellite',
     category: 'standard',
     basemap: 'satellite',
     // Imagery is already photographic; a light grade keeps it legible under text
-    // and traffic rather than trying to force it into an invert-based palette that
-    // was designed for a flat-coloured street map.
-    basemapFilter: 'saturate(1.05) contrast(1.08) brightness(0.92)',
+    // and traffic rather than forcing it into a palette.
+    rasterFilter: 'saturate(1.05) contrast(1.08) brightness(0.92)',
     background: '#0a0a0a',
+    casing: 'rgba(0,0,0,0.6)',
     strokeScale: 1.1,
     overlayText: '#ffffff',
     overlaySub: 'rgba(255,255,255,0.8)',
+    swatch: ['#2e3b26', '#56613f', '#8a7a58', '#3f5b73'],
+    caption: 'Real imagery from above, with traffic drawn over the rooftops.',
   },
 
   // --- artistic ---
-  {
+  vectorTheme({
     id: 'default',
     name: 'Default',
     category: 'artistic',
-    basemap: 'osm',
-    basemapFilter: 'invert(1) hue-rotate(180deg) brightness(0.45) contrast(1.25) saturate(0.35)',
-    background: '#050505',
-    strokeScale: 1.15,
-    overlayText: '#ffffff',
-    overlaySub: 'rgba(255,255,255,0.72)',
-  },
-  {
+    palette: {
+      bg: '#16161a',
+      water: '#22262c',
+      parks: '#1b1d1f',
+      roads: {
+        default: '#34322e',
+        minor: '#47443e',
+        tertiary: '#7a756a',
+        secondary: '#a39d8f',
+        primary: '#cfc8b8',
+        motorway: '#f2ecdd',
+      },
+    },
+    casing: '#16161a',
+    strokeScale: 1.5,
+    overlayText: '#f5f1e6',
+    overlaySub: 'rgba(245,241,230,0.72)',
+    caption: 'Warm bone-white streets on charcoal.',
+  }),
+  vectorTheme({
     id: 'cyber-glitch',
     name: 'Cyber Glitch',
     category: 'artistic',
-    basemap: 'osm',
-    basemapFilter: 'invert(1) hue-rotate(260deg) saturate(2.4) brightness(0.42) contrast(1.6)',
-    background: '#050110',
-    strokeScale: 1.25,
+    palette: {
+      bg: '#0b0b16',
+      water: '#071020',
+      parks: '#111122',
+      roads: {
+        // Muted from MapToPoster's cyber_noir: at full brightness the cyan arterials
+        // outshone the traffic, and traffic is the one thing a Maceut map must lead
+        // with. The hierarchy is kept, just a few steps down.
+        default: '#082d33',
+        minor: '#0b434a',
+        tertiary: '#0d6168',
+        secondary: '#0e8088',
+        primary: '#139fae',
+        motorway: '#b21aa2',
+      },
+    },
+    casing: '#0b0b16',
+    strokeScale: 1.5,
     overlayText: '#e6faff',
-    overlaySub: 'rgba(140,255,255,0.85)',
-    wash: { color: '#ff00e6', blend: 'color-dodge', opacity: 0.1 },
-  },
-  {
+    overlaySub: 'rgba(0,229,229,0.85)',
+    caption: 'Magenta freeways cutting through a cyan grid.',
+  }),
+  vectorTheme({
     id: 'midnight-neon',
     name: 'Midnight Neon',
     category: 'artistic',
-    basemap: 'osm',
-    basemapFilter: 'invert(1) hue-rotate(195deg) brightness(0.38) contrast(1.3) saturate(0.95)',
-    background: '#020308',
-    strokeScale: 1.2,
+    palette: {
+      bg: '#05081c',
+      water: '#0a1433',
+      parks: '#0a1226',
+      roads: {
+        default: '#142060',
+        minor: '#1a2c80',
+        tertiary: '#2b4bd8',
+        secondary: '#3d6af0',
+        primary: '#5b8cff',
+        motorway: '#a9c4ff',
+      },
+    },
+    casing: '#05081c',
+    strokeScale: 1.5,
     overlayText: '#eaf1ff',
     overlaySub: 'rgba(160,190,255,0.82)',
-    wash: { color: '#3b6bff', blend: 'screen', opacity: 0.12 },
-  },
-  {
+    caption: 'A city at 2 a.m. — navy dark, lit by its own roads.',
+  }),
+  vectorTheme({
     id: 'sakura-bloom',
     name: 'Sakura Bloom',
     category: 'artistic',
-    basemap: 'osm',
-    basemapFilter: 'invert(1) hue-rotate(305deg) saturate(0.65) brightness(0.58) contrast(1.15)',
-    background: '#0c0509',
-    strokeScale: 1.15,
+    palette: {
+      bg: '#1e0b18',
+      water: '#3a1230',
+      parks: '#2a1022',
+      roads: {
+        default: '#431933',
+        minor: '#5c2446',
+        tertiary: '#8a3c64',
+        secondary: '#ad5283',
+        primary: '#cc6d9e',
+        motorway: '#e8a9c6',
+      },
+    },
+    casing: '#1e0b18',
+    strokeScale: 1.5,
     overlayText: '#ffe9f2',
     overlaySub: 'rgba(255,214,235,0.82)',
-    wash: { color: '#ffb6d9', blend: 'soft-light', opacity: 0.28 },
-  },
+    caption: 'Plum night and blossom-pink streets.',
+  }),
 ]
 
 // --- congestion themes -------------------------------------------------------------
@@ -278,7 +369,6 @@ export interface RenderInput {
   capturedAt: string
   zoneName: string
   theme: MapTheme
-  showBasemap: boolean
   congestion: CongestionTheme
   overlay: RenderOverlay
   view: RenderView
@@ -400,7 +490,6 @@ function loadTile(url: string): Promise<HTMLImageElement | null> {
   })
 }
 
-const OSM_TILE_URL = process.env.NEXT_PUBLIC_OSM_TILE_URL ?? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 /**
  * Esri's free World Imagery basemap — no API key, `Access-Control-Allow-Origin: *`
  * confirmed directly before this was wired in. Its path order is `{z}/{y}/{x}`,
@@ -410,12 +499,69 @@ const OSM_TILE_URL = process.env.NEXT_PUBLIC_OSM_TILE_URL ?? 'https://tile.opens
 const SATELLITE_TILE_URL =
   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
 
-function tileUrl(source: BasemapSource, z: number, x: number, y: number): string {
-  const template = source === 'satellite' ? SATELLITE_TILE_URL : OSM_TILE_URL
-  return template.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y))
+function satelliteTileUrl(z: number, x: number, y: number): string {
+  return SATELLITE_TILE_URL.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y))
 }
 
-async function drawBasemap(ctx: CanvasRenderingContext2D, v: Viewport, input: RenderInput) {
+/**
+ * Filtered basemap layers, keyed by theme and viewport.
+ *
+ * The basemap is the same from one frame to the next — only the traffic changes — but
+ * drawing it is the expensive part: thousands of vector road segments, or every
+ * satellite tile run through a CSS filter. At export resolution the filtered version
+ * measured ~700 ms per frame: far over the 250 ms a frame gets at 4×
+ * playback. Traffic is clipped to the zone polygon, so the viewport (fitted to the
+ * ring) is identical for every frame of a zone, and this cache hits for the whole of
+ * playback. Small, because each entry is a full-size canvas.
+ */
+const basemapLayers = new Map<string, HTMLCanvasElement>()
+const BASEMAP_LAYER_LIMIT = 4
+
+async function basemapLayer(v: Viewport, input: RenderInput): Promise<HTMLCanvasElement> {
+  const key = [
+    input.theme.id,
+    v.zoom,
+    Math.round(v.originX),
+    Math.round(v.originY),
+    input.width,
+    input.height,
+  ].join('|')
+  const hit = basemapLayers.get(key)
+  if (hit) return hit
+
+  const layer = document.createElement('canvas')
+  layer.width = input.width
+  layer.height = input.height
+  const lctx = layer.getContext('2d')
+  if (!lctx) return layer
+  let complete: boolean
+  if (input.theme.basemap === 'vector' && input.theme.palette) {
+    complete = await drawVectorBasemap(
+      lctx,
+      { zoom: v.zoom, originX: v.originX, originY: v.originY, width: input.width, height: input.height },
+      input.theme.palette,
+    )
+  } else {
+    // The filter sits on the basemap layer alone. Applying it to the whole canvas
+    // would push the traffic colours through it too, and a congestion theme's
+    // "congested" red run through a filter is no longer the red its legend promises.
+    if (input.theme.rasterFilter) lctx.filter = input.theme.rasterFilter
+    complete = await drawSatellite(lctx, v, input)
+  }
+
+  // Only a layer with every tile in it is worth keeping — caching one with a gap
+  // would freeze the gap into every later frame.
+  if (complete) {
+    basemapLayers.set(key, layer)
+    if (basemapLayers.size > BASEMAP_LAYER_LIMIT) {
+      basemapLayers.delete(basemapLayers.keys().next().value!)
+    }
+  }
+  return layer
+}
+
+/** Draws the tiles for `v`. Resolves true when every tile loaded. */
+async function drawSatellite(ctx: CanvasRenderingContext2D, v: Viewport, input: RenderInput): Promise<boolean> {
   const first = { x: Math.floor(v.originX / TILE_SIZE), y: Math.floor(v.originY / TILE_SIZE) }
   const last = {
     x: Math.floor((v.originX + input.width) / TILE_SIZE),
@@ -423,22 +569,24 @@ async function drawBasemap(ctx: CanvasRenderingContext2D, v: Viewport, input: Re
   }
   const max = 2 ** v.zoom
 
-  const jobs: Promise<void>[] = []
+  const jobs: Promise<boolean>[] = []
   for (let x = first.x; x <= last.x; x++) {
     for (let y = first.y; y <= last.y; y++) {
       if (y < 0 || y >= max) continue
       const wrapped = ((x % max) + max) % max
-      const url = tileUrl(input.theme.basemap, v.zoom, wrapped, y)
+      const url = satelliteTileUrl(v.zoom, wrapped, y)
       const dx = x * TILE_SIZE - v.originX
       const dy = y * TILE_SIZE - v.originY
       jobs.push(
         loadTile(url).then((img) => {
-          if (img) ctx.drawImage(img, dx, dy, TILE_SIZE, TILE_SIZE)
+          if (!img) return false
+          ctx.drawImage(img, dx, dy, TILE_SIZE, TILE_SIZE)
+          return true
         }),
       )
     }
   }
-  await Promise.all(jobs)
+  return (await Promise.all(jobs)).every(Boolean)
 }
 
 // --- overlays ------------------------------------------------------------------
@@ -513,19 +661,33 @@ function drawText(ctx: CanvasRenderingContext2D, input: RenderInput) {
         ? anchor.y - totalHeight + lines[0]!.size
         : anchor.y - totalHeight / 2 + lines[0]!.size
 
+  ctx.save()
   ctx.textAlign = anchor.align
-  ctx.shadowColor = 'rgba(0,0,0,0.55)'
-  ctx.shadowBlur = unit
+  ctx.lineJoin = 'round'
+  // The caption sits on a dense street grid, so each line gets a halo in the map's
+  // own ground colour: the streets stop just short of the letters, the way printed
+  // city maps knock out the roads under a label. Satellite has no single ground
+  // colour to use, so imagery keeps a soft dark shadow instead.
+  const halo = input.theme.basemap === 'vector'
+  if (!halo) {
+    ctx.shadowColor = 'rgba(0,0,0,0.55)'
+    ctx.shadowBlur = unit
+  }
 
   for (const line of lines) {
-    ctx.fillStyle = line.color
     ctx.font = `${line.weight} ${line.size}px ui-sans-serif, system-ui, sans-serif`
+    if (halo) {
+      ctx.strokeStyle = theme.background
+      // Floored on the caption's unit, not the line's own size: a halo proportional to
+      // the small date line was too thin to stop a main road cutting between its words.
+      ctx.lineWidth = Math.max(line.size * 0.28, unit * 0.7, 3)
+      ctx.strokeText(line.text, anchor.x, y)
+    }
+    ctx.fillStyle = line.color
     ctx.fillText(line.text, anchor.x, y)
     y += line.size * 1.15 + line.gapAfter
   }
-
-  ctx.shadowBlur = 0
-  ctx.textAlign = 'left'
+  ctx.restore()
 }
 
 function drawLegend(ctx: CanvasRenderingContext2D, input: RenderInput) {
@@ -569,20 +731,7 @@ export async function renderCapture(canvas: HTMLCanvasElement, input: RenderInpu
 
   const v = computeViewport(boundsOf(input), input.width, input.height, input.view)
 
-  if (input.showBasemap) {
-    if (input.theme.basemapFilter !== 'none') {
-      ctx.save()
-      // The filter sits on the basemap layer alone. Applying it to the whole canvas
-      // would push the traffic colours through it too, and a congestion theme's
-      // "congested" red run through a hue-rotate is no longer the red its own
-      // legend promises.
-      ctx.filter = input.theme.basemapFilter
-      await drawBasemap(ctx, v, input)
-      ctx.restore()
-    } else {
-      await drawBasemap(ctx, v, input)
-    }
-  }
+  ctx.drawImage(await basemapLayer(v, input), 0, 0)
 
   if (input.overlay.boundary && input.ring && input.ring.length >= 3) {
     ctx.save()
@@ -601,41 +750,91 @@ export async function renderCapture(canvas: HTMLCanvasElement, input: RenderInpu
     ctx.restore()
   }
 
-  // Traffic last among the map layers, so a road is never hidden by the boundary fill.
-  const weight = Math.max((input.height / 300) * input.theme.strokeScale, 1.5)
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
-  for (const feature of input.traffic?.features ?? []) {
-    if (feature.c.length < 2) continue
-    ctx.beginPath()
-    feature.c.forEach(([lng, lat], i) => {
-      const [x, y] = project(lng, lat, v)
-      if (i === 0) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-    })
-    // Remapped through the active congestion theme. `feature.k` is always one of
-    // BR-017's four hexes; an unrecognised value (there should be none) falls back
-    // to itself rather than vanishing.
-    ctx.strokeStyle = input.congestion.map[feature.k] ?? feature.k
-    ctx.lineWidth = weight
-    ctx.stroke()
-  }
+  drawTraffic(ctx, input, v)
 
   if (input.overlay.showText) drawText(ctx, input)
   if (input.overlay.legend) drawLegend(ctx, input)
+  drawAttribution(ctx, input)
+}
 
-  // The theme's wash, if it has one — a colour glaze over EVERYTHING drawn so far,
-  // basemap and traffic and text alike. Deliberately last: a filter earlier in the
-  // pipeline can only touch what is drawn after it, and an artistic identity that
-  // wants to unify the whole poster has to grade the whole poster, not just the map.
-  if (input.theme.wash) {
-    ctx.save()
-    ctx.globalCompositeOperation = input.theme.wash.blend
-    ctx.globalAlpha = input.theme.wash.opacity
-    ctx.fillStyle = input.theme.wash.color
-    ctx.fillRect(0, 0, input.width, input.height)
-    ctx.restore()
+/**
+ * Traffic last among the map layers, so a road is never hidden by the boundary fill.
+ *
+ * Two passes, the way MapToPoster draws its route: every road's casing (ground colour,
+ * a little wider) first, then every coloured line. Casings all go down before any
+ * colour so one road's casing never cuts through the colour of a road it crosses.
+ * Lines are batched into one path per colour — four strokes, not thousands.
+ */
+function drawTraffic(ctx: CanvasRenderingContext2D, input: RenderInput, v: Viewport) {
+  const weight = Math.max((input.height / 300) * input.theme.strokeScale, 1.5)
+  const casing = new Path2D()
+  const byColour = new Map<string, Path2D>()
+
+  for (const feature of input.traffic?.features ?? []) {
+    if (feature.c.length < 2) continue
+    // Remapped through the active congestion theme. `feature.k` is always one of
+    // BR-017's four hexes; an unrecognised value (there should be none) falls back to
+    // itself rather than vanishing.
+    const colour = input.congestion.map[feature.k] ?? feature.k
+    let path = byColour.get(colour)
+    if (!path) {
+      path = new Path2D()
+      byColour.set(colour, path)
+    }
+    feature.c.forEach(([lng, lat], i) => {
+      const [x, y] = project(lng, lat, v)
+      if (i === 0) {
+        casing.moveTo(x, y)
+        path.moveTo(x, y)
+      } else {
+        casing.lineTo(x, y)
+        path.lineTo(x, y)
+      }
+    })
   }
+
+  ctx.save()
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.strokeStyle = input.theme.casing
+  ctx.lineWidth = weight + Math.max(input.height / 500, 2)
+  ctx.stroke(casing)
+  ctx.lineWidth = weight
+  for (const [colour, path] of byColour) {
+    ctx.strokeStyle = colour
+    ctx.stroke(path)
+  }
+  ctx.restore()
+}
+
+/**
+ * The map's credit, small in the bottom-right corner. Not optional: OpenStreetMap's
+ * ODbL licence requires attribution on published maps, and Esri's imagery terms do the
+ * same. Earlier exports carried none.
+ */
+function drawAttribution(ctx: CanvasRenderingContext2D, input: RenderInput) {
+  const text =
+    input.theme.basemap === 'satellite'
+      ? 'Imagery © Esri, Maxar, Earthstar Geographics'
+      : '© OpenStreetMap contributors · OpenFreeMap'
+  const size = Math.max(Math.round(input.height / 90), 9)
+  ctx.save()
+  ctx.font = `500 ${size}px ui-sans-serif, system-ui, sans-serif`
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'bottom'
+  const x = input.width - Math.round(input.width * 0.012)
+  const y = input.height - Math.round(input.height * 0.012)
+  if (input.theme.basemap === 'vector') {
+    // Same knock-out halo as the caption, so it stays legible over a busy street.
+    ctx.lineJoin = 'round'
+    ctx.strokeStyle = input.theme.background
+    ctx.lineWidth = Math.max(size * 0.35, 2)
+    ctx.strokeText(text, x, y)
+  }
+  ctx.globalAlpha = 0.85
+  ctx.fillStyle = input.theme.overlaySub
+  ctx.fillText(text, x, y)
+  ctx.restore()
 }
 
 /**

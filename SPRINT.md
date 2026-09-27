@@ -104,6 +104,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-11** Detail zona: legenda jam factor, Trigger jadi Auto/Manual, kolom Time diisi | permintaan user |
 | ✅ | **FE-12** Studio: renderer canvas — PNG per frame, WebM animasi, 5 style, toggle layer | permintaan user |
 | ✅ | **FE-13** Studio: rentang waktu (start/end), ekspor banyak gambar (ZIP), viewer capture lebih cepat | permintaan user |
+| ✅ | **FE-15** Studio: basemap vektor bergaya (OpenFreeMap, gaya MapToPoster), kartu tema swatch, preview di resolusi ekspor | permintaan user |
 | ✅ | **FE-14** Studio: panel style dipecah 5 bagian (map theme, congestion theme, zoom position, overlay, output size); tema satelit + artistik, pan/zoom manual | permintaan user |
 | 🔴 | **CAP-02** Playwright: render otomatis PNG per capture ke R2 (BR-009/BR-018) — canvas renderer siap dipakai ulang | zone-management Phase 3 |
 | ✅ | **BE-16** Scheduler: jendela aktif mem-publish job tiap menit (tanpa dependency baru, ADR-023) | capture-schedule/requirements.md |
@@ -1258,6 +1259,66 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   (scrollHeight 1331 > clientHeight 628) sementara canvas peta diam; sticky drawer
   aktif saat halaman digulir; Export tetap di bawah; slider zoom `max=10` menampilkan
   "+10" dan memperbesar peta. Nol error console. tsc + eslint bersih.
+
+[2026-09-27] Studio: basemap vektor bergaya — tampilan MapToPoster, jalan kecil terlihat.
+
+  RISET maptoposter.tarmizi.id (MIT, github.com/dimartarmizi/map-to-poster). Rahasianya
+  lebih kecil dari kelihatannya: BUKAN gambar tile, tapi TILE VEKTOR OSM dari OpenFreeMap
+  (gratis, tanpa key, `Access-Control-Allow-Origin: *` — dicek dengan curl sebelum
+  dipakai), dan style-nya minimal: latar, air, taman, dan jaringan jalan dipecah per
+  kelas (motorway → minor), tiap kelas satu warna. Tanpa label, tanpa gedung. Tema = palet.
+  Tile raster tidak bisa begitu — warnanya sudah terpanggang di gambar — itu sebabnya
+  tema lama harus memaksa tile OSM lewat filter CSS dan jalan kecilnya hilang.
+
+  DIBANGUN SENDIRI, BUKAN MAPLIBRE (keputusan user). `studio/vector-tiles.ts`: pembaca
+  protobuf (~150 baris) + decoder Mapbox Vector Tile yang hanya membuka layer `water`,
+  `park`, `transportation` — gedung/label/POI dilewati per byte-range tanpa di-decode.
+  Digambar ke canvas yang sama dengan semua hal lain, jadi preview tetap persis ekspor
+  dan tidak ada dependency baru. DIUJI pada tile Jakarta z14 sungguhan (460 KB): decode
+  19 ms, 1.737 jalan minor, 359 primary, 31 badan air, nol koordinat di luar buffer.
+  Catatan skema: OpenMapTiles memakai kelas `minor`, bukan `residential` — style
+  MapToPoster sendiri memfilter `residential` yang tidak pernah cocok.
+
+  SEMUA TEMA KECUALI SATELIT kini peta vektor dengan paletnya sendiri (Dark, Daylight,
+  Default, Cyber Glitch, Midnight Neon, Sakura Bloom — nama dari user). Ini MEMBALIK
+  keputusan sesi sebelumnya ("Artistic tanpa basemap") atas permintaan user. Percobaan
+  glow/wash/gradient dibuang seluruhnya — user menilai pendekatannya buruk, dan ukurannya
+  juga: blur menambah ~60 ms per frame. Satelit tetap citra Esri.
+
+  TRAFFIC HARUS TETAP MEMIMPIN. Tiap jalan traffic digambar di atas casing warna latar
+  (cara MapToPoster menggambar rute-nya), casing semua jalan dulu baru warnanya, dibatch
+  per warna (4 stroke, bukan ribuan). Palet Cyber Glitch & Sakura Bloom DIREDUPKAN
+  setelah verifikasi: arteri cyan terang mengalahkan garis traffic. Warna traffic tetap
+  milik Congestion theme (BR-017).
+
+  CAPTION diberi halo "knock-out" warna latar (jalan berhenti tepat sebelum huruf, seperti
+  peta cetak), bukan drop shadow; satelit tetap shadow. Tebal halo diberi batas bawah dari
+  unit caption — halo proporsional ke baris tanggal yang kecil terlalu tipis dan jalan
+  utama masih memotong di antara kata.
+
+  ATRIBUSI ditambahkan di setiap gambar ("© OpenStreetMap contributors · OpenFreeMap" /
+  "Imagery © Esri, Maxar, Earthstar Geographics"). Wajib menurut lisensi ODbL OSM —
+  ekspor sebelumnya TIDAK punya atribusi sama sekali. Terbaca di file ekspor; di preview
+  (gambar yang sama diperkecil ~46%) terlalu kecil untuk dibaca — itu konsekuensi preview
+  = ekspor, bukan bug.
+
+  PERFORMA: cache layer basemap per (tema, viewport, ukuran) — basemap sama di setiap
+  frame, hanya traffic yang berubah. Tanpa cache, Dark versi filter lama makan ~700 ms per
+  frame di 4× (preview kini di ukuran ekspor). Dengan cache + vektor: 4× playback 17 frame
+  dalam 5 detik, NOL long task di Daylight & Cyber Glitch.
+
+  JUGA DI RONDE INI: kartu tema gaya gambar referensi user (segmented control, lingkaran
+  swatch dari palet, caption miring); preview dirender di ukuran ekspor (maks 2400px) —
+  preview 960px sebelumnya memilih zoom tile lebih rendah dari ekspor, jadi menampilkan
+  detail lebih sedikit dari file yang diunduh; bug tile-sobek diperbaiki tuntas (canvas
+  scratch BARU per render — perbaikan pertama berbagi satu canvas dan tile basi masih
+  mendarat tanpa filter); satu gaya heading (`SectionLabel`); Select tanpa lebar kini
+  `w-full`; input ukuran custom pakai `Input` bersama; label Start/End kini benar
+  terhubung; "Congestion through the day" pindah ke paling bawah.
+
+  Diverifikasi di headless Chrome berulang kali (akun + zona Sudirman Wide, capture
+  nyata): 7 tema, tanpa seam antar tile, ekspor 1600×1000, nol error console dari Studio,
+  nol request gagal ke openfreemap.org. tsc + eslint bersih.
 
 ---
 
