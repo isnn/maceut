@@ -104,6 +104,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-11** Detail zona: legenda jam factor, Trigger jadi Auto/Manual, kolom Time diisi | permintaan user |
 | ✅ | **FE-12** Studio: renderer canvas — PNG per frame, WebM animasi, 5 style, toggle layer | permintaan user |
 | ✅ | **FE-13** Studio: rentang waktu (start/end), ekspor banyak gambar (ZIP), viewer capture lebih cepat | permintaan user |
+| ✅ | **FE-16** Studio: zoom halus + roda mouse, pan bebas di semua zoom, jalan kecil dinamis, palet MapToPoster persis, congestion theme kartu, ukuran & drag teks | permintaan user |
 | ✅ | **FE-15** Studio: basemap vektor bergaya (OpenFreeMap, gaya MapToPoster), kartu tema swatch, preview di resolusi ekspor | permintaan user |
 | ✅ | **FE-14** Studio: panel style dipecah 5 bagian (map theme, congestion theme, zoom position, overlay, output size); tema satelit + artistik, pan/zoom manual | permintaan user |
 | 🔴 | **CAP-02** Playwright: render otomatis PNG per capture ke R2 (BR-009/BR-018) — canvas renderer siap dipakai ulang | zone-management Phase 3 |
@@ -1319,6 +1320,59 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   Diverifikasi di headless Chrome berulang kali (akun + zona Sudirman Wide, capture
   nyata): 7 tema, tanpa seam antar tile, ekspor 1600×1000, nol error console dari Studio,
   nol request gagal ke openfreemap.org. tsc + eslint bersih.
+
+[2026-09-27b] Studio: zoom halus, pan bebas, jalan dinamis, teks gaya MapToPoster yang bisa digeser.
+
+  PAN "TERKUNCI" DI ZOOM TINGGI — BUG. Pan disimpan sebagai fraksi dari view SAAT INI dan
+  di-clamp ±0,6; di +4 itu hanya secuil zona. Kini pan disimpan dalam satuan view hasil
+  auto-fit (jarak geografis tetap di semua zoom), batas ±1,5 zona, dan drag dibagi faktor
+  zoom sehingga peta mengikuti pointer 1:1. Zoom setelah pan tidak lagi melompat.
+
+  TAB BROWSER BISA CRASH saat menggeser peta — ditemukan verifikasi, bukan user. Setiap
+  pointermove memulai render penuh 1600×1000 yang tidak pernah dibatalkan; drag cepat
+  menumpuk puluhan render sampai memori habis. Dua perbaikan: (1) selama drag, gambar
+  terakhir cuma digeser lewat CSS transform, render sungguhan sekali saat dilepas (dan
+  geseran bertahan sampai render baru tampil, jadi tidak ada snap-back); (2) antrian
+  render preview: satu berjalan, hanya permintaan TERBARU yang menyusul. User
+  mengonfirmasi drag di +4 ke atas lancar.
+
+  ZOOM: batas absolut 18 membuat separuh atas slider mati. Vektor kini sampai z22
+  (geometri di-overzoom tanpa blur), satelit z19 (lewat itu Esri memberi placeholder).
+  Rentang slider dihitung dari zona & ukuran (`zoomLimits`) — tidak ada langkah mati.
+  Zoom kini PECAHAN: slider ¼ langkah dan roda mouse (menuju kursor — titik di bawah
+  pointer tetap di bawahnya). Tile tetap di zoom bulat; sisanya ditanggung skala
+  (vektor tajam, satelit diskalakan maksimal 2×).
+
+  JALAN KECIL DINAMIS: tiap kelas punya zoom minimum (jalan kecil z13, path/service z14)
+  dengan fade kontinu satu langkah di bawahnya; tebal garis tumbuh ×~1,6 per langkah
+  (versi pertama ×1,27, dicap 2,4× — terlihat seperti kerangka kawat saat zoom in).
+  Garis traffic ikut menebal separuh laju, jadi saat dekat terbaca sebagai garis tengah.
+
+  CYBER GLITCH & SAKURA BLOOM = palet MapToPoster PERSIS (`cyber_glitch`, `sakura_bloom`
+  dari bundle mereka, MIT). Satu detail: style mereka mewarnai kelas `residential` yang
+  tidak pernah ada di OpenMapTiles, jadi di situs mereka jalan kecil tergambar dengan
+  warna `road_default` — itu yang disalin, bukan konfigurasinya. Sakura Bloom kini tema
+  TERANG, seperti aslinya. Ditambah VIGNETTE mereka (default `overlayBgType`): warna latar
+  memudar di atas & bawah (solid 3%, bening di 20%, balik dari 80%) — di bawah traffic,
+  jadi tidak ada kemacetan yang ikut pudar.
+
+  CONGESTION THEME kini kartu swatch seperti map theme (komponen `SwatchCard` bersama).
+
+  TEKS mengikuti sistem MapToPoster: nama zona serif tebal ber-tracking 0,25em, garis
+  tipis 128px, lalu "HH:MM WIB" dan "HARI · TANGGAL" ber-tracking 0,4em; skala dari
+  1080px sisi pendek, jarak 12px antar baris, 48px dari tepi. Ukuran None/S/M/L
+  (0,75/1/1,35 — preset mereka; None = sembunyi). Blok bisa DIGESER bebas (hit-test
+  memakai layout yang sama dengan gambar, jadi area pegangan = teks persis), tertahan di
+  margin tepi; preset posisi tetap ada. Halo diperlebar sesuai tracking — halo lama
+  membiarkan jalan tampak di sela huruf tanggal.
+
+  TEKS PANDUAN DIHAPUS dari panel (caption tema, penjelasan congestion, "Drag the
+  preview…", "N of M frames selected"). Yang tersisa hanya nilai (1600 × 1000, zoom).
+
+  Diverifikasi: headless Chrome (pan 1:1 terukur, zoom +2→+3 tetap di pusat yang sama,
+  ekspor = preview 0 pixel beda, caption di posisi yang ditaruh) + uji manual user (drag
+  di zoom tinggi, halo tanggal). tsc + eslint bersih. Roda mouse & slider ¼ langkah
+  ditambahkan setelah uji user — belum diuji ulang di browser.
 
 ---
 

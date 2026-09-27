@@ -46,6 +46,39 @@ const ROAD_WIDTH: Record<RoadBucket, number> = {
   motorway: 2.2,
 }
 
+/**
+ * The zoom (on our 256px grid) at which each class appears. Below it the class is
+ * dropped; one level below, it is drawn faint — so zooming out thins the network out
+ * gradually instead of collapsing into a solid mesh of hairlines, and zooming in brings
+ * the small streets back. The main roads are always drawn: they are what gives a city
+ * its shape at any scale.
+ */
+const ROAD_MIN_ZOOM: Record<RoadBucket, number> = {
+  default: 14,
+  minor: 13,
+  tertiary: 11,
+  secondary: 0,
+  primary: 0,
+  motorway: 0,
+}
+
+function roadOpacity(bucket: RoadBucket, zoom: number): number {
+  const min = ROAD_MIN_ZOOM[bucket]
+  // A ramp over the zoom step below `min`, so with fractional zoom (wheel, fine slider)
+  // the small streets fade in continuously instead of popping on at one notch.
+  return Math.min(Math.max(zoom - (min - 1), 0), 1)
+}
+
+/**
+ * Line weight grows with zoom, as it does on any slippy map: a street drawn at its
+ * city-scale width looks like a thread once you're looking at a few blocks. ×~1.6 per
+ * step, anchored so z14 is exactly MapToPoster's weight. The first version grew only
+ * ×1.27 per step and capped at 2.4×, so zoomed in the map read as a hairline wireframe.
+ */
+export function roadWidthScale(zoom: number): number {
+  return Math.min(Math.max(2 ** ((zoom - 14) * 0.7), 0.6), 14)
+}
+
 /** Smallest first, so the arterials are drawn over the streets that meet them. */
 const ROAD_ORDER: RoadBucket[] = ['default', 'minor', 'tertiary', 'secondary', 'primary', 'motorway']
 
@@ -352,7 +385,9 @@ export async function drawVectorBasemap(
 ): Promise<boolean> {
   // One zoom below the render's: our grid is 256px tiles, OpenMapTiles is built for
   // 512px, so this is the detail MapLibre itself would show — at a quarter the tiles.
-  const tz = Math.min(Math.max(view.zoom - 1, 0), MAX_TILE_ZOOM)
+  // Floored: the render zoom can be fractional, tiles only exist at whole zooms. The
+  // remainder is taken up by `tilePx`, and vector geometry scales without blurring.
+  const tz = Math.min(Math.max(Math.floor(view.zoom) - 1, 0), MAX_TILE_ZOOM)
   const tilePx = 256 * 2 ** (view.zoom - tz)
   const max = 2 ** tz
 
@@ -371,7 +406,7 @@ export async function drawVectorBasemap(
   ctx.fillStyle = palette.bg
   ctx.fillRect(0, 0, view.width, view.height)
 
-  const lineScale = Math.max(Math.min(view.width, view.height) / 1000, 0.5)
+  const lineScale = Math.max(Math.min(view.width, view.height) / 1000, 0.5) * roadWidthScale(view.zoom)
 
   /**
    * Layer by layer across ALL tiles, not tile by tile — otherwise the water in one
@@ -409,11 +444,14 @@ export async function drawVectorBasemap(
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   for (const bucket of ROAD_ORDER) {
+    const opacity = roadOpacity(bucket, view.zoom)
+    if (opacity === 0) continue
     eachTile((tile, dx, dy, k) => {
       const lines = tile.roads[bucket]
       if (lines.length === 0) return
       ctx.beginPath()
       for (const line of lines) tracePath(ctx, line, dx, dy, k)
+      ctx.globalAlpha = opacity
       ctx.strokeStyle = palette.roads[bucket]
       ctx.lineWidth = ROAD_WIDTH[bucket] * lineScale
       ctx.stroke()

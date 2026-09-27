@@ -14,7 +14,7 @@
  */
 
 import type { SlimTraffic } from './api'
-import { drawVectorBasemap, type VectorPalette } from './vector-tiles'
+import { drawVectorBasemap, roadWidthScale, type VectorPalette } from './vector-tiles'
 
 const TILE_SIZE = 256
 
@@ -46,8 +46,6 @@ export interface MapTheme {
   overlaySub: string
   /** Four colours for the overlapping circles on the theme's picker card. */
   swatch: string[]
-  /** One line describing the look, shown under the picker for the selected theme. */
-  caption: string
 }
 
 type VectorThemeSpec = Omit<MapTheme, 'basemap' | 'swatch' | 'background'> & { palette: VectorPalette }
@@ -98,7 +96,6 @@ export const MAP_THEMES: MapTheme[] = [
     strokeScale: 1,
     overlayText: '#ffffff',
     overlaySub: 'rgba(255,255,255,0.72)',
-    caption: 'Every street at night, dimmed so the traffic leads.',
   }),
   vectorTheme({
     id: 'daylight',
@@ -121,7 +118,6 @@ export const MAP_THEMES: MapTheme[] = [
     strokeScale: 1,
     overlayText: '#14171c',
     overlaySub: 'rgba(20,23,28,0.7)',
-    caption: 'Ink-grey streets on pale paper — the classic city print.',
   }),
   {
     id: 'satellite',
@@ -137,7 +133,6 @@ export const MAP_THEMES: MapTheme[] = [
     overlayText: '#ffffff',
     overlaySub: 'rgba(255,255,255,0.8)',
     swatch: ['#2e3b26', '#56613f', '#8a7a58', '#3f5b73'],
-    caption: 'Real imagery from above, with traffic drawn over the rooftops.',
   },
 
   // --- artistic ---
@@ -162,33 +157,32 @@ export const MAP_THEMES: MapTheme[] = [
     strokeScale: 1.5,
     overlayText: '#f5f1e6',
     overlaySub: 'rgba(245,241,230,0.72)',
-    caption: 'Warm bone-white streets on charcoal.',
   }),
   vectorTheme({
     id: 'cyber-glitch',
     name: 'Cyber Glitch',
     category: 'artistic',
+    // MapToPoster's own `cyber_glitch`, colour for colour. `minor` takes their
+    // road_default, not their road_residential: their style filters on a `residential`
+    // class OpenMapTiles never emits, so on their site every small street is drawn in
+    // the default colour — and that is the look being copied.
     palette: {
-      bg: '#0b0b16',
-      water: '#071020',
-      parks: '#111122',
+      bg: '#2e1065',
+      water: '#4c1d95',
+      parks: '#581c87',
       roads: {
-        // Muted from MapToPoster's cyber_noir: at full brightness the cyan arterials
-        // outshone the traffic, and traffic is the one thing a Maceut map must lead
-        // with. The hierarchy is kept, just a few steps down.
-        default: '#082d33',
-        minor: '#0b434a',
-        tertiary: '#0d6168',
-        secondary: '#0e8088',
-        primary: '#139fae',
-        motorway: '#b21aa2',
+        default: '#a855f7',
+        minor: '#a855f7',
+        tertiary: '#c084fc',
+        secondary: '#a855f7',
+        primary: '#eab308',
+        motorway: '#facc15',
       },
     },
-    casing: '#0b0b16',
+    casing: '#2e1065',
     strokeScale: 1.5,
-    overlayText: '#e6faff',
-    overlaySub: 'rgba(0,229,229,0.85)',
-    caption: 'Magenta freeways cutting through a cyan grid.',
+    overlayText: '#f0abfc',
+    overlaySub: 'rgba(240,171,252,0.8)',
   }),
   vectorTheme({
     id: 'midnight-neon',
@@ -211,30 +205,30 @@ export const MAP_THEMES: MapTheme[] = [
     strokeScale: 1.5,
     overlayText: '#eaf1ff',
     overlaySub: 'rgba(160,190,255,0.82)',
-    caption: 'A city at 2 a.m. — navy dark, lit by its own roads.',
   }),
   vectorTheme({
     id: 'sakura-bloom',
     name: 'Sakura Bloom',
     category: 'artistic',
+    // MapToPoster's own `sakura_bloom` — a light theme there, so it is one here too.
+    // Same road_default-for-minor note as Cyber Glitch.
     palette: {
-      bg: '#1e0b18',
-      water: '#3a1230',
-      parks: '#2a1022',
+      bg: '#fff1f2',
+      water: '#ffe4e6',
+      parks: '#fbcfe8',
       roads: {
-        default: '#431933',
-        minor: '#5c2446',
-        tertiary: '#8a3c64',
-        secondary: '#ad5283',
-        primary: '#cc6d9e',
-        motorway: '#e8a9c6',
+        default: '#f9a8d4',
+        minor: '#f9a8d4',
+        tertiary: '#f472b6',
+        secondary: '#f9a8d4',
+        primary: '#fda4af',
+        motorway: '#fb7185',
       },
     },
-    casing: '#1e0b18',
+    casing: '#fff1f2',
     strokeScale: 1.5,
-    overlayText: '#ffe9f2',
-    overlaySub: 'rgba(255,214,235,0.82)',
-    caption: 'Plum night and blossom-pink streets.',
+    overlayText: '#881337',
+    overlaySub: 'rgba(136,19,55,0.75)',
   }),
 ]
 
@@ -276,7 +270,7 @@ function bandsFor(map: Record<string, string>): CongestionTheme['bands'] {
 export const CONGESTION_THEMES: CongestionTheme[] = [
   {
     id: 'standard',
-    name: 'Standard (BR-017)',
+    name: 'Standard',
     map: {
       [BR017_HEX.normal]: BR017_HEX.normal,
       [BR017_HEX.slow]: BR017_HEX.slow,
@@ -327,32 +321,61 @@ export const MAX_OUTPUT_PX = 4000
 
 // --- overlay ---------------------------------------------------------------------
 
-export type TextPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
+/** The caption's size, or `none` to leave it off. Scales MapToPoster's own presets. */
+export type TextSize = 'none' | 'small' | 'medium' | 'large'
+
+export type TextAlign = 'left' | 'center' | 'right'
+
+/**
+ * Where the caption sits: a point as a fraction of the image, and which edge of the
+ * block that point is. Fractions for the same reason as the pan — a caption dragged on
+ * the preview must land in the same place on an export of any size.
+ */
+export interface TextPlacement {
+  x: number
+  y: number
+  align: TextAlign
+}
 
 export interface RenderOverlay {
-  /** The zone name + date/time/day block, shown or hidden as one unit. */
-  showText: boolean
-  textPosition: TextPosition
+  textSize: TextSize
+  text: TextPlacement
   legend: boolean
   boundary: boolean
 }
+
+/** Named placements behind the position picker; dragging moves freely from any of them. */
+export const TEXT_PRESETS = {
+  'top-left': { x: 0.05, y: 0.16, align: 'left' },
+  'top-right': { x: 0.95, y: 0.16, align: 'right' },
+  center: { x: 0.5, y: 0.5, align: 'center' },
+  'bottom-left': { x: 0.05, y: 0.84, align: 'left' },
+  'bottom-right': { x: 0.95, y: 0.84, align: 'right' },
+} as const satisfies Record<string, TextPlacement>
+
+export type TextPreset = keyof typeof TEXT_PRESETS
 
 // --- view (zoom / pan) ------------------------------------------------------------
 
 export interface RenderView {
   /**
-   * Steps away from the framing that fits the traffic + boundary with padding.
+   * Steps away from the framing that fits the traffic + boundary with padding. May be
+   * fractional — the wheel and the slider move in quarter steps.
    * Relative rather than an absolute zoom level: a zone the size of a district and
    * one the size of a neighbourhood need different absolute zooms to look "right",
    * but "one step closer than the automatic frame" means the same thing for both.
    */
   zoomOffset: number
   /**
-   * Pan as a fraction of the canvas's own width/height, not pixels. Pixels would mean
-   * a pan set while looking at the 960-wide preview lands somewhere else entirely on
-   * a 1920-wide export — the one thing this renderer has held to since Studio's first
-   * version is that the preview IS what exports. A fraction is resolution-independent
-   * by construction.
+   * Pan as a fraction of the canvas at the automatic framing (zoom offset 0) — not
+   * pixels, and not a fraction of the current, zoomed view.
+   *
+   * Not pixels, because a pan set on the preview must land in the same place on an
+   * export of any size. And not the current view, because that made the pan shrink
+   * as you zoomed in: the drag was clamped to 60% of the view, so at +4 the map could
+   * only move a sliver of the zone and felt stuck. Measured against the fitted view it
+   * is a fixed geographic distance at every zoom, so zooming neither jumps the map nor
+   * narrows how far it can travel.
    */
   panX: number
   panY: number
@@ -424,9 +447,32 @@ interface Bounds {
  * toward the canvas's top-left corner, which is what re-using the old `origin`
  * across a zoom change would do.
  */
-function computeViewport(bounds: Bounds, width: number, height: number, view: RenderView, padding = 0.06): Viewport {
+/**
+ * The deepest zoom each basemap can draw. Vector geometry is scaled past OpenMapTiles'
+ * z14 and stays sharp, so it can go close enough to see a single intersection. Esri's
+ * imagery runs out around z19 (past that it serves a "no imagery" placeholder). The
+ * old flat cap of 18 made the top half of the zoom slider do nothing on a typical zone.
+ */
+function maxZoomFor(theme: MapTheme): number {
+  return theme.basemap === 'satellite' ? 19 : 22
+}
+
+/** How far the zoom slider can go from the automatic framing, for this zone and size. */
+export function zoomLimits(input: RenderInput): { min: number; max: number } {
+  const base = fitZoom(boundsOf(input), input.width, input.height, 0.06)
+  return { min: Math.max(1 - base, -3), max: Math.min(maxZoomFor(input.theme) - base, 10) }
+}
+
+function computeViewport(
+  bounds: Bounds,
+  width: number,
+  height: number,
+  view: RenderView,
+  maxZoom: number,
+  padding = 0.06,
+): Viewport {
   const base = fitZoom(bounds, width, height, padding)
-  const zoom = Math.min(Math.max(base + view.zoomOffset, 1), 18)
+  const zoom = Math.min(Math.max(base + view.zoomOffset, 1), maxZoom)
   const scale = TILE_SIZE * 2 ** zoom
 
   const centreLng = (bounds.east + bounds.west) / 2
@@ -434,12 +480,25 @@ function computeViewport(bounds: Bounds, width: number, height: number, view: Re
   const centreX = lngToWorldX(centreLng, scale)
   const centreY = latToWorldY(centreLat, scale)
 
+  // The pan is in fitted-view units; at a closer zoom the same distance is more pixels.
+  const zoomFactor = 2 ** (zoom - base)
   return {
     zoom,
     scale,
-    originX: centreX - width / 2 - view.panX * width,
-    originY: centreY - height / 2 - view.panY * height,
+    originX: centreX - width / 2 - view.panX * width * zoomFactor,
+    originY: centreY - height / 2 - view.panY * height * zoomFactor,
   }
+}
+
+/**
+ * How many screen fractions one fitted-view fraction is at this input's zoom. The
+ * page divides a drag by this so the map follows the pointer exactly at any zoom.
+ */
+export function panScale(input: RenderInput): number {
+  const bounds = boundsOf(input)
+  const base = fitZoom(bounds, input.width, input.height, 0.06)
+  const zoom = Math.min(Math.max(base + input.view.zoomOffset, 1), maxZoomFor(input.theme))
+  return 2 ** (zoom - base)
 }
 
 function project(lng: number, lat: number, v: Viewport): [number, number] {
@@ -562,25 +621,29 @@ async function basemapLayer(v: Viewport, input: RenderInput): Promise<HTMLCanvas
 
 /** Draws the tiles for `v`. Resolves true when every tile loaded. */
 async function drawSatellite(ctx: CanvasRenderingContext2D, v: Viewport, input: RenderInput): Promise<boolean> {
-  const first = { x: Math.floor(v.originX / TILE_SIZE), y: Math.floor(v.originY / TILE_SIZE) }
+  // Imagery exists only at whole zooms; a fractional render zoom draws the tiles of the
+  // zoom below, scaled up by the remainder (at most 2×).
+  const tileZoom = Math.floor(v.zoom)
+  const size = TILE_SIZE * 2 ** (v.zoom - tileZoom)
+  const first = { x: Math.floor(v.originX / size), y: Math.floor(v.originY / size) }
   const last = {
-    x: Math.floor((v.originX + input.width) / TILE_SIZE),
-    y: Math.floor((v.originY + input.height) / TILE_SIZE),
+    x: Math.floor((v.originX + input.width) / size),
+    y: Math.floor((v.originY + input.height) / size),
   }
-  const max = 2 ** v.zoom
+  const max = 2 ** tileZoom
 
   const jobs: Promise<boolean>[] = []
   for (let x = first.x; x <= last.x; x++) {
     for (let y = first.y; y <= last.y; y++) {
       if (y < 0 || y >= max) continue
       const wrapped = ((x % max) + max) % max
-      const url = satelliteTileUrl(v.zoom, wrapped, y)
-      const dx = x * TILE_SIZE - v.originX
-      const dy = y * TILE_SIZE - v.originY
+      const url = satelliteTileUrl(tileZoom, wrapped, y)
+      const dx = x * size - v.originX
+      const dy = y * size - v.originY
       jobs.push(
         loadTile(url).then((img) => {
           if (!img) return false
-          ctx.drawImage(img, dx, dy, TILE_SIZE, TILE_SIZE)
+          ctx.drawImage(img, dx, dy, size, size)
           return true
         }),
       )
@@ -612,57 +675,170 @@ function wibParts(iso: string): { date: string; time: string; day: string } {
   return { date, time, day: DAY_ID[(wib.getUTCDay() + 6) % 7]! }
 }
 
-/** Anchor point and text alignment for each of the five overlay positions. */
-function textAnchor(position: TextPosition, width: number, height: number) {
-  const margin = { x: Math.round(width * 0.05), y: Math.round(height * 0.08) }
-  switch (position) {
-    case 'top-left':
-      return { x: margin.x, y: margin.y, align: 'left' as CanvasTextAlign, vAlign: 'top' as const }
-    case 'top-right':
-      return { x: width - margin.x, y: margin.y, align: 'right' as CanvasTextAlign, vAlign: 'top' as const }
-    case 'bottom-left':
-      return { x: margin.x, y: height - margin.y, align: 'left' as CanvasTextAlign, vAlign: 'bottom' as const }
-    case 'center':
-      return { x: width / 2, y: height / 2, align: 'center' as CanvasTextAlign, vAlign: 'middle' as const }
-    case 'bottom-right':
-    default:
-      return { x: width - margin.x, y: height - margin.y, align: 'right' as CanvasTextAlign, vAlign: 'bottom' as const }
-  }
+/** MapToPoster's size presets — its whole type scale is multiplied by one of these. */
+const TEXT_SCALE: Record<Exclude<TextSize, 'none'>, number> = { small: 0.75, medium: 1, large: 1.35 }
+
+const SERIF = 'ui-serif, Georgia, "Times New Roman", serif'
+const SANS = 'ui-sans-serif, system-ui, sans-serif'
+
+interface CaptionLine {
+  text: string
+  font: string
+  size: number
+  /** Letter-spacing in ems. */
+  tracking: number
+  /** Line box height as a multiple of `size`. */
+  leading: number
+  color: string
+}
+
+interface PlacedLine extends CaptionLine {
+  x: number
+  /** Vertical middle of the line box. */
+  y: number
+}
+
+export interface CaptionBox {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+interface CaptionLayout {
+  box: CaptionBox
+  lines: PlacedLine[]
+  divider: CaptionBox
+  /** Halo width for this caption size. */
+  halo: number
+}
+
+function setTracking(ctx: CanvasRenderingContext2D, px: number) {
+  // `letterSpacing` is Chrome 99+/Firefox 115+/Safari 17+. Where it's missing the
+  // caption simply sets tighter — nothing breaks.
+  const c = ctx as CanvasRenderingContext2D & { letterSpacing?: string }
+  if ('letterSpacing' in c) c.letterSpacing = `${px}px`
+}
+
+/** A line's drawn width, without the spacing canvas adds after its last letter. */
+function lineWidth(ctx: CanvasRenderingContext2D, line: CaptionLine): number {
+  ctx.font = line.font
+  const tracking = line.tracking * line.size
+  setTracking(ctx, tracking)
+  return Math.max(ctx.measureText(line.text).width - tracking, 0)
 }
 
 /**
- * The zone name and date/time/day, as one repositionable block (BR-018's required
- * fields, drawn together because a poster tool's "caption" is conventionally one
- * unit — separating them into independently placed elements is more controls for a
- * combination nobody asks for).
+ * The caption, laid out the way MapToPoster sets its poster title: a tracked serif
+ * name, a hairline rule, then smaller tracked lines — sized from a 1080px reference
+ * on the image's short side, so small/medium/large and every output size keep the
+ * same proportions. Spacing is theirs too: 12px between lines, 48px from the edge.
+ *
+ * The block is placed by `overlay.text` and then clamped inside the edge margin, so a
+ * caption dragged too far stops at the edge instead of leaving the image.
+ *
+ * Shared by drawing and by `captionBox`, which the page uses to tell a drag on the
+ * caption from a drag on the map — one layout, so the grab area is exactly the text.
  */
-function drawText(ctx: CanvasRenderingContext2D, input: RenderInput) {
+function layoutCaption(ctx: CanvasRenderingContext2D, input: RenderInput): CaptionLayout | null {
+  const { overlay, theme, width, height } = input
+  if (overlay.textSize === 'none') return null
+
+  const q = (Math.min(width, height) / 1080) * TEXT_SCALE[overlay.textSize]
+  const pad = 48 * q
+  const gap = 12 * q
   const { date, time, day } = wibParts(input.capturedAt)
-  const { theme, width, height, overlay, zoneName } = input
-  const unit = Math.max(Math.round(height / 34), 11)
-  const lineGap = unit * 1.85
-  const anchor = textAnchor(overlay.textPosition, width, height)
 
-  // Five lines stacked: name, date, time (large), day. Vertical anchoring decides
-  // whether that stack grows down from `anchor.y` (top positions), up from it
-  // (bottom positions) or is centred on it.
-  const lines = [
-    { text: zoneName, size: unit * 1.3, weight: 700, color: theme.overlayText, gapAfter: lineGap * 1.15 },
-    { text: date, size: unit * 1.05, weight: 600, color: theme.overlaySub, gapAfter: lineGap },
-    { text: time, size: unit * 3.1, weight: 700, color: theme.overlayText, gapAfter: lineGap * 1.05 },
-    { text: day.split('').join(' '), size: unit * 0.95, weight: 600, color: theme.overlaySub, gapAfter: 0 },
-  ]
-  const totalHeight = lines.reduce((sum, l) => sum + l.size * 1.15 + l.gapAfter, 0)
+  const hero: CaptionLine = {
+    text: input.zoneName.toUpperCase(),
+    font: '',
+    size: 64 * q,
+    tracking: 0.25,
+    leading: 1.12,
+    color: theme.overlayText,
+  }
+  // A long zone name shrinks to fit the image rather than running off it.
+  hero.font = `700 ${hero.size}px ${SERIF}`
+  const maxWidth = width - pad * 2
+  const heroWidth = lineWidth(ctx, hero)
+  if (heroWidth > maxWidth) {
+    hero.size = Math.max(hero.size * (maxWidth / heroWidth), 28 * q * 0.5)
+    hero.font = `700 ${hero.size}px ${SERIF}`
+  }
 
-  let y =
-    anchor.vAlign === 'top'
-      ? anchor.y + lines[0]!.size
-      : anchor.vAlign === 'bottom'
-        ? anchor.y - totalHeight + lines[0]!.size
-        : anchor.y - totalHeight / 2 + lines[0]!.size
+  const clock: CaptionLine = {
+    text: `${time} WIB`,
+    font: `700 ${22 * q}px ${SANS}`,
+    size: 22 * q,
+    tracking: 0.4,
+    leading: 1.2,
+    color: theme.overlayText,
+  }
+  const when: CaptionLine = {
+    text: `${day} · ${date.toUpperCase()}`,
+    font: `500 ${16 * q}px ${SANS}`,
+    size: 16 * q,
+    tracking: 0.4,
+    leading: 1.2,
+    color: theme.overlaySub,
+  }
 
+  const lines = [hero, clock, when]
+  const widths = lines.map((l) => lineWidth(ctx, l))
+  const rule = { width: 128 * q, height: Math.max(q, 1) }
+  const boxWidth = Math.max(...widths, rule.width)
+  const heights = [hero.size * hero.leading, rule.height, clock.size * clock.leading, when.size * when.leading]
+  const boxHeight = heights.reduce((a, b) => a + b, 0) + gap * (heights.length - 1)
+
+  const { x: fx, y: fy, align } = overlay.text
+  const anchorX = fx * width
+  let left = align === 'left' ? anchorX : align === 'center' ? anchorX - boxWidth / 2 : anchorX - boxWidth
+  let top = fy * height - boxHeight / 2
+  left = boxWidth > width - pad * 2 ? pad : Math.min(Math.max(left, pad), width - pad - boxWidth)
+  top = boxHeight > height - pad * 2 ? pad : Math.min(Math.max(top, pad), height - pad - boxHeight)
+
+  const xFor = (w: number) => (align === 'left' ? left : align === 'center' ? left + (boxWidth - w) / 2 : left + boxWidth - w)
+
+  let cursor = top
+  const placed: PlacedLine[] = []
+  placed.push({ ...hero, x: xFor(widths[0]!), y: cursor + heights[0]! / 2 })
+  cursor += heights[0]! + gap
+  const divider = { x: xFor(rule.width), y: cursor, width: rule.width, height: rule.height }
+  cursor += rule.height + gap
+  placed.push({ ...clock, x: xFor(widths[1]!), y: cursor + heights[2]! / 2 })
+  cursor += heights[2]! + gap
+  placed.push({ ...when, x: xFor(widths[2]!), y: cursor + heights[3]! / 2 })
+
+  return {
+    box: { x: left, y: top, width: boxWidth, height: boxHeight },
+    lines: placed,
+    divider,
+    halo: Math.max(10 * q, 2.5),
+  }
+}
+
+let measureCtx: CanvasRenderingContext2D | null = null
+
+/** The caption's bounds in image pixels, or null when it's hidden. */
+export function captionBox(input: RenderInput): CaptionBox | null {
+  measureCtx ??= document.createElement('canvas').getContext('2d')
+  if (!measureCtx) return null
+  measureCtx.save()
+  const layout = layoutCaption(measureCtx, input)
+  measureCtx.restore()
+  return layout?.box ?? null
+}
+
+function drawText(ctx: CanvasRenderingContext2D, input: RenderInput) {
   ctx.save()
-  ctx.textAlign = anchor.align
+  const layout = layoutCaption(ctx, input)
+  if (!layout) {
+    ctx.restore()
+    return
+  }
+
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
   ctx.lineJoin = 'round'
   // The caption sits on a dense street grid, so each line gets a halo in the map's
   // own ground colour: the streets stop just short of the letters, the way printed
@@ -671,23 +847,60 @@ function drawText(ctx: CanvasRenderingContext2D, input: RenderInput) {
   const halo = input.theme.basemap === 'vector'
   if (!halo) {
     ctx.shadowColor = 'rgba(0,0,0,0.55)'
-    ctx.shadowBlur = unit
+    ctx.shadowBlur = layout.halo
   }
 
-  for (const line of lines) {
-    ctx.font = `${line.weight} ${line.size}px ui-sans-serif, system-ui, sans-serif`
+  for (const line of layout.lines) {
+    ctx.font = line.font
+    setTracking(ctx, line.tracking * line.size)
     if (halo) {
-      ctx.strokeStyle = theme.background
-      // Floored on the caption's unit, not the line's own size: a halo proportional to
-      // the small date line was too thin to stop a main road cutting between its words.
-      ctx.lineWidth = Math.max(line.size * 0.28, unit * 0.7, 3)
-      ctx.strokeText(line.text, anchor.x, y)
+      ctx.strokeStyle = input.theme.background
+      // Wide enough to cover the gaps the letter-spacing opens between letters: a
+      // thinner halo let a road show through between "2026"'s digits.
+      ctx.lineWidth = Math.max(line.size * (0.3 + line.tracking), layout.halo)
+      ctx.strokeText(line.text, line.x, line.y)
     }
     ctx.fillStyle = line.color
-    ctx.fillText(line.text, anchor.x, y)
-    y += line.size * 1.15 + line.gapAfter
+    ctx.fillText(line.text, line.x, line.y)
   }
+
+  const { divider } = layout
+  if (halo) {
+    ctx.fillStyle = input.theme.background
+    ctx.fillRect(divider.x - layout.halo / 2, divider.y - layout.halo / 2, divider.width + layout.halo, divider.height + layout.halo)
+  }
+  ctx.globalAlpha = 0.8
+  ctx.fillStyle = input.theme.overlayText
+  ctx.fillRect(divider.x, divider.y, divider.width, divider.height)
   ctx.restore()
+}
+
+/**
+ * MapToPoster's default "vignette": the ground colour fading in over the top and bottom
+ * of the poster (solid to 3%, clear by 20%, and back from 80%), so the map dissolves
+ * into the page instead of stopping at a hard edge. Drawn over the map but under the
+ * traffic, so no road's congestion is ever faded out.
+ */
+function drawVignette(ctx: CanvasRenderingContext2D, input: RenderInput) {
+  const solid = hexToRgba(input.theme.background, 1)
+  const clear = hexToRgba(input.theme.background, 0)
+  if (!solid || !clear) return
+  const g = ctx.createLinearGradient(0, 0, 0, input.height)
+  g.addColorStop(0, solid)
+  g.addColorStop(0.03, solid)
+  g.addColorStop(0.2, clear)
+  g.addColorStop(0.8, clear)
+  g.addColorStop(0.97, solid)
+  g.addColorStop(1, solid)
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, input.width, input.height)
+}
+
+function hexToRgba(hex: string, alpha: number): string | null {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex)
+  if (!m) return null
+  const n = parseInt(m[1]!, 16)
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`
 }
 
 function drawLegend(ctx: CanvasRenderingContext2D, input: RenderInput) {
@@ -729,7 +942,7 @@ export async function renderCapture(canvas: HTMLCanvasElement, input: RenderInpu
   ctx.fillStyle = input.theme.background
   ctx.fillRect(0, 0, input.width, input.height)
 
-  const v = computeViewport(boundsOf(input), input.width, input.height, input.view)
+  const v = computeViewport(boundsOf(input), input.width, input.height, input.view, maxZoomFor(input.theme))
 
   ctx.drawImage(await basemapLayer(v, input), 0, 0)
 
@@ -750,9 +963,10 @@ export async function renderCapture(canvas: HTMLCanvasElement, input: RenderInpu
     ctx.restore()
   }
 
+  if (input.theme.basemap === 'vector') drawVignette(ctx, input)
   drawTraffic(ctx, input, v)
 
-  if (input.overlay.showText) drawText(ctx, input)
+  drawText(ctx, input)
   if (input.overlay.legend) drawLegend(ctx, input)
   drawAttribution(ctx, input)
 }
@@ -766,7 +980,11 @@ export async function renderCapture(canvas: HTMLCanvasElement, input: RenderInpu
  * Lines are batched into one path per colour — four strokes, not thousands.
  */
 function drawTraffic(ctx: CanvasRenderingContext2D, input: RenderInput, v: Viewport) {
-  const weight = Math.max((input.height / 300) * input.theme.strokeScale, 1.5)
+  // Traffic thickens with zoom as the streets under it do, but half as fast: close in,
+  // a road on the map is wider than the traffic line, which then reads as a coloured
+  // centre stripe — the way live-traffic maps draw it — rather than being swallowed.
+  const zoomGrowth = Math.min(Math.max(Math.sqrt(roadWidthScale(v.zoom)), 1), 2.5)
+  const weight = Math.max((input.height / 300) * input.theme.strokeScale * zoomGrowth, 1.5)
   const casing = new Path2D()
   const byColour = new Map<string, Path2D>()
 

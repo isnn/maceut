@@ -47,8 +47,13 @@ import {
   recordAnimation,
   downloadBlob,
   preferredVideoType,
+  TEXT_PRESETS,
+  captionBox,
+  panScale,
+  zoomLimits,
   type MapThemeCategory,
-  type TextPosition,
+  type TextPreset,
+  type TextSize,
   type RenderOverlay,
   type RenderView,
   type RenderInput,
@@ -64,16 +69,34 @@ const SPEEDS = [
   { label: '4×', ms: 250 },
 ]
 
-/** The five overlay-text anchor points, laid out on a 3×3 grid. */
-const POSITIONS: { id: TextPosition; label: string; row: number; col: number }[] = [
-  { id: 'top-left', label: 'TL', row: 1, col: 1 },
-  { id: 'top-right', label: 'TR', row: 1, col: 3 },
-  { id: 'center', label: 'C', row: 2, col: 2 },
-  { id: 'bottom-left', label: 'BL', row: 3, col: 1 },
-  { id: 'bottom-right', label: 'BR', row: 3, col: 3 },
+/** The position picker's five presets, laid out on a 3×3 grid. */
+const POSITIONS: { id: TextPreset; label: string; row: number; col: number }[] = [
+  { id: 'top-left', label: 'Top left', row: 1, col: 1 },
+  { id: 'top-right', label: 'Top right', row: 1, col: 3 },
+  { id: 'center', label: 'Center', row: 2, col: 2 },
+  { id: 'bottom-left', label: 'Bottom left', row: 3, col: 1 },
+  { id: 'bottom-right', label: 'Bottom right', row: 3, col: 3 },
 ]
 
-const DEFAULT_OVERLAY: RenderOverlay = { showText: true, textPosition: 'bottom-right', legend: false, boundary: false }
+const TEXT_SIZES: { value: TextSize; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'small', label: 'S' },
+  { value: 'medium', label: 'M' },
+  { value: 'large', label: 'L' },
+]
+
+const DEFAULT_OVERLAY: RenderOverlay = {
+  textSize: 'medium',
+  text: TEXT_PRESETS['bottom-right'],
+  legend: false,
+  boundary: false,
+}
+
+/**
+ * How far the map can be dragged from its automatic framing, in fitted-view widths —
+ * a zone and a half in every direction, at any zoom.
+ */
+const PAN_LIMIT = 1.5
 
 /**
  * The preview renders at the export's own size, displayed smaller by CSS.
@@ -320,60 +343,224 @@ export default function StudioPage() {
     [theme, congestion, overlay, view, zoneRing, zoneLabel],
   )
 
-  // Off-screen, and a NEW scratch canvas per run: `renderCapture` paints tiles as each
-  // one loads, so two overlapping renders (a fast theme switch mid-fetch, say) must
-  // never share a canvas. The first fix reused one scratch canvas across runs, and a
-  // stale run's late tile still landed on it — after that run had restored its
-  // context, so without the theme's filter: a bright unfiltered strip on a dark map.
-  // One canvas per run means a stale run can only ever draw on a canvas nobody reads.
+  /**
+   * The preview's render queue: at most one render runs, and when it finishes only the
+   * NEWEST waiting request runs next — everything in between is dropped unrendered.
+   *
+   * Without it every state change started its own full-size render, and none was ever
+   * aborted. Dragging the map changes state ~60 times a second, and a fast drag piled up
+   * dozens of concurrent 1600×1000 renders until the tab ran out of memory and crashed.
+   * Each render still gets a NEW scratch canvas and is blitted only when complete, so a
+   * half-loaded map never reaches the screen (the torn-tile bug, fixed earlier).
+   */
+  /**
+   * While the map is being dragged, the last rendered image just slides with the
+   * pointer (a CSS transform — free), and the real render happens once, on release.
+   * Re-rendering per pointer move is what crashed the tab.
+   */
+  const [slide, setSlide] = useState<{ x: number; y: number } | null>(null)
+  /** The view a released slide is waiting on; the slide clears when that view is on screen. */
+  const slideTarget = useRef<RenderView | null>(null)
+
+  const renderQueue = useRef<{ running: boolean; next: (() => Promise<void>) | null }>({ running: false, next: null })
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
+  const schedulePreview = useCallback((job: () => Promise<void>) => {
+    const queue = renderQueue.current
+    queue.next = job
+    if (queue.running) return
+    queue.running = true
+    setPreviewBusy(true)
+    void (async () => {
+      while (queue.next) {
+        const run = queue.next
+        queue.next = null
+        await run().catch(() => undefined)
+      }
+      queue.running = false
+      if (mounted.current) setPreviewBusy(false)
+    })()
+  }, [])
 
   useEffect(() => {
-    const canvas = previewCanvas.current
-    if (!canvas || !frame) return
-    let cancelled = false
-    setPreviewBusy(true)
-    // The preview renders at a scaled-down version of the chosen output size's own
-    // aspect ratio — never a fixed 960×600 — so what's on screen is what will export,
-    // just smaller.
+    if (!frame) return
+    // The preview renders at the output size's own aspect ratio, so what's on screen
+    // is what will export.
     const dims = previewDims(outputSize)
-    const offscreen = document.createElement('canvas')
-    renderCapture(offscreen, renderInputFor(frame, traffics[frame.id] ?? null, dims.width, dims.height))
-      .then(() => {
-        if (cancelled) return
-        canvas.width = offscreen.width
-        canvas.height = offscreen.height
-        canvas.getContext('2d')?.drawImage(offscreen, 0, 0)
-      })
-      .finally(() => {
-        if (!cancelled) setPreviewBusy(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [frame, traffics, renderInputFor, outputSize])
+    const input = renderInputFor(frame, traffics[frame.id] ?? null, dims.width, dims.height)
+    schedulePreview(async () => {
+      const offscreen = document.createElement('canvas')
+      await renderCapture(offscreen, input)
+      const canvas = previewCanvas.current
+      if (!canvas || !mounted.current) return
+      canvas.width = offscreen.width
+      canvas.height = offscreen.height
+      canvas.getContext('2d')?.drawImage(offscreen, 0, 0)
+      if (slideTarget.current === input.view) {
+        slideTarget.current = null
+        setSlide(null)
+      }
+    })
+  }, [frame, traffics, renderInputFor, outputSize, schedulePreview])
 
-  // --- drag-to-pan on the preview canvas -----------------------------------------
-  const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
-  const [dragging, setDragging] = useState(false)
+  // The slider's real range for this zone and size — past the basemap's deepest zoom
+  // the image stops changing, so offering those steps would be a dead slider.
+  const previewSize = previewDims(outputSize)
+  const zoomRange = frame
+    ? zoomLimits(renderInputFor(frame, null, previewSize.width, previewSize.height))
+    : { min: -3, max: 10 }
+  const zoomOffset = clamp(view.zoomOffset, zoomRange.min, zoomRange.max)
+  const zoomLabel =
+    zoomOffset === 0
+      ? 'Auto fit'
+      : `${zoomOffset > 0 ? '+' : ''}${Number.isInteger(zoomOffset) ? zoomOffset : zoomOffset.toFixed(2).replace(/0$/, '')}`
+
+  /**
+   * Mouse-wheel zoom on the preview, toward the pointer: the spot under the cursor stays
+   * under it, the way every web map behaves. A native listener rather than React's
+   * `onWheel`, which is passive — it can't stop the page scrolling at the same time.
+   */
+  const wheelRange = useRef(zoomRange)
+  useEffect(() => {
+    wheelRange.current = zoomRange
+  })
+  const hasPreview = frames.length > 0
+  useEffect(() => {
+    const canvas = previewCanvas.current
+    if (!hasPreview || !canvas) return
+    function onWheel(e: WheelEvent) {
+      e.preventDefault()
+      const rect = canvas!.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) return
+      // Where the pointer is, from the image centre, as fractions of the image.
+      const sx = (e.clientX - rect.left) / rect.width - 0.5
+      const sy = (e.clientY - rect.top) / rect.height - 0.5
+      // Line-mode deltas (Firefox) are ~3 per notch; pixel-mode ~100. One notch = ¼ step.
+      const delta = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY
+      const { min, max } = wheelRange.current
+      setView((v) => {
+        const from = clamp(v.zoomOffset, min, max)
+        const to = clamp(Math.round((from - delta / 400) * 100) / 100, min, max)
+        if (to === from) return v
+        // Screen offset of a point = (its offset from the data centre + pan) × zoom
+        // factor, all in fitted-view units. Solve for the pan that keeps the point
+        // under the pointer at the same screen offset after the zoom.
+        const before = 2 ** from
+        const after = 2 ** to
+        const pointX = sx / before - v.panX
+        const pointY = sy / before - v.panY
+        return {
+          zoomOffset: to,
+          panX: clamp(sx / after - pointX, -PAN_LIMIT, PAN_LIMIT),
+          panY: clamp(sy / after - pointY, -PAN_LIMIT, PAN_LIMIT),
+        }
+      })
+    }
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', onWheel)
+  }, [hasPreview])
+
+  // --- dragging on the preview: the caption if the pointer is on it, the map if not ---
+  type Drag =
+    | { kind: 'map'; x: number; y: number; panX: number; panY: number; scale: number }
+    | { kind: 'text'; x: number; y: number; cx: number; cy: number; w: number }
+  const dragRef = useRef<Drag | null>(null)
+  const [dragging, setDragging] = useState<Drag['kind'] | null>(null)
+  const [overCaption, setOverCaption] = useState(false)
+
+  /** Exactly what the preview is drawn with — so the grab area is exactly the drawn text. */
+  function previewInput(): RenderInput | null {
+    if (!frame) return null
+    const dims = previewDims(outputSize)
+    return renderInputFor(frame, traffics[frame.id] ?? null, dims.width, dims.height)
+  }
+
+  function hitsCaption(e: React.PointerEvent<HTMLCanvasElement>, input: RenderInput): boolean {
+    const box = captionBox(input)
+    if (!box) return false
+    const rect = e.currentTarget.getBoundingClientRect()
+    const px = ((e.clientX - rect.left) / rect.width) * input.width
+    const py = ((e.clientY - rect.top) / rect.height) * input.height
+    const slop = input.height * 0.01
+    return px >= box.x - slop && px <= box.x + box.width + slop && py >= box.y - slop && py <= box.y + box.height + slop
+  }
 
   function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    const input = previewInput()
+    if (!input) return
     e.currentTarget.setPointerCapture(e.pointerId)
-    dragRef.current = { x: e.clientX, y: e.clientY, panX: view.panX, panY: view.panY }
-    setDragging(true)
+    const box = hitsCaption(e, input) ? captionBox(input) : null
+    if (box) {
+      // Start from where the caption is actually drawn — after clamping to the edge
+      // margin — not from its stored anchor, so a caption parked against an edge moves
+      // the moment it is dragged instead of after a dead zone.
+      dragRef.current = {
+        kind: 'text',
+        x: e.clientX,
+        y: e.clientY,
+        cx: (box.x + box.width / 2) / input.width,
+        cy: (box.y + box.height / 2) / input.height,
+        w: box.width / input.width,
+      }
+    } else {
+      dragRef.current = { kind: 'map', x: e.clientX, y: e.clientY, panX: view.panX, panY: view.panY, scale: panScale(input) }
+    }
+    setDragging(dragRef.current.kind)
   }
   function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
-    const drag = dragRef.current
-    const canvas = previewCanvas.current
-    if (!drag || !canvas) return
-    const rect = canvas.getBoundingClientRect()
+    const rect = e.currentTarget.getBoundingClientRect()
     if (rect.width === 0 || rect.height === 0) return
+    const drag = dragRef.current
+    if (!drag) {
+      const input = previewInput()
+      const over = input !== null && hitsCaption(e, input)
+      if (over !== overCaption) setOverCaption(over)
+      return
+    }
     const dx = (e.clientX - drag.x) / rect.width
     const dy = (e.clientY - drag.y) / rect.height
-    setView((v) => ({ ...v, panX: clamp(drag.panX + dx, -0.6, 0.6), panY: clamp(drag.panY + dy, -0.6, 0.6) }))
+    if (drag.kind === 'text') {
+      // The alignment follows where the caption is: left third reads left-aligned,
+      // right third right-aligned, middle centred. Keeping the alignment it started
+      // with left a caption dragged from the right corner hanging off its name's end.
+      const cx = clamp(drag.cx + dx, 0, 1)
+      const cy = clamp(drag.cy + dy, 0, 1)
+      const align = cx < 1 / 3 ? 'left' : cx > 2 / 3 ? 'right' : 'center'
+      const x = align === 'left' ? cx - drag.w / 2 : align === 'right' ? cx + drag.w / 2 : cx
+      setOverlay((o) => ({ ...o, text: { x, y: cy, align } }))
+    } else {
+      // Clamped here too, so the slide never shows more than the release will keep.
+      const panX = clamp(drag.panX + dx / drag.scale, -PAN_LIMIT, PAN_LIMIT)
+      const panY = clamp(drag.panY + dy / drag.scale, -PAN_LIMIT, PAN_LIMIT)
+      setSlide({ x: (panX - drag.panX) * drag.scale * rect.width, y: (panY - drag.panY) * drag.scale * rect.height })
+    }
   }
   function handlePointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
+    const drag = dragRef.current
+    if (drag?.kind === 'map' && slide) {
+      // Commit the slide as a pan — divided by the zoom factor, because the pan is
+      // stored in fitted-view units — so the map tracks the pointer 1:1 at any zoom.
+      // The slide stays until that view's render is on screen — clearing it now would
+      // snap the old image back for the length of the render, then jump forward.
+      const rect = e.currentTarget.getBoundingClientRect()
+      const next = {
+        ...view,
+        panX: clamp(drag.panX + slide.x / rect.width / drag.scale, -PAN_LIMIT, PAN_LIMIT),
+        panY: clamp(drag.panY + slide.y / rect.height / drag.scale, -PAN_LIMIT, PAN_LIMIT),
+      }
+      slideTarget.current = next
+      setView(next)
+    } else {
+      setSlide(null)
+    }
     dragRef.current = null
-    setDragging(false)
+    setDragging(null)
     try {
       e.currentTarget.releasePointerCapture(e.pointerId)
     } catch {
@@ -560,7 +747,7 @@ export default function StudioPage() {
                 <canvas
                   ref={previewCanvas}
                   className="w-full block"
-                  style={{ aspectRatio: `${outputSize.width} / ${outputSize.height}`, cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+                  style={{ aspectRatio: `${outputSize.width} / ${outputSize.height}`, transform: slide ? `translate(${slide.x}px, ${slide.y}px)` : undefined, cursor: dragging === 'text' || (!dragging && overCaption) ? 'move' : dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
@@ -748,16 +935,6 @@ export default function StudioPage() {
             */}
             <Card className="p-lg space-y-md">
               <SectionLabel>Timeframe</SectionLabel>
-              <p className="text-caption text-text-muted">
-                {frames.length} of {dayFrames.length} frames selected
-                {dayFrames[0] && dayFrames[dayFrames.length - 1] && (
-                  <>
-                    {' '}
-                    ({dayFrames[0].time}–{dayFrames[dayFrames.length - 1].time} available)
-                  </>
-                )}
-                .
-              </p>
               <div className="grid grid-cols-2 gap-sm">
                 <div className="space-y-xs">
                   <label className="text-micro font-semibold uppercase tracking-wider text-text-muted" htmlFor="range-start">
@@ -797,78 +974,48 @@ export default function StudioPage() {
                 or an Artistic mood. Traffic colours are untouched here on purpose. */}
             <Card className="p-lg space-y-md">
               <SectionLabel>Map theme</SectionLabel>
-              <div role="tablist" aria-label="Theme category" className="flex p-xs rounded-lg bg-canvas-secondary">
-                {(['standard', 'artistic'] as const).map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    role="tab"
-                    aria-selected={theme.category === cat}
-                    onClick={() => selectThemeCategory(cat)}
-                    className={cn(
-                      'flex-1 h-9 rounded-md text-label font-semibold capitalize transition-colors',
-                      theme.category === cat
-                        ? 'bg-text-primary text-on-primary shadow-elevation-2'
-                        : 'text-text-secondary hover:text-text-primary',
-                    )}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-
+              <Segmented
+                ariaLabel="Theme category"
+                value={theme.category}
+                onChange={selectThemeCategory}
+                options={[
+                  { value: 'standard', label: 'Standard' },
+                  { value: 'artistic', label: 'Artistic' },
+                ]}
+              />
               <p className="text-micro font-semibold uppercase tracking-wider text-text-muted">
                 {theme.category} theme
               </p>
               <div className="grid grid-cols-2 gap-sm">
-                {MAP_THEMES.filter((t) => t.category === theme.category).map((t) => {
-                  const active = t.id === themeId
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setThemeId(t.id)}
-                      aria-pressed={active}
-                      className={cn(
-                        'flex flex-col items-center gap-sm rounded-lg border px-sm py-md transition-colors',
-                        active
-                          ? 'border-text-primary bg-canvas-secondary'
-                          : t.category === 'artistic'
-                            ? 'border-divider bg-canvas-secondary/60 hover:border-border'
-                            : 'border-transparent hover:bg-canvas-secondary/60',
-                      )}
-                    >
-                      <span className="flex" aria-hidden>
-                        {t.swatch.map((color, i) => (
-                          <span
-                            key={color + i}
-                            className={cn('h-7 w-7 rounded-full ring-2 ring-canvas', i > 0 && '-ml-sm')}
-                            style={{ background: color }}
-                          />
-                        ))}
-                      </span>
-                      <span className="text-label font-semibold text-text-primary">{t.name}</span>
-                    </button>
-                  )
-                })}
+                {MAP_THEMES.filter((t) => t.category === theme.category).map((t) => (
+                  <SwatchCard
+                    key={t.id}
+                    name={t.name}
+                    swatch={t.swatch}
+                    active={t.id === themeId}
+                    wrapped={t.category === 'artistic'}
+                    onSelect={() => setThemeId(t.id)}
+                  />
+                ))}
               </div>
-              <p className="text-caption italic text-text-muted">{theme.caption}</p>
             </Card>
 
             {/* 2. Congestion theme — a separate, opt-in recolour of BR-017's four bands.
                 Standard is the identity map: choosing it is choosing to keep the meaning. */}
-            <Card className="p-lg space-y-sm">
+            <Card className="p-lg space-y-md">
               <SectionLabel>Congestion theme</SectionLabel>
-              <Select
-                value={congestionId}
-                onValueChange={setCongestionId}
-                options={CONGESTION_THEMES.map((c) => ({ value: c.id, label: c.name }))}
-                className="w-full"
-                aria-label="Congestion theme"
-              />
-              <p className="text-caption text-text-muted">
-                Standard keeps the normal/slow/heavy/congested colours as-is. The others trade that meaning for a look.
-              </p>
+              <div className="grid grid-cols-2 gap-sm">
+                {CONGESTION_THEMES.map((c) => (
+                  <SwatchCard
+                    key={c.id}
+                    name={c.name}
+                    swatch={c.bands.map((b) => b.color)}
+                    active={c.id === congestionId}
+                    wrapped
+                    onSelect={() => setCongestionId(c.id)}
+                  />
+                ))}
+              </div>
             </Card>
 
             {/* 3. Zoom position — how far in, and where, the framing sits. Drag the preview
@@ -877,20 +1024,19 @@ export default function StudioPage() {
               <SectionLabel>Zoom position</SectionLabel>
               <div className="flex items-center justify-between text-micro text-text-muted">
                 <span>Wider</span>
-                <span className="tabular-nums">{view.zoomOffset === 0 ? 'Auto fit' : `${view.zoomOffset > 0 ? '+' : ''}${view.zoomOffset}`}</span>
+                <span className="tabular-nums">{zoomLabel}</span>
                 <span>Closer</span>
               </div>
               <input
                 type="range"
-                min={-3}
-                max={10}
-                step={1}
-                value={view.zoomOffset}
+                min={zoomRange.min}
+                max={zoomRange.max}
+                step={0.25}
+                value={zoomOffset}
                 onChange={(e) => setView((v) => ({ ...v, zoomOffset: Number(e.target.value) }))}
                 aria-label="Zoom"
                 className="w-full accent-primary"
               />
-              <p className="text-caption text-text-muted">Drag the preview to reposition it.</p>
               {(view.panX !== 0 || view.panY !== 0 || view.zoomOffset !== 0) && (
                 <button onClick={() => setView(DEFAULT_VIEW)} className="text-caption text-info hover:underline">
                   Reset zoom &amp; position
@@ -902,30 +1048,45 @@ export default function StudioPage() {
                 or hidden and placed independently. */}
             <Card className="p-lg space-y-md">
               <SectionLabel>Overlay</SectionLabel>
-              <label className="flex items-center gap-sm cursor-pointer">
-                <Checkbox checked={overlay.showText} onChange={(e) => setOverlay((o) => ({ ...o, showText: e.target.checked }))} />
-                <span className="text-body text-text-secondary">Show text</span>
-              </label>
-              <div className={cn('grid grid-cols-3 grid-rows-3 gap-xs w-28 h-28 mx-auto', !overlay.showText && 'opacity-40')}>
-                {POSITIONS.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    disabled={!overlay.showText}
-                    onClick={() => setOverlay((o) => ({ ...o, textPosition: p.id }))}
-                    style={{ gridColumn: p.col, gridRow: p.row }}
-                    className={cn(
-                      'rounded-xs border text-micro font-semibold flex items-center justify-center transition-colors',
-                      overlay.textPosition === p.id
-                        ? 'border-primary bg-primary-soft/40 text-primary'
-                        : 'border-border text-text-muted hover:bg-canvas-secondary',
-                    )}
-                    aria-label={`Text position: ${p.label}`}
-                    title={p.label}
-                  >
-                    {p.label}
-                  </button>
-                ))}
+              <div className="space-y-xs">
+                <p className="text-micro font-semibold uppercase tracking-wider text-text-muted">Text size</p>
+                <Segmented
+                  ariaLabel="Text size"
+                  value={overlay.textSize}
+                  onChange={(textSize) => setOverlay((o) => ({ ...o, textSize }))}
+                  options={TEXT_SIZES}
+                />
+              </div>
+              <div className="space-y-xs">
+                <p className="text-micro font-semibold uppercase tracking-wider text-text-muted">Position</p>
+                <div
+                  className={cn(
+                    'grid grid-cols-3 grid-rows-3 gap-xs w-28 h-28 mx-auto',
+                    overlay.textSize === 'none' && 'opacity-40',
+                  )}
+                >
+                  {POSITIONS.map((p) => {
+                    const preset = TEXT_PRESETS[p.id]
+                    const active =
+                      overlay.text.x === preset.x && overlay.text.y === preset.y && overlay.text.align === preset.align
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={overlay.textSize === 'none'}
+                        onClick={() => setOverlay((o) => ({ ...o, text: preset }))}
+                        style={{ gridColumn: p.col, gridRow: p.row }}
+                        className={cn(
+                          'rounded-xs border transition-colors',
+                          active ? 'border-primary bg-primary-soft' : 'border-border hover:bg-canvas-secondary',
+                        )}
+                        aria-label={`Text position: ${p.label}`}
+                        aria-pressed={active}
+                        title={p.label}
+                      />
+                    )
+                  })}
+                </div>
               </div>
               <div className="border-t border-divider pt-md space-y-sm">
                 <label className="flex items-center gap-sm cursor-pointer">
@@ -1046,6 +1207,86 @@ function quietest(frames: Frame[]): string {
   if (scored.length === 0) return '—'
   const low = scored.reduce((a, b) => (a.jamFactorAvg! <= b.jamFactorAvg! ? a : b))
   return `${low.time} · ${low.jamFactorAvg!.toFixed(2)}`
+}
+
+/**
+ * A theme picker card: overlapping colour circles over the name, after the reference
+ * the user gave (MapToPoster's Map Style panel). Map themes and congestion themes use
+ * the same card, so the two choices read as the same kind of choice.
+ */
+function SwatchCard({
+  name,
+  swatch,
+  active,
+  wrapped,
+  onSelect,
+}: {
+  name: string
+  swatch: string[]
+  active: boolean
+  /** A soft background on unselected cards; Standard map themes go without. */
+  wrapped: boolean
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+      className={cn(
+        'flex flex-col items-center gap-sm rounded-lg border px-sm py-md transition-colors',
+        active
+          ? 'border-text-primary bg-canvas-secondary'
+          : wrapped
+            ? 'border-divider bg-canvas-secondary/60 hover:border-border'
+            : 'border-transparent hover:bg-canvas-secondary/60',
+      )}
+    >
+      <span className="flex" aria-hidden>
+        {swatch.map((color, i) => (
+          <span
+            key={color + i}
+            className={cn('h-7 w-7 rounded-full ring-2 ring-canvas', i > 0 && '-ml-sm')}
+            style={{ background: color }}
+          />
+        ))}
+      </span>
+      <span className="text-label font-semibold text-text-primary">{name}</span>
+    </button>
+  )
+}
+
+/** A pill-style segmented control — the category switch and the text-size picker. */
+function Segmented<T extends string>({
+  ariaLabel,
+  value,
+  onChange,
+  options,
+}: {
+  ariaLabel: string
+  value: T
+  onChange: (value: T) => void
+  options: { value: T; label: string }[]
+}) {
+  return (
+    <div role="radiogroup" aria-label={ariaLabel} className="flex p-xs rounded-lg bg-canvas-secondary">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={cn(
+            'flex-1 h-9 rounded-md text-label font-semibold transition-colors',
+            value === o.value ? 'bg-text-primary text-on-primary shadow-elevation-2' : 'text-text-secondary hover:text-text-primary',
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 /** Every card's heading, in one style, so the drawer reads as one set of controls. */
