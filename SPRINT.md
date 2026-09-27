@@ -104,6 +104,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-11** Detail zona: legenda jam factor, Trigger jadi Auto/Manual, kolom Time diisi | permintaan user |
 | ✅ | **FE-12** Studio: renderer canvas — PNG per frame, WebM animasi, 5 style, toggle layer | permintaan user |
 | ✅ | **FE-13** Studio: rentang waktu (start/end), ekspor banyak gambar (ZIP), viewer capture lebih cepat | permintaan user |
+| ✅ | **FE-19** Studio: rentang waktu lintas hari; animasi 1:1 dengan preview (timing tepat, framing tak tergantung ukuran, bitrate sesuai resolusi) | permintaan user |
 | ✅ | **FE-18** Studio: panel satu kartu, menu Export, alignment teks, efek vignette opsional, modal ukuran; ringkasan hari pindah ke detail zona | permintaan user |
 | ✅ | **FE-17** Studio: UI panel zoom/overlay/output baru, judul bisa diubah, peta & teks dua lapis, halaman lebih lebar | permintaan user |
 | ✅ | **FE-16** Studio: zoom halus + roda mouse, pan bebas di semua zoom, jalan kecil dinamis, palet MapToPoster persis, congestion theme kartu, ukuran & drag teks | permintaan user |
@@ -1435,6 +1436,34 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   dijalankan — host ~850MB tersedia, load 16 (OOM killer mematikan tab di ronde
   sebelumnya). Satu error sesaat di log (import TEXT_PRESETS) terjadi di tengah edit dan
   hilang setelah edit selesai.
+
+[2026-09-27e] Studio: rentang lintas hari, animasi 1:1 dengan preview.
+
+  RENTANG LINTAS HARI. Pemilih Day di header dihapus; Timeframe kini From/To, masing-masing
+  (hari + jam capture di hari itu), plus pilihan cepat Newest day / Last 7 days / All dan
+  pil jumlah frame. Rentang disimpan sebagai dua id capture di seluruh riwayat zona,
+  di-kunci ke zona (bukan di-reset effect). Default tetap hari terbaru — zona dengan
+  riwayat berminggu-minggu tidak membuka ratusan frame. Nama file ekspor memakai rentang
+  (`…_to_…`).
+
+  ANIMASI TIDAK SAMA DENGAN PREVIEW — tiga sebab, tiga perbaikan:
+  1. TIMING: MediaRecorder merekam real-time, jadi tiap frame tertahan hold + waktu render
+     frame berikutnya (detik, di ukuran poster) — video lebih lambat & tidak rata dari
+     preview. Kini recorder di-PAUSE selama render dan RESUME hanya selama hold; waktu
+     pause tidak masuk file. Satu salinan frame terakhir ditambahkan supaya pemutar tidak
+     memotong frame terakhir.
+  2. FRAMING TERGANTUNG UKURAN: fit zoom dulu dibulatkan ke zoom bulat berdasarkan jumlah
+     pixel, jadi 1080 vs 1920 vs 4K menunjukkan area berbeda, dan ukuran di atas cap
+     preview 2400px tidak pernah sama dengan preview-nya. Kini fit zoom EKSAK (pecahan), dan
+     detail (tile mana, kelas jalan mana, tebal garis) mengikuti "detail zoom" yang
+     dinormalisasi ke gambar 1000px. Ukuran apa pun = peta yang sama, hanya resolusinya.
+  3. KUALITAS: bitrate tetap 8 Mbps lembek di ≥1920px; kini ~12 bit/pixel/detik, 8–60 Mbps.
+
+  VERIFIKASI: tsc + eslint bersih, /studio 200. Browser TIDAK terverifikasi — tab
+  headless kembali di-OOM-kill host saat /studio dimuat (oom_kill 115→116). Rentang lintas
+  hari juga tidak bisa diuji lewat app: capture selalu dicap waktu saat dijalankan, jadi
+  hari kedua baru ada setelah jadwal berjalan lintas hari. Skrip uji siap diulang:
+  /tmp/studio-verify/Dr.mjs.
 
 ---
 

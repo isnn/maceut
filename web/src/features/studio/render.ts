@@ -412,26 +412,48 @@ function latToWorldY(lat: number, scale: number): number {
 }
 
 interface Viewport {
+  /** The zoom geometry is projected at — this image's own pixels. */
   zoom: number
+  /**
+   * The zoom the same view would have on a 1000px image. Street density, line weight
+   * and which tiles to draw follow this, not `zoom`, so a 4000px export shows exactly
+   * the map its 1000px-ish preview does — just sharper — instead of switching to a
+   * busier level of detail because it has more pixels.
+   */
+  detail: number
   scale: number
   originX: number
   originY: number
 }
 
+/** The short side, in pixels, that a map's level of detail is judged at. */
+const DETAIL_REF_PX = 1000
+
+/** log2 of how much bigger than the reference this image is. */
+function sizeShift(width: number, height: number): number {
+  return Math.log2(Math.min(width, height) / DETAIL_REF_PX)
+}
+
 /**
- * The zoom that fits `bounds` into `width`×`height` with padding, before any manual
- * zoom offset is applied. Zoom is a whole number because tiles only exist at whole
- * zooms; the remainder is absorbed by padding rather than by scaling tiles, which
- * would blur them.
+ * The zoom that fits `bounds` into `width`×`height` with padding — exact, not rounded.
+ *
+ * This used to step down through whole zooms until the zone fit. That made the framing
+ * depend on the pixel size: a 1080 and a 1920 image of the same zone each rounded
+ * differently, so they showed different amounts of map, and an export above the 2400px
+ * preview cap never matched its preview. Tiles can now be drawn at fractional zooms,
+ * so the fit can be exact, and every size frames the zone identically.
  */
 function fitZoom(bounds: Bounds, width: number, height: number, padding: number): number {
-  for (let zoom = 18; zoom >= 1; zoom--) {
-    const scale = TILE_SIZE * 2 ** zoom
-    const w = Math.abs(lngToWorldX(bounds.east, scale) - lngToWorldX(bounds.west, scale))
-    const h = Math.abs(latToWorldY(bounds.south, scale) - latToWorldY(bounds.north, scale))
-    if (w <= width * (1 - padding * 2) && h <= height * (1 - padding * 2)) return zoom
-  }
-  return 1
+  const w0 = Math.abs(lngToWorldX(bounds.east, TILE_SIZE) - lngToWorldX(bounds.west, TILE_SIZE))
+  const h0 = Math.abs(latToWorldY(bounds.south, TILE_SIZE) - latToWorldY(bounds.north, TILE_SIZE))
+  const zx = w0 > 0 ? Math.log2((width * (1 - padding * 2)) / w0) : 18
+  const zy = h0 > 0 ? Math.log2((height * (1 - padding * 2)) / h0) : 18
+  return Math.min(Math.max(Math.min(zx, zy), 1), 18 + sizeShift(width, height))
+}
+
+/** The fitted view's detail zoom — `fitZoom` expressed at the 1000px reference. */
+function fitDetail(bounds: Bounds, width: number, height: number, padding: number): number {
+  return fitZoom(bounds, width, height, padding) - sizeShift(width, height)
 }
 
 interface Bounds {
@@ -460,8 +482,12 @@ function maxZoomFor(theme: MapTheme): number {
 
 /** How far the zoom slider can go from the automatic framing, for this zone and size. */
 export function zoomLimits(input: RenderInput): { min: number; max: number } {
-  const base = fitZoom(boundsOf(input), input.width, input.height, 0.06)
-  return { min: Math.max(1 - base, -3), max: Math.min(maxZoomFor(input.theme) - base, 10) }
+  const base = fitDetail(boundsOf(input), input.width, input.height, 0.06)
+  // Quarter steps, matching the slider — a limit between two steps would be unreachable.
+  return {
+    min: Math.ceil(Math.max(1 - base, -3) * 4) / 4,
+    max: Math.floor(Math.min(maxZoomFor(input.theme) - base, 10) * 4) / 4,
+  }
 }
 
 function computeViewport(
@@ -472,8 +498,12 @@ function computeViewport(
   maxZoom: number,
   padding = 0.06,
 ): Viewport {
-  const base = fitZoom(bounds, width, height, padding)
-  const zoom = Math.min(Math.max(base + view.zoomOffset, 1), maxZoom)
+  // Zoom limits and the offset apply to the detail zoom, so the clamp lands at the
+  // same framing on every image size; the projection zoom is that plus the size shift.
+  const shift = sizeShift(width, height)
+  const base = fitDetail(bounds, width, height, padding)
+  const detail = Math.min(Math.max(base + view.zoomOffset, 1), maxZoom)
+  const zoom = detail + shift
   const scale = TILE_SIZE * 2 ** zoom
 
   const centreLng = (bounds.east + bounds.west) / 2
@@ -482,9 +512,10 @@ function computeViewport(
   const centreY = latToWorldY(centreLat, scale)
 
   // The pan is in fitted-view units; at a closer zoom the same distance is more pixels.
-  const zoomFactor = 2 ** (zoom - base)
+  const zoomFactor = 2 ** (detail - base)
   return {
     zoom,
+    detail,
     scale,
     originX: centreX - width / 2 - view.panX * width * zoomFactor,
     originY: centreY - height / 2 - view.panY * height * zoomFactor,
@@ -497,9 +528,9 @@ function computeViewport(
  */
 export function panScale(input: RenderInput): number {
   const bounds = boundsOf(input)
-  const base = fitZoom(bounds, input.width, input.height, 0.06)
-  const zoom = Math.min(Math.max(base + input.view.zoomOffset, 1), maxZoomFor(input.theme))
-  return 2 ** (zoom - base)
+  const base = fitDetail(bounds, input.width, input.height, 0.06)
+  const detail = Math.min(Math.max(base + input.view.zoomOffset, 1), maxZoomFor(input.theme))
+  return 2 ** (detail - base)
 }
 
 function project(lng: number, lat: number, v: Viewport): [number, number] {
@@ -598,7 +629,7 @@ async function basemapLayer(v: Viewport, input: RenderInput): Promise<HTMLCanvas
   if (input.theme.basemap === 'vector' && input.theme.palette) {
     complete = await drawVectorBasemap(
       lctx,
-      { zoom: v.zoom, originX: v.originX, originY: v.originY, width: input.width, height: input.height },
+      { zoom: v.zoom, detail: v.detail, originX: v.originX, originY: v.originY, width: input.width, height: input.height },
       input.theme.palette,
     )
   } else {
@@ -624,7 +655,8 @@ async function basemapLayer(v: Viewport, input: RenderInput): Promise<HTMLCanvas
 async function drawSatellite(ctx: CanvasRenderingContext2D, v: Viewport, input: RenderInput): Promise<boolean> {
   // Imagery exists only at whole zooms; a fractional render zoom draws the tiles of the
   // zoom below, scaled up by the remainder (at most 2×).
-  const tileZoom = Math.floor(v.zoom)
+  // Imagery stops at z19; past that the z19 tiles are scaled up.
+  const tileZoom = Math.min(Math.floor(v.zoom), 19)
   const size = TILE_SIZE * 2 ** (v.zoom - tileZoom)
   const first = { x: Math.floor(v.originX / size), y: Math.floor(v.originY / size) }
   const last = {
@@ -994,7 +1026,7 @@ async function drawMap(ctx: CanvasRenderingContext2D, input: RenderInput) {
     ctx.fillStyle = 'rgba(90,53,243,0.12)'
     ctx.fill()
     ctx.strokeStyle = 'rgba(126,99,255,0.85)'
-    ctx.lineWidth = 2
+    ctx.lineWidth = Math.max(2 * (Math.min(input.width, input.height) / DETAIL_REF_PX), 1.5)
     ctx.stroke()
     ctx.restore()
   }
@@ -1015,7 +1047,7 @@ function drawTraffic(ctx: CanvasRenderingContext2D, input: RenderInput, v: Viewp
   // Traffic thickens with zoom as the streets under it do, but half as fast: close in,
   // a road on the map is wider than the traffic line, which then reads as a coloured
   // centre stripe — the way live-traffic maps draw it — rather than being swallowed.
-  const zoomGrowth = Math.min(Math.max(Math.sqrt(roadWidthScale(v.zoom)), 1), 2.5)
+  const zoomGrowth = Math.min(Math.max(Math.sqrt(roadWidthScale(v.detail)), 1), 2.5)
   const weight = Math.max((input.height / 300) * input.theme.strokeScale * zoomGrowth, 1.5)
   const casing = new Path2D()
   const byColour = new Map<string, Path2D>()
@@ -1131,12 +1163,15 @@ export interface AnimationOptions {
 }
 
 /**
- * Records the canvas frame by frame into a WebM file.
+ * Records the canvas frame by frame into a WebM file whose timing is exactly the
+ * preview's: every frame held for `holdMs`, no more.
  *
- * `captureStream(0)` plus `requestFrame()` gives manual control: the recorder takes a
- * frame only when told, so a slow tile fetch stretches nothing and a fast one does not
- * produce a blur of near-identical frames. Recording in real time would make the output
- * depend on the network, which is not a property anyone wants in an export.
+ * `captureStream(0)` plus `requestFrame()` makes the recorder take a frame only when
+ * told. On its own that wasn't enough: the recorder's clock kept running while the next
+ * frame rendered, so each frame stayed on screen for its hold PLUS the next frame's
+ * render time — seconds, at poster sizes — and the video played slower and more
+ * unevenly than the preview. Now the recorder is paused while a frame renders and
+ * resumed only for its hold; paused time is not part of the file.
  *
  * WebM because it is what browsers record without a library. MP4 needs an encoder, and
  * that is the same dependency question as server-side rendering.
@@ -1144,28 +1179,47 @@ export interface AnimationOptions {
 export async function recordAnimation(options: AnimationOptions): Promise<Blob> {
   const mimeType = preferredVideoType()
   if (!mimeType) throw new Error('This browser cannot record video.')
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+  // The first frame is painted before the recorder exists, so the canvas already has
+  // its final size when the bitrate is chosen from it.
+  await options.paint(0)
+  options.onProgress?.(1, options.frameCount)
+
+  const { width, height } = options.canvas
+  // Scaled to the image: a flat 8 Mbps was fine for small sizes and visibly soft at
+  // 1920px and above. ~12 bits per pixel per second, between 8 and 60 Mbps.
+  const videoBitsPerSecond = Math.min(Math.max(width * height * 12, 8_000_000), 60_000_000)
 
   const stream = options.canvas.captureStream(0)
   const track = stream.getVideoTracks()[0] as (CanvasCaptureMediaStreamTrack & MediaStreamTrack) | undefined
-  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 })
+  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond })
 
   const chunks: Blob[] = []
   recorder.ondataavailable = (e) => {
     if (e.data.size > 0) chunks.push(e.data)
   }
-
   const finished = new Promise<Blob>((resolve) => {
     recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }))
   })
 
   recorder.start()
-  for (let i = 0; i < options.frameCount; i++) {
+  track?.requestFrame()
+  await wait(options.holdMs)
+
+  for (let i = 1; i < options.frameCount; i++) {
+    recorder.pause()
     await options.paint(i)
+    recorder.resume()
     track?.requestFrame()
     options.onProgress?.(i + 1, options.frameCount)
-    // Hold the frame on screen for its share of the timeline.
-    await new Promise((r) => setTimeout(r, options.holdMs))
+    await wait(options.holdMs)
   }
+
+  // One closing copy of the last frame: a WebM frame's duration is the gap to the next
+  // one, so without it players cut the last frame short.
+  track?.requestFrame()
+  await wait(60)
   recorder.stop()
   return finished
 }

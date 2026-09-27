@@ -360,8 +360,13 @@ function loadVectorTile(z: number, x: number, y: number): Promise<DecodedTile | 
 // --- drawing -------------------------------------------------------------------
 
 export interface VectorView {
-  /** The render's zoom on a 256px tile grid. */
+  /** The render's zoom on a 256px tile grid — what geometry is projected at. */
   zoom: number
+  /**
+   * The same view's zoom on a 1000px image. Which tiles, which road classes and how
+   * thick they draw all follow this, so every output size shows the same map.
+   */
+  detail: number
   originX: number
   originY: number
   width: number
@@ -387,7 +392,7 @@ export async function drawVectorBasemap(
   // 512px, so this is the detail MapLibre itself would show — at a quarter the tiles.
   // Floored: the render zoom can be fractional, tiles only exist at whole zooms. The
   // remainder is taken up by `tilePx`, and vector geometry scales without blurring.
-  const tz = Math.min(Math.max(Math.floor(view.zoom) - 1, 0), MAX_TILE_ZOOM)
+  const tz = Math.min(Math.max(Math.floor(view.detail) - 1, 0), MAX_TILE_ZOOM)
   const tilePx = 256 * 2 ** (view.zoom - tz)
   const max = 2 ** tz
 
@@ -406,7 +411,7 @@ export async function drawVectorBasemap(
   ctx.fillStyle = palette.bg
   ctx.fillRect(0, 0, view.width, view.height)
 
-  const lineScale = Math.max(Math.min(view.width, view.height) / 1000, 0.5) * roadWidthScale(view.zoom)
+  const lineScale = Math.max(Math.min(view.width, view.height) / 1000, 0.5) * roadWidthScale(view.detail)
 
   /**
    * Layer by layer across ALL tiles, not tile by tile — otherwise the water in one
@@ -444,7 +449,7 @@ export async function drawVectorBasemap(
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   for (const bucket of ROAD_ORDER) {
-    const opacity = roadOpacity(bucket, view.zoom)
+    const opacity = roadOpacity(bucket, view.detail)
     if (opacity === 0) continue
     eachTile((tile, dx, dy, k) => {
       const lines = tile.roads[bucket]

@@ -172,7 +172,6 @@ export default function StudioPage() {
   // Keyed by the zone it belongs to, so switching zones needs no reset: a result whose
   // key no longer matches is simply not this zone's, and the page falls back to loading.
   const [loadedFrames, setLoadedFrames] = useState<{ zoneId: string; frames: Frame[] } | null>(null)
-  const [day, setDay] = useState<string>('')
 
   const [rawCurrent, setCurrent] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -218,7 +217,6 @@ export default function StudioPage() {
       setTraffics({})
       inFlight.current.clear()
       setLoadedFrames({ zoneId, frames })
-      setDay(studioApi.daysWithFrames(frames)[0] ?? '')
       setCurrent(0)
       setPlaying(false)
     })
@@ -230,64 +228,81 @@ export default function StudioPage() {
   const allFrames = loadedFrames?.zoneId === zoneId ? loadedFrames.frames : null
 
   const days = useMemo(() => (allFrames ? studioApi.daysWithFrames(allFrames) : []), [allFrames])
-
-  /** Every completed capture on the selected day, oldest first — the full playable range. */
-  const dayFrames = useMemo(
-    () => (allFrames ?? []).filter((f) => studioApi.wibDate(f.capturedAt) === day),
-    [allFrames, day],
-  )
+  const ordered = useMemo(() => allFrames ?? [], [allFrames])
+  const framesOn = useCallback((d: string) => ordered.filter((f) => studioApi.wibDate(f.capturedAt) === d), [ordered])
 
   /**
-   * The playback/export range within the day, bounded by two capture ids rather than
-   * two clock times. Captures land at irregular moments — a manual one at 19:33, the
-   * next scheduled one at 19:42 — so a time-of-day range would have to guess which
-   * frame a boundary "belongs" to. Anchoring to real frames means every choice in the
-   * picker is something that actually exists.
+   * The playback/export range: two capture ids anywhere in the zone's history, so a
+   * range can run across days — an evening into the next morning, or a whole week.
+   * Bounded by real captures rather than clock times: captures land at irregular
+   * moments, so every choice in the picker is a frame that actually exists.
    *
-   * Keyed on the day rather than reset by an effect: a chosen range whose `day` no
-   * longer matches the selected day is simply not this day's range, and the read below
-   * falls back to the full day on its own — the same pattern `loadedFrames` already uses
-   * for the zone switch. No effect means no render where the range briefly points at
-   * frames that no longer exist.
+   * Keyed on the zone rather than reset by an effect — a range whose `zoneId` no longer
+   * matches is simply not this zone's, and the read below falls back to the default on
+   * its own (the same pattern `loadedFrames` uses). The default is the newest day: a
+   * zone with weeks of history would otherwise open on a range of hundreds of frames.
    */
-  const [range, setRange] = useState<{ day: string; startId: string; endId: string } | null>(null)
+  const [range, setRange] = useState<{ zoneId: string; startId: string; endId: string } | null>(null)
 
-  function setRangeStartId(id: string) {
-    const idx = dayFrames.findIndex((f) => f.id === id)
-    // Keeps the range the right way round: pushing the start past the end drags the end
-    // along with it, rather than producing an empty range.
-    const endId = idx > rangeEndIdx ? id : (rangeEndId ?? id)
-    setRange({ day, startId: id, endId })
-  }
-  function setRangeEndId(id: string) {
-    const idx = dayFrames.findIndex((f) => f.id === id)
-    const startId = idx < rangeStartIdx ? id : (rangeStartId ?? id)
-    setRange({ day, startId, endId: id })
-  }
-  function resetRange() {
-    setRange(null)
-  }
+  const newestDay = days[0] ?? ''
+  const defaultRange = useMemo(() => {
+    const newest = framesOn(newestDay)
+    return { startId: newest[0]?.id ?? null, endId: newest[newest.length - 1]?.id ?? null }
+  }, [framesOn, newestDay])
 
-  const rangeStartId = range?.day === day ? range.startId : (dayFrames[0]?.id ?? null)
-  const rangeEndId = range?.day === day ? range.endId : (dayFrames[dayFrames.length - 1]?.id ?? null)
-
+  const rangeStartId = range?.zoneId === zoneId ? range.startId : defaultRange.startId
+  const rangeEndId = range?.zoneId === zoneId ? range.endId : defaultRange.endId
   const rangeStartIdx = Math.max(
-    dayFrames.findIndex((f) => f.id === rangeStartId),
+    ordered.findIndex((f) => f.id === rangeStartId),
     0,
   )
-  const rangeEndIdxFound = dayFrames.findIndex((f) => f.id === rangeEndId)
-  const rangeEndIdx = rangeEndIdxFound === -1 ? dayFrames.length - 1 : rangeEndIdxFound
+  const rangeEndIdxFound = ordered.findIndex((f) => f.id === rangeEndId)
+  const rangeEndIdx = rangeEndIdxFound === -1 ? ordered.length - 1 : rangeEndIdxFound
 
   /**
-   * What actually plays and exports — the day, narrowed to the selected range. Every
-   * export (single PNG, image set, animation) reads from this and nothing else, so the
-   * range the person set is exactly what they get: no separate "export scope" that could
-   * silently disagree with what the range picker shows.
+   * Moves one end of the range. Keeps it the right way round: pushing the start past
+   * the end drags the end along (and vice versa) rather than producing an empty range.
    */
-  const frames = useMemo(
-    () => dayFrames.slice(rangeStartIdx, rangeEndIdx + 1),
-    [dayFrames, rangeStartIdx, rangeEndIdx],
-  )
+  function setRangeEnd(which: 'start' | 'end', id: string) {
+    const idx = ordered.findIndex((f) => f.id === id)
+    if (idx === -1) return
+    let startId = ordered[rangeStartIdx]?.id ?? id
+    let endId = ordered[rangeEndIdx]?.id ?? id
+    if (which === 'start') {
+      startId = id
+      if (idx > rangeEndIdx) endId = id
+    } else {
+      endId = id
+      if (idx < rangeStartIdx) startId = id
+    }
+    setRange({ zoneId, startId, endId })
+    setPlaying(false)
+  }
+  function setRangeDay(which: 'start' | 'end', d: string) {
+    const onDay = framesOn(d)
+    // A day picked for the start begins at its first capture; for the end, its last.
+    const pick = which === 'start' ? onDay[0] : onDay[onDay.length - 1]
+    if (pick) setRangeEnd(which, pick.id)
+  }
+  function setWholeRange(startId: string | undefined, endId: string | undefined) {
+    if (!startId || !endId) return
+    setRange({ zoneId, startId, endId })
+    setPlaying(false)
+  }
+
+  const startFrame = ordered[rangeStartIdx] ?? null
+  const endFrame = ordered[rangeEndIdx] ?? null
+  const startDay = startFrame ? studioApi.wibDate(startFrame.capturedAt) : ''
+  const endDay = endFrame ? studioApi.wibDate(endFrame.capturedAt) : ''
+  /** For filenames: one day, or first_last when the range spans several. */
+  const rangeLabel = startDay === endDay ? startDay : `${startDay}_to_${endDay}`
+
+  /**
+   * What actually plays and exports. Every export (single PNG, image set, animation)
+   * reads from this and nothing else, so the range the person set is exactly what they
+   * get — no separate "export scope" that could disagree with the picker.
+   */
+  const frames = useMemo(() => ordered.slice(rangeStartIdx, rangeEndIdx + 1), [ordered, rangeStartIdx, rangeEndIdx])
 
   // The range can shrink out from under the raw position — narrowing the end past where
   // playback was, say. Clamped at the point of use rather than reset by an effect, so
@@ -670,13 +685,13 @@ export default function StudioPage() {
         setExporting({ label: 'Rendering images', done: i + 1, total: frames.length })
       }
 
-      downloadBlob(buildZip(entries), `${zoneLabel}-${day}-images.zip`.replace(/[/\\:*?"<>|]/g, '-'))
+      downloadBlob(buildZip(entries), `${zoneLabel}-${rangeLabel}-images.zip`.replace(/[/\\:*?"<>|]/g, '-'))
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Could not export the images.')
     } finally {
       setExporting(null)
     }
-  }, [frames, renderInputFor, trafficFor, zoneLabel, day, outputSize])
+  }, [frames, renderInputFor, trafficFor, zoneLabel, rangeLabel, outputSize])
 
   /**
    * Records the selected range into a WebM.
@@ -702,13 +717,13 @@ export default function StudioPage() {
           await renderCapture(canvas, renderInputFor(f, await trafficFor(f), outputSize.width, outputSize.height))
         },
       })
-      downloadBlob(blob, `${zoneLabel}-${day}.webm`.replace(/[/\\:*?"<>|]/g, '-'))
+      downloadBlob(blob, `${zoneLabel}-${rangeLabel}.webm`.replace(/[/\\:*?"<>|]/g, '-'))
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Could not record the animation.')
     } finally {
       setExporting(null)
     }
-  }, [frames, speed, day, renderInputFor, trafficFor, zoneLabel, outputSize])
+  }, [frames, speed, rangeLabel, renderInputFor, trafficFor, zoneLabel, outputSize])
 
   const zone = selectedZone
   const loadingFrame = frame ? !(frame.id in traffics) : false
@@ -737,7 +752,7 @@ export default function StudioPage() {
         <div>
           <h1 className="text-page-title font-bold text-text-primary">Studio</h1>
           <p className="text-body text-text-secondary mt-xs">
-            Play a zone&rsquo;s day back, frame by frame, from what it actually collected.
+            Play a zone&rsquo;s captures back, frame by frame, across any stretch of days.
           </p>
         </div>
         <div className="flex flex-wrap gap-md">
@@ -748,19 +763,6 @@ export default function StudioPage() {
             className="w-56"
             aria-label="Zone"
           />
-          {days.length > 0 && (
-            <Select
-              value={day}
-              onValueChange={(next) => {
-                setDay(next)
-                setCurrent(0)
-                setPlaying(false)
-              }}
-              options={days.map((d) => ({ value: d, label: formatDay(d) }))}
-              className="w-44"
-              aria-label="Day"
-            />
-          )}
         </div>
       </div>
 
@@ -917,40 +919,65 @@ export default function StudioPage() {
               actually produce.
             */}
             <section className="space-y-md py-lg border-t border-divider first:border-t-0">
-              <SectionLabel>Timeframe</SectionLabel>
-              <div className="grid grid-cols-2 gap-sm">
-                <div className="space-y-xs">
-                  <label className="text-micro font-semibold uppercase tracking-wider text-text-muted" htmlFor="range-start">
-                    Start
-                  </label>
-                  <Select
-                    id="range-start"
-                    className="w-full"
-                    value={rangeStartId ?? ''}
-                    onValueChange={setRangeStartId}
-                    options={dayFrames.map((f) => ({ value: f.id, label: f.time }))}
-                    aria-label="Range start"
-                  />
-                </div>
-                <div className="space-y-xs">
-                  <label className="text-micro font-semibold uppercase tracking-wider text-text-muted" htmlFor="range-end">
-                    End
-                  </label>
-                  <Select
-                    id="range-end"
-                    className="w-full"
-                    value={rangeEndId ?? ''}
-                    onValueChange={setRangeEndId}
-                    options={dayFrames.map((f) => ({ value: f.id, label: f.time }))}
-                    aria-label="Range end"
-                  />
-                </div>
+              <div className="flex items-center justify-between gap-sm">
+                <SectionLabel>Timeframe</SectionLabel>
+                <span className="text-micro font-semibold tabular-nums text-text-secondary bg-canvas-secondary rounded-xs px-sm py-xs">
+                  {frames.length} frame{frames.length === 1 ? '' : 's'}
+                </span>
               </div>
-              {frames.length !== dayFrames.length && (
-                <button onClick={resetRange} className="text-caption text-info hover:underline">
-                  Reset to full day
-                </button>
-              )}
+              {/* Quick picks, then the exact ends. Each end is a day and a capture on it,
+                  so a range can start one evening and finish days later. */}
+              <div className="flex gap-xs">
+                {(
+                  [
+                    ['Newest day', defaultRange.startId, defaultRange.endId],
+                    ['Last 7 days', framesOn(days[Math.min(6, days.length - 1)] ?? '')[0]?.id, ordered[ordered.length - 1]?.id],
+                    ['All', ordered[0]?.id, ordered[ordered.length - 1]?.id],
+                  ] as const
+                ).map(([label, startId, endId]) => {
+                  const active = startId === startFrame?.id && endId === endFrame?.id
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => setWholeRange(startId ?? undefined, endId ?? undefined)}
+                      aria-pressed={active}
+                      className={cn(
+                        'flex-1 h-8 rounded-md text-micro font-semibold transition-colors',
+                        active ? 'bg-primary text-on-primary' : 'bg-canvas-secondary text-text-secondary hover:text-text-primary',
+                      )}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+              {(
+                [
+                  ['start', 'From', startDay, startFrame],
+                  ['end', 'To', endDay, endFrame],
+                ] as const
+              ).map(([which, label, d, f]) => (
+                <div key={which} className="space-y-xs">
+                  <p className="text-micro font-semibold uppercase tracking-wider text-text-muted">{label}</p>
+                  <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-sm">
+                    <Select
+                      className="w-full"
+                      value={d}
+                      onValueChange={(next) => setRangeDay(which, next)}
+                      options={days.map((day) => ({ value: day, label: formatDay(day) }))}
+                      aria-label={`${label} day`}
+                    />
+                    <Select
+                      className="w-full"
+                      value={f?.id ?? ''}
+                      onValueChange={(id) => setRangeEnd(which, id)}
+                      options={framesOn(d).map((x) => ({ value: x.id, label: x.time }))}
+                      aria-label={`${label} time`}
+                    />
+                  </div>
+                </div>
+              ))}
             </section>
 
             {/* 1. Map theme — the basemap's colour identity: a literal Standard rendering,
