@@ -25,23 +25,23 @@ docker compose logs -f api           # Lihat log service tertentu
 docker compose exec api sh           # Masuk ke container api
 
 # Frontend (jika run manual di luar Docker)
-cd web && pnpm dev                   # Dev server (port 3000)
-cd web && pnpm build                 # Production build
-cd web && pnpm lint                  # ESLint
+cd web && npm run dev                   # Dev server (port 3000)
+cd web && npm run build                 # Production build
+cd web && npm run lint                  # ESLint
 
 # Backend (jika run manual di luar Docker)
-cd api && pnpm dev                   # Express dev server dengan hot reload (tsx watch)
-cd api && pnpm build                 # Compile TypeScript
-cd api && pnpm start                 # Run compiled server
-cd api && pnpm worker                # Jalankan capture worker
-cd api && pnpm test                  # Run semua unit test (vitest/jest)
-cd api && pnpm test:coverage         # Test dengan coverage report
-cd api && pnpm lint                  # ESLint
+cd api && npm run dev                   # Express dev server dengan hot reload (tsx watch)
+cd api && npm run build                 # Compile TypeScript
+cd api && npm run start                 # Run compiled server
+cd api && npm run worker                # Jalankan capture worker
+cd api && npm run test                  # Run semua unit test (vitest/jest)
+cd api && npm run test:coverage         # Test dengan coverage report
+cd api && npm run lint                  # ESLint
 
 # Drizzle ORM
-cd api && pnpm drizzle-kit generate  # Generate migration dari schema
-cd api && pnpm drizzle-kit migrate   # Jalankan migration
-cd api && pnpm drizzle-kit studio    # Buka Drizzle Studio (GUI DB browser)
+cd api && npx drizzle-kit generate  # Generate migration dari schema
+cd api && npx drizzle-kit migrate   # Jalankan migration
+cd api && npx drizzle-kit studio    # Buka Drizzle Studio (GUI DB browser)
 
 # Swagger
 # Swagger UI tersedia otomatis di: http://localhost:8080/api-docs
@@ -57,6 +57,18 @@ cp web/.env.example web/.env.local   # Setup frontend env
 - Limit enforce di service layer, bukan controller (BR-007)
 - Capture file path di R2: `captures/{user_id}/{YYYY}/{MM}/{capture_id}.png`
 - PostGIS polygon zone disimpan sebagai `geometry(Polygon, 4326)` — selalu WGS84
+- **Semua kolom waktu WAJIB `timestamptz`** (`timestamp('x', { withTimezone: true })` di Drizzle).
+  `timestamp` polos tidak menyimpan offset, jadi nilainya berarti apa pun yang diasumsikan proses
+  pembaca — aman selama semua container UTC, diam-diam salah begitu ada satu yang tidak, dan
+  gagalnya tak terlihat: tidak ada error, cuma jam yang meleset. Simpan instant; WIB adalah urusan
+  query/tampilan (`AT TIME ZONE 'Asia/Jakarta'`), bukan urusan penyimpanan.
+  Dijaga otomatis oleh `api/src/config/schema-timezone.test.ts`.
+  ⚠️ `npx @better-auth/cli generate` MENGHAPUS `withTimezone` setiap kali dijalankan — pasang lagi.
+- **Setiap perubahan schema WAJIB ikut meng-update `docs/database/schema.dbml` di commit yang sama.**
+  Bukan commit berikutnya. ERD yang basi lebih buruk daripada tidak ada ERD: tidak ada yang curiga
+  pada diagram, jadi orang pertama yang merencanakan berdasarkan itu merencanakan untuk schema yang
+  tidak ada. Sertakan tabel/kolom baru & terhapus, perubahan tipe/nullability, index & constraint
+  baru, dan baris `Last updated`. Lihat `docs/database/README.md`.
 - Subscription tier check wajib ada di setiap endpoint yang berkaitan zona & schedule
 - UI components wajib berbasis Base UI — jangan buat custom dari scratch
 - Dark theme HANYA untuk halaman map visualization & export — dashboard tetap white-first
@@ -66,6 +78,10 @@ cp web/.env.example web/.env.local   # Setup frontend env
 - Semua secret & config dari `.env` — jangan hardcode di source code, load via `zod`-validated config object
 - Styling frontend wajib pakai token Tailwind dari `tailwind.config.ts` — jangan hardcode hex
 - Semua service (api, worker, web, db, rabbitmq) wajib bisa jalan lewat `docker compose up` tanpa setup manual tambahan
+- **Nama branch & judul PR pakai `<type>/<nama-kebab-case>`** dengan type yang SAMA seperti commit:
+  `feat` · `fix` · `refactor` · `docs` · `test` · `chore` · `perf`. Contoh `feat/schedule-management`,
+  `fix/session-expiry-timezone`, `chore/db-conventions`. Satu kosakata untuk branch, PR, dan commit —
+  lihat structure.md.
 
 ## Project Structure
 ```
@@ -139,7 +155,7 @@ Setiap task mengikuti flow ini — wajib dipatuhi:
 1. TANDAI task sebagai 🟡 In Progress di SPRINT.md sebelum mulai coding
 2. KERJAKAN implementasi (route → controller → service → repository → test → swagger)
 3. TULIS unit test untuk setiap endpoint baru di file *.test.ts
-4. JALANKAN test: pnpm test — pastikan pass sebelum selesai
+4. JALANKAN test: npm test — pastikan pass sebelum selesai
 5. VERIFIKASI Swagger annotation lengkap dan ter-render di /api-docs
 6. TANDAI task sebagai ✅ Done di SPRINT.md
 7. CATAT log singkat di SPRINT.md section "Progress Log" (tanggal + apa yang dilakukan)
@@ -153,6 +169,9 @@ Jangan pindah ke task berikutnya sebelum task aktif di-tandai ✅ dan test pass.
 DO   → Baca SPRINT.md sebelum mulai. Tanya jika ada ambiguitas.
 DO   → Enforce plan limit di service layer, referensikan BR-007.
 DO   → Simpan polygon sebagai PostGIS geometry, bukan JSON biasa.
+DO   → Pakai `timestamptz` untuk SEMUA kolom waktu — tidak pernah `timestamp` polos.
+DO   → Update docs/database/schema.dbml di commit yang sama saat schema berubah.
+DO   → Nama branch & PR: <type>/<kebab-case>, type sama dengan commit (feat/schedule-management).
 DO   → Tulis Swagger JSDoc annotation di setiap route baru.
 DO   → Tulis unit test untuk setiap endpoint baru.
 DO   → Baca .env.example sebelum menggunakan config value.

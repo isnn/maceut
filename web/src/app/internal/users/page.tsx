@@ -6,10 +6,14 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Alert } from '@/components/ui/Alert'
-import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
+import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
+import { useTableControls } from '@/components/ui/useTableControls'
+import { ActionMenu } from '@/components/ui/ActionMenu'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { UsageMeter } from '@/components/ui/UsageMeter'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { AddUserDialog } from '@/features/internal/components/AddUserDialog'
+import { EditUserDialog } from '@/features/internal/components/EditUserDialog'
 import { formatDate } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER } from '@/lib/constants'
 import { ApiError } from '@/types/api'
@@ -22,12 +26,16 @@ const ROLE_LABEL: Record<PlatformRole, string> = { user: 'User', internal: 'Inte
 
 export default function InternalUsersPage() {
   const [rows, setRows] = useState<InternalUserRow[] | null>(null)
-  const [search, setSearch] = useState('')
   const [planFilter, setPlanFilter] = useState<Plan | 'all'>('all')
   const [roleFilter, setRoleFilter] = useState<PlatformRole | 'all'>('all')
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [viewing, setViewing] = useState<InternalUserRow | null>(null)
   const [downgrade, setDowngrade] = useState<{ row: InternalUserRow; plan: Plan } | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [editing, setEditing] = useState<InternalUserRow | null>(null)
+  const [deleting, setDeleting] = useState<InternalUserRow | null>(null)
+  const [deletePending, setDeletePending] = useState(false)
 
   const load = useCallback(() => internalApi.getUserDirectory(), [])
   const refetch = useCallback(() => load().then(setRows), [load])
@@ -36,18 +44,32 @@ export default function InternalUsersPage() {
     load().then(setRows)
   }, [load])
 
-  const visible = useMemo(() => {
-    if (!rows) return []
-    const term = search.trim().toLowerCase()
-    return rows.filter((row) => {
-      const matchesTerm =
-        term === '' ||
-        row.fullName.toLowerCase().includes(term) ||
-        row.email.toLowerCase().includes(term) ||
-        row.organisation.toLowerCase().includes(term)
-      return matchesTerm && (planFilter === 'all' || row.plan === planFilter) && (roleFilter === 'all' || row.role === roleFilter)
-    })
-  }, [rows, search, planFilter, roleFilter])
+  // The plan and role dropdowns narrow the set before search, sort and paging run, so
+  // "showing 4 of 12" counts within the filter rather than across the whole directory.
+  const filtered = useMemo(
+    () =>
+      rows?.filter(
+        (row) =>
+          (planFilter === 'all' || row.plan === planFilter) && (roleFilter === 'all' || row.role === roleFilter),
+      ) ?? null,
+    [rows, planFilter, roleFilter],
+  )
+
+  const table = useTableControls<InternalUserRow>({
+    rows: filtered,
+    searchOn: (row) => [row.fullName, row.email],
+    sortOn: {
+      name: (row) => row.fullName.toLowerCase(),
+      plan: (row) => PLAN_ORDER.indexOf(row.plan),
+      role: (row) => row.role,
+      zones: (row) => row.usage.zonesCount,
+      windows: (row) => row.usage.schedulesActiveCount,
+      captures: (row) => row.usage.capturesToday,
+      joined: (row) => row.createdAt,
+    },
+    initialSort: { key: 'joined', direction: 'desc' },
+  })
+  const visible = table.visible
 
   const internalCount = rows?.filter((r) => r.role === 'internal').length ?? 0
 
@@ -73,6 +95,29 @@ export default function InternalUsersPage() {
     refetch()
   }
 
+  async function confirmDelete() {
+    if (!deleting) return
+    setDeletePending(true)
+    setError(null)
+    try {
+      const res = await internalApi.deleteUser(deleting.id)
+      setDeleting(null)
+      refetch()
+      // Say what actually went, rather than leaving the operator to wonder what they
+      // just destroyed. The server counts it before deleting, so this is measured.
+      setNotice(
+        `Deleted ${res.deleted.email}` +
+          (res.removed.zones || res.removed.schedules
+            ? ` · ${res.removed.zones} zones and ${res.removed.schedules} capture windows removed`
+            : ''),
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not delete the account. Please try again.')
+    } finally {
+      setDeletePending(false)
+    }
+  }
+
   async function confirmDowngrade() {
     if (!downgrade) return
     await internalApi.setUserPlan(downgrade.row.id, downgrade.plan)
@@ -85,33 +130,45 @@ export default function InternalUsersPage() {
         const next = PLAN_LIMITS[downgrade.plan]
         const u = downgrade.row.usage
         const over: string[] = []
-        if (u.zonesCount > next.zonesLimit) over.push(`${u.zonesCount} zones over a ${next.zonesLimit}-zone limit`)
+        // Zones and windows are measured, so this list is now real rather than always
+        // empty — the warning it feeds could never fire while every count was null.
+        if (u.zonesCount > next.zonesLimit)
+          over.push(`${u.zonesCount} zones over a ${next.zonesLimit}-zone limit`)
         if (u.schedulesActiveCount > next.schedulesLimit)
           over.push(`${u.schedulesActiveCount} active windows over a ${next.schedulesLimit} limit`)
-        if (u.storageUsedGb > next.storageGb) over.push(`${u.storageUsedGb} GB over a ${next.storageGb} GB limit`)
+        // Storage is still unmeasured; null means "not known", not "zero", so it is
+        // skipped rather than reported as within limits.
+        if (u.storageUsedGb !== null && u.storageUsedGb > next.storageGb)
+          over.push(`${u.storageUsedGb} GB over a ${next.storageGb} GB limit`)
         return over
       })()
     : []
 
   return (
     <div className="space-y-lg">
-      <div>
-        <p className="text-label text-text-secondary">Platform · {rows?.length ?? 0} accounts</p>
-        <h1 className="text-page-title font-bold text-text-primary mt-xs">Users</h1>
-        <p className="text-body text-text-secondary mt-xs max-w-[70ch]">
-          Change a customer&rsquo;s plan or grant them internal access. You cannot change your own role, and the last
-          internal account cannot be demoted.
-        </p>
+      <div className="flex flex-wrap items-start gap-lg">
+        <div>
+          <p className="text-label text-text-secondary">Platform · {rows?.length ?? 0} accounts</p>
+          <h1 className="text-page-title font-bold text-text-primary mt-xs">Users</h1>
+          <p className="text-body text-text-secondary mt-xs max-w-[70ch]">
+            Create an account, change a customer&rsquo;s plan, or grant internal access. You cannot change your own
+            role, and the last internal account cannot be demoted.
+          </p>
+        </div>
+        <Button className="ml-auto shrink-0" onClick={() => setAdding(true)}>
+          Add user
+        </Button>
       </div>
 
       {error && <Alert variant="warning">{error}</Alert>}
+      {notice && <Alert variant="success">{notice}</Alert>}
 
       <div className="flex flex-wrap items-center gap-md">
         <Input
           type="search"
-          placeholder="Search name, email or organisation…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search name or email…"
+          value={table.search}
+          onChange={(e) => table.setSearch(e.target.value)}
           className="w-full tablet:w-80"
         />
         <Select
@@ -137,7 +194,7 @@ export default function InternalUsersPage() {
         />
       </div>
 
-      {rows === null ? (
+      {table.loading ? (
         <div className="h-64 bg-canvas-secondary rounded-lg animate-pulse" />
       ) : visible.length === 0 ? (
         <EmptyState title="No accounts match" description="Try a different filter or search term." />
@@ -146,12 +203,58 @@ export default function InternalUsersPage() {
           <Table>
             <thead>
               <tr>
-                <Th>Person</Th>
-                <Th>Organisation</Th>
-                <Th>Plan</Th>
-                <Th>Role</Th>
-                <Th>Usage</Th>
-                <Th>Joined</Th>
+                <SortableTh
+                  active={table.sort?.key === 'name'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('name')}
+                >
+                  Person
+                </SortableTh>
+                <SortableTh
+                  active={table.sort?.key === 'plan'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('plan')}
+                >
+                  Plan
+                </SortableTh>
+                <SortableTh
+                  active={table.sort?.key === 'role'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('role')}
+                >
+                  Role
+                </SortableTh>
+                <SortableTh
+                  className="text-right"
+                  active={table.sort?.key === 'zones'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('zones')}
+                >
+                  Zones
+                </SortableTh>
+                <SortableTh
+                  className="text-right"
+                  active={table.sort?.key === 'windows'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('windows')}
+                >
+                  Windows
+                </SortableTh>
+                <SortableTh
+                  className="text-right"
+                  active={table.sort?.key === 'captures'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('captures')}
+                >
+                  Captures
+                </SortableTh>
+                <SortableTh
+                  active={table.sort?.key === 'joined'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('joined')}
+                >
+                  Joined
+                </SortableTh>
                 <Th className="text-right">Actions</Th>
               </tr>
             </thead>
@@ -171,17 +274,11 @@ export default function InternalUsersPage() {
                           <p className="font-semibold text-text-primary truncate">
                             {row.fullName}
                             {row.isYou && <span className="ml-sm text-micro text-text-muted font-normal">You</span>}
-                            {row.isDemo && (
-                              <span className="ml-sm text-micro text-text-muted font-normal border border-border rounded-xs px-sm py-[1px]">
-                                demo
-                              </span>
-                            )}
                           </p>
                           <p className="text-caption text-text-muted truncate">{row.email}</p>
                         </div>
                       </div>
                     </Td>
-                    <Td className="text-text-secondary">{row.organisation || '—'}</Td>
                     <Td>
                       <Select
                         size="sm"
@@ -216,15 +313,44 @@ export default function InternalUsersPage() {
                       />
                       {byConfig && <p className="text-micro text-text-muted mt-xs">set by env</p>}
                     </Td>
-                    <Td className="text-caption text-text-secondary whitespace-nowrap tabular-nums">
-                      {row.usage.zonesCount}/{row.usage.zonesLimit} zones ·{' '}
-                      {row.usage.capturesToday}/{row.usage.capturesLimit} captures
+                    <Td className="text-right tabular-nums text-text-secondary whitespace-nowrap">
+                      {row.usage.zonesCount}
+                      <span className="text-text-muted">/{row.usage.zonesLimit}</span>
+                      {row.usage.zonesPaused > 0 && (
+                        <span className="block text-micro text-warning-text">{row.usage.zonesPaused} paused</span>
+                      )}
+                    </Td>
+                    <Td className="text-right tabular-nums text-text-secondary whitespace-nowrap">
+                      {row.usage.schedulesActiveCount}
+                      <span className="text-text-muted">/{row.usage.schedulesLimit}</span>
+                      {row.usage.schedulesPaused > 0 && (
+                        <span className="block text-micro text-warning-text">{row.usage.schedulesPaused} paused</span>
+                      )}
+                    </Td>
+                    <Td className="text-right tabular-nums text-text-secondary whitespace-nowrap">
+                      {/* Null, not zero: nothing counts captures yet (CAP-01). */}
+                      {row.usage.capturesToday ?? <span className="text-text-muted">&mdash;</span>}
+                      <span className="text-text-muted">/{row.usage.capturesLimit}</span>
                     </Td>
                     <Td className="text-text-secondary whitespace-nowrap">{formatDate(row.createdAt)}</Td>
-                    <Td className="text-right">
-                      <button onClick={() => setViewing(row)} className="text-label text-info hover:underline">
-                        View usage
-                      </button>
+                    <Td className="text-right whitespace-nowrap">
+                      <div className="flex justify-end">
+                        <ActionMenu
+                          label={`Actions for ${row.fullName}`}
+                          items={[
+                            { label: 'View usage', onSelect: () => setViewing(row) },
+                            { label: 'Edit account', onSelect: () => setEditing(row) },
+                            {
+                              label: 'Delete account',
+                              destructive: true,
+                              // Refused by the server too; disabling here explains why up front
+                              // rather than after a 403.
+                              disabled: row.isYou,
+                              onSelect: () => setDeleting(row),
+                            },
+                          ]}
+                        />
+                      </div>
                     </Td>
                   </tr>
                 )
@@ -232,6 +358,19 @@ export default function InternalUsersPage() {
             </tbody>
           </Table>
         </TableWrap>
+      )}
+
+      {!table.loading && (
+        <Pagination
+          page={table.page}
+          pageCount={table.pageCount}
+          pageSize={table.pageSize}
+          onPage={table.setPage}
+          matchCount={table.matchCount}
+          totalCount={table.totalCount}
+          noun="accounts"
+          onClearSearch={table.search ? () => table.setSearch('') : undefined}
+        />
       )}
 
       {viewing && <UsageDialog row={viewing} onClose={() => setViewing(null)} />}
@@ -257,6 +396,34 @@ export default function InternalUsersPage() {
         onConfirm={confirmDowngrade}
         onCancel={() => setDowngrade(null)}
       />
+
+      <AddUserDialog open={adding} onClose={() => setAdding(false)} onCreated={refetch} />
+
+      <EditUserDialog row={editing} onClose={() => setEditing(null)} onSaved={refetch} />
+
+      <ConfirmDialog
+        open={deleting !== null}
+        title={`Delete ${deleting?.fullName ?? ''}?`}
+        description={
+          <>
+            <p>
+              This removes <strong>{deleting?.email}</strong> and everything belonging to the account. It cannot be
+              undone.
+            </p>
+            {deleting && deleting.usage.zonesCount + deleting.usage.zonesPaused > 0 && (
+              <p className="mt-md">
+                Going with it: {deleting.usage.zonesCount + deleting.usage.zonesPaused} zones and{' '}
+                {deleting.usage.schedulesActiveCount + deleting.usage.schedulesPaused} capture windows.
+              </p>
+            )}
+          </>
+        }
+        confirmLabel="Delete account"
+        destructive
+        pending={deletePending}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleting(null)}
+      />
     </div>
   )
 }
@@ -270,15 +437,25 @@ function UsageDialog({ row, onClose }: { row: InternalUserRow; onClose: () => vo
         <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[36rem] max-h-[90vh] overflow-y-auto bg-card border border-border rounded-lg p-xl shadow-elevation-3">
           <Dialog.Title className="text-section-title text-text-primary">{row.fullName}</Dialog.Title>
           <Dialog.Description className="text-caption text-text-secondary mt-xs mb-lg">
-            {row.email}
-            {row.organisation && ` · ${row.organisation}`} · {PLAN_LABEL[row.plan]} plan
+            {row.email} · {PLAN_LABEL[row.plan]} plan
           </Dialog.Description>
 
-          {row.isDemo && (
+          {(row.usage.zonesPaused > 0 || row.usage.schedulesPaused > 0) && (
             <Alert variant="warning" className="mb-lg">
-              Seeded demo tenant — these figures are fabricated and never change.
+              This account has{' '}
+              {row.usage.zonesPaused > 0 && `${row.usage.zonesPaused} zone${row.usage.zonesPaused === 1 ? '' : 's'}`}
+              {row.usage.zonesPaused > 0 && row.usage.schedulesPaused > 0 && ' and '}
+              {row.usage.schedulesPaused > 0 &&
+                `${row.usage.schedulesPaused} capture window${row.usage.schedulesPaused === 1 ? '' : 's'}`}{' '}
+              paused for exceeding the {PLAN_LABEL[row.plan]} plan. Nothing was deleted &mdash; moving the plan back up
+              lets them be resumed.
             </Alert>
           )}
+
+          <Alert variant="warning" className="mb-lg">
+            Captures and storage aren&apos;t tracked yet, so those read &quot;&mdash;&quot;. Zones and capture windows
+            are counted for real.
+          </Alert>
 
           <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
             <UsageMeter label="Zones" value={row.usage.zonesCount} max={row.usage.zonesLimit} />

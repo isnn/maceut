@@ -10,6 +10,8 @@ import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
+import { useTableControls } from '@/components/ui/useTableControls'
 import { cn } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_LIMITS } from '@/lib/constants'
 import { ApiError } from '@/types/api'
@@ -35,6 +37,32 @@ function hourOf(time: string): number {
   return Number(time.split(':')[0])
 }
 
+/**
+ * Packs windows into rows so overlapping ones stop hiding each other.
+ *
+ * Every window was absolutely positioned on one 44px ruler, so two that share any hour
+ * sat on top of each other — a zone with a morning and an all-day window showed one
+ * bar and silently lost the other. Greedy first-fit: each window takes the first lane
+ * whose last window has already ended, so a zone uses only as many rows as it actually
+ * needs.
+ *
+ * Sorted by start time first, which is what makes first-fit produce the minimum number
+ * of lanes rather than an arbitrary number.
+ */
+function packIntoLanes(windows: CaptureWindow[]): CaptureWindow[][] {
+  const lanes: CaptureWindow[][] = []
+
+  for (const w of [...windows].sort((a, b) => hourOf(a.start) - hourOf(b.start))) {
+    const lane = lanes.find((l) => {
+      const last = l[l.length - 1]!
+      return hourOf(last.end) <= hourOf(w.start)
+    })
+    if (lane) lane.push(w)
+    else lanes.push([w])
+  }
+  return lanes
+}
+
 export default function SchedulePage() {
   const { user } = useCurrentUser()
   const [zones, setZones] = useState<Zone[]>([])
@@ -46,9 +74,10 @@ export default function SchedulePage() {
   const limits = PLAN_LIMITS[plan]
 
   const load = useCallback(async () => {
-    const nextZones = await zonesApi.getZones(plan)
-    return { zones: nextZones, windows: await schedulesApi.getWindows(plan) }
-  }, [plan])
+    const nextZones = await zonesApi.getZones()
+    return { zones: nextZones, windows: await schedulesApi.getWindows() }
+    // No dependency: both are scoped to the session server-side.
+  }, [])
 
   const apply = useCallback((data: { zones: Zone[]; windows: CaptureWindow[] }) => {
     setZones(data.zones)
@@ -60,6 +89,23 @@ export default function SchedulePage() {
   useEffect(() => {
     if (user) load().then(apply)
   }, [user, load, apply])
+
+  const zoneName = (id: string) => zones.find((z) => z.id === id)?.name ?? '—'
+
+  const windowTable = useTableControls<CaptureWindow>({
+    rows: windows,
+    searchOn: (w) => [w.label, zoneName(w.zoneId)],
+    sortOn: {
+      label: (w) => w.label.toLowerCase(),
+      zone: (w) => zoneName(w.zoneId).toLowerCase(),
+      hours: (w) => w.start,
+      frames: (w) => framesPerDay(w),
+      // Active first when ascending: what is running belongs at the top.
+      status: (w) => (w.active ? 0 : 1),
+    },
+    defaultDirection: { frames: 'desc' },
+    pageSize: 10,
+  })
 
   const framesTotal = useMemo(() => (windows ? schedulesApi.totalFramesPerDay(windows) : 0), [windows])
   const activeCount = windows?.filter((w) => w.active).length ?? 0
@@ -112,7 +158,7 @@ export default function SchedulePage() {
                 {zones.map((zone) => {
                   const zoneWindows = windows.filter((w) => w.zoneId === zone.id)
                   return (
-                    <li key={zone.id} className="grid grid-cols-[160px_1fr] gap-md items-center">
+                    <li key={zone.id} className="grid grid-cols-[160px_1fr] gap-md items-start">
                       <div className="min-w-0">
                         <p className="text-label font-semibold text-text-primary truncate">{zone.name}</p>
                         <p className="text-micro text-text-muted mt-xs">
@@ -121,41 +167,47 @@ export default function SchedulePage() {
                             : `${zoneWindows.length} windows · ${zoneWindows.reduce((s, w) => s + framesPerDay(w), 0)} frames/day`}
                         </p>
                       </div>
-                      <div className="relative h-11 bg-canvas-secondary border border-divider rounded-md overflow-hidden">
-                        {zone.status === 'paused' && (
-                          <span className="absolute inset-0 flex items-center justify-center text-micro text-text-muted">
-                            Paused
-                          </span>
-                        )}
-                        {zone.status !== 'paused' &&
-                          zoneWindows.map((w) => {
-                            const start = ((hourOf(w.start) - FIRST_HOUR) / HOURS.length) * 100
-                            const width = ((hourOf(w.end) - hourOf(w.start)) / HOURS.length) * 100
-                            return (
-                              <button
-                                key={w.id}
-                                onClick={() => setEditing(w)}
-                                title={`${w.label} · ${w.start}–${w.end}`}
-                                className={cn(
-                                  'absolute top-1 bottom-1 rounded-sm px-sm text-micro font-semibold truncate text-left transition-colors',
-                                  w.active
-                                    ? 'bg-primary text-on-primary hover:bg-primary-hover'
-                                    : 'bg-canvas border border-border text-text-muted'
-                                )}
-                                style={{ left: `${start}%`, width: `${Math.max(width, 6)}%` }}
-                              >
-                                {w.start}–{w.end}
-                              </button>
-                            )
-                          })}
-                        {zone.status !== 'paused' && zoneWindows.length === 0 && (
-                          <button
-                            onClick={() => setAddOpen(true)}
-                            className="absolute inset-0 flex items-center justify-center text-micro text-text-muted hover:text-primary transition-colors"
+                      <div className="space-y-1">
+                        {(zone.status === 'paused' ? [[]] : packIntoLanes(zoneWindows)).map((lane, laneIndex) => (
+                          <div
+                            key={laneIndex}
+                            className="relative h-11 bg-canvas-secondary border border-divider rounded-md overflow-hidden"
                           >
-                            + Add a window
-                          </button>
-                        )}
+                            {zone.status === 'paused' && (
+                              <span className="absolute inset-0 flex items-center justify-center text-micro text-text-muted">
+                                Paused
+                              </span>
+                            )}
+                            {lane.map((w) => {
+                              const start = ((hourOf(w.start) - FIRST_HOUR) / HOURS.length) * 100
+                              const width = ((hourOf(w.end) - hourOf(w.start)) / HOURS.length) * 100
+                              return (
+                                <button
+                                  key={w.id}
+                                  onClick={() => setEditing(w)}
+                                  title={`${w.label} · ${w.start}–${w.end}`}
+                                  className={cn(
+                                    'absolute top-1 bottom-1 rounded-sm px-sm text-micro font-semibold truncate text-left transition-colors',
+                                    w.active
+                                      ? 'bg-primary text-on-primary hover:bg-primary-hover'
+                                      : 'bg-canvas border border-border text-text-muted'
+                                  )}
+                                  style={{ left: `${start}%`, width: `${Math.max(width, 6)}%` }}
+                                >
+                                  {w.start}–{w.end}
+                                </button>
+                              )
+                            })}
+                            {zone.status !== 'paused' && zoneWindows.length === 0 && (
+                              <button
+                                onClick={() => setAddOpen(true)}
+                                className="absolute inset-0 flex items-center justify-center text-micro text-text-muted hover:text-primary transition-colors"
+                              >
+                                + Add a window
+                              </button>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </li>
                   )
@@ -200,6 +252,133 @@ export default function SchedulePage() {
           </Card>
         </div>
       </div>
+
+      {/* Every window as a list, under the ruler. The ruler answers "when does this zone
+          collect?" at a glance; this answers "what exactly is set up, and is any of it
+          paused?" — which a bar chart cannot, and which is the question when something
+          has stopped collecting. */}
+      <section className="space-y-md">
+        <div className="flex flex-wrap items-center justify-between gap-md">
+          <h2 className="text-section-title text-text-primary">Capture windows</h2>
+          <Input
+            type="search"
+            placeholder="Search windows or zones…"
+            value={windowTable.search}
+            onChange={(e) => windowTable.setSearch(e.target.value)}
+            className="w-full tablet:w-64"
+          />
+        </div>
+      
+        {(windows ?? []).length === 0 ? (
+          <EmptyState title="No capture windows yet" description="A zone stays idle until one is set." />
+        ) : (
+          <>
+            <TableWrap>
+              <Table>
+                <thead>
+                  <tr>
+                    <SortableTh
+                      active={windowTable.sort?.key === 'label'}
+                      direction={windowTable.sort?.direction ?? 'asc'}
+                      onSort={() => windowTable.toggleSort('label')}
+                    >
+                      Window
+                    </SortableTh>
+                    <SortableTh
+                      active={windowTable.sort?.key === 'zone'}
+                      direction={windowTable.sort?.direction ?? 'asc'}
+                      onSort={() => windowTable.toggleSort('zone')}
+                    >
+                      Zone
+                    </SortableTh>
+                    <SortableTh
+                      active={windowTable.sort?.key === 'hours'}
+                      direction={windowTable.sort?.direction ?? 'asc'}
+                      onSort={() => windowTable.toggleSort('hours')}
+                    >
+                      Hours
+                    </SortableTh>
+                    <Th>Interval</Th>
+                    <Th>Days</Th>
+                    <SortableTh
+                      className="text-right"
+                      active={windowTable.sort?.key === 'frames'}
+                      direction={windowTable.sort?.direction ?? 'asc'}
+                      onSort={() => windowTable.toggleSort('frames')}
+                    >
+                      Frames / day
+                    </SortableTh>
+                    <SortableTh
+                      active={windowTable.sort?.key === 'status'}
+                      direction={windowTable.sort?.direction ?? 'asc'}
+                      onSort={() => windowTable.toggleSort('status')}
+                    >
+                      Status
+                    </SortableTh>
+                    <Th className="text-right">Actions</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {windowTable.visible.map((w) => (
+                    <tr key={w.id} className="hover:bg-canvas-secondary/60 transition-colors">
+                      <Td className="font-semibold text-text-primary">{w.label}</Td>
+                      <Td className="text-text-secondary">{zoneName(w.zoneId)}</Td>
+                      <Td className="tabular-nums text-text-secondary whitespace-nowrap">
+                        {w.start}–{w.end}
+                      </Td>
+                      <Td className="text-text-secondary">{INTERVAL_LABEL[w.interval]}</Td>
+                      <Td>
+                        <span className="flex gap-xs">
+                          {DAY_LABEL.map((label, index) => (
+                            <span
+                              key={`${w.id}-${index}`}
+                              title={w.days.includes(index) ? 'Collecting' : 'Not collecting'}
+                              className={cn(
+                                'w-5 h-5 rounded-xs text-micro flex items-center justify-center',
+                                w.days.includes(index)
+                                  ? 'bg-primary-soft text-[#5A35F3] font-semibold'
+                                  : 'bg-canvas-secondary text-text-muted'
+                              )}
+                            >
+                              {label}
+                            </span>
+                          ))}
+                        </span>
+                      </Td>
+                      <Td className="text-right tabular-nums">{framesPerDay(w)}</Td>
+                      <Td>
+                        <span
+                          className={cn(
+                            'text-micro font-semibold rounded-xs px-sm py-xs',
+                            w.active ? 'bg-success-bg text-success-text' : 'bg-canvas-secondary text-text-muted'
+                          )}
+                        >
+                          {w.active ? 'Active' : 'Paused'}
+                        </span>
+                      </Td>
+                      <Td className="text-right">
+                        <button onClick={() => setEditing(w)} className="text-label text-info hover:underline">
+                          Edit
+                        </button>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </TableWrap>
+            <Pagination
+              page={windowTable.page}
+              pageCount={windowTable.pageCount}
+              pageSize={windowTable.pageSize}
+              onPage={windowTable.setPage}
+              matchCount={windowTable.matchCount}
+              totalCount={windowTable.totalCount}
+              noun="windows"
+              onClearSearch={windowTable.search ? () => windowTable.setSearch('') : undefined}
+            />
+          </>
+        )}
+      </section>
 
       <WindowDialog
         open={addOpen}
@@ -266,7 +445,7 @@ function WindowDialog({
       if (editing) {
         await schedulesApi.updateWindow(editing.id, { zoneId, label, start, end, interval, days, active })
       } else {
-        await schedulesApi.createWindow({ zoneId, label, start, end, interval, days }, plan)
+        await schedulesApi.createWindow({ zoneId, label, start, end, interval, days })
       }
       onSaved()
     } catch (err) {

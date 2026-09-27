@@ -44,8 +44,18 @@ export const DAY_NAME = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
 
 export function framesPerDay(window: Pick<CaptureWindow, 'start' | 'end' | 'interval'>): number {
   if (window.interval === 'daily') return 1
-  const [startH] = window.start.split(':').map(Number)
-  const [endH] = window.end.split(':').map(Number)
-  const hours = Math.max(endH - startH, 0)
-  return hours * INTERVAL_PER_HOUR[window.interval]
+
+  // Must match api/src/types/schedule.ts exactly: this number is shown against the
+  // plan's daily budget, and if the two disagree the UI promises a budget the server
+  // does not enforce.
+  //
+  // It previously read only the HOUR digits, so 07:30–09:00 counted as two full hours
+  // and any window inside a single hour counted as zero — the second of which made
+  // short windows look free against BR-006.
+  const [sh = 0, sm = 0] = window.start.split(':').map(Number)
+  const [eh = 0, em = 0] = window.end.split(':').map(Number)
+  const minutes = eh * 60 + em - (sh * 60 + sm)
+
+  const step = window.interval === '15min' ? 15 : 60
+  return Math.max(Math.ceil(minutes / step), 0)
 }

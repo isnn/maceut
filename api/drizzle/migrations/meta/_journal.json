@@ -1,0 +1,69 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789779549830,
+      "tag": "0000_secret_franklin_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789779553605,
+      "tag": "0001_postgis_and_email_ci",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789811798118,
+      "tag": "0002_zones",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789811808181,
+      "tag": "0003_zones_geometry",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789817681137,
+      "tag": "0004_timestamptz",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789903237263,
+      "tag": "0005_schedules",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789990954593,
+      "tag": "0006_drop_organisation",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790079598537,
+      "tag": "0007_captures",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790133586358,
+      "tag": "0008_next_fire_at",
+      "breakpoints": true
+    }
+  ]
+}

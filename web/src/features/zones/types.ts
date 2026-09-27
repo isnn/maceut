@@ -14,12 +14,18 @@ export interface Zone {
   geometry: ZoneGeometry
   roadClass: RoadClass
   status: ZoneStatus
-  /** Derived from the drawn boundary — shown in the wizard and zone table. */
+  /** Computed by PostGIS from the stored boundary. */
   areaKm2: number
-  roadsCount: number
-  lengthKm: number
+  /**
+   * Segments matched inside the boundary for this road class, from HERE.
+   * Null means "not known yet" (HERE unconfigured), rendered as "—". Zero would
+   * claim the zone matched no roads, which is a different statement.
+   */
+  roadsCount: number | null
+  lengthKm: number | null
   /** Human label for the zone's cadence, e.g. "Per jam" (set on Schedule). */
-  cadence: string
+  /** Null when no active window points at this zone. */
+  cadence: string | null
   createdAt: string
 }
 
@@ -27,13 +33,6 @@ export interface CreateZoneInput {
   name: string
   geometry: ZoneGeometry
   roadClass: RoadClass
-}
-
-/** Road segments matched inside the boundary, grouped by class (3c). */
-export interface MatchedRoad {
-  name: string
-  roadClass: Exclude<RoadClass, 'nasional_provinsi' | 'semua'> | 'provinsi' | 'kota'
-  lengthKm: number
 }
 
 export interface StylePreset {

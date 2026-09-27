@@ -4,24 +4,26 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { Alert } from '@/components/ui/Alert'
 import { UsageMeter, AttributeRow } from '@/components/ui/UsageMeter'
 import { Checkbox } from '@/components/ui/Input'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { cn } from '@/lib/utils'
 import { IconCheck } from '@/components/ui/icons'
-import { PLAN_LABEL, PLAN_LIMITS, PLAN_PRICE, ROAD_CLASS_LABEL } from '@/lib/constants'
+import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER, PLAN_PRICE, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import * as authApi from '@/features/auth/api'
 import * as dashboardApi from '@/features/dashboard/api'
 import type { UsageSummary } from '@/features/dashboard/api'
 import type { Plan } from '@/features/auth/types'
+import { ApiError } from '@/types/api'
 
 const ALL_TABS = ['Usage', 'Account', 'Billing', 'Notifications'] as const
 type Tab = (typeof ALL_TABS)[number]
 
 /**
  * Staff see only Account and Notifications. Usage and Billing are customer
- * concerns — an internal account has no workspace quota to report, and its
+ * concerns — an internal account has no plan quota to report, and its
  * seeded figures would be noise to someone with no Zones page to open.
  */
 const TABS_FOR: Record<'tenant' | 'internal', readonly Tab[]> = {
@@ -37,17 +39,29 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
   const tabs = TABS_FOR[variant]
   const [tab, setTab] = useState<Tab>(variant === 'internal' ? 'Account' : 'Usage')
   const [pendingPlan, setPendingPlan] = useState<Plan | null>(null)
+  const [planError, setPlanError] = useState<string | null>(null)
 
   useEffect(() => {
     if (variant === 'internal') return
     dashboardApi.getUsage().then(setUsage)
   }, [variant])
 
+  /**
+   * Downgrades only. The server refuses an upgrade with UPGRADE_NOT_SELF_SERVE until
+   * billing exists, so the refusal is surfaced rather than left as a button stuck on
+   * "Saving…" — which is what happened before, because nothing caught the throw.
+   */
   async function changePlan(plan: Plan) {
     setPendingPlan(plan)
-    await authApi.updatePlan(plan)
-    // Reload so the header, limits and quota readouts all pick up the new plan.
-    window.location.reload()
+    setPlanError(null)
+    try {
+      await authApi.updatePlan(plan)
+      // Reload so the header, limits and quota readouts all pick up the new plan.
+      window.location.reload()
+    } catch (err) {
+      setPlanError(err instanceof ApiError ? err.message : 'Could not change the plan. Please try again.')
+      setPendingPlan(null)
+    }
   }
 
   if (!user || (variant === 'tenant' && !usage)) return <div className="h-96 bg-canvas-secondary rounded-lg animate-pulse" />
@@ -63,7 +77,7 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
         <div>
           <h1 className="text-page-title font-bold text-text-primary">{user.fullName || user.email}</h1>
           <p className="text-body text-text-secondary mt-xs">
-            {user.email} · Owner{user.organisation && ` · ${user.organisation}`}
+            {user.email}
           </p>
         </div>
         <Button variant="secondary" className="ml-auto">
@@ -99,7 +113,6 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                 <UsageMeter label="Scheduled frames / day" value={usage.framesPerDay} max={usage.capturesLimit} />
                 <UsageMeter label="Active windows" value={usage.schedulesActiveCount} max={usage.schedulesLimit} />
                 <UsageMeter label="Storage" value={usage.storageUsedGb} max={usage.storageLimitGb} unit=" GB" />
-                <UsageMeter label="Team seats" value={usage.seatsUsed} max={usage.seatsLimit} />
               </div>
             </Card>
 
@@ -122,13 +135,11 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                 {PLAN_PRICE[usage.plan].amount} {PLAN_PRICE[usage.plan].period} · renews 1 Oct
               </p>
               {usage.plan !== 'premium' && (
-                <Button className="w-full mt-lg" onClick={() => changePlan(usage.plan === 'free' ? 'standard' : 'premium')}>
-                  {pendingPlan ? 'Saving…' : `Upgrade to ${usage.plan === 'free' ? 'Standard' : 'Premium'}`}
-                </Button>
+                <p className="text-caption text-text-secondary mt-lg">
+                  Need more room? Contact the Maceut team and we&rsquo;ll move you up — upgrades aren&rsquo;t self-serve
+                  while billing is being built.
+                </p>
               )}
-              <button className="w-full text-label text-text-secondary hover:text-text-primary mt-md transition-colors">
-                Manage billing
-              </button>
             </Card>
 
             {usage.plan !== 'premium' && (
@@ -151,13 +162,26 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
       {tab === 'Billing' && usage && (
         <div className="space-y-lg">
           <p className="text-body text-text-secondary">
-            Payments are not wired up in the MVP — pick a plan below to simulate a plan change.
+            Payments aren&rsquo;t wired up yet, so upgrades are arranged with the Maceut team. You can move down a plan
+            here at any time.
           </p>
+          <Alert variant="warning">
+            Moving down pauses anything over the new plan&rsquo;s limits — zones, capture windows and intervals. Nothing
+            is deleted, and it all comes back if you move up again.
+          </Alert>
+          {planError && <p className="text-caption text-danger-text">{planError}</p>}
           <PlanCards
             selected={usage.plan}
             onSelect={changePlan}
             pendingPlan={pendingPlan}
-            actionLabel={(plan) => (plan === usage.plan ? 'Current plan' : `Switch to ${PLAN_LABEL[plan]}`)}
+            disabledPlan={(plan) => PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(usage.plan)}
+            actionLabel={(plan) =>
+              plan === usage.plan
+                ? 'Current plan'
+                : PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(usage.plan)
+                  ? 'Contact us'
+                  : `Move down to ${PLAN_LABEL[plan]}`
+            }
           />
         </div>
       )}
@@ -168,8 +192,6 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
             <dl className="divide-y divide-divider">
               <AttributeRow label="Full name" value={user.fullName || '—'} />
               <AttributeRow label="Email" value={user.email} />
-              <AttributeRow label="Organisation" value={user.organisation || '—'} />
-              <AttributeRow label="Workspace role" value="Owner" />
               <AttributeRow label="Platform role" value={user.role === 'internal' ? 'Internal (Maceut staff)' : 'Customer'} />
             </dl>
           </Card>

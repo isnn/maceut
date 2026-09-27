@@ -26,7 +26,7 @@ export default function RegisterPage() {
 
         <h1 className="mt-xxl text-display text-text-primary">Create your account</h1>
         <p className="mt-xs text-body text-text-secondary mb-xl">
-          One account per agency workspace — invite your team afterwards. You&rsquo;ll pick a plan next.
+          One account, one plan. You&rsquo;ll pick a plan next.
         </p>
 
         <div className="bg-card border border-border rounded-lg p-xl">

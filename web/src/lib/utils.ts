@@ -46,3 +46,26 @@ export function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
+
+/**
+ * Numbers for display, in one convention across the whole app.
+ *
+ * The dashboard was showing `11652 roads` in one panel, `11.623 roads` in the next and
+ * `501.69 km` beside them — so a dot meant "thousands" and "decimal point" on the same
+ * screen, and `9.645 roads` read as nine-point-six. The interface is in English, and km
+ * already uses a decimal point, so the thousands separator follows that: 9,645.
+ *
+ * One helper rather than a locale string at each call site, because four call sites is
+ * four chances to pick a different one — which is how this happened.
+ */
+export function formatNumber(value: number, fractionDigits = 0): string {
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })
+}
+
+/** Distances, always to two decimals so a column of them lines up. */
+export function formatKm(value: number): string {
+  return `${formatNumber(value, 2)} km`
+}

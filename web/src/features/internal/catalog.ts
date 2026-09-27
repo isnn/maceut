@@ -72,6 +72,14 @@ export const CONFIG_VARS: ConfigVarMeta[] = [
   { key: 'R2_PUBLIC_URL', group: 'storage', label: 'Public URL', type: 'url', help: 'Or a custom domain in front of the bucket.' },
   { key: 'R2_ACCESS_KEY_ID', group: 'storage', label: 'Access key ID', type: 'string', secret: true, requiresRestart: true },
   { key: 'R2_ACCESS_KEY_SECRET', group: 'storage', label: 'Access key secret', type: 'string', secret: true, requiresRestart: true },
+  {
+    key: 'R2_ENDPOINT',
+    group: 'storage',
+    label: 'Endpoint override',
+    help: 'Normally derived from the account ID. Set only for a jurisdiction-restricted bucket (EU uses .eu.r2.cloudflarestorage.com) or a local S3 emulator.',
+    type: 'url',
+    requiresRestart: true,
+  },
 
   // Playwright
   { key: 'PLAYWRIGHT_HEADLESS', group: 'capture_engine', label: 'Headless', type: 'boolean', defaultValue: true },
@@ -90,6 +98,14 @@ export const CONFIG_VARS: ConfigVarMeta[] = [
     rotateWarning: 'Rotating this signs out every user immediately — every existing session token stops validating.',
   },
   { key: 'JWT_EXPIRY', group: 'auth', label: 'Session lifetime', type: 'string', defaultValue: '7d', help: 'Duration string, e.g. 7d or 12h.' },
+  {
+    key: 'INTERNAL_EMAILS',
+    group: 'auth',
+    label: 'Internal staff emails',
+    help: 'Comma-separated. These accounts always get the internal role and cannot be demoted from this app (BR-027). Config grants but does not revoke: removing an address here only removes access if the account was not also promoted in the database.',
+    type: 'string',
+    requiresRestart: true,
+  },
 
   // Flags
   { key: 'SWAGGER_ENABLED', group: 'feature_flags', label: 'Swagger UI at /api-docs', type: 'boolean', defaultValue: true, requiresRestart: true },
@@ -116,7 +132,22 @@ export const CONFIG_VARS: ConfigVarMeta[] = [
   { key: 'RABBITMQ_URL', group: 'queue', label: 'Connection URL', type: 'string', defaultValue: 'amqp://guest:guest@rabbitmq:5672/' },
   { key: 'RABBITMQ_QUEUE_CAPTURE', group: 'queue', label: 'Capture queue', type: 'string', defaultValue: 'capture-jobs' },
   { key: 'RABBITMQ_QUEUE_DEAD_LETTER', group: 'queue', label: 'Dead-letter queue', type: 'string', defaultValue: 'capture-dead-letter' },
-  { key: 'FRONTEND_URL', group: 'frontend', label: 'Allowed origin', type: 'url', defaultValue: 'http://localhost:3000' },
+  {
+    key: 'FRONTEND_URL',
+    group: 'frontend',
+    label: 'Allowed origin',
+    help: 'The origin the browser uses, matched exactly for CORS — scheme, host and port.',
+    type: 'url',
+    defaultValue: 'http://localhost:3000',
+  },
+  {
+    key: 'RENDER_BASE_URL',
+    group: 'frontend',
+    label: 'Render page base URL',
+    help: 'Where Playwright opens the capture render page from inside the api container — the compose service name, not localhost (ADR-017).',
+    type: 'url',
+    defaultValue: 'http://web:3000',
+  },
 ]
 
 export function varsInGroup(group: ConfigGroupId): ConfigVarMeta[] {
