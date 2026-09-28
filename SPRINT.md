@@ -1552,6 +1552,12 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   Hasil nyata: ZIP 2 PNG 800×500 valid (zipfile Python: testzip bersih), WebM VP9 800×500
   dengan traffic tergambar penuh, keduanya diunduh dari R2 lewat link bertanda tangan.
 
+  TEMUAN REVIEW USER: nama file ZIP (dan nama PNG di dalamnya, juga unduhan PNG tunggal)
+  diambil dari string ISO UTC, jadi tidak cocok dengan jam WIB di gambar — tujuh jam
+  meleset, dan setelah 17:00 WIB memakai tanggal kemarin. Kini semua nama memakai WIB dan
+  menyebut rentang waktunya: `YOG-2026-09-23_0600-1900.zip`, lintas hari
+  `YOG-2026-09-22_1900_to_2026-09-23_0600.webm`. Diuji (termasuk kasus lewat 17:00 WIB).
+
   VERIFIKASI: 307 test API (18 export controller, 3 sweeper, 2 zip), tsc + eslint bersih
   di kedua paket, Swagger memuat 3 path export, semua route export 401 tanpa sesi.
   UI (dialog progres, chip, bagian Exports) BELUM dilihat di browser — host kekurangan
