@@ -61,6 +61,11 @@ interface MapCanvasProps {
   center?: LatLngExpression
   zoom?: number
   className?: string
+  /**
+   * `dim` (default): the boundary maps, dark enough to sit in the UI. `dark`: fully
+   * dark, like Studio's Dark theme — for maps that exist to show traffic colours.
+   */
+  tone?: 'dim' | 'dark'
   children?: React.ReactNode
 }
 
@@ -73,6 +78,7 @@ export function MapCanvas({
   center,
   zoom = 15,
   className,
+  tone = 'dim',
   children,
 }: MapCanvasProps) {
   const latLngs = polygon ? (Array.isArray(polygon) ? polygon : toLatLngs(polygon)) : null
@@ -84,7 +90,7 @@ export function MapCanvas({
        controls z-indexes up to 1000, which otherwise float above dialogs, dropdowns and
        anything else later on the page — the map appearing to spill over its neighbours. */
     <div
-      className={`maceut-map-dark bg-gray-950 rounded-lg overflow-hidden isolate relative ${className ?? 'h-80 w-full'}`}
+      className={`${tone === 'dark' ? 'maceut-map-night' : 'maceut-map-dark'} bg-gray-950 rounded-lg overflow-hidden isolate relative ${className ?? 'h-80 w-full'}`}
     >
       <MapContainer
         center={mapCenter}
