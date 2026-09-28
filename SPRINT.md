@@ -117,7 +117,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | 🔴 | **CAP-02** Playwright: render otomatis PNG per capture ke R2 (BR-009/BR-018) — canvas renderer siap dipakai ulang | zone-management Phase 3 |
 | ✅ | **BE-16** Scheduler: jendela aktif mem-publish job tiap menit (tanpa dependency baru, ADR-023) | capture-schedule/requirements.md |
 | ✅ | **BE-17** Akun uji `*@maceut.test` yang KOSONG dihapus (17); 8 yang punya zona/capture/export dipertahankan atas keputusan user (termasuk sched@ — zona YOG) | housekeeping |
-| 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
+| ✅ | Notifikasi downgrade (ADR-020): dialog pratinjau dampak (pelanggan & staf, dari server) + tanda "Paused · plan limit" + banner "di-pause oleh perubahan paket" | ADR-020 |
 | ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: RoadClassPicker pakai `GET /traffic/road-class-counts` — katalog lokal dihapus | zone-management/tasks.md Phase 4 |
 | 🔴 | **FE-01** Zona kecil di pusat kota bisa sah-sah saja dapat 0 ruas di paket Free — butuh penjelasan di wizard, bukan angka 0 telanjang | temuan 22 Sep |
@@ -1650,6 +1650,33 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   studioverify×3, layoutverify@.
 
   VERIFIKASI: 331 test API, tsc + eslint bersih kedua paket.
+
+[2026-09-28g] Notifikasi downgrade (ADR-020).
+
+  SEBELUMNYA: pelanggan menurunkan paket di Profil TANPA pratinjau — langsung diterapkan
+  di balik peringatan generik. Staf di /internal/users melihat dialog yang MENEBAK di
+  browser dari jumlah zona/jendela, tanpa bisa melihat interval atau anggaran frame
+  harian. Dan setelahnya, zona yang di-pause oleh paket tampak persis seperti yang
+  di-pause pengguna — zona yang "mati sendiri".
+
+  SEKARANG:
+  - `paused_by_plan` di zones & schedules (migrasi 0011). Di-set HANYA oleh
+    `applyPlanChange`; perubahan status lain apa pun (pause/resume manual) menghapusnya —
+    dijaga di `update()` repository, jadi tidak ada pemanggil yang bisa lupa. Baris
+    lama default false: siapa yang mem-pause dulu tidak pernah tercatat, dan menebaknya
+    sekarang tidak jujur.
+  - Dialog `PlanChangeDialog` (bersama): daftar zona & jendela yang AKAN di-pause beserta
+    alasannya, dari `previewPlanChange` server — fungsi yang sama dengan perubahannya,
+    jadi konfirmasi dan hasil tidak bisa berbeda. Dipakai di Profil (GET /plan/impact) dan
+    /internal/users (endpoint staf baru GET /internal/users/:id/plan-impact).
+  - Tanda "Paused · plan limit" (kuning) di pill zona & chip jendela; banner
+    `PlanPausedNotice` di Dashboard, Zones, Schedule: berapa & apa yang di-pause, bahwa
+    tidak ada yang dihapus, dan cara melanjutkannya.
+
+  DIUJI LANGSUNG (akun uji sekali pakai, dihapus setelahnya): pratinjau ke Free menyebut
+  "Probe new (over_zone_limit)" → setelah downgrade persis zona itu yang di-pause
+  [by plan]; resume manual → flag hilang; pause oleh user → bukan "by plan".
+  VERIFIKASI: 333 test API, tsc + eslint bersih kedua paket. UI belum dilihat di browser.
 
 ---
 

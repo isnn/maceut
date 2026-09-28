@@ -163,7 +163,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
 
       <div className="flex flex-wrap items-center gap-md">
         <h1 className="text-page-title font-bold text-text-primary">{zone.name}</h1>
-        <ZoneStatusPill status={zone.status} />
+        <ZoneStatusPill status={zone.status} pausedByPlan={zone.pausedByPlan} />
         <div className="ml-auto flex flex-wrap items-center gap-sm">
           {editing ? (
             <>
@@ -373,10 +373,13 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                             'text-micro font-semibold rounded-xs px-sm py-xs whitespace-nowrap',
                             w.active
                               ? 'bg-success-bg text-success-text'
-                              : 'bg-canvas-secondary text-text-muted border border-border'
+                              : w.pausedByPlan
+                                ? 'bg-warning-bg text-warning-text'
+                                : 'bg-canvas-secondary text-text-muted border border-border'
                           )}
+                          title={!w.active && w.pausedByPlan ? 'Paused because it is over your plan’s limits' : undefined}
                         >
-                          {w.active ? 'Active' : 'Paused'}
+                          {w.active ? 'Active' : w.pausedByPlan ? 'Paused · plan limit' : 'Paused'}
                         </span>
                       </Td>
                     </tr>
