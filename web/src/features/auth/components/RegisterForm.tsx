@@ -47,7 +47,8 @@ export function RegisterForm() {
     setLoading(true)
     try {
       await authApi.register({ fullName, email, password })
-      router.push('/onboarding')
+      // No session yet — the account is signed in once the emailed code is entered.
+      router.push(`/verify-email?email=${encodeURIComponent(email.trim())}&from=signup`)
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
       setLoading(false)

@@ -16,20 +16,26 @@ import type { LoginInput, Plan, RegisterInput, User } from './types'
 import { ApiError } from '@/types/api'
 import { apiClient, authRequest } from '@/lib/api-client'
 
-export async function register(input: RegisterInput): Promise<User> {
+/**
+ * Creates the account. Returns no user: there is no session until the address is
+ * verified with the emailed code (`verifyEmail`), so the caller moves on to the code
+ * screen.
+ *
+ * An address that already has an account gets the same answer as a new one — Better
+ * Auth won't say "email taken", so sign-up can't be used to find out who has an
+ * account. That account's owner simply receives no code; the code screen says so.
+ */
+export async function register(input: RegisterInput): Promise<void> {
   await authRequest<unknown>('/sign-up/email', {
     email: input.email,
     password: input.password,
     // Better Auth's field is `name`; every screen here calls it fullName.
     name: input.fullName,
   })
-
-  // Better Auth signs the user in on sign-up (autoSignIn), so the cookie is already
-  // set and this call is authenticated.
-  const user = await getMe()
-  if (!user) throw new ApiError({ code: 'UNAUTHORIZED', message: 'Signed up, but the session did not start. Please log in.' })
-  return user
 }
+
+/** The error code a sign-in to an unverified account fails with. A new code is already on its way. */
+export const EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED'
 
 export async function login(input: LoginInput): Promise<User> {
   await authRequest<unknown>('/sign-in/email', { email: input.email, password: input.password })
@@ -37,6 +43,52 @@ export async function login(input: LoginInput): Promise<User> {
   const user = await getMe()
   if (!user) throw new ApiError({ code: 'UNAUTHORIZED', message: 'Signed in, but the session did not start. Please try again.' })
   return user
+}
+
+// --- One-time codes by email ------------------------------------------------------
+
+/**
+ * Better Auth's code errors in words a person can act on. Its own messages ("Invalid
+ * OTP") name the mechanism, not what to do next.
+ */
+const OTP_MESSAGE: Record<string, string> = {
+  INVALID_OTP: "That code isn't right. Check the most recent email — only the latest code works.",
+  OTP_EXPIRED: 'That code has expired. Send a new one.',
+  TOO_MANY_ATTEMPTS: 'Too many wrong tries for this code. Send a new one.',
+}
+
+async function otpRequest<T>(path: string, payload: unknown): Promise<T> {
+  try {
+    return await authRequest<T>(path, payload)
+  } catch (err) {
+    if (err instanceof ApiError && OTP_MESSAGE[err.code]) {
+      throw new ApiError({ code: err.code, message: OTP_MESSAGE[err.code]! })
+    }
+    throw err
+  }
+}
+
+/** Verifies the address with its code. Right code → signed in, and the user is returned. */
+export async function verifyEmail(email: string, otp: string): Promise<User> {
+  await otpRequest<unknown>('/email-otp/verify-email', { email, otp })
+  const user = await getMe()
+  if (!user) throw new ApiError({ code: 'UNAUTHORIZED', message: 'Your email is verified. Please log in.' })
+  return user
+}
+
+/** Sends a fresh verification code; the previous one stops working. */
+export async function resendVerificationCode(email: string): Promise<void> {
+  await otpRequest<unknown>('/email-otp/send-verification-otp', { email, type: 'email-verification' })
+}
+
+/** Emails a reset code — if the address has an account. The answer is the same either way. */
+export async function requestPasswordReset(email: string): Promise<void> {
+  await otpRequest<unknown>('/email-otp/request-password-reset', { email })
+}
+
+/** Sets a new password with the emailed code. Doesn't sign in: the next step is logging in. */
+export async function resetPassword(email: string, otp: string, password: string): Promise<void> {
+  await otpRequest<unknown>('/email-otp/reset-password', { email, otp, password })
 }
 
 export async function logout(): Promise<void> {
