@@ -181,4 +181,7 @@ DON'T → Install library baru tanpa persetujuan eksplisit.
 DON'T → Tambahkan POI, store, restaurant ke map layer — fokus road + traffic saja.
 DON'T → Implement fitur yang tidak ada di SPRINT.md aktif.
 DON'T → Pindah task sebelum yang aktif di-tandai ✅ dan test pass.
+DON'T → Commit langsung ke `develop`. Kerjakan di branch <type>/<kebab-case> dari `develop`,
+        buka PR ke `develop` saat selesai, lalu BERHENTI — user yang me-review dan merge.
+        Jangan pernah `gh pr merge` atau push ke `develop` sendiri.
 ```
