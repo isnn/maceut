@@ -5,6 +5,7 @@ import * as zoneRepo from '../repositories/zone.repository'
 import { bboxOfGeometry } from '../services/zone.service'
 import * as here from '../lib/here-traffic-client'
 import { functionalClassesFor } from '../lib/here-traffic-client'
+import { meteredTrafficFlow } from '../services/here-usage.service'
 import type { RoadClass } from '../types/plan'
 
 /**
@@ -57,7 +58,7 @@ export async function runCapture(captureId: string): Promise<void> {
     const zone = await zoneRepo.findById(capture.zoneId)
     if (!zone) throw new Error('Zona sudah dihapus sebelum capture dijalankan.')
 
-    const flow = await here.getTrafficFlow(bboxOfGeometry(zone.geometry), {
+    const flow = await meteredTrafficFlow('capture', bboxOfGeometry(zone.geometry), {
       // The class stored on the capture, already capped by BR-022 when it was queued.
       // Re-deriving it here would use the plan as it is now, not as it was when the
       // cycle was authorised.

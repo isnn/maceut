@@ -2,6 +2,7 @@ import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import type { CaptureInterval } from '../types/schedule'
 import * as here from '../lib/here-traffic-client'
+import { meteredTrafficFlow } from './here-usage.service'
 import { isHereConfigured } from '../config/env'
 import { NotFoundError, ForbiddenError, ZoneNameTakenError, RoadClassNotAllowedError, ValidationError } from '../errors'
 import {
@@ -149,7 +150,7 @@ export async function deriveRoadStats(
 
   try {
     const bbox = bboxOfGeometry(geometry)
-    const flow = await here.getTrafficFlow(bbox, {
+    const flow = await meteredTrafficFlow('zone_stats', bbox, {
       functionalClasses: here.functionalClassesFor(roadClass),
       // The zone's own boundary, not the box around it — otherwise `roadsCount` counts
       // roads the zone does not contain, and the figure the wizard sold is not the

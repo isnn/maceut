@@ -10,6 +10,7 @@ import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
 const NAV_ITEMS = [
   { href: '/internal', label: 'Overview' },
   { href: '/internal/users', label: 'Users' },
+  { href: '/internal/here', label: 'HERE usage' },
   { href: '/internal/config', label: 'Configuration' },
 ]
 
