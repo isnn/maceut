@@ -9,7 +9,7 @@
  * Read-only by design (ADR-018): values change by editing api/.env and restarting.
  */
 
-export type ConfigGroupId = 'integrations' | 'storage' | 'auth' | 'queue' | 'capture_engine' | 'server' | 'database'
+export type ConfigGroupId = 'integrations' | 'storage' | 'auth' | 'queue' | 'capture_engine' | 'email' | 'server' | 'database'
 
 export interface ConfigGroupMeta {
   id: ConfigGroupId
@@ -32,6 +32,7 @@ export const CONFIG_GROUPS: ConfigGroupMeta[] = [
   { id: 'auth', title: 'Authentication & staff access', description: 'Session signing and lifetime, and who is staff.' },
   { id: 'queue', title: 'Queue & workers', description: 'RabbitMQ, and how the worker takes jobs.' },
   { id: 'capture_engine', title: 'Render engine', description: 'The headless Chromium that renders images and exports.' },
+  { id: 'email', title: 'Email', description: 'Who delivers verification and password-reset codes (ADR-026).' },
   { id: 'server', title: 'Server', description: 'Where the API runs and who may call it.' },
   { id: 'database', title: 'Database', description: 'PostgreSQL + PostGIS.' },
 ]
@@ -86,6 +87,22 @@ export const CONFIG_VARS: ConfigVarMeta[] = [
   { key: 'APP_BASE_URL', group: 'server', label: 'API base URL', defaultValue: 'http://localhost:8080' },
   { key: 'FRONTEND_URL', group: 'server', label: 'Allowed browser origin (CORS)' },
   { key: 'SWAGGER_ENABLED', group: 'server', label: 'Swagger UI at /api-docs', defaultValue: 'true' },
+  {
+    key: 'EMAIL_PROVIDER',
+    group: 'email',
+    label: 'Email provider',
+    help: 'console only prints codes to the API log — refused in production.',
+    defaultValue: 'console',
+  },
+  { key: 'EMAIL_FROM', group: 'email', label: 'Sender', defaultValue: 'Maceut <no-reply@maceut.id>' },
+  { key: 'RESEND_API_KEY', group: 'email', label: 'Resend API key', help: 'Needed when the provider is resend.' },
+  { key: 'MAILTRAP_API_TOKEN', group: 'email', label: 'Mailtrap API token', help: 'Needed when the provider is mailtrap.' },
+  {
+    key: 'MAILTRAP_INBOX_ID',
+    group: 'email',
+    label: 'Mailtrap sandbox inbox',
+    help: 'Set to send into a test inbox instead of real mailboxes.',
+  },
 
   { key: 'DB_HOST', group: 'database', label: 'Host' },
   { key: 'DB_PORT', group: 'database', label: 'Port', defaultValue: '5432' },

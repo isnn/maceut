@@ -145,6 +145,36 @@ const schema = z.object({
   RENDER_BASE_URL: z.string().url().default('http://web:3000'),
 
   SWAGGER_ENABLED: boolFromEnv(true),
+
+  /**
+   * Transactional email — sign-up verification and password-reset codes (lib/email).
+   * `console` prints the message to the API log instead of sending it: the dev default,
+   * so `docker compose up` needs no account. Swapping provider is this one key plus
+   * that provider's credential; no code changes.
+   */
+  EMAIL_PROVIDER: z.enum(['console', 'resend', 'mailtrap']).default('console'),
+  EMAIL_FROM: z.string().trim().min(3).default('Maceut <no-reply@maceut.id>'),
+  RESEND_API_KEY: optionalStr,
+  MAILTRAP_API_TOKEN: optionalStr,
+  /** Set to send into a Mailtrap *sandbox* inbox (testing) instead of real delivery. */
+  MAILTRAP_INBOX_ID: optionalStr,
+}).superRefine((e, ctx) => {
+  // Unlike R2 and HERE (rule 2), a chosen email provider without its credential fails
+  // at boot: sign-up is blocked until the address is verified, so a provider that can't
+  // send locks every new account out — silently, until someone asks why no code came.
+  if (e.EMAIL_PROVIDER === 'resend' && !e.RESEND_API_KEY) {
+    ctx.addIssue({ code: 'custom', path: ['RESEND_API_KEY'], message: 'required when EMAIL_PROVIDER=resend' })
+  }
+  if (e.EMAIL_PROVIDER === 'mailtrap' && !e.MAILTRAP_API_TOKEN) {
+    ctx.addIssue({ code: 'custom', path: ['MAILTRAP_API_TOKEN'], message: 'required when EMAIL_PROVIDER=mailtrap' })
+  }
+  if (e.EMAIL_PROVIDER === 'console' && e.NODE_ENV === 'production') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['EMAIL_PROVIDER'],
+      message: 'console only logs codes — set resend or mailtrap in production',
+    })
+  }
 })
 
 function parseEnv(raw: NodeJS.ProcessEnv = process.env) {
@@ -237,6 +267,12 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
     renderBaseUrl: e.RENDER_BASE_URL,
 
     swaggerEnabled: e.SWAGGER_ENABLED,
+
+    emailProvider: e.EMAIL_PROVIDER,
+    emailFrom: e.EMAIL_FROM,
+    resendApiKey: e.RESEND_API_KEY,
+    mailtrapApiToken: e.MAILTRAP_API_TOKEN,
+    mailtrapInboxId: e.MAILTRAP_INBOX_ID,
   }
 }
 

@@ -144,3 +144,35 @@ describe('buildConfig', () => {
     expect(c.playwrightTimeoutMs).toBe(45_000)
   })
 })
+
+describe('email provider config', () => {
+  it('defaults to the console provider in development', () => {
+    const c = buildConfig(base)
+    expect(c.emailProvider).toBe('console')
+    expect(c.emailFrom).toBe('Maceut <no-reply@maceut.id>')
+  })
+
+  it('requires the key of the provider it names', () => {
+    expect(() => buildConfig({ ...base, EMAIL_PROVIDER: 'resend' })).toThrow(/RESEND_API_KEY: required when EMAIL_PROVIDER=resend/)
+    expect(() => buildConfig({ ...base, EMAIL_PROVIDER: 'mailtrap' })).toThrow(
+      /MAILTRAP_API_TOKEN: required when EMAIL_PROVIDER=mailtrap/,
+    )
+  })
+
+  it("does not ask for the other provider's key", () => {
+    const c = buildConfig({ ...base, EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_123' })
+    expect(c.emailProvider).toBe('resend')
+    expect(c.mailtrapApiToken).toBeUndefined()
+  })
+
+  it('refuses the console provider in production — it would lock out every new account', () => {
+    expect(() => buildConfig({ ...base, NODE_ENV: 'production' })).toThrow(/EMAIL_PROVIDER: console only logs codes/)
+    expect(() =>
+      buildConfig({ ...base, NODE_ENV: 'production', EMAIL_PROVIDER: 'mailtrap', MAILTRAP_API_TOKEN: 'tok' }),
+    ).not.toThrow()
+  })
+
+  it('rejects an unknown provider', () => {
+    expect(() => buildConfig({ ...base, EMAIL_PROVIDER: 'mailchimp' })).toThrow(/EMAIL_PROVIDER/)
+  })
+})
