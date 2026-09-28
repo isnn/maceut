@@ -17,16 +17,31 @@ export function RoadClassBadge({ roadClass, className }: { roadClass: RoadClass;
 }
 
 /** Whether a zone's windows are running (3f, 3g). */
-export function ZoneStatusPill({ status, className }: { status: 'collecting' | 'paused'; className?: string }) {
+export function ZoneStatusPill({
+  status,
+  pausedByPlan = false,
+  className,
+}: {
+  status: 'collecting' | 'paused'
+  /** Paused by a plan change rather than the user — shown, so it doesn't look like a choice. */
+  pausedByPlan?: boolean
+  className?: string
+}) {
+  const byPlan = status === 'paused' && pausedByPlan
   return (
     <span
+      title={byPlan ? 'Paused because it is over your plan’s limits' : undefined}
       className={cn(
         'text-micro font-semibold rounded-xs px-sm py-xs whitespace-nowrap',
-        status === 'collecting' ? 'bg-success-bg text-success-text' : 'bg-canvas-secondary text-text-muted border border-border',
+        status === 'collecting'
+          ? 'bg-success-bg text-success-text'
+          : byPlan
+            ? 'bg-warning-bg text-warning-text'
+            : 'bg-canvas-secondary text-text-muted border border-border',
         className
       )}
     >
-      {status === 'collecting' ? 'Collecting' : 'Paused'}
+      {status === 'collecting' ? 'Collecting' : byPlan ? 'Paused · plan limit' : 'Paused'}
     </span>
   )
 }

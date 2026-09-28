@@ -111,6 +111,8 @@ export interface UpdateScheduleRow {
   interval?: CaptureInterval
   days?: number[]
   status?: ScheduleStatus
+  /** Set only by a plan change. Any other status change clears it (see `update`). */
+  pausedByPlan?: boolean
 }
 
 /**
@@ -124,7 +126,13 @@ export interface UpdateScheduleRow {
 export async function update(id: string, patch: UpdateScheduleRow): Promise<ScheduleRecord | undefined> {
   const rows = await db
     .update(schedules)
-    .set({ ...patch, nextFireAt: null, updatedAt: new Date() })
+    .set({
+      ...patch,
+      // Who paused it travels with the status — see zone.repository `update`.
+      ...(patch.status !== undefined ? { pausedByPlan: patch.status === 'paused' && patch.pausedByPlan === true } : {}),
+      nextFireAt: null,
+      updatedAt: new Date(),
+    })
     .where(eq(schedules.id, id))
     .returning()
   return rows[0]
@@ -193,6 +201,7 @@ export async function claimDue(now: Date): Promise<DueWindow[]> {
     interval: string
     days: number[]
     status: string
+    paused_by_plan: boolean
     next_fire_at: string | null
     created_at: string
     updated_at: string
@@ -209,6 +218,7 @@ export async function claimDue(now: Date): Promise<DueWindow[]> {
     interval: r.interval as CaptureInterval,
     days: r.days,
     status: r.status as ScheduleStatus,
+    pausedByPlan: r.paused_by_plan ?? false,
     nextFireAt: r.next_fire_at ? new Date(r.next_fire_at) : null,
     createdAt: new Date(r.created_at),
     updatedAt: new Date(r.updated_at),

@@ -17,6 +17,8 @@ import * as dashboardApi from '@/features/dashboard/api'
 import type { UsageSummary } from '@/features/dashboard/api'
 import type { Plan } from '@/features/auth/types'
 import { ApiError } from '@/types/api'
+import { PlanChangeDialog } from '@/features/plan/PlanChangeDialog'
+import { previewOwnPlanChange, type PlanImpact } from '@/features/plan/impact'
 
 const ALL_TABS = ['Usage', 'Account', 'Billing', 'Notifications'] as const
 type Tab = (typeof ALL_TABS)[number]
@@ -50,8 +52,26 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
    * Downgrades only. The server refuses an upgrade with UPGRADE_NOT_SELF_SERVE until
    * billing exists, so the refusal is surfaced rather than left as a button stuck on
    * "Saving…" — which is what happened before, because nothing caught the throw.
+   *
+   * A downgrade first shows exactly what it will pause (ADR-020), from the server's own
+   * preview. It used to apply straight away behind a generic warning.
    */
-  async function changePlan(plan: Plan) {
+  const [confirming, setConfirming] = useState<{ plan: Plan; impact: PlanImpact | null } | null>(null)
+
+  function changePlan(plan: Plan) {
+    setPlanError(null)
+    setConfirming({ plan, impact: null })
+    previewOwnPlanChange(plan)
+      .then((impact) => setConfirming((c) => (c && c.plan === plan ? { plan, impact } : c)))
+      .catch((err) => {
+        setConfirming(null)
+        setPlanError(err instanceof ApiError ? err.message : 'Could not check what this change would pause.')
+      })
+  }
+
+  async function confirmPlanChange() {
+    if (!confirming) return
+    const { plan } = confirming
     setPendingPlan(plan)
     setPlanError(null)
     try {
@@ -182,6 +202,17 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                   ? 'Contact us'
                   : `Move down to ${PLAN_LABEL[plan]}`
             }
+          />
+          <PlanChangeDialog
+            open={confirming !== null}
+            title={confirming ? `Move down to ${PLAN_LABEL[confirming.plan]}?` : ''}
+            planLabel={confirming ? PLAN_LABEL[confirming.plan] : ''}
+            impact={confirming?.impact ?? null}
+            loading={confirming !== null && confirming.impact === null}
+            pending={pendingPlan !== null}
+            error={planError}
+            onConfirm={confirmPlanChange}
+            onCancel={() => setConfirming(null)}
           />
         </div>
       )}

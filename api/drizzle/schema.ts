@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, numeric, jsonb, pgEnum, unique, index, date, primaryKey } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, integer, numeric, jsonb, pgEnum, unique, index, date, primaryKey, boolean } from 'drizzle-orm/pg-core'
 import { user } from './auth-schema'
 
 /**
@@ -60,6 +60,12 @@ export const zones = pgTable(
     name: text('name').notNull(),
     roadClass: roadClassEnum('road_class').notNull(),
     status: zoneStatusEnum('status').notNull().default('collecting'),
+    /**
+     * True when a plan change paused this zone (ADR-020), not the user. Lets the app say
+     * "paused because of your plan" instead of a bare "paused". Cleared by any other
+     * status change — see zone.repository `update`.
+     */
+    pausedByPlan: boolean('paused_by_plan').notNull().default(false),
 
     // `geometry geometry(Polygon, 4326)` is added by migration 0002 — PostGIS has no
     // native Drizzle type, so it is written and read through `sql` templates with
@@ -125,6 +131,8 @@ export const schedules = pgTable(
      * produced each frame, so removing the row would orphan that history.
      */
     status: scheduleStatusEnum('status').notNull().default('active'),
+    /** As zones.pausedByPlan: paused by a plan change (ADR-020), not by the user. */
+    pausedByPlan: boolean('paused_by_plan').notNull().default(false),
 
     /**
      * When this window next fires — the clock, kept in the database rather than in the

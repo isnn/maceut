@@ -29,6 +29,8 @@ export interface ZoneRecord {
   geometry: ZoneGeometry
   roadClass: RoadClass
   status: ZoneStatus
+  /** Paused by a plan change (ADR-020) rather than by the user. */
+  pausedByPlan: boolean
   areaKm2: number
   roadsCount: number | null
   lengthKm: number | null
@@ -44,6 +46,7 @@ interface RawZoneRow {
   geometry: ZoneGeometry
   road_class: RoadClass
   status: ZoneStatus
+  paused_by_plan: boolean
   area_km2: string | number | null
   roads_count: number | null
   length_km: string | number | null
@@ -65,6 +68,7 @@ const ZONE_COLUMNS = sql`
   ST_AsGeoJSON(geometry)::json AS geometry,
   road_class,
   status,
+  paused_by_plan,
   ST_Area(geography(geometry)) / 1000000.0 AS area_km2,
   roads_count,
   length_km,
@@ -87,6 +91,7 @@ function toRecord(row: RawZoneRow): ZoneRecord {
     geometry: row.geometry,
     roadClass: row.road_class,
     status: row.status,
+    pausedByPlan: row.paused_by_plan ?? false,
     // Area is always computable from the boundary, so it is never null in practice;
     // round to 2dp because sub-10m² precision is noise on a city zone.
     areaKm2: Math.round((num(row.area_km2) ?? 0) * 100) / 100,
@@ -139,6 +144,8 @@ export interface UpdateZoneRow {
   name?: string
   roadClass?: RoadClass
   status?: ZoneStatus
+  /** Set only by a plan change. Any other status change clears it (see `update`). */
+  pausedByPlan?: boolean
   roadsCount?: number | null
   lengthKm?: number | null
 }
@@ -152,7 +159,12 @@ export async function update(id: string, patch: UpdateZoneRow): Promise<ZoneReco
   const sets = []
   if (patch.name !== undefined) sets.push(sql`name = ${patch.name}`)
   if (patch.roadClass !== undefined) sets.push(sql`road_class = ${patch.roadClass}::road_class`)
-  if (patch.status !== undefined) sets.push(sql`status = ${patch.status}::zone_status`)
+  if (patch.status !== undefined) {
+    sets.push(sql`status = ${patch.status}::zone_status`)
+    // Who paused it travels with the status: a pause from a plan change says so; any
+    // other status change — the user pausing or resuming — clears it.
+    sets.push(sql`paused_by_plan = ${patch.status === 'paused' && patch.pausedByPlan === true}`)
+  }
   if (patch.roadsCount !== undefined) sets.push(sql`roads_count = ${patch.roadsCount}`)
   if (patch.lengthKm !== undefined) sets.push(sql`length_km = ${patch.lengthKm}`)
 
