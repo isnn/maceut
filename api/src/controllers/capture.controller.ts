@@ -62,6 +62,17 @@ export async function listForZone(req: Request, res: Response, next: NextFunctio
   }
 }
 
+/** A capture's rendered PNG, as a signed download link (CAP-02). */
+export async function image(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) throw new UnauthorizedError()
+    const id = idParam.parse(req.params.id)
+    return res.status(200).json(ok(await captureService.getCaptureImage(req.userId, id)))
+  } catch (err) {
+    next(err)
+  }
+}
+
 /** One cycle including its traffic — what the zone page loads when an arrow moves. */
 export async function detail(req: Request, res: Response, next: NextFunction) {
   try {

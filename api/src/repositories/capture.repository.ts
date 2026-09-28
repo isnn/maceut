@@ -225,6 +225,14 @@ export async function recentForUser(
 }
 
 /**
+ * Records a capture's rendered image (CAP-02, BR-011) and the style it was drawn with
+ * (BR-023 — kept for history, never replayed).
+ */
+export async function setImage(id: string, filePath: string, fileSize: number, styleUsed: unknown): Promise<void> {
+  await db.update(captures).set({ filePath, fileSize, styleUsed }).where(eq(captures.id, id))
+}
+
+/**
  * The collected captures of a zone between two instants, inclusive, oldest first —
  * ids and times only. An export's frame list: never the `traffic` column, which is
  * ~2 MB a row and is read one frame at a time when the frame is actually rendered.
