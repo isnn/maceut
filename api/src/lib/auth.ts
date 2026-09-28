@@ -70,8 +70,13 @@ export const auth = betterAuth({
       otpLength: 6,
       expiresIn: OTP_EXPIRES_SECONDS,
       allowedAttempts: 5,
-      // Stored hashed: a database read must not hand out working codes.
-      storeOTP: 'hashed',
+      // Encrypted with the auth secret — a database read alone doesn't hand out working
+      // codes. Not hashed, because `reuse` below needs to send the same code again.
+      storeOTP: 'encrypted',
+      // "Send a new code" while one is still valid re-sends THAT code (fresh expiry)
+      // instead of rotating it, so an email arriving late still works and the user
+      // isn't left guessing which of three codes is the live one.
+      resendStrategy: 'reuse',
       // Replaces Better Auth's link-based verification email with a code, including
       // the one sent on sign-up and on a refused sign-in.
       overrideDefaultEmailVerification: true,

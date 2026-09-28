@@ -11,6 +11,8 @@ export interface HereBudget {
   dailyLimit: number | null
   monthlyLimit: number | null
   costPer1000: number | null
+  /** Where the 80% and cap-reached alerts are emailed. Null = bell only. */
+  alertEmail: string | null
 }
 
 export interface UsageCounts {

@@ -48,7 +48,7 @@ describe('WIB day and month', () => {
 describe('getBudget', () => {
   it('means "no cap" when nothing has been set', async () => {
     budget(undefined)
-    expect(await getBudget()).toEqual({ dailyLimit: null, monthlyLimit: null, costPer1000: null })
+    expect(await getBudget()).toEqual({ dailyLimit: null, monthlyLimit: null, costPer1000: null, alertEmail: null })
   })
 
   it('is cached briefly — the setting is read once for a burst of calls', async () => {
@@ -62,7 +62,7 @@ describe('getBudget', () => {
 })
 
 describe('limitReached', () => {
-  const b = { dailyLimit: 100, monthlyLimit: 1000, costPer1000: null }
+  const b = { dailyLimit: 100, monthlyLimit: 1000, costPer1000: null, alertEmail: null }
   it('flags the daily cap first, then the monthly one', () => {
     expect(limitReached(b, { ...zero, requests: 100 }, { ...zero, requests: 100 })).toBe('daily')
     expect(limitReached(b, { ...zero, requests: 5 }, { ...zero, requests: 1000 })).toBe('monthly')

@@ -6,6 +6,7 @@ import { Logo } from '@/components/ui/Logo'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { cn } from '@/lib/utils'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
+import { NotificationBell } from '@/features/notifications/NotificationBell'
 
 const NAV_ITEMS = [
   { href: '/internal', label: 'Overview' },
@@ -58,6 +59,8 @@ export function InternalHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-md">
+          {/* Staff get HERE budget alerts here (NOTIF). */}
+          <NotificationBell />
           {user && (
             <Dropdown
               triggerLabel="Account menu"

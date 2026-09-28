@@ -10,6 +10,8 @@ export const budgetSchema = z.object({
   dailyLimit: limit,
   monthlyLimit: limit,
   costPer1000: z.number().min(0).max(100_000).nullable(),
+  /** Where budget alerts are emailed. Optional so older clients that don't send it keep working. */
+  alertEmail: z.string().trim().toLowerCase().email('Alamat email tidak valid.').nullable().optional().default(null),
 })
 
 /** HERE usage and the budget cap — staff only. */

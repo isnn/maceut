@@ -1,5 +1,6 @@
 import * as exportRepo from '../repositories/export.repository'
 import * as r2 from '../lib/r2-client'
+import * as notificationService from '../services/notification.service'
 
 /**
  * Keeps the exports table honest (FE-21), once a minute, in the API process beside the
@@ -24,7 +25,10 @@ export interface SweepResult {
 export async function sweep(now: Date = new Date()): Promise<SweepResult> {
   let failed = 0
   for (const row of await exportRepo.findStale(new Date(now.getTime() - STALE_AFTER_MS))) {
-    if (await exportRepo.fail(row.id, 'Render berhenti di tengah jalan. Silakan coba lagi.')) failed++
+    if (await exportRepo.fail(row.id, 'Render berhenti di tengah jalan. Silakan coba lagi.')) {
+      failed++
+      await notificationService.onExportFinished(row.id)
+    }
   }
 
   let expired = 0

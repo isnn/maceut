@@ -12,6 +12,7 @@ import {
 import { isInternalByConfig, resolveRole, configuredInternalEmails } from '../lib/internal-access'
 import { PLAN_LIMITS, isUpgrade, type Plan, type PlatformRole } from '../types/plan'
 import * as planService from './plan.service'
+import * as notificationService from './notification.service'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as captureRepo from '../repositories/capture.repository'
@@ -147,6 +148,9 @@ export async function changeOwnPlan(userId: string, plan: Plan): Promise<PlanCha
   await userRepo.setPlan(userId, plan)
   // Grandfather and block (ADR-020): pause what no longer fits, delete nothing.
   const impact = await planService.applyPlanChange(userId, plan)
+  if (current) {
+    await notificationService.onPlanChanged(userId, { from: current.plan, to: plan, paused: pausedNames(impact), byStaff: false })
+  }
 
   return { user: await getUser(userId), impact }
 }
@@ -231,13 +235,23 @@ export async function listUsers(params: ListUsersParams): Promise<ListUsersResul
   }
 }
 
+/** What a plan change paused, by name, for the notification. */
+function pausedNames(impact: planService.PlanImpact): string[] {
+  return [...impact.zonesToPause.map((z) => z.name), ...impact.schedulesToPause.map((s) => s.name)]
+}
+
 /** Staff changing a customer's plan from /internal. Same grandfather rule. */
 export async function changePlan(userId: string, plan: Plan): Promise<PlanChangeResult> {
   const found = await userRepo.findById(userId)
   if (!found) throw new NotFoundError('User')
 
+  const before = await userRepo.findByIdWithPlan(userId)
   await userRepo.setPlan(userId, plan)
   const impact = await planService.applyPlanChange(userId, plan)
+  // Made by staff, so the customer may not know yet: this one also emails (NOTIF).
+  if (before) {
+    await notificationService.onPlanChanged(userId, { from: before.plan, to: plan, paused: pausedNames(impact), byStaff: true })
+  }
 
   return { user: await getUser(userId), impact }
 }
