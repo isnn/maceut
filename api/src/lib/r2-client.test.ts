@@ -20,7 +20,7 @@ vi.mock('../config/env', () => ({
   missingIntegrationKeys: () => ({ r2: state.missing, here: [] }),
 }))
 
-import { capturePath, logoPath, publicUrlFor, getClient, resetClient } from './r2-client'
+import { capturePath, publicUrlFor, getClient, resetClient } from './r2-client'
 import { UpstreamError } from '../errors'
 
 beforeEach(() => {
@@ -48,12 +48,6 @@ describe('capturePath (BR-011)', () => {
 
   it('accepts a different extension for the JPG variant (BR-009)', () => {
     expect(capturePath('u1', 'c1', new Date('2026-09-19T10:00:00Z'), 'jpg')).toBe('captures/u1/2026/09/c1.jpg')
-  })
-})
-
-describe('logoPath', () => {
-  it('is per user and stable', () => {
-    expect(logoPath('u1')).toBe('branding/u1/logo.png')
   })
 })
 

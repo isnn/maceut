@@ -12,7 +12,7 @@ import type { RoadClass } from '../types/plan'
  *
  * The API decided this cycle may happen and wrote the row; this does the slow part.
  * Right now that means asking HERE for the zone's traffic at this moment and storing
- * the GeoJSON. The rendered PNG (BR-018's logo, zone name, timestamp and legend) is a
+ * the GeoJSON. The rendered PNG (BR-018's zone name and timestamp, BR-019's legend) is a
  * second step that fills `filePath` on the same row — nothing here has to change for it.
  *
  * ## Acknowledgement

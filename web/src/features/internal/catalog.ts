@@ -40,7 +40,7 @@ export interface ConfigVarMeta {
 export const CONFIG_GROUPS: ConfigGroupMeta[] = [
   { id: 'here', title: 'HERE Traffic', description: 'Traffic flow data source. Basemap tiles come from OpenStreetMap (ADR-010b).', editable: true },
   { id: 'osm', title: 'OpenStreetMap', description: 'Basemap tiles, used in the browser and by the Playwright render page.', editable: true },
-  { id: 'storage', title: 'Cloudflare R2', description: 'Where captures and branding logos are stored.', editable: true },
+  { id: 'storage', title: 'Cloudflare R2', description: 'Where capture images and Studio exports are stored.', editable: true },
   { id: 'capture_engine', title: 'Capture engine', description: 'Playwright screenshot behaviour.', editable: true },
   { id: 'auth', title: 'Authentication', description: 'Session signing and lifetime.', editable: true },
   { id: 'feature_flags', title: 'Feature flags', description: 'Toggles that change behaviour without a code change.', editable: true },

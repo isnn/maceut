@@ -298,4 +298,3 @@ Ref: exports.zone_id > zones.id [delete: cascade]
 // -----------------------------------------------------------------------------
 // Not built yet — listed so the gap is visible rather than forgotten
 // -----------------------------------------------------------------------------
-// branding_configs  — Sprint 2 (F-11, F-12). BR-018's logo compositing needs it.
