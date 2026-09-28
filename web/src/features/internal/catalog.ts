@@ -1,25 +1,20 @@
-// The system configuration surface, transcribed from api/.env.example and
-// web/.env.example. Keys match the environment variable names 1:1, so a real
-// backend can map these straight onto its zod-validated config object.
+/**
+ * Labels and help for the server configuration shown on /internal/config.
+ *
+ * The VALUES come from the API (GET /internal/config), which reads the running
+ * server's environment — this file only says how to present each key. Keys match
+ * `CONFIG_KEYS` in api/src/services/config.service.ts; a key the API returns that is
+ * missing here still renders, under "Other", with its raw name.
+ *
+ * Read-only by design (ADR-018): values change by editing api/.env and restarting.
+ */
 
-export type ConfigGroupId =
-  | 'here'
-  | 'osm'
-  | 'storage'
-  | 'capture_engine'
-  | 'auth'
-  | 'feature_flags'
-  | 'server'
-  | 'database'
-  | 'queue'
-  | 'frontend'
+export type ConfigGroupId = 'integrations' | 'storage' | 'auth' | 'queue' | 'capture_engine' | 'server' | 'database'
 
 export interface ConfigGroupMeta {
   id: ConfigGroupId
   title: string
   description: string
-  /** Deploy-time infrastructure is shown but never editable from a web UI. */
-  editable: boolean
 }
 
 export interface ConfigVarMeta {
@@ -27,129 +22,79 @@ export interface ConfigVarMeta {
   group: ConfigGroupId
   label: string
   help?: string
-  type: 'string' | 'url' | 'number' | 'boolean'
-  secret?: boolean
-  /** Change takes effect only after the service restarts. */
-  requiresRestart?: boolean
-  /** Shown when nothing has been set through this screen. */
-  defaultValue?: string | number | boolean
-  /** Extra copy on the rotate dialog for unusually destructive keys. */
-  rotateWarning?: string
+  /** What the server uses when the environment doesn't set it. */
+  defaultValue?: string
 }
 
 export const CONFIG_GROUPS: ConfigGroupMeta[] = [
-  { id: 'here', title: 'HERE Traffic', description: 'Traffic flow data source. Basemap tiles come from OpenStreetMap (ADR-010b).', editable: true },
-  { id: 'osm', title: 'OpenStreetMap', description: 'Basemap tiles, used in the browser and by the Playwright render page.', editable: true },
-  { id: 'storage', title: 'Cloudflare R2', description: 'Where capture images and Studio exports are stored.', editable: true },
-  { id: 'capture_engine', title: 'Capture engine', description: 'Playwright screenshot behaviour.', editable: true },
-  { id: 'auth', title: 'Authentication', description: 'Session signing and lifetime.', editable: true },
-  { id: 'feature_flags', title: 'Feature flags', description: 'Toggles that change behaviour without a code change.', editable: true },
-  { id: 'server', title: 'Server', description: 'Set at deploy time — not editable from this screen.', editable: false },
-  { id: 'database', title: 'Database', description: 'Set at deploy time — not editable from this screen.', editable: false },
-  { id: 'queue', title: 'RabbitMQ', description: 'Set at deploy time — not editable from this screen.', editable: false },
-  { id: 'frontend', title: 'Frontend & CORS', description: 'Set at deploy time — not editable from this screen.', editable: false },
+  { id: 'integrations', title: 'Map data', description: 'HERE supplies the traffic; OpenStreetMap the basemap (ADR-010b).' },
+  { id: 'storage', title: 'Cloudflare R2', description: 'Where capture images and Studio exports are stored.' },
+  { id: 'auth', title: 'Authentication & staff access', description: 'Session signing and lifetime, and who is staff.' },
+  { id: 'queue', title: 'Queue & workers', description: 'RabbitMQ, and how the worker takes jobs.' },
+  { id: 'capture_engine', title: 'Render engine', description: 'The headless Chromium that renders images and exports.' },
+  { id: 'server', title: 'Server', description: 'Where the API runs and who may call it.' },
+  { id: 'database', title: 'Database', description: 'PostgreSQL + PostGIS.' },
 ]
 
 export const CONFIG_VARS: ConfigVarMeta[] = [
-  // HERE
-  {
-    key: 'HERE_API_KEY',
-    group: 'here',
-    label: 'HERE API key',
-    help: 'Server-side only — the browser never receives it; traffic is proxied through GET /traffic/preview.',
-    type: 'string',
-    secret: true,
-    requiresRestart: true,
-  },
-  { key: 'HERE_TRAFFIC_FLOW_URL', group: 'here', label: 'Traffic flow endpoint', type: 'url', defaultValue: 'https://data.traffic.hereapi.com/v7/flow' },
+  { key: 'HERE_API_KEY', group: 'integrations', label: 'HERE API key', help: 'Server-side only; the browser never receives it.' },
+  { key: 'HERE_TRAFFIC_FLOW_URL', group: 'integrations', label: 'HERE traffic flow endpoint', defaultValue: 'https://data.traffic.hereapi.com/v7/flow' },
+  { key: 'OSM_TILE_URL', group: 'integrations', label: 'OSM tile URL template', defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png' },
 
-  // OSM
-  { key: 'OSM_TILE_URL', group: 'osm', label: 'Tile URL template', type: 'url', defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png' },
+  { key: 'R2_ACCOUNT_ID', group: 'storage', label: 'Account ID' },
+  { key: 'R2_BUCKET_NAME', group: 'storage', label: 'Bucket name' },
+  { key: 'R2_PUBLIC_URL', group: 'storage', label: 'Public URL', help: 'Or a custom domain in front of the bucket.' },
+  { key: 'R2_ACCESS_KEY_ID', group: 'storage', label: 'Access key ID' },
+  { key: 'R2_ACCESS_KEY_SECRET', group: 'storage', label: 'Access key secret' },
+  { key: 'R2_ENDPOINT', group: 'storage', label: 'Endpoint override', help: 'Normally derived from the account ID.' },
 
-  // R2
-  { key: 'R2_ACCOUNT_ID', group: 'storage', label: 'Account ID', type: 'string' },
-  { key: 'R2_BUCKET_NAME', group: 'storage', label: 'Bucket name', type: 'string', defaultValue: 'maceut-captures' },
-  { key: 'R2_PUBLIC_URL', group: 'storage', label: 'Public URL', type: 'url', help: 'Or a custom domain in front of the bucket.' },
-  { key: 'R2_ACCESS_KEY_ID', group: 'storage', label: 'Access key ID', type: 'string', secret: true, requiresRestart: true },
-  { key: 'R2_ACCESS_KEY_SECRET', group: 'storage', label: 'Access key secret', type: 'string', secret: true, requiresRestart: true },
-  {
-    key: 'R2_ENDPOINT',
-    group: 'storage',
-    label: 'Endpoint override',
-    help: 'Normally derived from the account ID. Set only for a jurisdiction-restricted bucket (EU uses .eu.r2.cloudflarestorage.com) or a local S3 emulator.',
-    type: 'url',
-    requiresRestart: true,
-  },
-
-  // Playwright
-  { key: 'PLAYWRIGHT_HEADLESS', group: 'capture_engine', label: 'Headless', type: 'boolean', defaultValue: true },
-  { key: 'PLAYWRIGHT_TIMEOUT_MS', group: 'capture_engine', label: 'Timeout (ms)', type: 'number', defaultValue: 30000 },
-  { key: 'PLAYWRIGHT_SCREENSHOT_WIDTH', group: 'capture_engine', label: 'Screenshot width', type: 'number', defaultValue: 1280 },
-  { key: 'PLAYWRIGHT_SCREENSHOT_HEIGHT', group: 'capture_engine', label: 'Screenshot height', type: 'number', defaultValue: 720 },
-
-  // Auth
-  {
-    key: 'JWT_SECRET',
-    group: 'auth',
-    label: 'JWT signing secret',
-    type: 'string',
-    secret: true,
-    requiresRestart: true,
-    rotateWarning: 'Rotating this signs out every user immediately — every existing session token stops validating.',
-  },
-  { key: 'JWT_EXPIRY', group: 'auth', label: 'Session lifetime', type: 'string', defaultValue: '7d', help: 'Duration string, e.g. 7d or 12h.' },
+  { key: 'JWT_SECRET', group: 'auth', label: 'Session signing secret' },
+  { key: 'JWT_EXPIRY', group: 'auth', label: 'Session lifetime', defaultValue: '7d' },
   {
     key: 'INTERNAL_EMAILS',
     group: 'auth',
-    label: 'Internal staff emails',
-    help: 'Comma-separated. These accounts always get the internal role and cannot be demoted from this app (BR-027). Config grants but does not revoke: removing an address here only removes access if the account was not also promoted in the database.',
-    type: 'string',
-    requiresRestart: true,
+    label: 'Staff emails',
+    help: 'These accounts are always staff and can’t be demoted in the app (BR-027).',
   },
+  { key: 'COOKIE_DOMAIN', group: 'auth', label: 'Cookie domain', defaultValue: 'localhost' },
+  { key: 'COOKIE_SECURE', group: 'auth', label: 'Secure cookies', defaultValue: 'false' },
+  { key: 'COOKIE_SAME_SITE', group: 'auth', label: 'Cookie SameSite', defaultValue: 'lax' },
 
-  // Flags
-  { key: 'SWAGGER_ENABLED', group: 'feature_flags', label: 'Swagger UI at /api-docs', type: 'boolean', defaultValue: true, requiresRestart: true },
-  {
-    key: 'NEXT_PUBLIC_ENABLE_MOCK_CAPTURE',
-    group: 'feature_flags',
-    label: 'Mock capture',
-    help: 'Skips Playwright and returns a dummy image.',
-    type: 'boolean',
-    defaultValue: false,
-    requiresRestart: true,
-  },
+  { key: 'RABBITMQ_URL', group: 'queue', label: 'RabbitMQ URL' },
+  { key: 'RABBITMQ_QUEUE_CAPTURE', group: 'queue', label: 'Capture queue', defaultValue: 'capture-jobs' },
+  { key: 'RABBITMQ_QUEUE_EXPORT', group: 'queue', label: 'Export queue', defaultValue: 'export-jobs' },
+  { key: 'RABBITMQ_QUEUE_DEAD_LETTER', group: 'queue', label: 'Dead-letter queue', defaultValue: 'capture-dead-letter' },
+  { key: 'CAPTURE_CONCURRENCY', group: 'queue', label: 'Captures at once', defaultValue: '4' },
+  { key: 'EXPORT_RETENTION_DAYS', group: 'queue', label: 'Export file retention (days)', defaultValue: '7' },
 
-  // Read-only infrastructure
-  { key: 'NODE_ENV', group: 'server', label: 'Environment', type: 'string', defaultValue: 'development' },
-  { key: 'PORT', group: 'server', label: 'Port', type: 'number', defaultValue: 8080 },
-  { key: 'APP_BASE_URL', group: 'server', label: 'App base URL', type: 'url', defaultValue: 'http://localhost:8080' },
-  { key: 'DB_HOST', group: 'database', label: 'Host', type: 'string', defaultValue: 'postgres' },
-  { key: 'DB_PORT', group: 'database', label: 'Port', type: 'number', defaultValue: 5432 },
-  { key: 'DB_NAME', group: 'database', label: 'Database', type: 'string', defaultValue: 'maceut_dev' },
-  { key: 'DB_USER', group: 'database', label: 'User', type: 'string', defaultValue: 'postgres' },
-  { key: 'DB_PASSWORD', group: 'database', label: 'Password', type: 'string', secret: true },
-  { key: 'DATABASE_URL', group: 'database', label: 'Connection URL', type: 'string', secret: true },
-  { key: 'RABBITMQ_URL', group: 'queue', label: 'Connection URL', type: 'string', defaultValue: 'amqp://guest:guest@rabbitmq:5672/' },
-  { key: 'RABBITMQ_QUEUE_CAPTURE', group: 'queue', label: 'Capture queue', type: 'string', defaultValue: 'capture-jobs' },
-  { key: 'RABBITMQ_QUEUE_DEAD_LETTER', group: 'queue', label: 'Dead-letter queue', type: 'string', defaultValue: 'capture-dead-letter' },
-  {
-    key: 'FRONTEND_URL',
-    group: 'frontend',
-    label: 'Allowed origin',
-    help: 'The origin the browser uses, matched exactly for CORS — scheme, host and port.',
-    type: 'url',
-    defaultValue: 'http://localhost:3000',
-  },
+  { key: 'PLAYWRIGHT_HEADLESS', group: 'capture_engine', label: 'Headless', defaultValue: 'true' },
+  { key: 'PLAYWRIGHT_TIMEOUT_MS', group: 'capture_engine', label: 'Timeout (ms)', defaultValue: '30000' },
+  { key: 'PLAYWRIGHT_SCREENSHOT_WIDTH', group: 'capture_engine', label: 'Capture image width', defaultValue: '1280' },
+  { key: 'PLAYWRIGHT_SCREENSHOT_HEIGHT', group: 'capture_engine', label: 'Capture image height', defaultValue: '720' },
+  { key: 'PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH', group: 'capture_engine', label: 'Chromium path' },
   {
     key: 'RENDER_BASE_URL',
-    group: 'frontend',
+    group: 'capture_engine',
     label: 'Render page base URL',
-    help: 'Where Playwright opens the capture render page from inside the api container — the compose service name, not localhost (ADR-017).',
-    type: 'url',
+    help: 'Where the worker opens the render page — the compose service name, not localhost.',
     defaultValue: 'http://web:3000',
   },
+
+  { key: 'NODE_ENV', group: 'server', label: 'Environment', defaultValue: 'development' },
+  { key: 'PORT', group: 'server', label: 'Port', defaultValue: '8080' },
+  { key: 'APP_BASE_URL', group: 'server', label: 'API base URL', defaultValue: 'http://localhost:8080' },
+  { key: 'FRONTEND_URL', group: 'server', label: 'Allowed browser origin (CORS)' },
+  { key: 'SWAGGER_ENABLED', group: 'server', label: 'Swagger UI at /api-docs', defaultValue: 'true' },
+
+  { key: 'DB_HOST', group: 'database', label: 'Host' },
+  { key: 'DB_PORT', group: 'database', label: 'Port', defaultValue: '5432' },
+  { key: 'DB_NAME', group: 'database', label: 'Database' },
+  { key: 'DB_USER', group: 'database', label: 'User' },
+  { key: 'DB_PASSWORD', group: 'database', label: 'Password' },
+  { key: 'DB_SSLMODE', group: 'database', label: 'SSL mode' },
+  { key: 'DATABASE_URL', group: 'database', label: 'Connection URL', help: 'Overrides the DB_* fields when set.' },
+  { key: 'DB_POOL_MAX', group: 'database', label: 'Pool size' },
+  { key: 'DB_POOL_IDLE_TIMEOUT_MS', group: 'database', label: 'Pool idle timeout (ms)' },
 ]
 
-export function varsInGroup(group: ConfigGroupId): ConfigVarMeta[] {
-  return CONFIG_VARS.filter((v) => v.group === group)
-}
+export const VAR_BY_KEY = new Map(CONFIG_VARS.map((v) => [v.key, v]))

@@ -90,8 +90,8 @@ const schema = z.object({
 
   /**
    * Comma-separated emails granted the `internal` platform role (BR-027).
-   * Unlike the frontend's NEXT_PUBLIC_INTERNAL_EMAILS, this one is server-side and
-   * is the actual authority — the frontend copy only decides what to render.
+   * The only copy: the web app no longer keeps one (it used to, in a NEXT_PUBLIC_
+   * variable bundled into every browser); it reads `roleLockedByConfig` per user.
    */
   INTERNAL_EMAILS: z
     .string()

@@ -53,11 +53,11 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | docs/database/schema.dbml — ERD wajib ikut ter-update saat schema berubah | CLAUDE.md |
 | 🔴 | Produksi: ganti kredensial RabbitMQ `guest:guest` di docker-compose.prod.yml | deployment.md |
 | 🔴 | Middleware: rate-limit (belum ada; /internal tanpa proteksi, Better Auth hanya melindungi route-nya sendiri) | structure.md |
-| 🔴 | **BE-12** Frontend: /internal Config jadi read-only sesuai ADR-018 | specs/internal/requirements.md |
+| ✅ | **BE-12** /internal/config jadi cermin read-only dari `.env` server (ADR-018) — `GET /internal/config`, secret hanya set/tidak, password di URL disamarkan | specs/internal/requirements.md |
 | ✅ | Frontend: ganti mock `features/auth/api.ts` → `/api/auth/*` + GET /me (fetch langsung, tanpa dependency baru) | auth/tasks.md Phase 3 |
 | ✅ | Frontend: ganti mock `features/internal/api.ts` → GET /internal/users, /internal/stats | specs/internal/requirements.md |
 | 🟡 | **BE-13** Gate pembayaran `PATCH /me/plan` — lubang self-serve sudah ditutup (403, ADR-021) ✅ · payment intent + webhook 🔴 | Sprint 3 billing |
-| 🔴 | Backend: kirim flag `roleLockedByConfig` per user supaya UI tidak perlu NEXT_PUBLIC_INTERNAL_EMAILS | specs/internal/requirements.md |
+| ✅ | Backend kirim `roleLockedByConfig` per user (+ `internalByConfig` di stats); `NEXT_PUBLIC_INTERNAL_EMAILS` dihapus dari web | specs/internal/requirements.md |
 | ✅ | API: GET /zones + POST /zones (Drizzle + PostGIS raw) + unit test + swagger | zone-management/tasks.md Phase 2 |
 | ✅ | API: GET/PATCH/DELETE /zones/:id + unit test + swagger (F-24, BR-028..030) | zone-management/tasks.md Phase 2 |
 | ✅ | Lib: RabbitMQ client (connect, assert queue + dead-letter, publish) | zone-management/tasks.md Phase 3 |
@@ -116,7 +116,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-14** Studio: panel style dipecah 5 bagian (map theme, congestion theme, zoom position, overlay, output size); tema satelit + artistik, pan/zoom manual | permintaan user |
 | 🔴 | **CAP-02** Playwright: render otomatis PNG per capture ke R2 (BR-009/BR-018) — canvas renderer siap dipakai ulang | zone-management Phase 3 |
 | ✅ | **BE-16** Scheduler: jendela aktif mem-publish job tiap menit (tanpa dependency baru, ADR-023) | capture-schedule/requirements.md |
-| 🟡 | **BE-17** Bersihkan akun uji `*@maceut.test` dari DB dev — sekarang bisa lewat /internal/users | housekeeping |
+| ✅ | **BE-17** Akun uji `*@maceut.test` yang KOSONG dihapus (17); 8 yang punya zona/capture/export dipertahankan atas keputusan user (termasuk sched@ — zona YOG) | housekeeping |
 | 🔴 | Frontend: tampilkan state "X zona/jendela Anda di-pause" + dialog dampak downgrade | ADR-020 |
 | ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: RoadClassPicker pakai `GET /traffic/road-class-counts` — katalog lokal dihapus | zone-management/tasks.md Phase 4 |
@@ -1626,6 +1626,30 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
   VERIFIKASI: 324 test API (10 service, 6 controller baru), tsc + eslint bersih kedua paket,
   /internal/here 200. Halaman admin belum dilihat di browser.
+
+[2026-09-28f] Backlog admin: config read-only, role lock dari server, akun uji dibersihkan.
+
+  BE-12: halaman /internal/config dulunya PROTOTIPE — "config" disimpan di localStorage
+  browser, dengan kolom edit dan dialog "rotate secret" yang tidak mengubah apa pun di
+  server mana pun. Kini cermin read-only dari env server yang sedang berjalan lewat
+  `GET /internal/config` (config.service.ts, 41 key). Secret (JWT_SECRET, HERE_API_KEY,
+  R2 keys, DB_PASSWORD) TIDAK pernah dikirim, hanya set/belum; password di DATABASE_URL
+  & RABBITMQ_URL disamarkan (`****` — ASCII, karena `URL` meng-encode karakter bullet).
+  Diuji dengan env sungguhan: 36 key terisi, nol secret bocor. `config-api.ts` (mock
+  localStorage) dihapus; catalog kini hanya label/bantuan, nilainya dari API.
+
+  roleLockedByConfig: API kini mengirim flag per user dan jumlah `internalByConfig` di
+  stats. Web tidak lagi membawa salinan daftar staf di `NEXT_PUBLIC_INTERNAL_EMAILS`
+  (ikut ter-bundle ke setiap browser dan bisa berbeda dari daftar server) —
+  `features/auth/internal-access.ts` dihapus, env-nya dihapus dari web/.env.example.
+  Boleh dihapus dari web/.env.local.
+
+  BE-17: 17 akun uji KOSONG (tanpa zona/capture/export) dihapus lewat jalur hapus aplikasi
+  sendiri (`userService.deleteUser`), bukan SQL mentah. 8 yang punya data dipertahankan
+  atas keputusan user — sched@ (zona YOG, 154 capture), tbl@ (13 zona), pw@, herecheck@,
+  studioverify×3, layoutverify@.
+
+  VERIFIKASI: 331 test API, tsc + eslint bersih kedua paket.
 
 ---
 

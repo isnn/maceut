@@ -348,3 +348,23 @@ describe('GET /internal/stats', () => {
     expect(res.body.data.planMix).toEqual({ free: 1, standard: 0, premium: 2 })
   })
 })
+
+describe('GET /internal/config (BE-12, ADR-018)', () => {
+  it('mirrors the running config to staff, without any secret value', async () => {
+    signedInAs(STAFF_ID)
+    staffLookups()
+    const res = await request(app).get('/internal/config')
+
+    expect(res.status).toBe(200)
+    const jwt = res.body.data.find((e: { key: string }) => e.key === 'JWT_SECRET')
+    expect(jwt).toMatchObject({ secret: true, value: null })
+    // The real secret from this process's environment must not appear anywhere.
+    if (process.env.JWT_SECRET) expect(JSON.stringify(res.body)).not.toContain(process.env.JWT_SECRET)
+  })
+
+  it('is closed to customers', async () => {
+    signedInAs(STAFF_ID)
+    vi.mocked(userRepo.findById).mockResolvedValue(row({ id: STAFF_ID, email: 'budi@example.com', role: 'user' }))
+    expect((await request(app).get('/internal/config')).status).toBe(403)
+  })
+})

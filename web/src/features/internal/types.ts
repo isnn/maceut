@@ -30,6 +30,8 @@ export interface InternalUserRow {
   email: string
   plan: Plan
   role: PlatformRole
+  /** Staff by INTERNAL_EMAILS — can't be demoted here (BR-027). Decided by the server. */
+  roleLockedByConfig: boolean
   createdAt: string
   /** The signed-in account — shown with a "you" marker and locked against self-edits. */
   isYou: boolean
@@ -39,6 +41,8 @@ export interface InternalUserRow {
 export interface PlatformStats {
   totalAccounts: number
   internalUsers: number
+  /** Addresses the server's INTERNAL_EMAILS grants. */
+  internalByConfig: number
   signupsLast7d: number
   byPlan: Record<Plan, number>
   /** Measured. Captures and storage stay null until CAP-01 — see AccountUsage. */

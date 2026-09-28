@@ -18,7 +18,6 @@ import { formatDate } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import * as internalApi from '@/features/internal/api'
-import { isInternalByConfig } from '@/features/auth/internal-access'
 import type { InternalUserRow } from '@/features/internal/types'
 import type { Plan, PlatformRole } from '@/features/auth/types'
 
@@ -260,7 +259,7 @@ export default function InternalUsersPage() {
             </thead>
             <tbody>
               {visible.map((row) => {
-                const byConfig = isInternalByConfig(row.email)
+                const byConfig = row.roleLockedByConfig
                 const isLastInternal = row.role === 'internal' && internalCount <= 1
                 const roleLocked = row.isYou || isLastInternal || byConfig
                 return (
@@ -296,7 +295,7 @@ export default function InternalUsersPage() {
                         disabled={roleLocked}
                         title={
                           byConfig
-                            ? 'Granted by NEXT_PUBLIC_INTERNAL_EMAILS — change it there'
+                            ? 'Granted by INTERNAL_EMAILS in the server config — change it there'
                             : row.isYou
                               ? 'You cannot change your own role'
                               : isLastInternal

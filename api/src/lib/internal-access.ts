@@ -19,8 +19,9 @@ import type { PlatformRole } from '../types/plan'
  * is deliberately no single switch, because one would either break runtime promotion
  * or let a config edit be silently overridden by a stale row.
  *
- * The frontend has its own NEXT_PUBLIC_INTERNAL_EMAILS, but that is bundled into the
- * browser and only decides what to render. This one is the authority.
+ * The only copy. The web app used to keep its own in NEXT_PUBLIC_INTERNAL_EMAILS —
+ * bundled into every browser, and free to disagree with this one; it now reads a
+ * per-user `roleLockedByConfig` flag from the API instead.
  */
 export function isInternalByConfig(email: string): boolean {
   return config.internalEmails.includes(email.trim().toLowerCase())
