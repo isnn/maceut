@@ -1,5 +1,6 @@
 import type { Channel, ConsumeMessage } from 'amqplib'
-import { config } from '../config/env'
+import { config, isR2Configured } from '../config/env'
+import { publishRenderJob } from '../lib/rabbitmq-client'
 import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import { bboxOfGeometry } from '../services/zone.service'
@@ -76,6 +77,14 @@ export async function runCapture(captureId: string): Promise<void> {
     })
 
     console.log(`[worker] capture ${captureId} done — ${flow.features.length} roads`)
+
+    // CAP-02 — the image is a separate, single-file job: see render.worker.ts. A failure
+    // to queue it leaves a complete capture without an image, never a failed capture.
+    if (isR2Configured()) {
+      await publishRenderJob({ captureId }).catch((err) =>
+        console.error(`[worker] capture ${captureId} image not queued:`, err instanceof Error ? err.message : err),
+      )
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     await captureRepo.markStatus(captureId, 'failed', message)

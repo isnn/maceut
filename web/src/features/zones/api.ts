@@ -204,6 +204,17 @@ export async function getCaptureTrafficSlim(captureId: string): Promise<SlimTraf
   return detail.traffic
 }
 
+export interface CaptureImage {
+  url: string
+  fileName: string
+  expiresInSeconds: number
+}
+
+/** A signed, short-lived download link for a capture's PNG (CAP-02). Fetch it on click. */
+export async function getCaptureImage(captureId: string): Promise<CaptureImage> {
+  return apiClient.get<CaptureImage>(`/captures/${captureId}/image`)
+}
+
 export interface EnqueuedCapture {
   capture: Capture
   /** False when the daily plan limit refused it (BR-008). */

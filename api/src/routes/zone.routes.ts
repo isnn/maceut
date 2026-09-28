@@ -19,7 +19,7 @@ const router = Router()
  * unscoped middleware would also run for /me, /internal and everything else that passes
  * through. When adding a route here, add its prefix below in the same edit.
  */
-router.use(['/zones', '/zones/:id', '/traffic', '/captures', '/captures/:id'], authMiddleware, planCheck)
+router.use(['/zones', '/zones/:id', '/traffic', '/captures', '/captures/:id', '/captures/:id/image'], authMiddleware, planCheck)
 
 /**
  * @swagger
@@ -483,5 +483,45 @@ router.get('/zones/:id/captures', captureController.listForZone)
 router.get('/captures', captureController.recent)
 
 router.get('/captures/:id', captureController.detail)
+
+/**
+ * @swagger
+ * /captures/{id}/image:
+ *   get:
+ *     summary: Link unduh gambar PNG sebuah capture (CAP-02)
+ *     description: >
+ *       Setiap capture yang selesai dirender otomatis menjadi satu PNG di R2 oleh
+ *       render worker (tema Dark, legenda, nama zona dan waktu WIB). Endpoint ini
+ *       mengembalikan signed URL berumur pendek yang mengunduh file dengan nama
+ *       `{ZONA}-{YYYY-MM-DD}_{HHMM}.png` (WIB). 404 bila gambar belum ada — capture
+ *       masih pending, gagal, dibuat sebelum fitur ini, atau render-nya gagal. Data
+ *       traffic capture tidak terpengaruh.
+ *     tags: [Captures]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Signed URL untuk mengunduh PNG
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     url: { type: string, format: uri }
+ *                     fileName: { type: string, example: YOG-2026-09-23_0700.png }
+ *                     expiresInSeconds: { type: integer, example: 300 }
+ *       401: { description: UNAUTHORIZED }
+ *       403: { description: FORBIDDEN }
+ *       404: { description: NOT_FOUND — capture atau gambarnya tidak ada }
+ */
+router.get('/captures/:id/image', captureController.image)
 
 export default router
