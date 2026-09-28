@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import request from 'supertest'
 
 vi.mock('../lib/drizzle-client', () => ({ checkDb: vi.fn(), closeDb: vi.fn(), db: {}, pool: {} }))
+// HERE calls are metered (here-usage.service); with no budget set the meter only counts.
+vi.mock('../repositories/here-usage.repository', () => ({
+  HERE_SOURCES: ['capture', 'preview', 'road_counts', 'zone_stats'],
+  getSetting: vi.fn(async () => undefined),
+  increment: vi.fn(async () => undefined),
+  totalsOn: vi.fn(async () => ({ requests: 0, failed: 0, refused: 0 })),
+  totalsSince: vi.fn(async () => ({ requests: 0, failed: 0, refused: 0 })),
+}))
 vi.mock('../lib/rabbitmq-client', () => ({ checkQueue: vi.fn(), closeQueue: vi.fn(), getChannel: vi.fn() }))
 vi.mock('../lib/auth', () => ({ auth: { api: { getSession: vi.fn() }, handler: vi.fn() } }))
 vi.mock('better-auth/node', () => ({
