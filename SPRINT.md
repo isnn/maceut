@@ -105,7 +105,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-12** Studio: renderer canvas — PNG per frame, WebM animasi, 5 style, toggle layer | permintaan user |
 | ✅ | **FE-13** Studio: rentang waktu (start/end), ekspor banyak gambar (ZIP), viewer capture lebih cepat | permintaan user |
 | ✅ | **FE-20** Studio: judul panjang terbungkus, teks tanpa outline (90% opasitas), modal Export, UI output size, swatch tema berbeda, Default → Charcoal | permintaan user |
-| 🔴 | **FE-21** Export async di server (tabel `exports`, antrian RabbitMQ, worker Playwright + render page internal, riwayat & progres di detail zona) — desain di plan | permintaan user |
+| ✅ | **FE-21** Export async di server: tabel `exports`, antrian RabbitMQ, worker Playwright + halaman render internal, riwayat & progres di detail zona, retry, sweeper | permintaan user |
 | ✅ | **FE-19** Studio: rentang waktu lintas hari; animasi 1:1 dengan preview (timing tepat, framing tak tergantung ukuran, bitrate sesuai resolusi) | permintaan user |
 | ✅ | **FE-18** Studio: panel satu kartu, menu Export, alignment teks, efek vignette opsional, modal ukuran; ringkasan hari pindah ke detail zona | permintaan user |
 | ✅ | **FE-17** Studio: UI panel zoom/overlay/output baru, judul bisa diubah, peta & teks dua lapis, halaman lebih lebar | permintaan user |
@@ -1498,6 +1498,64 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
   VERIFIKASI: tsc + eslint bersih, /studio 200, tanpa error di log. Browser tidak
   dijalankan (host kekurangan memori).
+
+[2026-09-28b] Export Studio dikerjakan server (FE-21). Aturan baru: PR, bukan commit ke develop.
+
+  ATURAN BARU (user): pekerjaan selesai TIDAK di-commit langsung ke `develop`. Kerjakan di
+  branch `<type>/<nama>` dari develop, buka PR ke develop, dan tunggu review user sebelum
+  merge. Dicatat di CLAUDE.md (AI Rules). Branch ini: `feat/async-export`.
+
+  ALIRAN: Studio → POST /zones/:id/exports (format zip|webm, capture awal & akhir,
+  pengaturan render per id) → service memeriksa kepemilikan, satu export aktif per akun
+  (409 EXPORT_IN_PROGRESS), batas frame per paket (free 60 / standard 240 / premium 720,
+  422 EXPORT_LIMIT_EXCEEDED), R2 terkonfigurasi → baris `exports` (frame DIBEKUKAN saat
+  permintaan) → antrian `export-jobs` → worker (prefetch 1) meluncurkan Chromium yang
+  sudah ada di image worker lewat `playwright-core` (dependency baru, disetujui user) →
+  membuka halaman render internal web `/render/export` → halaman itu menjalankan
+  `renderCapture`/`recordAnimation` YANG SAMA dengan preview Studio → hasil ke R2
+  `exports/{user}/{id}.{zip|webm}` → baris `done` + link unduh bertanda tangan 15 menit
+  (dengan nama file yang manusiawi via Content-Disposition). PNG tunggal tetap di browser.
+
+  JEMBATAN HALAMAN ↔ WORKER: fungsi yang di-expose Playwright (in-process), bukan API —
+  `__exportFrame(i)` (traffic slim per frame, dibaca satu-satu dari DB), `__exportProgress`
+  (juga memberi tahu bila dibatalkan), `__exportPng`/`__exportChunk` (keluaran base64
+  per 4 MB). Halaman render tidak punya data & tidak memanggil API, jadi aman di luar area
+  login.
+
+  PROGRES: worker menulis `frames_done` maks 1×/detik (+ selalu frame terakhir);
+  `updated_at` = heartbeat (juga setiap 30 detik saat langkah panjang). API menurunkan
+  `progress`, `queuePosition`, `etaSeconds`, `downloadUrl` saat dibaca — tidak ada status
+  yang disimpan dua kali. Browser polling tiap 2 detik selama aktif & tab terlihat.
+  SWEEPER (proses API, tiap menit): render yang heartbeat-nya berhenti >2 menit → failed
+  (worker di-OOM-kill); file lewat masa simpan (EXPORT_RETENTION_DAYS, default 7) dihapus
+  dari R2, baris tetap sebagai `expired`.
+
+  UX: dialog Export tidak menutup setelah memulai — berubah jadi tampilan progres
+  ("Making your animation", pill + bar + keterangan, penjelasan bahwa ini berjalan di
+  server dan file menunggu di halaman zona), tombol Keep editing / Open zone page →.
+  Chip di footer Studio menjaga export yang berjalan tetap terlihat (klik = buka lagi),
+  dan muncul juga bila export zona itu sudah berjalan sebelumnya. Halaman zona: bagian
+  "Exports" paling bawah — tabel dengan pill/bar/keterangan per status, Download, Retry
+  (baris baru, riwayat gagal tetap), Cancel/Delete; datang dari Studio menyorot barisnya.
+
+  DITEMUKAN SAAT UJI END-TO-END (worker sungguhan, R2 sungguhan, zona YOG ~9.600 jalan):
+  - Chromium headless tidak bisa hydrate halaman dev: Next 16 menolak socket HMR dari
+    origin `web` → `allowedDevOrigins` + "web" (dev saja).
+  - Frame terakhir animasi terpotong (2 frame × 500 ms = 0,53 s): Chrome mengabaikan
+    `requestFrame` pada canvas yang tidak berubah → satu pixel ditulis ulang dulu. Kini
+    3 × 500 ms = 1,45 s (frame di 0 / 0,53 / 1,03 / 1,45 s).
+  - FONT: caption memakai font sistem, dan Chromium Alpine hampir tak punya font — file
+    server akan beda tipografi dari preview. Kini web font self-hosted (Inter + Playfair
+    Display via next/font) dan renderer menunggu font dimuat sebelum menggambar.
+  - ERD (schema.dbml) tertinggal sejak 0006 — `captures` (0007) dan `next_fire_at` (0008)
+    tidak pernah masuk. Diperbaiki bersama 0009.
+  Hasil nyata: ZIP 2 PNG 800×500 valid (zipfile Python: testzip bersih), WebM VP9 800×500
+  dengan traffic tergambar penuh, keduanya diunduh dari R2 lewat link bertanda tangan.
+
+  VERIFIKASI: 307 test API (18 export controller, 3 sweeper, 2 zip), tsc + eslint bersih
+  di kedua paket, Swagger memuat 3 path export, semua route export 401 tanpa sesi.
+  UI (dialog progres, chip, bagian Exports) BELUM dilihat di browser — host kekurangan
+  memori untuk browser uji di sisi host; pipeline server-nya yang diuji end-to-end.
 
 ---
 

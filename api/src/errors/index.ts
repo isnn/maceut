@@ -20,6 +20,8 @@ export type ErrorCode =
   | 'INVALID_CREDENTIALS'
   | 'UPGRADE_NOT_SELF_SERVE'
   | 'CAPTURE_FAILED'
+  | 'EXPORT_IN_PROGRESS'
+  | 'EXPORT_LIMIT_EXCEEDED'
   | 'UPSTREAM_ERROR'
   | 'INTERNAL_ERROR'
 
@@ -142,6 +144,25 @@ export class CaptureFailedError extends AppError {
 }
 
 /** A third party (HERE, R2) failed or is unreachable — not our bug, and not a 500. */
+/** One export renders at a time per account — the worker is shared and slow. */
+export class ExportInProgressError extends AppError {
+  constructor(exportId: string) {
+    super('EXPORT_IN_PROGRESS', 409, 'Masih ada export yang sedang dibuat. Tunggu sampai selesai, atau batalkan dulu.', {
+      exportId,
+    })
+  }
+}
+
+/** An export asking for more frames than the plan allows in one file. */
+export class ExportLimitExceededError extends AppError {
+  constructor(limit: number, requested: number) {
+    super('EXPORT_LIMIT_EXCEEDED', 422, `Paket Anda mengizinkan maksimal ${limit} frame per export (diminta ${requested}).`, {
+      limit,
+      requested,
+    })
+  }
+}
+
 export class UpstreamError extends AppError {
   constructor(service: string, message: string) {
     super('UPSTREAM_ERROR', 502, `${service}: ${message}`, { service })

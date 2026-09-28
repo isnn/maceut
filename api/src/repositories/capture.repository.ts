@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from 'drizzle-orm'
+import { eq, and, asc, desc, gte, lte, sql } from 'drizzle-orm'
 import { db } from '../lib/drizzle-client'
 import { captures, zones } from '../../drizzle/schema'
 import type { RoadClass } from '../types/plan'
@@ -222,4 +222,28 @@ export async function recentForUser(
     .orderBy(desc(captures.capturedAt))
     .limit(limit)
   return rows
+}
+
+/**
+ * The collected captures of a zone between two instants, inclusive, oldest first —
+ * ids and times only. An export's frame list: never the `traffic` column, which is
+ * ~2 MB a row and is read one frame at a time when the frame is actually rendered.
+ */
+export async function listDoneIdsBetween(
+  zoneId: string,
+  from: Date,
+  to: Date,
+): Promise<{ id: string; capturedAt: Date }[]> {
+  return db
+    .select({ id: captures.id, capturedAt: captures.capturedAt })
+    .from(captures)
+    .where(
+      and(
+        eq(captures.zoneId, zoneId),
+        eq(captures.status, 'done'),
+        gte(captures.capturedAt, from),
+        lte(captures.capturedAt, to),
+      ),
+    )
+    .orderBy(asc(captures.capturedAt))
 }

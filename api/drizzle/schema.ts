@@ -238,3 +238,83 @@ export const captures = pgTable(
 )
 
 export type CaptureRow = typeof captures.$inferSelect
+
+// --- exports (FE-21) ------------------------------------------------------------------
+
+export const exportFormatEnum = pgEnum('export_format', ['zip', 'webm'])
+
+/**
+ * `uploading` is its own state because it can take a while on a large file, and a
+ * progress bar stuck at "50 / 50" with no explanation looks hung. `expired` rows are
+ * kept (without their file) so the history still says the export existed.
+ */
+export const exportStatusEnum = pgEnum('export_status', [
+  'queued',
+  'rendering',
+  'uploading',
+  'done',
+  'failed',
+  'expired',
+])
+
+/**
+ * Studio exports rendered by the worker instead of the user's browser tab — a ZIP of
+ * frames or a WebM animation of a capture range. One row per request, and the row is
+ * the single source of truth for its progress: the worker writes `framesDone` as it
+ * renders, and every screen that shows a progress bar reads it from here.
+ */
+export const exports = pgTable(
+  'exports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    zoneId: uuid('zone_id')
+      .notNull()
+      .references(() => zones.id, { onDelete: 'cascade' }),
+
+    format: exportFormatEnum('format').notNull(),
+    status: exportStatusEnum('status').notNull().default('queued'),
+
+    /**
+     * The render settings exactly as Studio showed them — theme and congestion theme by
+     * id, overlay, view, size, frame hold. Stored by id rather than resolved colours,
+     * so the one definition of each theme stays in the renderer.
+     */
+    spec: jsonb('spec').notNull(),
+    /**
+     * The capture ids to render, fixed when the export was requested. Resolving the
+     * range again at render time could pick up captures collected in the meantime and
+     * produce a file that doesn't match what the user asked for.
+     */
+    frameIds: jsonb('frame_ids').$type<string[]>().notNull(),
+    frameCount: integer('frame_count').notNull(),
+    framesDone: integer('frames_done').notNull().default(0),
+
+    /** R2 object path. Null until uploaded, and again once expired. */
+    filePath: text('file_path'),
+    fileSize: integer('file_size'),
+    error: text('error'),
+
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    /**
+     * Touched on every progress write — a heartbeat. A render whose heartbeat stops
+     * (the worker was OOM-killed mid-job) is swept to `failed` instead of spinning
+     * forever at the frame it died on.
+     */
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+  },
+  (t) => [
+    // The zone page lists its exports newest first.
+    index('exports_zone_created_idx').on(t.zoneId, t.createdAt),
+    // "One export at a time" looks up a user's active rows; the sweeper scans by status.
+    index('exports_user_status_idx').on(t.userId, t.status),
+    index('exports_status_idx').on(t.status),
+  ],
+)
+
+export type ExportRow = typeof exports.$inferSelect
