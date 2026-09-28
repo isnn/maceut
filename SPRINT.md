@@ -105,6 +105,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-12** Studio: renderer canvas — PNG per frame, WebM animasi, 5 style, toggle layer | permintaan user |
 | ✅ | **FE-13** Studio: rentang waktu (start/end), ekspor banyak gambar (ZIP), viewer capture lebih cepat | permintaan user |
 | ✅ | **FE-20** Studio: judul panjang terbungkus, teks tanpa outline (90% opasitas), modal Export, UI output size, swatch tema berbeda, Default → Charcoal | permintaan user |
+| ✅ | **FE-22** Detail zona: capture windows naik ke bawah detail, peta captures gelap, header tabel sejajar, pagination baru, help tip boundary, gaya konsisten | permintaan user |
 | ✅ | **FE-21** Export async di server: tabel `exports`, antrian RabbitMQ, worker Playwright + halaman render internal, riwayat & progres di detail zona, retry, sweeper | permintaan user |
 | ✅ | **FE-19** Studio: rentang waktu lintas hari; animasi 1:1 dengan preview (timing tepat, framing tak tergantung ukuran, bitrate sesuai resolusi) | permintaan user |
 | ✅ | **FE-18** Studio: panel satu kartu, menu Export, alignment teks, efek vignette opsional, modal ukuran; ringkasan hari pindah ke detail zona | permintaan user |
@@ -1562,6 +1563,33 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   di kedua paket, Swagger memuat 3 path export, semua route export 401 tanpa sesi.
   UI (dialog progres, chip, bagian Exports) BELUM dilihat di browser — host kekurangan
   memori untuk browser uji di sisi host; pipeline server-nya yang diuji end-to-end.
+
+[2026-09-28c] Halaman detail zona dirapikan (FE-22). Branch `feat/zone-page-polish`, PR
+  bertumpuk di atas #41 (base `feat/async-export`, pindah ke develop otomatis saat #41
+  di-merge) — ZoneDetail.tsx juga diubah #41, jadi branch terpisah dari develop akan konflik.
+
+  - URUTAN: Capture windows kini tepat di bawah Boundary/Zone details, lalu Captures,
+    lalu Exports paling bawah. Keterangan "Capture times are set on the Schedule page"
+    dihapus — bagian windows tepat di bawahnya kini membawa tombol Manage on Schedule.
+  - PETA CAPTURES GELAP: MapCanvas punya `tone` ('dim' default, 'dark'). Filter "dark"
+    lama menaruh brightness SEBELUM invert, jadi invert mencerahkannya lagi → abu-abu,
+    bukan gelap (bug urutan yang sama yang pernah terjadi di renderer). `maceut-map-night`
+    memakai rantai tema Dark Studio: invert dulu, baru diredupkan.
+  - HEADER TABEL TIDAK SEJAJAR: di kolom rata kanan (Roads, Avg jam), slot panah sort
+    12px ada SETELAH label, jadi label berhenti ~16px sebelum angka di bawahnya. Kini
+    slotnya di depan label pada kolom rata kanan. Berlaku untuk semua tabel aplikasi.
+  - PAGINATION baru (semua tabel): "Showing 1–10 of 34 captures" dengan angka ditebalkan,
+    tombol halaman bernomor (1 … 4 5 6 … 12) dengan halaman aktif ungu, panah prev/next.
+  - BOUNDARY: paragraf peringatan diganti ikon bantuan di samping judul peta — deskripsi
+    muncul saat hover/fokus (komponen baru `ui/HelpTip.tsx`, Base UI Tooltip).
+  - KONSISTENSI: `SectionHeader` (judul + deskripsi satu baris + aksi kanan) dipakai
+    Capture windows, Captures, Exports; `CardTitle` untuk judul kartu (Boundary, Zone
+    details, This frame, Day summary, Congestion through the day). Tombol stepper
+    captures kini 44px/rounded-md seperti Button; aksi baris Exports memakai ukuran `sm`
+    (ukuran aksi baris); chip hari di tabel windows memakai token `text-primary`, bukan
+    hex `#5A35F3` (aturan CLAUDE.md).
+
+  VERIFIKASI: tsc + eslint bersih, /zones 200, tanpa error di log. Belum dilihat di browser.
 
 ---
 

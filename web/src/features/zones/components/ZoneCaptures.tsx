@@ -19,6 +19,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { SectionHeader } from '@/components/shared/SectionHeader'
 import { Pagination, SortableTh, Table, TableWrap, Td } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
 import { IconArrowLeft, IconArrowRight, IconClock } from '@/components/ui/icons'
@@ -216,17 +217,15 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
 
   return (
     <section className="space-y-md">
-      <div className="flex flex-wrap items-center justify-between gap-md">
-        <div>
-          <h2 className="text-section-title text-text-primary">Captures</h2>
-          <p className="text-caption text-text-muted mt-xs">
-            Every cycle this zone has collected, newest first.
-          </p>
-        </div>
-        <Button variant="secondary" onClick={runNow} disabled={running}>
-          {running ? 'Starting…' : 'Capture now'}
-        </Button>
-      </div>
+      <SectionHeader
+        title="Captures"
+        description="Every cycle this zone has collected, newest first."
+        actions={
+          <Button variant="secondary" onClick={runNow} disabled={running}>
+            {running ? 'Starting…' : 'Capture now'}
+          </Button>
+        }
+      />
 
       {error && <Alert variant="warning">{error}</Alert>}
       {notice && <Alert variant="success">{notice}</Alert>}
@@ -247,7 +246,8 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
               disabled={index >= cycles.length - 1}
               aria-label="Older capture"
               className={cn(
-                'w-10 h-10 rounded-sm border border-border flex items-center justify-center transition-colors',
+                // The same 44px, rounded-md, bordered surface as a secondary Button.
+                'w-11 h-11 shrink-0 rounded-md border border-border bg-canvas text-text-primary flex items-center justify-center transition-colors',
                 'hover:bg-canvas-secondary focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
                 'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent',
               )}
@@ -282,7 +282,8 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
               disabled={index <= 0}
               aria-label="Newer capture"
               className={cn(
-                'w-10 h-10 rounded-sm border border-border flex items-center justify-center transition-colors',
+                // The same 44px, rounded-md, bordered surface as a secondary Button.
+                'w-11 h-11 shrink-0 rounded-md border border-border bg-canvas text-text-primary flex items-center justify-center transition-colors',
                 'hover:bg-canvas-secondary focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
                 'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent',
               )}
@@ -312,6 +313,7 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
                     <MapCanvas
                       polygon={zone.geometry}
                       slimTraffic={traffic}
+                      tone="dark"
                       className="h-80 rounded-md overflow-hidden"
                     />
                     {loadingTraffic && (
