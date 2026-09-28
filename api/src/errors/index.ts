@@ -22,6 +22,7 @@ export type ErrorCode =
   | 'CAPTURE_FAILED'
   | 'EXPORT_IN_PROGRESS'
   | 'EXPORT_LIMIT_EXCEEDED'
+  | 'TRAFFIC_UNAVAILABLE'
   | 'UPSTREAM_ERROR'
   | 'INTERNAL_ERROR'
 
@@ -160,6 +161,17 @@ export class ExportLimitExceededError extends AppError {
       limit,
       requested,
     })
+  }
+}
+
+/**
+ * The platform's HERE budget cap is reached. Deliberately says nothing about HERE or
+ * budgets: that is an operator concern, and customers see only that traffic data is
+ * briefly unavailable. Staff see the real reason on /internal/here.
+ */
+export class TrafficUnavailableError extends AppError {
+  constructor() {
+    super('TRAFFIC_UNAVAILABLE', 503, 'Data lalu lintas sedang tidak tersedia. Coba lagi nanti.')
   }
 }
 
