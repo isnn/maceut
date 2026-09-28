@@ -746,8 +746,36 @@ function wibParts(iso: string): { date: string; time: string; day: string } {
 /** MapToPoster's size presets — its whole type scale is multiplied by one of these. */
 const TEXT_SCALE: Record<Exclude<TextSize, 'none'>, number> = { small: 0.75, medium: 1, large: 1.35 }
 
-const SERIF = 'ui-serif, Georgia, "Times New Roman", serif'
-const SANS = 'ui-sans-serif, system-ui, sans-serif'
+/**
+ * The caption's typefaces: web fonts the app self-hosts (next/font, root layout), read
+ * from their CSS variables — never system fonts.
+ *
+ * Exports are rendered by the worker's headless Chromium, which has almost no fonts
+ * installed. With `ui-serif`/`system-ui` the same caption set in a Mac preview and in
+ * the server's file would be two different typefaces. Web fonts are the same bytes on
+ * both, so the file matches the preview. The system stacks remain only as fallbacks.
+ */
+function fontFamily(cssVar: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  const family = getComputedStyle(document.documentElement).getPropertyValue(cssVar).trim()
+  return family ? `${family}, ${fallback}` : fallback
+}
+const serif = () => fontFamily('--font-poster-serif', 'Georgia, "Times New Roman", serif')
+const sans = () => fontFamily('--font-inter', 'ui-sans-serif, system-ui, sans-serif')
+
+/**
+ * Waits until the caption's fonts are loaded. Canvas text does not wait for web fonts
+ * on its own — it silently draws with the fallback — so an export rendered right after
+ * page load would otherwise come out in the wrong typeface.
+ */
+export async function ensureFonts(): Promise<void> {
+  if (typeof document === 'undefined' || !document.fonts) return
+  await Promise.all([
+    document.fonts.load(`700 64px ${serif()}`),
+    document.fonts.load(`700 22px ${sans()}`),
+    document.fonts.load(`500 16px ${sans()}`),
+  ]).catch(() => undefined)
+}
 
 interface CaptionLine {
   text: string
@@ -825,7 +853,7 @@ function layoutCaption(ctx: CanvasRenderingContext2D, input: RenderInput): Capti
   let heroSize = 64 * q
   const heroLine = (text: string, size: number): CaptionLine => ({
     text,
-    font: `700 ${size}px ${SERIF}`,
+    font: `700 ${size}px ${serif()}`,
     size,
     tracking: 0.25,
     leading: 1.12,
@@ -857,7 +885,7 @@ function layoutCaption(ctx: CanvasRenderingContext2D, input: RenderInput): Capti
 
   const clock: CaptionLine = {
     text: `${time} WIB`,
-    font: `700 ${22 * q}px ${SANS}`,
+    font: `700 ${22 * q}px ${sans()}`,
     size: 22 * q,
     tracking: 0.4,
     leading: 1.2,
@@ -865,7 +893,7 @@ function layoutCaption(ctx: CanvasRenderingContext2D, input: RenderInput): Capti
   }
   const when: CaptionLine = {
     text: `${day} · ${date.toUpperCase()}`,
-    font: `500 ${16 * q}px ${SANS}`,
+    font: `500 ${16 * q}px ${sans()}`,
     size: 16 * q,
     tracking: 0.4,
     leading: 1.2,
@@ -1023,6 +1051,7 @@ function drawLegend(ctx: CanvasRenderingContext2D, input: RenderInput) {
 export async function renderCapture(canvas: HTMLCanvasElement, input: RenderInput): Promise<void> {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
+  await ensureFonts()
   canvas.width = input.width
   canvas.height = input.height
   await drawMap(ctx, input)
@@ -1271,7 +1300,12 @@ export async function recordAnimation(options: AnimationOptions): Promise<Blob> 
   }
 
   // One closing copy of the last frame: a WebM frame's duration is the gap to the next
-  // one, so without it players cut the last frame short.
+  // one, so without it players cut the last frame short. Chrome ignores `requestFrame`
+  // on a canvas that hasn't changed since the last frame — a 2-frame, 500 ms export
+  // came out 0.53 s long — so one of its own pixels is written back first, which marks
+  // it changed without changing what it shows.
+  const ctx2d = options.canvas.getContext('2d')
+  if (ctx2d) ctx2d.putImageData(ctx2d.getImageData(0, 0, 1, 1), 0, 0)
   track?.requestFrame()
   await wait(60)
   recorder.stop()

@@ -18,6 +18,7 @@ import { ApiError } from '@/types/api'
 import { MapCanvas } from './MapCanvas'
 import { RoadClassPicker, ROAD_CLASS_ORDER } from './RoadClassPicker'
 import { ZoneCaptures } from './ZoneCaptures'
+import { ZoneExports } from '@/features/exports/components/ZoneExports'
 import * as zonesApi from '../api'
 import * as schedulesApi from '@/features/schedules/api'
 import { DAY_LABEL, INTERVAL_LABEL, framesPerDay, type CaptureWindow } from '@/features/schedules/types'
@@ -401,6 +402,9 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
           </Alert>
         )}
       </section>
+
+      {/* Last on the page: exports are made in Studio and collected here. */}
+      <ZoneExports zoneId={zone.id} />
 
       <ConfirmDialog
         open={confirmDelete}

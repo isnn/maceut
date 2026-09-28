@@ -62,11 +62,8 @@ import {
   renderCapture,
   renderMap,
   renderOverlays,
-  canvasToPngBlob,
+  ensureFonts,
   downloadCanvas,
-  recordAnimation,
-  downloadBlob,
-  preferredVideoType,
   captionBox,
   panScale,
   zoomLimits,
@@ -78,7 +75,20 @@ import {
   type RenderView,
   type RenderInput,
 } from '@/features/studio/render'
-import { buildZip } from '@/features/studio/zip'
+import {
+  createExport,
+  exportErrorMessage,
+  getZoneExports,
+  isActive,
+  type ExportJob,
+} from '@/features/exports/api'
+import {
+  ExportBar,
+  ExportPill,
+  FORMAT_LABEL,
+  detailFor,
+  useExport,
+} from '@/features/exports/components/ExportProgress'
 import type { Zone } from '@/features/zones/types'
 
 /** Playback speeds, as milliseconds between frames. */
@@ -292,8 +302,6 @@ export default function StudioPage() {
   const endFrame = ordered[rangeEndIdx] ?? null
   const startDay = startFrame ? studioApi.wibDate(startFrame.capturedAt) : ''
   const endDay = endFrame ? studioApi.wibDate(endFrame.capturedAt) : ''
-  /** For filenames: one day, or first_last when the range spans several. */
-  const rangeLabel = startDay === endDay ? startDay : `${startDay}_to_${endDay}`
 
   /**
    * What actually plays and exports. Every export (single PNG, image set, animation)
@@ -334,12 +342,8 @@ export default function StudioPage() {
     return () => clearTimeout(timer)
   }, [playing, current, frames.length, speed])
 
-  // Checked once on the client. MediaRecorder is absent in some browsers and in SSR,
-  // and a disabled button that explains itself beats one that fails when pressed.
   const previewCanvas = useRef<HTMLCanvasElement | null>(null)
   const [previewBusy, setPreviewBusy] = useState(false)
-
-  const canRecord = typeof window !== 'undefined' && preferredVideoType() !== null
 
   const selectedZone = zones?.find((z) => z.id === zoneId) ?? null
   const zoneRing = selectedZone?.geometry.coordinates[0] as [number, number][] | undefined
@@ -460,12 +464,25 @@ export default function StudioPage() {
   // canvas. It's cheap and synchronous, so a caption drag or a title keystroke never
   // waits behind a map render, and the caption stays put while the map slides under it.
   const overlayCanvas = useRef<HTMLCanvasElement | null>(null)
+  // Canvas text doesn't wait for web fonts — it silently falls back. The caption's
+  // fonts are awaited once, then the layer redraws in the right typeface; after that
+  // every redraw is synchronous, so dragging the caption stays instant.
+  const [fontsReady, setFontsReady] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    void ensureFonts().then(() => {
+      if (!cancelled) setFontsReady(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
   useEffect(() => {
     const canvas = overlayCanvas.current
     if (!canvas || !frame) return
     const dims = previewDims(outputSize)
     renderOverlays(canvas, renderInputFor(frame, null, dims.width, dims.height))
-  }, [frame, renderInputFor, outputSize])
+  }, [frame, renderInputFor, outputSize, fontsReady])
 
   // The slider's real range for this zone and size — past the basemap's deepest zoom
   // the image stops changing, so offering those steps would be a dead slider.
@@ -634,10 +651,6 @@ export default function StudioPage() {
     [traffics],
   )
 
-  /** A filename-safe stamp for one export. */
-  function stampFor(iso: string): string {
-    return iso.slice(0, 16).replace(/[:T]/g, '-')
-  }
 
   /**
    * Exports the frame on screen as a PNG, at the selected output size — not whatever
@@ -651,7 +664,7 @@ export default function StudioPage() {
       const canvas = exportCanvas.current ?? document.createElement('canvas')
       exportCanvas.current = canvas
       await renderCapture(canvas, renderInputFor(frame, await trafficFor(frame), outputSize.width, outputSize.height))
-      await downloadCanvas(canvas, `${zoneLabel}-${stampFor(frame.capturedAt)}.png`.replace(/[/\\:*?"<>|]/g, '-'))
+      await downloadCanvas(canvas, `${zoneLabel}-${studioApi.wibStamp(frame.capturedAt)}.png`.replace(/[/\\:*?"<>|]/g, '-'))
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Could not export the image.')
     } finally {
@@ -660,68 +673,64 @@ export default function StudioPage() {
   }, [frame, renderInputFor, trafficFor, zoneLabel, outputSize])
 
   /**
-   * Renders every frame in the selected range as a PNG and bundles them into one ZIP.
-   *
-   * One file rather than one download per frame: triggering N downloads in a loop is
-   * what popup blockers exist to stop, and a person would have to approve each one by
-   * hand. The ZIP writer has no external dependency — see studio/zip.ts.
+   * ZIP and animation exports run on the server (FE-21): the worker renders them with
+   * this same renderer, so a long range no longer ties up — or dies with — this tab.
+   * The request carries exactly what the preview shows: the range as its first and last
+   * capture, and the style by id.
    */
-  const exportImages = useCallback(async () => {
-    if (frames.length === 0) return
-    setExportError(null)
-    setPlaying(false)
-    try {
-      const canvas = exportCanvas.current ?? document.createElement('canvas')
-      exportCanvas.current = canvas
-      const entries: { name: string; data: Uint8Array }[] = []
+  const [serverExport, setServerExport] = useState<{ zoneId: string; id: string; initial: ExportJob | null } | null>(null)
+  const [exportDialog, setExportDialog] = useState<'closed' | 'choose' | 'progress'>('closed')
+  const [starting, setStarting] = useState(false)
+  const activeExportId = serverExport?.zoneId === zoneId ? serverExport.id : null
+  const activeExport = useExport(activeExportId, serverExport?.zoneId === zoneId ? serverExport.initial : null)
 
-      for (let i = 0; i < frames.length; i++) {
-        const f = frames[i]!
-        await renderCapture(canvas, renderInputFor(f, await trafficFor(f), outputSize.width, outputSize.height))
-        const blob = await canvasToPngBlob(canvas)
-        entries.push({ name: `${String(i + 1).padStart(2, '0')}-${stampFor(f.capturedAt)}.png`, data: new Uint8Array(await blob.arrayBuffer()) })
-        setExporting({ label: 'Rendering images', done: i + 1, total: frames.length })
-      }
-
-      downloadBlob(buildZip(entries), `${zoneLabel}-${rangeLabel}-images.zip`.replace(/[/\\:*?"<>|]/g, '-'))
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Could not export the images.')
-    } finally {
-      setExporting(null)
-    }
-  }, [frames, renderInputFor, trafficFor, zoneLabel, rangeLabel, outputSize])
-
-  /**
-   * Records the selected range into a WebM.
-   *
-   * Each frame's geometry is fetched as it is reached rather than all at once — a range
-   * can be dozens of frames and each is hundreds of kilobytes.
-   */
-  const exportAnimation = useCallback(async () => {
-    if (frames.length === 0) return
-    setExportError(null)
-    setPlaying(false)
-    try {
-      const canvas = exportCanvas.current ?? document.createElement('canvas')
-      exportCanvas.current = canvas
-
-      const blob = await recordAnimation({
-        canvas,
-        frameCount: frames.length,
-        holdMs: SPEEDS[speed]!.ms,
-        onProgress: (done, total) => setExporting({ label: 'Recording animation', done, total }),
-        paint: async (i) => {
-          const f = frames[i]!
-          await renderCapture(canvas, renderInputFor(f, await trafficFor(f), outputSize.width, outputSize.height))
-        },
+  // An export already running for this zone — started earlier, or in another tab —
+  // shows in the footer as soon as the zone opens, rather than only on the zone page.
+  useEffect(() => {
+    if (!zoneId) return
+    let cancelled = false
+    getZoneExports(zoneId)
+      .then((rows) => {
+        const running = rows.find(isActive)
+        if (!cancelled && running) setServerExport({ zoneId, id: running.id, initial: running })
       })
-      downloadBlob(blob, `${zoneLabel}-${rangeLabel}.webm`.replace(/[/\\:*?"<>|]/g, '-'))
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Could not record the animation.')
-    } finally {
-      setExporting(null)
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
     }
-  }, [frames, speed, rangeLabel, renderInputFor, trafficFor, zoneLabel, outputSize])
+  }, [zoneId])
+
+  const startServerExport = useCallback(
+    async (format: 'zip' | 'webm') => {
+      if (!startFrame || !endFrame) return
+      setExportError(null)
+      setPlaying(false)
+      setStarting(true)
+      try {
+        const job = await createExport(zoneId, {
+          format,
+          startCaptureId: startFrame.id,
+          endCaptureId: endFrame.id,
+          spec: {
+            themeId,
+            congestionId,
+            overlay,
+            view,
+            width: outputSize.width,
+            height: outputSize.height,
+            holdMs: SPEEDS[speed]!.ms,
+          },
+        })
+        setServerExport({ zoneId, id: job.id, initial: job })
+        setExportDialog('progress')
+      } catch (err) {
+        setExportError(exportErrorMessage(err))
+      } finally {
+        setStarting(false)
+      }
+    },
+    [startFrame, endFrame, zoneId, themeId, congestionId, overlay, view, outputSize, speed],
+  )
 
   const zone = selectedZone
   const loadingFrame = frame ? !(frame.id in traffics) : false
@@ -1234,35 +1243,29 @@ export default function StudioPage() {
             </div>
 
             <div className="shrink-0 border-t border-divider p-lg space-y-sm">
-              <ExportDialog
+              <Button
+                className="w-full justify-center gap-sm"
+                onClick={() => setExportDialog('choose')}
                 disabled={exporting !== null || !frame}
-                items={[
-                  {
-                    label: 'This frame',
-                    format: 'PNG',
-                    detail: `${outputSize.width} × ${outputSize.height} image`,
-                    onSelect: exportPng,
-                  },
-                  {
-                    label: 'All frames',
-                    format: 'ZIP',
-                    detail: `${frames.length} image${frames.length === 1 ? '' : 's'} in the selected time range`,
-                    onSelect: exportImages,
-                    disabled: frames.length === 0,
-                  },
-                  {
-                    label: 'Animation',
-                    format: 'WebM',
-                    detail: !canRecord
-                      ? "This browser can't record video"
-                      : frames.length < 2
-                        ? 'Needs at least 2 frames in range'
-                        : `${frames.length} frames, ${SPEEDS[speed]!.label} speed`,
-                    onSelect: exportAnimation,
-                    disabled: frames.length < 2 || !canRecord,
-                  },
-                ]}
-              />
+              >
+                <IconDownload size={16} />
+                Export
+              </Button>
+              {/* The export being made on the server, kept in view after its dialog is
+                  closed. Clicking it reopens the progress view. */}
+              {activeExport && (
+                <button
+                  type="button"
+                  onClick={() => setExportDialog('progress')}
+                  className="w-full text-left rounded-md border border-border bg-canvas-secondary/60 px-md py-sm space-y-xs hover:border-primary transition-colors"
+                >
+                  <span className="flex items-center justify-between gap-sm">
+                    <span className="text-caption font-semibold text-text-primary">{FORMAT_LABEL[activeExport.format]}</span>
+                    <ExportPill job={activeExport} />
+                  </span>
+                  <ExportBar job={activeExport} />
+                </button>
+              )}
               {exporting && (
                 <div className="pt-xs">
                   <ProgressBar value={exporting.done} max={exporting.total} />
@@ -1272,6 +1275,42 @@ export default function StudioPage() {
                 </div>
               )}
               {exportError && <p className="text-caption text-danger-text">{exportError}</p>}
+              <ExportDialog
+                view={exportDialog}
+                onClose={() => setExportDialog('closed')}
+                starting={starting}
+                job={activeExport}
+                zoneHref={activeExport ? `/zones/${activeExport.zoneId}?export=${activeExport.id}#exports` : null}
+                busy={activeExport ? isActive(activeExport) : false}
+                items={[
+                  {
+                    label: 'This frame',
+                    format: 'PNG',
+                    detail: `${outputSize.width} × ${outputSize.height} image, downloads right away`,
+                    onSelect: () => {
+                      setExportDialog('closed')
+                      void exportPng()
+                    },
+                  },
+                  {
+                    label: 'All frames',
+                    format: 'ZIP',
+                    detail: `${frames.length} image${frames.length === 1 ? '' : 's'} in the selected time range`,
+                    onSelect: () => void startServerExport('zip'),
+                    disabled: frames.length === 0,
+                  },
+                  {
+                    label: 'Animation',
+                    format: 'WebM',
+                    detail:
+                      frames.length < 2
+                        ? 'Needs at least 2 frames in range'
+                        : `${frames.length} frames at ${SPEEDS[speed]!.label} speed`,
+                    onSelect: () => void startServerExport('webm'),
+                    disabled: frames.length < 2,
+                  },
+                ]}
+              />
             </div>
           </div>
         </div>
@@ -1434,56 +1473,131 @@ interface ExportItem {
 }
 
 /**
- * One Export button; the formats are chosen in a dialog. Three full-width buttons
- * stacked in the footer took more room than every other control, for a choice made
- * once — and a dialog has room to say what each option will produce before it runs.
+ * The Export dialog, in two views.
+ *
+ * **Choose:** three option cards. A PNG downloads right away; ZIP and animation are
+ * sent to the server.
+ *
+ * **Progress:** once a server export starts, the dialog does not close — it becomes the
+ * export's live status, and says plainly that the work happens elsewhere: it can be
+ * closed, Studio can be left, and the file will be waiting on the zone page. A toast
+ * that vanished after three seconds would leave someone wondering where their file went.
  */
-function ExportDialog({ items, disabled }: { items: ExportItem[]; disabled: boolean }) {
-  const [open, setOpen] = useState(false)
+function ExportDialog({
+  view,
+  onClose,
+  items,
+  starting,
+  job,
+  zoneHref,
+  busy,
+}: {
+  view: 'closed' | 'choose' | 'progress'
+  onClose: () => void
+  items: ExportItem[]
+  starting: boolean
+  job: ExportJob | null
+  zoneHref: string | null
+  /** An export is already queued or rendering — only one at a time. */
+  busy: boolean
+}) {
+  const showProgress = view === 'progress' && job !== null
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Trigger disabled={disabled} className={cn(buttonClass(), 'w-full justify-center gap-sm')}>
-        <IconDownload size={16} />
-        Export
-      </Dialog.Trigger>
+    <Dialog.Root open={view !== 'closed'} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
-        <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[28rem] bg-card border border-border rounded-lg p-xl shadow-elevation-3 space-y-lg">
-          <div>
-            <Dialog.Title className="text-section-title text-text-primary">Export</Dialog.Title>
-            <Dialog.Description className="text-body text-text-secondary mt-xs">
-              Choose what to download. Every option uses the style shown in the preview.
-            </Dialog.Description>
-          </div>
-          <div className="space-y-sm">
-            {items.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                disabled={item.disabled}
-                onClick={() => {
-                  setOpen(false)
-                  item.onSelect()
-                }}
-                className={cn(
-                  'flex items-center justify-between gap-md w-full text-left rounded-lg border border-border px-lg py-md transition-colors',
-                  'hover:border-primary hover:bg-primary-soft/40 focus:outline-none focus-visible:outline-2 focus-visible:outline-primary',
-                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-transparent',
+        <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[30rem] bg-card border border-border rounded-lg p-xl shadow-elevation-3 space-y-lg">
+          {showProgress ? (
+            <>
+              <div>
+                <Dialog.Title className="text-section-title text-text-primary">
+                  {job.status === 'done'
+                    ? 'Your export is ready'
+                    : job.status === 'failed'
+                      ? 'The export failed'
+                      : job.format === 'webm'
+                        ? 'Making your animation'
+                        : 'Collecting your frames'}
+                </Dialog.Title>
+                <Dialog.Description className="text-body text-text-secondary mt-xs tabular-nums">
+                  {job.frameCount} frames · {job.width} × {job.height} · {job.format === 'webm' ? 'WebM' : 'ZIP of PNGs'}
+                </Dialog.Description>
+              </div>
+
+              <div className="space-y-sm rounded-lg border border-border p-lg">
+                <ExportPill job={job} />
+                <ExportBar job={job} />
+                <p className={cn('text-caption', job.status === 'failed' ? 'text-danger-text' : 'text-text-secondary')}>
+                  {detailFor(job)}
+                </p>
+              </div>
+
+              {isActive(job) && (
+                <p className="text-caption text-text-muted">
+                  This runs on our servers. You can close this, keep editing, or leave Studio — the file will wait for
+                  you on the zone page for 7 days.
+                </p>
+              )}
+
+              <div className="flex flex-wrap justify-end gap-sm">
+                {zoneHref && (
+                  <Link href={zoneHref} className={buttonClass('secondary')}>
+                    Open zone page →
+                  </Link>
                 )}
-              >
-                <span className="min-w-0">
-                  <span className="block text-body font-semibold text-text-primary">{item.label}</span>
-                  <span className="block text-caption text-text-muted mt-xs">{item.detail}</span>
-                </span>
-                <span className="shrink-0 text-micro font-semibold text-primary bg-primary-soft rounded-xs px-sm py-xs">
-                  {item.format}
-                </span>
-              </button>
-            ))}
-          </div>
-          <div className="flex justify-end">
-            <Dialog.Close className={buttonClass('secondary')}>Cancel</Dialog.Close>
-          </div>
+                {job.status === 'done' && job.downloadUrl ? (
+                  <a href={job.downloadUrl} download className={buttonClass()}>
+                    Download
+                  </a>
+                ) : (
+                  <Dialog.Close className={buttonClass(isActive(job) ? 'primary' : 'secondary')}>
+                    {isActive(job) ? 'Keep editing' : 'Close'}
+                  </Dialog.Close>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <Dialog.Title className="text-section-title text-text-primary">Export</Dialog.Title>
+                <Dialog.Description className="text-body text-text-secondary mt-xs">
+                  Every option uses the style shown in the preview. Frames and animations are made on our servers, so
+                  you can keep working while they render.
+                </Dialog.Description>
+              </div>
+              <div className="space-y-sm">
+                {items.map((item) => {
+                  const blocked = item.format !== 'PNG' && busy
+                  return (
+                    <button
+                      key={item.label}
+                      type="button"
+                      disabled={item.disabled || blocked || starting}
+                      onClick={item.onSelect}
+                      className={cn(
+                        'flex items-center justify-between gap-md w-full text-left rounded-lg border border-border px-lg py-md transition-colors',
+                        'hover:border-primary hover:bg-primary-soft/40 focus:outline-none focus-visible:outline-2 focus-visible:outline-primary',
+                        'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-transparent',
+                      )}
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-body font-semibold text-text-primary">{item.label}</span>
+                        <span className="block text-caption text-text-muted mt-xs">
+                          {blocked ? 'Another export is still being made — one at a time' : item.detail}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-micro font-semibold text-primary bg-primary-soft rounded-xs px-sm py-xs">
+                        {item.format}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="flex justify-end">
+                <Dialog.Close className={buttonClass('secondary')}>{starting ? 'Starting…' : 'Cancel'}</Dialog.Close>
+              </div>
+            </>
+          )}
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

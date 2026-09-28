@@ -131,12 +131,22 @@ export async function exists(path: string): Promise<boolean> {
  * signed against the S3 endpoint, not R2_PUBLIC_URL, so it works whether or not the
  * bucket has public access configured.
  */
-export async function getPresignedUrl(path: string, expiresInSeconds = 3600): Promise<string> {
+export async function getPresignedUrl(path: string, expiresInSeconds = 3600, downloadName?: string): Promise<string> {
   const s3 = getClient()
   try {
-    return await getSignedUrl(s3, new GetObjectCommand({ Bucket: config.r2BucketName, Key: path }), {
-      expiresIn: expiresInSeconds,
-    })
+    return await getSignedUrl(
+      s3,
+      new GetObjectCommand({
+        Bucket: config.r2BucketName,
+        Key: path,
+        // With a name, the browser saves the file as that rather than as the object's
+        // uuid key — the difference between "Sudirman-2026-09-27.webm" and "3f2a….webm".
+        ...(downloadName
+          ? { ResponseContentDisposition: `attachment; filename="${downloadName.replace(/["\\\r\n]/g, '')}"` }
+          : {}),
+      }),
+      { expiresIn: expiresInSeconds },
+    )
   } catch (err) {
     throw toUpstream('presign', path, err)
   }
