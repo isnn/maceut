@@ -11,7 +11,7 @@
 // Convention: every timestamp is `timestamptz`. A bare `timestamp` carries no
 // offset and means whatever the reading process assumes.
 //
-// Last updated: 2026-09-28 (migration 0011_paused_by_plan)
+// Last updated: 2026-09-28 (migration 0013_notifications; 0012 was data-only — existing users marked email_verified)
 // =============================================================================
 
 Project maceut {
@@ -324,6 +324,99 @@ Table platform_settings {
 }
 
 Ref: platform_settings.updated_by > user.id [delete: set null]
+
+// -----------------------------------------------------------------------------
+// Notifications (NOTIF) — migration 0013
+// -----------------------------------------------------------------------------
+
+Enum notification_type {
+  capture_failing
+  capture_recovered
+  captures_missed
+  capture_limit_reached
+  capture_limit_near
+  export_ready
+  export_failed
+  plan_changed
+  here_budget_warning [note: 'Staff only']
+  here_budget_reached [note: 'Staff only']
+}
+
+Enum notification_tone {
+  warning
+  success
+  info
+}
+
+Enum notification_email_status {
+  none [note: 'In-app only (most types)']
+  pending [note: 'May email at email_due_at — the sweep decides']
+  sent
+  skipped [note: 'Reason in email_skip_reason: read in app, resolved, switched off, daily cap']
+}
+
+Table notifications {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id text [not null]
+  type notification_type [not null]
+  tone notification_tone [not null]
+  title text [not null]
+  body text [not null]
+  action_label text
+  action_href text
+  data jsonb [not null, default: `'{}'`, note: 'zoneId / captureId / exportId behind the message']
+  dedupe_key text [not null, note: 'Same event twice inserts nothing']
+  read_at timestamptz
+  email_status notification_email_status [not null, default: 'none']
+  email_due_at timestamptz
+  email_attempts integer [not null, default: 0]
+  emailed_at timestamptz
+  email_skip_reason text
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (user_id, dedupe_key) [unique, name: 'notifications_user_dedupe_uq']
+    (user_id, created_at) [name: 'notifications_user_created_idx']
+    (email_status, email_due_at) [name: 'notifications_email_due_idx']
+  }
+
+  Note: 'The bell. Deleted after 90 days by the sweeper.'
+}
+
+Ref: notifications.user_id > user.id [delete: cascade]
+
+Table notification_preferences {
+  user_id text [pk]
+  email_capture_problems boolean [not null, default: true]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Note: 'One email switch per user; no row = defaults'
+}
+
+Ref: notification_preferences.user_id - user.id [delete: cascade]
+
+Enum email_log_status {
+  sent
+  failed
+  suppressed [note: 'A send limit said no']
+}
+
+Table email_log {
+  id uuid [pk, default: `gen_random_uuid()`]
+  to text [not null]
+  category text [not null, note: 'email-verification, forget-password, capture-problems, plan-changed, here-budget']
+  dedupe_key text [unique, note: 'Alerts that must go out once']
+  status email_log_status [not null]
+  provider text [not null]
+  error text
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (to, category, created_at) [name: 'email_log_to_category_created_idx']
+  }
+
+  Note: 'Every email attempted — cost meter and OTP send limits. Never the body or a code.'
+}
 
 // -----------------------------------------------------------------------------
 // Not built yet — listed so the gap is visible rather than forgotten

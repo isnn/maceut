@@ -142,6 +142,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: /internal jadi aplikasi terpisah (staf tidak punya halaman tenant) | specs/internal/requirements.md |
 | ✅ | Frontend: rework halaman login & register (tanpa header, show/hide password) | permintaan user |
 | ✅ | **AUTH-OTP** Abstraksi provider email (console · Resend · Mailtrap) + kode OTP untuk verifikasi email (wajib) & lupa password | ADR-026, permintaan user |
+| ✅ | **NOTIF** Notifikasi berjalan: bell in-app + banner/toast, email hemat (capture gagal >2 jam, ringkas 1/hari; perubahan paket oleh staf; alert HERE ke satu alamat) + batas kirim OTP | permintaan user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -1735,6 +1736,49 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   BELUM DIUJI: kirim sungguhan via Resend/Mailtrap (belum ada key) — adapter diuji dengan
     fetch palsu terhadap bentuk request dokumentasi masing-masing. UI belum dilihat di browser.
   VERIFIKASI: 362 test API, tsc + eslint bersih kedua paket.
+
+[2026-09-28j] NOTIF — notifikasi berjalan, email hemat (ADR-027).
+
+  SEBELUMNYA: bell berisi 3 contoh hardcode (localStorage), toggle email di Profil tidak
+  menyimpan apa pun dan halaman sendiri bilang email "tidak dikirim di MVP".
+
+  KEPUTUSAN USER: user-centric + tekan biaya email. HERE alert → satu alamat khusus;
+  export selesai → in-app saja; ringkasan mingguan → nanti. Default yang dipakai (user
+  bilang "start now" tanpa menjawab): alamat alert di halaman HERE, jeda 2 jam, batas
+  OTP ikut di task ini.
+
+  API:
+  - Migrasi 0013: `notifications` (dedupe_key unik per user, email_status/due/attempts),
+    `notification_preferences` (satu kolom), `email_log` (meteran biaya, batas OTP,
+    dedupe alert). DBML ikut di commit yang sama.
+  - `notification.service`: onCaptureFailed/Done (hanya saat MULAI/SELESAI rentetan gagal,
+    capture terjadwal saja), onCapturesMissed (satu per user per outage, dikumpulkan di
+    tick scheduler), onLimitReached, onCaptureQueued (80%), onExportFinished,
+    onPlanChanged (email hanya bila oleh staf), onHereBudget (bell semua staf + satu email
+    ke alamat alert; memo per proses karena dipanggil tiap request HERE).
+  - Sweeper 10 menit (proses API): email yang jatuh tempo — lewati bila sudah dibaca di
+    app / zona pulih / toggle mati / sudah dikirim hari ini (WIB); sisanya SATU email
+    berisi semua zona yang masih gagal. Retensi bell 90 hari.
+  - Endpoint: GET /notifications, POST /notifications/:id/read, POST /notifications/read-all,
+    GET/PATCH /me/notification-preferences. PUT /internal/here-usage menerima `alertEmail`.
+  - OTP: maks. 3 kode/10 menit & 10/hari per alamat (lewat batas: `suppressed`, respons
+    tetap 200); resendStrategy `reuse` + storeOTP `encrypted`.
+  Web: NotificationBell (header pelanggan & staf) — polling 60 dt + saat tab aktif lagi,
+    pengelompokan "3 zones stopped collecting", badge "(n)" di judul tab, toast untuk export
+    & zona pulih (Base UI Toast); banner "gagal sejak …" di halaman zona; Profil →
+    Notifications jadi satu toggle nyata + daftar yang selalu in-app; staf: penjelasan +
+    link ke halaman HERE; field "Alert email" di /internal/here.
+
+  DIUJI LANGSUNG (akun uji lewat sign-up + OTP sungguhan, dihapus setelahnya):
+    OTP: 3 terkirim, ke-4 `suppressed`, API tetap 200; kirim ulang memakai kode yang sama.
+    Skenario DB nyata: dua zona gagal → 2 notifikasi, gagal kedua di zona yang sama diam;
+    sweep → SATU email berisi 2 zona; sweep lagi → tidak ada; zona pulih → "collecting
+    again"; kegagalan baru dibaca di app → email dilewati (read_in_app); perubahan paket
+    oleh staf → email. HTTP: list/read/read-all/prefs dengan cookie sesi asli, 401 tanpa.
+    HERE alert: 1 email ke alamat alert, dicatat SEKALI di email_log.
+    Bug ditemukan & diperbaiki: email menulis "gagal sejak" = waktu baris dibuat, bukan
+    waktu capture gagal (sekarang `data.failedAt`).
+  BELUM: UI belum dilihat di browser; email sungguhan via Resend/Mailtrap.
 
 ---
 

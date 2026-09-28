@@ -223,3 +223,9 @@ export async function countInternal(internalEmails: readonly string[]): Promise<
     .where(isInternalSql(internalEmails))
   return rows[0]?.count ?? 0
 }
+
+/** Ids of every staff account — the recipients of staff-only notifications. */
+export async function listInternalIds(internalEmails: readonly string[]): Promise<string[]> {
+  const rows = await db.select({ id: user.id }).from(user).where(isInternalSql(internalEmails))
+  return rows.map((r) => r.id)
+}

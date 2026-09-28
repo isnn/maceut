@@ -3,6 +3,7 @@ import * as zoneRepo from '../repositories/zone.repository'
 import * as userRepo from '../repositories/user.repository'
 import { publishCaptureJob } from '../lib/rabbitmq-client'
 import * as r2 from '../lib/r2-client'
+import * as notificationService from './notification.service'
 import { wibParts } from './export.service'
 import { NotFoundError, ForbiddenError } from '../errors'
 import { PLAN_LIMITS, effectiveRoadClass, type Plan, type RoadClass } from '../types/plan'
@@ -125,6 +126,7 @@ export async function enqueueCapture(
       status: 'skipped_limit',
       error: `Batas ${limit} capture per hari sudah tercapai.`,
     })
+    await notificationService.onLimitReached(userId, plan)
     return { capture: toPublic(skipped), queued: false }
   }
 
@@ -152,6 +154,7 @@ export async function enqueueCapture(
     return { capture: toPublic(failed ?? capture), queued: false }
   }
 
+  await notificationService.onCaptureQueued(userId, plan, usedToday + 1)
   return { capture: toPublic(capture), queued: true }
 }
 
