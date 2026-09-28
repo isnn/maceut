@@ -18,6 +18,7 @@ import { useSearchParams } from 'next/navigation'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
+import { SectionHeader } from '@/components/shared/SectionHeader'
 import { cn } from '@/lib/utils'
 import { isActive, removeExport, retryExport, exportErrorMessage, type ExportJob } from '../api'
 import { ExportBar, ExportPill, FORMAT_LABEL, detailFor, useZoneExports } from './ExportProgress'
@@ -66,17 +67,15 @@ export function ZoneExports({ zoneId }: { zoneId: string }) {
 
   return (
     <section id="exports" className="space-y-md scroll-mt-xl">
-      <div className="flex flex-wrap items-center justify-between gap-md">
-        <div>
-          <h2 className="text-section-title text-text-primary">Exports</h2>
-          <p className="text-caption text-text-muted mt-xs">
-            ZIPs and animations made from this zone in Studio. Files are kept for 7 days.
-          </p>
-        </div>
-        <Link href="/studio" className={buttonClass('secondary')}>
-          Open Studio
-        </Link>
-      </div>
+      <SectionHeader
+        title="Exports"
+        description="ZIPs and animations made from this zone in Studio. Files are kept for 7 days."
+        actions={
+          <Link href="/studio" className={buttonClass('secondary')}>
+            Open Studio
+          </Link>
+        }
+      />
 
       {error && <Alert variant="warning">{error}</Alert>}
 
@@ -127,16 +126,16 @@ export function ZoneExports({ zoneId }: { zoneId: string }) {
                   <Td className="text-right whitespace-nowrap">
                     <div className="inline-flex items-center gap-sm">
                       {job.status === 'done' && job.downloadUrl && (
-                        <a href={job.downloadUrl} className={buttonClass()} download>
+                        <a href={job.downloadUrl} className={buttonClass('primary', 'sm')} download>
                           Download
                         </a>
                       )}
                       {(job.status === 'failed' || job.status === 'expired') && (
-                        <Button variant="secondary" onClick={() => act(job, 'retry')} disabled={busy !== null}>
+                        <Button variant="secondary" size="sm" onClick={() => act(job, 'retry')} disabled={busy !== null}>
                           {busy === job.id ? 'Retrying…' : 'Retry'}
                         </Button>
                       )}
-                      <Button variant="secondary" onClick={() => act(job, 'remove')} disabled={busy !== null}>
+                      <Button variant="secondary" size="sm" onClick={() => act(job, 'remove')} disabled={busy !== null}>
                         {isActive(job) ? 'Cancel' : 'Delete'}
                       </Button>
                     </div>
