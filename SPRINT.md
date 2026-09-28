@@ -65,9 +65,9 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **BE-08** Lib: HERE Traffic client (getTrafficFlow → GeoJSON, BR-017/BR-022) | zone-management/tasks.md Phase 3 |
 | ✅ | **BE-09** Script: `npm run env:check` — bukti Postgres/MQ/R2/HERE tersambung | plan BE-09 |
 | ✅ | **BE-10** Verifikasi kredensial live — R2 ✅ round-trip penuh · HERE ✅ 268 ruas, filter functionalClasses diterima | plan BE-10 |
-| 🔴 | **CAP-02** Playwright: render page + screenshot → PNG ke R2, isi `captures.file_path` (BR-009/BR-018) | zone-management/tasks.md Phase 3 |
+| ✅ | **CAP-02** Playwright: render page + screenshot → PNG ke R2, isi `captures.file_path` (BR-009/BR-018) | zone-management/tasks.md Phase 3 |
 | ✅ | API: POST /zones/:id/captures · GET /zones/:id/captures · GET /captures/:id + test + swagger | zone-management/tasks.md Phase 3 |
-| 🟡 | Worker: capture.worker.ts — consume ✅ · filter kelas jalan ✅ · simpan GeoJSON ✅ · screenshot & upload 🔴 (CAP-02) | zone-management/tasks.md Phase 3 |
+| ✅ | Worker: capture.worker.ts — consume ✅ · filter kelas jalan ✅ · simpan GeoJSON ✅ · screenshot & upload ✅ (CAP-02, render.worker) | zone-management/tasks.md Phase 3 |
 | ✅ | Frontend: tailwind.config.ts dengan token dari design.md | design.md |
 | ✅ | Frontend: Login + Register pages | auth/tasks.md Phase 3 |
 | ✅ | Frontend: Dashboard page (zone count, schedule count, CTA) | zone-management/tasks.md Phase 4 |
@@ -114,15 +114,15 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-16** Studio: zoom halus + roda mouse, pan bebas di semua zoom, jalan kecil dinamis, palet MapToPoster persis, congestion theme kartu, ukuran & drag teks | permintaan user |
 | ✅ | **FE-15** Studio: basemap vektor bergaya (OpenFreeMap, gaya MapToPoster), kartu tema swatch, preview di resolusi ekspor | permintaan user |
 | ✅ | **FE-14** Studio: panel style dipecah 5 bagian (map theme, congestion theme, zoom position, overlay, output size); tema satelit + artistik, pan/zoom manual | permintaan user |
-| 🔴 | **CAP-02** Playwright: render otomatis PNG per capture ke R2 (BR-009/BR-018) — canvas renderer siap dipakai ulang | zone-management Phase 3 |
+| ✅ | **CAP-02** Playwright: render otomatis PNG per capture ke R2 (BR-009/BR-018) — canvas renderer siap dipakai ulang | zone-management Phase 3 |
 | ✅ | **BE-16** Scheduler: jendela aktif mem-publish job tiap menit (tanpa dependency baru, ADR-023) | capture-schedule/requirements.md |
 | ✅ | **BE-17** Akun uji `*@maceut.test` yang KOSONG dihapus (17); 8 yang punya zona/capture/export dipertahankan atas keputusan user (termasuk sched@ — zona YOG) | housekeeping |
 | ✅ | Notifikasi downgrade (ADR-020): dialog pratinjau dampak (pelanggan & staf, dari server) + tanda "Paused · plan limit" + banner "di-pause oleh perubahan paket" | ADR-020 |
 | ✅ | Frontend: ganti mock `features/zones/api.ts` → /zones + /traffic/preview | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: RoadClassPicker pakai `GET /traffic/road-class-counts` — katalog lokal dihapus | zone-management/tasks.md Phase 4 |
-| 🔴 | **FE-01** Zona kecil di pusat kota bisa sah-sah saja dapat 0 ruas di paket Free — butuh penjelasan di wizard, bukan angka 0 telanjang | temuan 22 Sep |
+| ✅ | **FE-01** Zona kecil di pusat kota bisa sah-sah saja dapat 0 ruas di paket Free — butuh penjelasan di wizard, bukan angka 0 telanjang | temuan 22 Sep |
 | ✅ | Frontend: MapCanvas (Leaflet + OSM) + TrafficPreviewPanel + StyleSelector | zone-management/tasks.md Phase 4 |
-| 🔴 | Backend: internal render page (Playwright target) + update playwright-client.ts | zone-management/tasks.md Phase 3 |
+| ✅ | Backend: internal render page (Playwright target) — `/render/export` + `lib/render-page.ts` | zone-management/tasks.md Phase 3 |
 | ✅ | Frontend: Step 3 — Review & Konfirmasi | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: Manual Capture Button + StyleSelector modal + polling status | zone-management/tasks.md Phase 4 |
 | ✅ | Frontend: Landing page publik (mockup 4a) | mockup turn 4 |
@@ -1677,6 +1677,32 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   "Probe new (over_zone_limit)" → setelah downgrade persis zona itu yang di-pause
   [by plan]; resume manual → flag hilang; pause oleh user → bukan "by plan".
   VERIFIKASI: 333 test API, tsc + eslint bersih kedua paket. UI belum dilihat di browser.
+
+[2026-09-28h] CAP-02 — gambar PNG otomatis per capture · FE-01 — penjelasan 0 ruas.
+
+  CAP-02: capture worker, setelah `complete`, mem-publish job ke antrean baru `render-jobs`
+  (RABBITMQ_QUEUE_RENDER). `render.worker.ts` merender PNG lewat halaman `/render/export`
+  yang sama dengan export Studio (format baru `png` = satu frame), upload ke
+  `captures/{user}/{YYYY}/{MM}/{id}.png`, isi `file_path`, `file_size`, `style_used`.
+  Keputusan:
+  - ANTREAN TERPISAH, bukan di dalam capture worker: capture jalan 4 sekaligus; empat
+    Chromium bersamaan = OOM di host ini. Render prefetch 1, SATU browser bersama yang
+    ditutup 60 detik setelah gambar terakhir.
+  - Gagal render ≠ capture gagal: capture tetap `done` tanpa gambar (di-log, di-ack, tidak
+    di-retry) — peta tetap menggambar ulang dari traffic yang tersimpan.
+  - Gaya default: tema Dark, kongesti standar, vignette, legenda WAJIB (BR-019), nama zona +
+    jam WIB (BR-018), ukuran PLAYWRIGHT_SCREENSHOT_WIDTH×HEIGHT (1280×720).
+  - `lib/render-page.ts`: launch + page driver dipindah dari export.worker, dipakai bersama.
+  - GET /captures/:id/image → signed URL 5 menit, nama `{ZONA}-{YYYY-MM-DD}_{HHMM}.png` (WIB).
+    Tombol "Download image" di halaman zona, hanya bila capture punya gambar.
+  - Capture lama tidak di-backfill (tidak diminta; bisa dengan publish job per id).
+  FE-01: RoadClassPicker menulis "No roads of this class in this area" dan, bila kelas yang
+    dipilih kosong, catatan kuning: kenapa (wajar untuk zona kecil di pusat kota), akibatnya
+    (capture kosong), dan kelas lebih luas mana yang punya ruas di sini (+ paketnya).
+  DIUJI LANGSUNG: job render untuk capture YOG yang ada → PNG 1,07 MB di R2, baris terisi
+    (themeId dark); unduh via service → 200, `attachment; filename="YOG-2026-09-28_1445.png"`,
+    gambar dicek visual. Export ZIP/WebM belum di-e2e ulang setelah refactor (tsc + test hijau).
+  VERIFIKASI: 344 test API, tsc + eslint bersih kedua paket.
 
 ---
 

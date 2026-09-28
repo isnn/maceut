@@ -16,6 +16,13 @@ const ROAD_CLASS_DESCRIPTION: Record<RoadClass, string> = {
   semua: 'Adds city and local streets',
 }
 
+/** What "none of this class" means in words, for the empty-zone notice (FE-01). */
+const NONE_OF: Record<RoadClass, string> = {
+  nasional: 'motorway or trunk road',
+  nasional_provinsi: 'motorway, trunk or provincial road',
+  semua: 'road with traffic data',
+}
+
 export const REQUIRED_PLAN_LABEL: Record<RoadClass, string> = {
   nasional: 'Free',
   nasional_provinsi: 'Standard',
@@ -69,6 +76,20 @@ export function RoadClassPicker({ value, onChange, geometry, plan }: RoadClassPi
   const counts = current?.counts ?? null
   const countsFailed = current !== null && current.counts === null
 
+  // FE-01 — a correct zero still needs saying out loud. A small zone in a city centre can
+  // honestly contain no motorway or trunk road, and a bare "0 roads" reads as a fault.
+  // Say what it means (captures would be empty) and where the roads actually are.
+  const selectedCount = value ? counts?.[value] : undefined
+  const emptyNotice = (() => {
+    if (!counts || !value || !selectedCount || selectedCount.roads > 0) return null
+    const wider = ROAD_CLASS_ORDER.slice(ROAD_CLASS_ORDER.indexOf(value) + 1).find((c) => (counts[c]?.roads ?? 0) > 0)
+    if (!wider) {
+      return 'HERE has no traffic data for any road inside this boundary, so every capture would be empty. Try drawing a larger area, or one that crosses a main road.'
+    }
+    const widerLocked = ROAD_CLASS_ORDER.indexOf(wider) > ROAD_CLASS_ORDER.indexOf(maxRoadClass)
+    return `No ${NONE_OF[value]} runs through this area — normal for a small zone in a city centre — so captures would be empty. ${ROAD_CLASS_LABEL[wider]} covers ${formatNumber(counts[wider]!.roads)} roads here${widerLocked ? ` (${REQUIRED_PLAN_LABEL[wider]} plan)` : ''}, or draw a larger boundary that reaches a main road.`
+  })()
+
   function pick(next: RoadClass) {
     if (ROAD_CLASS_ORDER.indexOf(next) > ROAD_CLASS_ORDER.indexOf(maxRoadClass)) {
       setUpgradeFor(next)
@@ -109,7 +130,9 @@ export function RoadClassPicker({ value, onChange, geometry, plan }: RoadClassPi
             <span className="block text-micro text-text-muted mt-xs">{ROAD_CLASS_DESCRIPTION[option]}</span>
             <span className="block text-micro text-text-secondary mt-xs tabular-nums">
               {count
-                ? `${formatNumber(count.roads)} roads · ${formatKm(count.lengthKm)}`
+                ? count.roads === 0
+                  ? 'No roads of this class in this area'
+                  : `${formatNumber(count.roads)} roads · ${formatKm(count.lengthKm)}`
                 : countsFailed
                   ? 'Road count unavailable'
                   : 'Counting roads…'}
@@ -117,6 +140,12 @@ export function RoadClassPicker({ value, onChange, geometry, plan }: RoadClassPi
           </button>
         )
       })}
+
+      {emptyNotice && (
+        <p role="status" className="text-caption text-warning-text bg-warning-bg rounded-md px-md py-sm">
+          {emptyNotice}
+        </p>
+      )}
 
       <UpgradeModal
         open={upgradeFor !== null}

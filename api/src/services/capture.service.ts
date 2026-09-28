@@ -2,6 +2,8 @@ import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as userRepo from '../repositories/user.repository'
 import { publishCaptureJob } from '../lib/rabbitmq-client'
+import * as r2 from '../lib/r2-client'
+import { wibParts } from './export.service'
 import { NotFoundError, ForbiddenError } from '../errors'
 import { PLAN_LIMITS, effectiveRoadClass, type Plan, type RoadClass } from '../types/plan'
 
@@ -197,6 +199,41 @@ export async function getCapture(userId: string, captureId: string): Promise<Cap
   if (row.userId !== userId) throw new ForbiddenError('Capture ini bukan milik Anda.')
 
   return { ...toPublic(row), traffic: row.traffic ?? null }
+}
+
+/** How long a capture-image link stays valid — it is fetched on click, used at once. */
+const IMAGE_URL_TTL_SECONDS = 5 * 60
+
+export interface CaptureImage {
+  /** A short-lived signed R2 link that downloads the PNG under `fileName`. */
+  url: string
+  fileName: string
+  expiresInSeconds: number
+}
+
+/**
+ * The rendered image of one capture (CAP-02), as a signed download link.
+ *
+ * 404 until the render worker has stored one — a pending or failed cycle, a capture from
+ * before images existed, or a render that failed. The capture's data is unaffected in
+ * every one of those cases; the map still redraws it.
+ */
+export async function getCaptureImage(userId: string, captureId: string): Promise<CaptureImage> {
+  const row = await captureRepo.findById(captureId)
+  if (!row) throw new NotFoundError('Capture')
+  if (row.userId !== userId) throw new ForbiddenError('Capture ini bukan milik Anda.')
+  if (!row.filePath) throw new NotFoundError('Gambar capture')
+
+  const zone = await zoneRepo.findById(row.zoneId)
+  const safe = (zone?.name ?? '').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'zone'
+  // WIB, like the timestamp printed on the image itself.
+  const at = wibParts(row.capturedAt.toISOString())
+  const fileName = `${safe}-${at.date}_${at.time}.png`
+  return {
+    url: await r2.getPresignedUrl(row.filePath, IMAGE_URL_TTL_SECONDS, fileName),
+    fileName,
+    expiresInSeconds: IMAGE_URL_TTL_SECONDS,
+  }
 }
 
 export interface MissedInput {

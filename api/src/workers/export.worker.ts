@@ -1,5 +1,6 @@
 import type { Channel, ConsumeMessage } from 'amqplib'
-import { chromium, type Browser } from 'playwright-core'
+import type { Browser } from 'playwright-core'
+import { launchBrowser, renderWithPage, type RenderPageJob } from '../lib/render-page'
 import { config } from '../config/env'
 import * as exportRepo from '../repositories/export.repository'
 import * as captureRepo from '../repositories/capture.repository'
@@ -41,28 +42,8 @@ interface ExportJob {
   exportId: string
 }
 
-/** What the render page is given. Everything else it asks for, frame by frame. */
-export interface RenderPageJob {
-  format: 'zip' | 'webm'
-  spec: StoredSpec
-  frameCount: number
-  zoneName: string
-  ring: [number, number][]
-}
-
 const PROGRESS_WRITE_MS = 1000
 const HEARTBEAT_MS = 30_000
-
-async function launchBrowser(): Promise<Browser> {
-  return chromium.launch({
-    executablePath: config.playwrightChromiumExecutablePath ?? '/usr/bin/chromium',
-    headless: config.playwrightHeadless,
-    // --no-sandbox: the container runs as root and has no user namespaces for the
-    // sandbox. --disable-dev-shm-usage: Docker's default /dev/shm is 64 MB, too small
-    // for a 1920px canvas, and Chromium crashes rather than degrading when it runs out.
-    args: ['--no-sandbox', '--disable-dev-shm-usage'],
-  })
-}
 
 export async function runExport(exportId: string): Promise<void> {
   // The claim is the lock: only a row still `queued` moves to `rendering`. A duplicate
@@ -83,46 +64,8 @@ export async function runExport(exportId: string): Promise<void> {
     if (!zone) throw new Error('Zona sudah dihapus.')
 
     browser = await launchBrowser()
-    const page = await browser.newPage()
-    page.on('pageerror', (err) => console.error(`[export] ${exportId} page error:`, err.message))
-
     let cancelled = false
     let lastWrite = 0
-    const pngs: { name: string; data: Buffer }[] = []
-    const chunks: Buffer[] = []
-
-    await page.exposeFunction('__exportFrame', async (i: number) => {
-      const capture = await captureRepo.findById(frameIds[i]!)
-      // A capture deleted since the export was queued renders as an empty frame
-      // rather than failing the whole file over one missing moment.
-      return {
-        capturedAt: (capture?.capturedAt ?? new Date()).toISOString(),
-        traffic: capture?.traffic ? slimTraffic(capture.traffic) : null,
-      }
-    })
-    await page.exposeFunction('__exportProgress', async (done: number) => {
-      const now = Date.now()
-      if (done >= frameIds.length || now - lastWrite >= PROGRESS_WRITE_MS) {
-        lastWrite = now
-        // Lands only while the row is still `rendering` — false means it was cancelled.
-        if (!(await exportRepo.reportProgress(exportId, done))) cancelled = true
-      }
-      return !cancelled
-    })
-    await page.exposeFunction('__exportPng', (i: number, name: string, base64: string) => {
-      pngs[i] = { name, data: Buffer.from(base64, 'base64') }
-    })
-    await page.exposeFunction('__exportChunk', (base64: string) => {
-      chunks.push(Buffer.from(base64, 'base64'))
-    })
-
-    await page.goto(`${config.renderBaseUrl}/render/export`, { waitUntil: 'load', timeout: 120_000 })
-    // The page announces itself once its script has run — in dev, Next compiles the
-    // route on first request, which can take far longer than `load`.
-    await page.waitForFunction(() => typeof (globalThis as { __maceutExport?: unknown }).__maceutExport === 'function', null, {
-      timeout: 120_000,
-    })
-
     const job: RenderPageJob = {
       format: row.format,
       spec,
@@ -130,9 +73,30 @@ export async function runExport(exportId: string): Promise<void> {
       zoneName: spec.zoneName,
       ring: zone.geometry.coordinates[0] as [number, number][],
     }
-    await page.evaluate(
-      (j) => (globalThis as unknown as { __maceutExport: (job: unknown) => Promise<void> }).__maceutExport(j),
+    const { pngs, video } = await renderWithPage(
+      browser,
       job,
+      {
+        frame: async (i) => {
+          const capture = await captureRepo.findById(frameIds[i]!)
+          // A capture deleted since the export was queued renders as an empty frame
+          // rather than failing the whole file over one missing moment.
+          return {
+            capturedAt: (capture?.capturedAt ?? new Date()).toISOString(),
+            traffic: capture?.traffic ? slimTraffic(capture.traffic) : null,
+          }
+        },
+        progress: async (done) => {
+          const now = Date.now()
+          if (done >= frameIds.length || now - lastWrite >= PROGRESS_WRITE_MS) {
+            lastWrite = now
+            // Lands only while the row is still `rendering` — false means it was cancelled.
+            if (!(await exportRepo.reportProgress(exportId, done))) cancelled = true
+          }
+          return !cancelled
+        },
+      },
+      `export ${exportId}`,
     )
 
     if (cancelled) {
@@ -140,8 +104,7 @@ export async function runExport(exportId: string): Promise<void> {
       return
     }
 
-    const file =
-      row.format === 'zip' ? buildZip(pngs.filter(Boolean)) : Buffer.concat(chunks)
+    const file = row.format === 'zip' ? buildZip(pngs) : video
     if (file.length === 0) throw new Error('Render selesai tanpa menghasilkan file.')
 
     await exportRepo.markUploading(exportId)

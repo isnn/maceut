@@ -117,6 +117,8 @@ const schema = z.object({
   RABBITMQ_QUEUE_DEAD_LETTER: z.string().trim().default('capture-dead-letter'),
   /** FE-21 — Studio exports rendered by the worker. Consumed one at a time. */
   RABBITMQ_QUEUE_EXPORT: z.string().trim().default('export-jobs'),
+  /** CAP-02 — one image per collected capture, rendered by the worker's single browser. */
+  RABBITMQ_QUEUE_RENDER: z.string().trim().default('render-jobs'),
   /** Days a finished export file is kept in R2 before the sweeper deletes it. */
   EXPORT_RETENTION_DAYS: z.coerce.number().int().positive().max(90).default(7),
 
@@ -210,6 +212,7 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
     captureConcurrency: e.CAPTURE_CONCURRENCY,
     rabbitmqQueueDeadLetter: e.RABBITMQ_QUEUE_DEAD_LETTER,
     rabbitmqQueueExport: e.RABBITMQ_QUEUE_EXPORT,
+    rabbitmqQueueRender: e.RABBITMQ_QUEUE_RENDER,
     exportRetentionDays: e.EXPORT_RETENTION_DAYS,
 
     r2AccountId: e.R2_ACCOUNT_ID,

@@ -1,0 +1,93 @@
+import { chromium, type Browser } from 'playwright-core'
+import { config } from '../config/env'
+import type { SlimTraffic } from '../services/capture.service'
+
+/**
+ * Drives the web app's `/render/export` page in headless Chromium — the one place the
+ * server draws images. Studio exports (export.worker) and per-capture images
+ * (render.worker) both go through here, and the page itself runs Studio's own
+ * `renderCapture` / `recordAnimation`, so every server-made image is exactly what the
+ * preview shows.
+ *
+ * The page holds no data: it asks for each frame through `__exportFrame`, reports
+ * progress through `__exportProgress` (whose answer can stop it), and hands its output
+ * back through `__exportPng` / `__exportChunk` — Playwright's exposeFunction, in-process.
+ */
+
+/** What the render page is handed. Mirrors web/src/app/render/export/page.tsx. */
+export interface RenderPageJob {
+  /** `png` renders frame 0 once; `zip` every frame as PNGs; `webm` an animation. */
+  format: 'png' | 'zip' | 'webm'
+  spec: {
+    themeId: string
+    congestionId: string
+    overlay: unknown
+    view: unknown
+    width: number
+    height: number
+    holdMs: number
+  }
+  frameCount: number
+  zoneName: string
+  ring: [number, number][]
+}
+
+export interface RenderFrame {
+  capturedAt: string
+  traffic: SlimTraffic | null
+}
+
+export interface RenderBridge {
+  frame: (i: number) => Promise<RenderFrame>
+  /** Called as frames finish. Resolve false to stop the render (a cancelled export). */
+  progress?: (done: number) => Promise<boolean> | boolean
+}
+
+export interface RenderOutput {
+  pngs: { name: string; data: Buffer }[]
+  video: Buffer
+}
+
+export async function launchBrowser(): Promise<Browser> {
+  return chromium.launch({
+    executablePath: config.playwrightChromiumExecutablePath ?? '/usr/bin/chromium',
+    headless: config.playwrightHeadless,
+    // --no-sandbox: the container runs as root and has no user namespaces for the
+    // sandbox. --disable-dev-shm-usage: Docker's default /dev/shm is 64 MB, too small
+    // for a 1920px canvas, and Chromium crashes rather than degrading when it runs out.
+    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  })
+}
+
+/** Renders one job in a fresh page of `browser`, and closes the page. */
+export async function renderWithPage(browser: Browser, job: RenderPageJob, bridge: RenderBridge, label: string): Promise<RenderOutput> {
+  const page = await browser.newPage()
+  try {
+    page.on('pageerror', (err) => console.error(`[render] ${label} page error:`, err.message))
+
+    const pngs: { name: string; data: Buffer }[] = []
+    const chunks: Buffer[] = []
+    await page.exposeFunction('__exportFrame', (i: number) => bridge.frame(i))
+    await page.exposeFunction('__exportProgress', async (done: number) => (bridge.progress ? bridge.progress(done) : true))
+    await page.exposeFunction('__exportPng', (i: number, name: string, base64: string) => {
+      pngs[i] = { name, data: Buffer.from(base64, 'base64') }
+    })
+    await page.exposeFunction('__exportChunk', (base64: string) => {
+      chunks.push(Buffer.from(base64, 'base64'))
+    })
+
+    await page.goto(`${config.renderBaseUrl}/render/export`, { waitUntil: 'load', timeout: 120_000 })
+    // The page announces itself once its script has run — in dev, Next compiles the
+    // route on first request, which can take far longer than `load`.
+    await page.waitForFunction(() => typeof (globalThis as { __maceutExport?: unknown }).__maceutExport === 'function', null, {
+      timeout: 120_000,
+    })
+    await page.evaluate(
+      (j) => (globalThis as unknown as { __maceutExport: (job: unknown) => Promise<void> }).__maceutExport(j),
+      job,
+    )
+    return { pngs: pngs.filter(Boolean), video: Buffer.concat(chunks) }
+  } finally {
+    await page.close().catch(() => undefined)
+  }
+}
