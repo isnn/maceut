@@ -193,7 +193,7 @@ Capture Job Flow:
       → Road Class Resolver (BR-022) → effectiveRoadClass
       → Playwright navigate ke internal render page (`/internal/render/capture?zoneId=&roadClass=&style=`)
         → Halaman render pakai komponen sama dengan preview browser: Leaflet + OSM basemap + HERE Traffic overlay (ADR-010b/c)
-      → Overlay branding (logo + timestamp + legend) + style yang dipilih (warna, title, format timestamp) (BR-023)
+      → Overlay zone name + timestamp + legend (BR-018/BR-019) + style yang dipilih (BR-023)
       → Screenshot halaman → PNG
       → Upload ke R2 (BR-011)
       → Simpan metadata PostgreSQL, termasuk `style_used` (JSON, untuk histori — BR-010)
@@ -213,7 +213,6 @@ Style Resolution:
 users ──── user_plans (1:1 aktif)
 users ──── zones (1:N)
 users ──── schedules (1:N)
-users ──── branding_configs (1:1)
 users ──── captures (1:N)
 
 zones ──── schedules (1:N)
@@ -289,16 +288,6 @@ INDEX: (user_id, created_at DESC) untuk history query
 INDEX: (user_id, created_at::date) untuk daily limit check (BR-006)
 ```
 
-**`branding_configs`** — Konfigurasi watermark per user
-```
-id            uuid PK
-user_id       uuid FK → users.id UNIQUE
-company_name  text
-logo_path     text   ← R2 path logo
-created_at    timestamptz DEFAULT now()
-updated_at    timestamptz
-```
-
 ---
 
 ## API Contract
@@ -344,9 +333,6 @@ GET    /captures              POST   /captures/manual
 GET    /captures/:id          GET    /captures/:id/download
 
 GET    /traffic/preview       ← proxy HERE Traffic Flow, dipakai preview browser (bukan Playwright)
-
-GET    /branding              PUT    /branding
-POST   /branding/logo
 
 GET    /usage                 GET    /plans
 ```
