@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import * as userService from '../services/user.service'
+import { configSnapshot } from '../services/config.service'
 import {
   listUsersQuerySchema,
   createUserSchema,
@@ -139,6 +140,18 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
     if (!req.userId) throw new UnauthorizedError()
     const id = userIdParam.parse(req.params.id)
     return res.status(200).json(ok(await userService.deleteUser(req.userId, id)))
+  } catch (err) {
+    next(err)
+  }
+}
+
+/**
+ * GET /internal/config — the running server's configuration, read-only (ADR-018).
+ * Secrets appear only as set / not set; connection-URL passwords are masked.
+ */
+export async function config(req: Request, res: Response, next: NextFunction) {
+  try {
+    return res.status(200).json(ok(configSnapshot()))
   } catch (err) {
     next(err)
   }

@@ -43,6 +43,40 @@ router.get('/internal/stats', userController.stats)
 
 /**
  * @swagger
+ * /internal/config:
+ *   get:
+ *     summary: Konfigurasi server yang sedang berjalan — read-only (ADR-018, staf saja)
+ *     description: >
+ *       Cermin dari `.env` yang dimuat saat container start. Secret TIDAK pernah
+ *       dikembalikan (hanya `set: true/false`); password di URL koneksi (DATABASE_URL,
+ *       RABBITMQ_URL) disamarkan. Mengubah nilai tetap lewat `.env` + restart.
+ *     tags: [Internal]
+ *     security: [{ cookieAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Daftar key konfigurasi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       key: { type: string }
+ *                       value: { type: string, nullable: true }
+ *                       set: { type: boolean }
+ *                       secret: { type: boolean }
+ *       401: { description: UNAUTHORIZED }
+ *       403: { description: FORBIDDEN — bukan staf }
+ */
+router.get('/internal/config', userController.config)
+
+/**
+ * @swagger
  * /internal/users:
  *   get:
  *     summary: Daftar semua akun (F-22)

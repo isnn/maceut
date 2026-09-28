@@ -21,7 +21,6 @@ import { Alert } from '@/components/ui/Alert'
 import { PLAN_LABEL, PLAN_ORDER } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import * as internalApi from '@/features/internal/api'
-import { isInternalByConfig } from '@/features/auth/internal-access'
 import type { InternalUserRow } from '@/features/internal/types'
 import type { Plan, PlatformRole } from '@/features/auth/types'
 
@@ -62,7 +61,7 @@ function EditUserForm({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const roleByConfig = isInternalByConfig(row.email)
+  const roleByConfig = row.roleLockedByConfig
   const emailError = submitted && !EMAIL_RE.test(email) ? 'Enter a valid email address.' : null
   const nameError = submitted && !fullName.trim() ? 'A name is required.' : null
   const passwordError = submitted && password !== '' && password.length < 8 ? 'At least 8 characters.' : null
