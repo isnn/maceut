@@ -32,6 +32,13 @@ export interface PublicUser {
   fullName: string
   plan: Plan
   role: PlatformRole
+  /**
+   * True when INTERNAL_EMAILS grants this account the internal role, so it can't be
+   * demoted from the app (BR-027). Sent by the server so the web app no longer needs its
+   * own copy of the list in a NEXT_PUBLIC_ variable — which shipped the staff roster to
+   * every browser, and could silently disagree with the server's.
+   */
+  roleLockedByConfig: boolean
   onboardingDone: boolean
   createdAt: string
 }
@@ -49,6 +56,7 @@ export function toPublic(row: userRepo.UserWithPlan): PublicUser {
     plan: row.plan,
     // The stored column is a cache; config is the authority (BR-027).
     role: resolveRole(row.email, (row.role ?? 'user') as PlatformRole),
+    roleLockedByConfig: isInternalByConfig(row.email),
     onboardingDone: row.onboardingDone ?? false,
     createdAt: row.createdAt.toISOString(),
   }
@@ -278,6 +286,8 @@ export async function changeRole(actorId: string, targetUserId: string, role: Pl
 export async function getPlatformStats(): Promise<{
   totalUsers: number
   internalUsers: number
+  /** How many addresses INTERNAL_EMAILS grants — the overview's "granted by config". */
+  internalByConfig: number
   planMix: Record<Plan, number>
   estimatedSeats: number
   /** Measured platform-wide. Captures and storage stay null until CAP-01. */
@@ -316,6 +326,7 @@ export async function getPlatformStats(): Promise<{
   return {
     totalUsers: total,
     internalUsers,
+    internalByConfig: configuredInternalEmails().length,
     planMix,
     estimatedSeats,
     zonesCollecting,

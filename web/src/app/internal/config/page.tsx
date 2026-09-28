@@ -1,299 +1,129 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { Dialog } from '@base-ui/react/dialog'
-import { Button } from '@/components/ui/Button'
+/**
+ * The running server's configuration — read-only (BE-12, ADR-018).
+ *
+ * This page used to be a prototype that kept "config" in localStorage, with edit fields
+ * and a rotate-secret dialog that changed nothing on any server. It now mirrors what the
+ * API actually loaded from `.env`. Secrets show only whether they're set; connection
+ * URLs have their password masked. Changing a value means editing api/.env and
+ * restarting — deliberately, since a web form for secrets means storing them in the
+ * database, and one mistyped value could take the platform down.
+ */
+
+import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
-import { Checkbox, FormLabel, Input } from '@/components/ui/Input'
-import { cn, formatDate } from '@/lib/utils'
-import { useCurrentUser } from '@/features/auth/hooks/useAuth'
-import * as configApi from '@/features/internal/config-api'
-import { CONFIG_GROUPS, varsInGroup, type ConfigVarMeta } from '@/features/internal/catalog'
-import type { ConfigPrimitive, ConfigValue, SecretMeta } from '@/features/internal/config-api'
-
-type State = { values: Record<string, ConfigValue>; secrets: Record<string, SecretMeta> }
+import { CardTitle } from '@/components/shared/SectionHeader'
+import { cn } from '@/lib/utils'
+import { ApiError } from '@/types/api'
+import { getServerConfig, type ServerConfigEntry } from '@/features/internal/api'
+import { CONFIG_GROUPS, VAR_BY_KEY, type ConfigGroupId } from '@/features/internal/catalog'
 
 export default function InternalConfigPage() {
-  const { user } = useCurrentUser()
-  const [state, setState] = useState<State | null>(null)
-  const [rotating, setRotating] = useState<ConfigVarMeta | null>(null)
-
-  const load = useCallback(() => configApi.getConfigState(), [])
-  const refetch = useCallback(() => load().then(setState), [load])
+  const [entries, setEntries] = useState<ServerConfigEntry[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    load().then(setState)
-  }, [load])
+    getServerConfig()
+      .then(setEntries)
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not load the configuration.'))
+  }, [])
 
-  const updatedBy = user?.email ?? 'unknown'
+  const grouped = useMemo(() => {
+    const byGroup = new Map<ConfigGroupId | 'other', ServerConfigEntry[]>()
+    for (const e of entries ?? []) {
+      const group = VAR_BY_KEY.get(e.key)?.group ?? 'other'
+      byGroup.set(group, [...(byGroup.get(group) ?? []), e])
+    }
+    return byGroup
+  }, [entries])
 
-  async function commit(meta: ConfigVarMeta, value: ConfigPrimitive) {
-    await configApi.updateConfigValue(meta.key, value, updatedBy)
-    refetch()
-  }
-
-  if (!state) return <div className="h-96 bg-canvas-secondary rounded-lg animate-pulse" />
-
-  const unsetSecrets = Object.values(state.secrets).filter((s) => !s.isSet).length
+  const unsetSecrets = (entries ?? []).filter((e) => e.secret && !e.set).map((e) => e.key)
 
   return (
-    <div className="space-y-lg">
+    <div className="space-y-xl">
       <div>
-        <p className="text-label text-text-secondary">Platform · environment development</p>
+        <p className="text-label text-text-secondary">Platform</p>
         <h1 className="text-page-title font-bold text-text-primary mt-xs">Configuration</h1>
-        <p className="text-body text-text-secondary mt-xs max-w-[72ch]">
-          System settings shared by every workspace. Secrets are write-only — they can be rotated but never read back,
-          here or through the API.
+        <p className="text-body text-text-secondary mt-xs">
+          What the API server is running with. Read-only — to change a value, edit <code>api/.env</code> and restart the
+          service.
         </p>
       </div>
 
-      {unsetSecrets > 0 && (
+      {error && <Alert variant="warning">{error}</Alert>}
+      {unsetSecrets.length > 0 && (
         <Alert variant="warning">
-          {unsetSecrets} secret{unsetSecrets === 1 ? '' : 's'} without a value. Captures and uploads will fail until
-          they&rsquo;re set.
+          Not set: {unsetSecrets.join(', ')}. The features that need {unsetSecrets.length === 1 ? 'it' : 'them'} will
+          fail until {unsetSecrets.length === 1 ? 'it is' : 'they are'} added to <code>api/.env</code>.
         </Alert>
       )}
 
-      <nav className="flex flex-wrap gap-sm text-caption text-text-secondary">
-        <span className="text-text-muted">Jump to:</span>
-        {CONFIG_GROUPS.map((group) => (
-          <a key={group.id} href={`#${group.id}`} className="text-info no-underline hover:underline">
-            {group.title}
-          </a>
-        ))}
-      </nav>
-
-      {CONFIG_GROUPS.map((group) => (
-        <Card key={group.id} id={group.id} className="p-lg scroll-mt-24">
-          <div className="flex flex-wrap items-start justify-between gap-md">
-            <div>
-              <h2 className="text-heading-sm text-text-primary">{group.title}</h2>
-              <p className="text-caption text-text-secondary mt-xs">{group.description}</p>
-            </div>
-            {!group.editable && (
-              <span className="text-micro font-semibold bg-canvas-secondary text-text-muted border border-border rounded-xs px-sm py-xs">
-                Read-only
-              </span>
-            )}
-          </div>
-
-          {!group.editable && (
-            <Alert variant="info" className="mt-md">
-              Set in the service&rsquo;s <code className="font-mono">.env</code> at deploy time. A web UI cannot swap
-              these on a running system.
-            </Alert>
-          )}
-
-          <ul className="mt-lg divide-y divide-divider">
-            {varsInGroup(group.id).map((meta) => (
-              <li key={meta.key} className="py-md first:pt-0 last:pb-0">
-                <div className="flex flex-wrap items-start justify-between gap-md">
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-sm flex-wrap">
-                      <code className="font-mono text-label text-text-primary">{meta.key}</code>
-                      {meta.requiresRestart && (
-                        <span className="text-micro text-warning-text bg-warning-bg rounded-xs px-sm py-[1px]">
-                          restart required
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-caption text-text-secondary mt-xs">{meta.label}</p>
-                    {meta.help && <p className="text-micro text-text-muted mt-xs max-w-[60ch]">{meta.help}</p>}
-                  </div>
-
-                  <div className="w-full tablet:w-80 shrink-0">
-                    {meta.secret ? (
-                      <SecretField
-                        meta={meta}
-                        secret={state.secrets[meta.key]}
-                        editable={group.editable}
-                        onRotate={() => setRotating(meta)}
-                      />
-                    ) : (
-                      <ValueField
-                        meta={meta}
-                        current={state.values[meta.key]}
-                        editable={group.editable}
-                        onCommit={(value) => commit(meta, value)}
-                      />
-                    )}
-                  </div>
+      {entries === null && !error ? (
+        <div className="space-y-lg">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-40 bg-canvas-secondary rounded-lg animate-pulse" />
+          ))}
+        </div>
+      ) : (
+        [...CONFIG_GROUPS, { id: 'other' as const, title: 'Other', description: 'Keys without a description yet.' }].map(
+          (group) => {
+            const rows = grouped.get(group.id)
+            if (!rows?.length) return null
+            return (
+              <Card key={group.id} className="p-lg space-y-md">
+                <div>
+                  <CardTitle>{group.title}</CardTitle>
+                  <p className="text-caption text-text-muted mt-xs">{group.description}</p>
                 </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ))}
-
-      {rotating && (
-        <RotateDialog
-          meta={rotating}
-          onClose={() => setRotating(null)}
-          onSaved={() => {
-            setRotating(null)
-            refetch()
-          }}
-          updatedBy={updatedBy}
-        />
+                <dl className="divide-y divide-divider">
+                  {rows.map((e) => (
+                    <ConfigRow key={e.key} entry={e} />
+                  ))}
+                </dl>
+              </Card>
+            )
+          },
+        )
       )}
     </div>
   )
 }
 
-function SecretField({
-  meta,
-  secret,
-  editable,
-  onRotate,
-}: {
-  meta: ConfigVarMeta
-  secret?: SecretMeta
-  editable: boolean
-  onRotate: () => void
-}) {
-  const isSet = secret?.isSet ?? false
+function ConfigRow({ entry }: { entry: ServerConfigEntry }) {
+  const meta = VAR_BY_KEY.get(entry.key)
   return (
-    <div className="space-y-xs">
-      <div className="flex items-center gap-sm">
-        <span
-          className={cn(
-            'text-micro font-semibold rounded-xs px-sm py-xs',
-            isSet ? 'bg-success-bg text-success-text' : 'bg-canvas-secondary text-text-muted border border-border'
-          )}
-        >
-          {isSet ? 'Set' : 'Not set'}
-        </span>
-        <code className="font-mono text-label text-text-secondary">{isSet ? `••••••••${secret?.last4}` : '—'}</code>
-        {editable && (
-          <Button variant="secondary" size="sm" className="ml-auto" onClick={onRotate}>
-            {isSet ? 'Rotate' : 'Set'}
-          </Button>
+    <div className="grid grid-cols-1 tablet:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-xs tablet:gap-lg py-md">
+      <dt className="min-w-0">
+        <span className="block text-body font-semibold text-text-primary">{meta?.label ?? entry.key}</span>
+        <code className="block text-micro text-text-muted mt-xs">{entry.key}</code>
+        {meta?.help && <span className="block text-caption text-text-muted mt-xs">{meta.help}</span>}
+      </dt>
+      <dd className="min-w-0 flex items-start">
+        {entry.secret ? (
+          <StatusPill ok={entry.set}>{entry.set ? 'Set · hidden' : 'Not set'}</StatusPill>
+        ) : entry.set ? (
+          <code className="text-label text-text-primary break-all bg-canvas-secondary rounded-xs px-sm py-xs">{entry.value}</code>
+        ) : (
+          <span className="text-caption text-text-muted">
+            Not set{meta?.defaultValue !== undefined && <> — default <code>{meta.defaultValue}</code></>}
+          </span>
         )}
-      </div>
-      {isSet && secret?.updatedAt && (
-        <p className="text-micro text-text-muted">
-          Rotated {formatDate(secret.updatedAt)} by {secret.updatedBy}
-        </p>
-      )}
-      {!editable && <p className="text-micro text-text-muted">Not editable here — {meta.label.toLowerCase()} is deploy-time config.</p>}
+      </dd>
     </div>
   )
 }
 
-function ValueField({
-  meta,
-  current,
-  editable,
-  onCommit,
-}: {
-  meta: ConfigVarMeta
-  current?: ConfigValue
-  editable: boolean
-  onCommit: (value: ConfigPrimitive) => void
-}) {
-  const stored = current?.value ?? meta.defaultValue ?? ''
-  const [draft, setDraft] = useState(String(stored))
-
-  if (meta.type === 'boolean') {
-    const checked = typeof stored === 'boolean' ? stored : stored === 'true'
-    return (
-      <label className="flex items-center gap-sm text-body text-text-secondary">
-        <Checkbox checked={checked} disabled={!editable} onChange={(e) => onCommit(e.target.checked)} />
-        {checked ? 'Enabled' : 'Disabled'}
-      </label>
-    )
-  }
-
+function StatusPill({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   return (
-    <div className="space-y-xs">
-      <Input
-        value={draft}
-        disabled={!editable}
-        inputMode={meta.type === 'number' ? 'numeric' : undefined}
-        onChange={(e) => setDraft(e.target.value)}
-        // Commit on blur rather than per keystroke — one write per edit.
-        onBlur={() => {
-          if (String(stored) === draft) return
-          onCommit(meta.type === 'number' ? Number(draft) : draft)
-        }}
-        className="disabled:opacity-60 disabled:cursor-not-allowed font-mono text-label"
-        aria-label={meta.key}
-      />
-      {current && (
-        <p className="text-micro text-text-muted">
-          Changed {formatDate(current.updatedAt)} by {current.updatedBy}
-        </p>
+    <span
+      className={cn(
+        'text-micro font-semibold rounded-xs px-sm py-xs',
+        ok ? 'bg-success-bg text-success-text' : 'bg-warning-bg text-warning-text',
       )}
-    </div>
-  )
-}
-
-function RotateDialog({
-  meta,
-  updatedBy,
-  onClose,
-  onSaved,
-}: {
-  meta: ConfigVarMeta
-  updatedBy: string
-  onClose: () => void
-  onSaved: () => void
-}) {
-  const [value, setValue] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  async function save() {
-    setSaving(true)
-    await configApi.rotateSecret(meta.key, value, updatedBy)
-    // The plaintext lives only in this component's state and dies with it.
-    setValue('')
-    setSaving(false)
-    onSaved()
-  }
-
-  return (
-    <Dialog.Root open onOpenChange={(next) => !next && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
-        <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[28rem] bg-card border border-border rounded-lg p-xl shadow-elevation-3">
-          <Dialog.Title className="text-section-title text-text-primary">Rotate {meta.label}</Dialog.Title>
-          <Dialog.Description className="text-caption text-text-secondary mt-xs mb-lg">
-            <code className="font-mono">{meta.key}</code> — the current value cannot be shown. Entering a new one
-            replaces it.
-          </Dialog.Description>
-
-          {meta.rotateWarning && (
-            <Alert variant="warning" className="mb-lg">
-              {meta.rotateWarning}
-            </Alert>
-          )}
-
-          <div className="space-y-xs">
-            <FormLabel htmlFor="secret-value">New value</FormLabel>
-            <Input
-              id="secret-value"
-              type="password"
-              autoComplete="off"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-            />
-          </div>
-
-          {meta.requiresRestart && (
-            <p className="text-micro text-text-muted mt-md">Takes effect after the service restarts.</p>
-          )}
-
-          <div className="flex justify-end gap-sm mt-xl">
-            <Button variant="secondary" onClick={onClose} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={save} disabled={saving || value.trim().length === 0}>
-              {saving ? 'Saving…' : 'Save secret'}
-            </Button>
-          </div>
-        </Dialog.Popup>
-      </Dialog.Portal>
-    </Dialog.Root>
+    >
+      {children}
+    </span>
   )
 }

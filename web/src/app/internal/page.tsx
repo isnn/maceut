@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/Input'
 import { cn, formatDate } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_ORDER } from '@/lib/constants'
 import * as internalApi from '@/features/internal/api'
-import { configuredInternalEmails } from '@/features/auth/internal-access'
 import { formatIdr } from '@/features/internal/api'
 import type { InternalUserRow, PlatformStats } from '@/features/internal/types'
 import type { Plan } from '@/features/auth/types'
@@ -91,7 +90,7 @@ export default function InternalOverviewPage() {
         <StatTile
           label="Internal users"
           value={stats.internalUsers}
-          note={`${configuredInternalEmails().length} granted by env`}
+          note={`${stats.internalByConfig} granted by config`}
         />
         <StatTile
           label="Zones collecting"
