@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/Select'
 import { RoadClassBadge, ZoneStatusPill } from '@/components/ui/Badge'
 import { Pagination, SortableTh, Table, TableWrap, Td, Th, type SortDirection } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
+import { PlanPausedNotice } from '@/features/plan/PlanPausedNotice'
 import { ActionMenu } from '@/components/ui/ActionMenu'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -128,6 +129,8 @@ export default function ZonesPage() {
         )}
       </div>
 
+      <PlanPausedNotice zones={(zones ?? []).filter((z) => z.status === 'paused' && z.pausedByPlan)} windows={[]} />
+
       <div className="flex flex-wrap items-center gap-md">
         <div className="flex bg-canvas-secondary border border-border rounded-md p-[3px]">
           {FILTERS.map((item) => (
@@ -239,7 +242,7 @@ export default function ZonesPage() {
                     <Td className="text-right tabular-nums">{zone.roadsCount ?? '—'}</Td>
                     <Td className="text-text-secondary">{zone.cadence ?? <span className="text-text-muted">Not scheduled</span>}</Td>
                     <Td>
-                      <ZoneStatusPill status={zone.status} />
+                      <ZoneStatusPill status={zone.status} pausedByPlan={zone.pausedByPlan} />
                     </Td>
                     <Td className="text-text-secondary whitespace-nowrap">{formatDate(zone.createdAt)}</Td>
                     <Td className="text-right whitespace-nowrap">

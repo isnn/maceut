@@ -360,6 +360,34 @@ router.delete('/internal/users/:id', userController.remove)
  *                 data: { $ref: '#/components/schemas/User' }
  *       404: { description: NOT_FOUND }
  */
+/**
+ * @swagger
+ * /internal/users/{id}/plan-impact:
+ *   get:
+ *     summary: Pratinjau dampak ganti paket sebuah akun (ADR-020) — tanpa mengubah apa pun
+ *     description: >
+ *       Zona dan jendela capture yang AKAN di-pause bila akun ini dipindah ke `plan`,
+ *       beserta alasannya. Memakai fungsi yang sama dengan perubahan paketnya sendiri,
+ *       jadi konfirmasi dan hasilnya tidak bisa berbeda.
+ *     tags: [Internal]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *       - in: query
+ *         name: plan
+ *         required: true
+ *         schema: { type: string, enum: [free, standard, premium] }
+ *     responses:
+ *       200: { description: "PlanImpact — zonesToPause, schedulesToPause, clean" }
+ *       401: { description: UNAUTHORIZED }
+ *       403: { description: FORBIDDEN — bukan staf }
+ *       422: { description: VALIDATION_ERROR — paket tidak dikenal }
+ */
+router.get('/internal/users/:id/plan-impact', userController.planImpact)
+
 router.patch('/internal/users/:id/plan', userController.changePlan)
 
 /**

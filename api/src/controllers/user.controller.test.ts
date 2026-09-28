@@ -368,3 +368,31 @@ describe('GET /internal/config (BE-12, ADR-018)', () => {
     expect((await request(app).get('/internal/config')).status).toBe(403)
   })
 })
+
+describe('GET /internal/users/:id/plan-impact (ADR-020)', () => {
+  it('previews exactly what a downgrade would pause, without changing anything', async () => {
+    signedInAs(STAFF_ID)
+    staffLookups()
+    const zones = await import('../repositories/zone.repository')
+    const schedules = await import('../repositories/schedule.repository')
+    vi.mocked(zones.findByUserId).mockResolvedValue([
+      { id: 'z1', name: 'Old zone', status: 'collecting', createdAt: new Date('2026-01-01') },
+      { id: 'z2', name: 'New zone', status: 'collecting', createdAt: new Date('2026-02-01') },
+    ] as never)
+    vi.mocked(schedules.findByUserId).mockResolvedValue([])
+
+    const res = await request(app).get('/internal/users/u_1/plan-impact?plan=free')
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.clean).toBe(false)
+    // Free allows one collecting zone; the newer one is the one paused.
+    expect(res.body.data.zonesToPause.map((z: { name: string }) => z.name)).toEqual(['New zone'])
+    expect(zones.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unknown plan', async () => {
+    signedInAs(STAFF_ID)
+    staffLookups()
+    expect((await request(app).get('/internal/users/u_1/plan-impact?plan=gold')).status).toBe(422)
+  })
+})

@@ -78,6 +78,7 @@ function zone(over: Partial<ZoneRecord> = {}): ZoneRecord {
     geometry: { type: 'Polygon', coordinates: SQUARE },
     roadClass: 'nasional',
     status: 'collecting',
+    pausedByPlan: false,
     areaKm2: 1.23,
     roadsCount: null,
     lengthKm: null,

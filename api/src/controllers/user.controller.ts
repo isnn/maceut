@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import * as userService from '../services/user.service'
 import { configSnapshot } from '../services/config.service'
+import * as planService from '../services/plan.service'
 import {
   listUsersQuerySchema,
   createUserSchema,
@@ -152,6 +153,21 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
 export async function config(req: Request, res: Response, next: NextFunction) {
   try {
     return res.status(200).json(ok(configSnapshot()))
+  } catch (err) {
+    next(err)
+  }
+}
+
+/**
+ * GET /internal/users/:id/plan-impact?plan= — what moving this account to `plan` would
+ * pause, without changing anything (ADR-020). The same function the change itself runs,
+ * so the confirmation staff see and the outcome cannot disagree.
+ */
+export async function planImpact(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = z.string().min(1).parse(req.params.id)
+    const plan = z.enum(['free', 'standard', 'premium']).parse(req.query.plan)
+    return res.status(200).json(ok(await planService.previewPlanChange(id, plan)))
   } catch (err) {
     next(err)
   }

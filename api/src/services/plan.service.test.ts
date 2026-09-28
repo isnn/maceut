@@ -53,8 +53,9 @@ describe('nothing is ever deleted', () => {
 
     await applyPlanChange(USER, 'free')
 
-    expect(scheduleRepo.update).toHaveBeenCalledWith('s1', { status: 'paused' })
-    expect(zoneRepo.update).toHaveBeenCalledWith(expect.any(String), { status: 'paused' })
+    // …and marks them as paused BY THE PLAN, so the app can say why and what resumes them.
+    expect(scheduleRepo.update).toHaveBeenCalledWith('s1', { status: 'paused', pausedByPlan: true })
+    expect(zoneRepo.update).toHaveBeenCalledWith(expect.any(String), { status: 'paused', pausedByPlan: true })
     // The whole point of grandfathering: a downgrade must never destroy the only
     // record of something the customer was collecting.
     expect(zoneRepo.deleteById).not.toHaveBeenCalled()
