@@ -141,6 +141,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: Halaman detail zona + edit nama & kelas jalan (F-24) | specs/zone-management/requirements.md |
 | ✅ | Frontend: /internal jadi aplikasi terpisah (staf tidak punya halaman tenant) | specs/internal/requirements.md |
 | ✅ | Frontend: rework halaman login & register (tanpa header, show/hide password) | permintaan user |
+| ✅ | **AUTH-OTP** Abstraksi provider email (console · Resend · Mailtrap) + kode OTP untuk verifikasi email (wajib) & lupa password | ADR-026, permintaan user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -1703,6 +1704,37 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
     (themeId dark); unduh via service → 200, `attachment; filename="YOG-2026-09-28_1445.png"`,
     gambar dicek visual. Export ZIP/WebM belum di-e2e ulang setelah refactor (tsc + test hijau).
   VERIFIKASI: 344 test API, tsc + eslint bersih kedua paket.
+
+[2026-09-28i] AUTH-OTP — abstraksi provider email + kode OTP (ADR-026).
+
+  PERMINTAAN: provider email yang bisa diganti gampang (Mailtrap atau Resend), dipakai
+  untuk verifikasi email dan OTP. Dipilih user: verifikasi saat daftar + lupa password;
+  akun yang belum verifikasi DIBLOKIR; default dev = console.
+
+  - `api/src/lib/email/`: interface `EmailProvider.send(EmailMessage)` + adapter
+    console / resend / mailtrap (fetch biasa, tanpa SDK baru). Mailtrap: isi
+    MAILTRAP_INBOX_ID → sandbox inbox, kosong → kirim sungguhan. Ganti provider =
+    EMAIL_PROVIDER + kredensialnya saja.
+  - Validasi config: provider tanpa kredensial → gagal start; console di production → ditolak.
+  - `services/email.service.ts`: template email kode (html + text), `sendOtpEmail` tidak
+    melempar error (Better Auth menjawab sama untuk alamat ada/tidak ada).
+  - Better Auth: `requireEmailVerification`, plugin `emailOTP` (6 digit, 10 menit,
+    5 percobaan, disimpan ter-hash), `sendOnSignIn`, `autoSignInAfterVerification`.
+  - Migrasi 0012: semua user lama ditandai `email_verified = true` (11 akun di dev).
+    Tanpa perubahan schema → DBML tidak berubah.
+  - Web: `/verify-email` (OtpInput dari Base UI OTP Field, auto-submit saat terisi,
+    kirim ulang dengan jeda 30 detik), `/forgot-password` (email → kode + password baru →
+    login dengan pesan sukses). Register → layar kode; login akun belum verifikasi →
+    layar kode (kode baru sudah terkirim). Link "Forgot password?" sekarang hidup.
+  - Konfigurasi baru tampil di /internal/config (RESEND_API_KEY & MAILTRAP_API_TOKEN secret).
+
+  DIUJI LANGSUNG (akun uji sekali pakai, dihapus): sign-up → token null + kode di log;
+    login belum verifikasi → 403 EMAIL_NOT_VERIFIED + kode baru; kode lama → INVALID_OTP;
+    kode benar → sesi + /me 200; kode yang sama lagi → ditolak; lupa password → kode,
+    reset → password baru 200, lama 401; alamat tak dikenal → jawaban sama.
+  BELUM DIUJI: kirim sungguhan via Resend/Mailtrap (belum ada key) — adapter diuji dengan
+    fetch palsu terhadap bentuk request dokumentasi masing-masing. UI belum dilihat di browser.
+  VERIFIKASI: 362 test API, tsc + eslint bersih kedua paket.
 
 ---
 

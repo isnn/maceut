@@ -54,10 +54,15 @@ export const CONFIG_KEYS = [
   'PLAYWRIGHT_SCREENSHOT_HEIGHT',
   'PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH',
   'SWAGGER_ENABLED',
+  'EMAIL_PROVIDER',
+  'EMAIL_FROM',
+  'RESEND_API_KEY',
+  'MAILTRAP_API_TOKEN',
+  'MAILTRAP_INBOX_ID',
 ] as const
 
 /** Never returned, in any form. */
-const SECRET_KEYS = new Set<string>(['DB_PASSWORD', 'JWT_SECRET', 'HERE_API_KEY', 'R2_ACCESS_KEY_ID', 'R2_ACCESS_KEY_SECRET'])
+const SECRET_KEYS = new Set<string>(['DB_PASSWORD', 'JWT_SECRET', 'HERE_API_KEY', 'R2_ACCESS_KEY_ID', 'R2_ACCESS_KEY_SECRET', 'RESEND_API_KEY', 'MAILTRAP_API_TOKEN'])
 /** URLs that can carry a password in their userinfo. */
 const CREDENTIAL_URL_KEYS = new Set<string>(['DATABASE_URL', 'RABBITMQ_URL'])
 
