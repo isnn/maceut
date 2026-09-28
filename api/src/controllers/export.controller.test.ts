@@ -261,7 +261,7 @@ describe('GET /exports/:id', () => {
     expect(r2.getPresignedUrl).toHaveBeenCalledWith(
       `exports/${USER_ID}/${EXPORT_ID}.webm`,
       expect.any(Number),
-      'Sudirman-2026-09-27.webm',
+      'Sudirman-2026-09-27_0700-1700.webm',
     )
   })
 
@@ -335,5 +335,23 @@ describe('POST /exports/:id/retry', () => {
 
     expect(res.status).toBe(409)
     expect(exportRepo.create).not.toHaveBeenCalled()
+  })
+})
+
+describe('export filenames', () => {
+  it('name the timeframe in WIB, the clock printed on every image', async () => {
+    const { fileNameFor } = await import('../services/export.service')
+    // 22 Sep 12:24 UTC and 23 Sep 12:00 UTC = 19:24 WIB on the 22nd to 19:00 WIB on the 23rd.
+    expect(
+      fileNameFor({ format: 'zip' }, { zoneName: 'Zona 12', range: { from: '2026-09-22T12:24:00.000Z', to: '2026-09-23T12:00:00.000Z' } }),
+    ).toBe('Zona-12-2026-09-22_1924_to_2026-09-23_1900.zip')
+  })
+
+  it('uses the WIB date after 17:00 WIB, where UTC is still the previous day', async () => {
+    const { fileNameFor } = await import('../services/export.service')
+    // 18:00 UTC on the 22nd is 01:00 WIB on the 23rd.
+    expect(
+      fileNameFor({ format: 'webm' }, { zoneName: 'YOG', range: { from: '2026-09-22T18:00:00.000Z', to: '2026-09-23T02:00:00.000Z' } }),
+    ).toBe('YOG-2026-09-23_0100-0900.webm')
   })
 })

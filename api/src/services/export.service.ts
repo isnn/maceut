@@ -62,11 +62,36 @@ export interface PublicExport {
   expiresAt: string | null
 }
 
-function fileNameFor(row: ExportRecord, spec: StoredSpec): string {
+/** An instant in Jakarta time as { date: "YYYY-MM-DD", time: "HHmm" }. */
+function wibParts(iso: string): { date: string; time: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Jakarta',
+  }).formatToParts(new Date(iso))
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '00'
+  const hour = get('hour') === '24' ? '00' : get('hour')
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${hour}${get('minute')}` }
+}
+
+/**
+ * The download's filename: zone, then the timeframe it covers, in WIB —
+ * `YOG-2026-09-23_0600-1900.zip` for one day, `YOG-2026-09-22_1900_to_2026-09-23_0600.webm`
+ * across days.
+ *
+ * WIB because that is the clock printed on every image. The first version cut the date
+ * out of the UTC ISO string, so the name disagreed with its own pictures: after 17:00
+ * WIB it even carried the previous day's date.
+ */
+export function fileNameFor(row: Pick<ExportRecord, 'format'>, spec: Pick<StoredSpec, 'zoneName' | 'range'>): string {
   const safe = spec.zoneName.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'zone'
-  const from = spec.range.from.slice(0, 10)
-  const to = spec.range.to.slice(0, 10)
-  const span = from === to ? from : `${from}_to_${to}`
+  const from = wibParts(spec.range.from)
+  const to = wibParts(spec.range.to)
+  const span = from.date === to.date ? `${from.date}_${from.time}-${to.time}` : `${from.date}_${from.time}_to_${to.date}_${to.time}`
   return `${safe}-${span}.${row.format === 'zip' ? 'zip' : 'webm'}`
 }
 

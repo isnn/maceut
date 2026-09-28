@@ -26,7 +26,7 @@ import {
   type RenderOverlay,
   type RenderView,
 } from '@/features/studio/render'
-import type { SlimTraffic } from '@/features/studio/api'
+import { wibStamp, type SlimTraffic } from '@/features/studio/api'
 
 interface ExportJob {
   format: 'zip' | 'webm'
@@ -67,11 +67,6 @@ function toBase64(blob: Blob): Promise<string> {
   })
 }
 
-/** Filename-safe stamp for a frame, e.g. 2026-09-27-06-00. */
-function stamp(iso: string): string {
-  return iso.slice(0, 16).replace(/[:T]/g, '-')
-}
-
 /** Output is handed over in pieces: one huge base64 string would strain the bridge. */
 const CHUNK_BYTES = 4 * 1024 * 1024
 
@@ -102,7 +97,7 @@ async function runExport(job: ExportJob): Promise<void> {
       const frame = await bridge.__exportFrame(i)
       await renderCapture(canvas, inputFor(frame))
       const png = await canvasToPngBlob(canvas)
-      const name = `${String(i + 1).padStart(3, '0')}-${stamp(frame.capturedAt)}.png`
+      const name = `${String(i + 1).padStart(3, '0')}-${wibStamp(frame.capturedAt)}.png`
       await bridge.__exportPng(i, name, await toBase64(png))
       if (!(await bridge.__exportProgress(i + 1))) return // cancelled
     }

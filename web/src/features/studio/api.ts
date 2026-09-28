@@ -38,6 +38,29 @@ function wibClock(iso: string): string {
     .replace('.', ':')
 }
 
+/**
+ * A filename-safe stamp of an instant in Jakarta time, "YYYY-MM-DD-HH-mm".
+ *
+ * WIB, not UTC: every image's caption shows WIB, so a file named from the UTC clock
+ * (`toISOString()`) read seven hours off its own picture — a 06:00 capture was saved as
+ * "…-23-00", and after 17:00 WIB under the previous day's date.
+ */
+export function wibStamp(iso: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Jakarta',
+  }).formatToParts(new Date(iso))
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '00'
+  // en-CA can report midnight as "24"; the calendar date already rolled over.
+  const hour = get('hour') === '24' ? '00' : get('hour')
+  return `${get('year')}-${get('month')}-${get('day')}-${hour}-${get('minute')}`
+}
+
 /** The Jakarta calendar date of an instant, as "YYYY-MM-DD". */
 export function wibDate(iso: string): string {
   return new Intl.DateTimeFormat('en-CA', {

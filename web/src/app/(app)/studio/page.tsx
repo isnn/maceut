@@ -651,10 +651,6 @@ export default function StudioPage() {
     [traffics],
   )
 
-  /** A filename-safe stamp for one export. */
-  function stampFor(iso: string): string {
-    return iso.slice(0, 16).replace(/[:T]/g, '-')
-  }
 
   /**
    * Exports the frame on screen as a PNG, at the selected output size — not whatever
@@ -668,7 +664,7 @@ export default function StudioPage() {
       const canvas = exportCanvas.current ?? document.createElement('canvas')
       exportCanvas.current = canvas
       await renderCapture(canvas, renderInputFor(frame, await trafficFor(frame), outputSize.width, outputSize.height))
-      await downloadCanvas(canvas, `${zoneLabel}-${stampFor(frame.capturedAt)}.png`.replace(/[/\\:*?"<>|]/g, '-'))
+      await downloadCanvas(canvas, `${zoneLabel}-${studioApi.wibStamp(frame.capturedAt)}.png`.replace(/[/\\:*?"<>|]/g, '-'))
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Could not export the image.')
     } finally {
