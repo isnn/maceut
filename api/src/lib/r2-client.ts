@@ -73,11 +73,6 @@ export function capturePath(userId: string, captureId: string, at: Date = new Da
   return `captures/${userId}/${year}/${month}/${captureId}.${ext}`
 }
 
-/** Where a branding logo lives. */
-export function logoPath(userId: string, ext = 'png'): string {
-  return `branding/${userId}/logo.${ext}`
-}
-
 export async function upload(path: string, data: Buffer, contentType: string): Promise<void> {
   const s3 = getClient()
   try {

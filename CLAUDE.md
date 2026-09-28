@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 ## Project
-**Maceut** — Platform SaaS untuk monitoring dan visualisasi kemacetan lalu lintas berbasis peta, dengan fitur scheduled capture otomatis dan export gambar bermerek.
+**Maceut** — Platform SaaS untuk monitoring dan visualisasi kemacetan lalu lintas berbasis peta, dengan fitur scheduled capture otomatis dan export gambar dan animasi.
 Single-workspace SaaS dengan model langganan Free / Standard / Premium.
 
 ## Stack
@@ -97,7 +97,6 @@ web/                        # Next.js frontend
       zones/
       captures/
       schedules/
-      branding/
     lib/                    # api-client, utils
     types/                  # Global TypeScript types
   Dockerfile
@@ -139,8 +138,6 @@ docker-compose.prod.yml      # Production overrides
 - `@.claude/specs/zone-management/tasks.md`
 - `@.claude/specs/capture-schedule/requirements.md` → F-05 Create Schedule · F-06 Manage Schedule · F-07 Capture History
 - `@.claude/specs/capture-schedule/tasks.md`
-- `@.claude/specs/branding/requirements.md`         → F-11 Company Name · F-12 Logo Upload · F-13 Capture Preview
-- `@.claude/specs/branding/tasks.md`
 - `@.claude/specs/subscription/requirements.md`     → F-14 Usage Dashboard · F-15 Plan Display · F-16 Enforcement
 - `@.claude/specs/subscription/tasks.md`
 
