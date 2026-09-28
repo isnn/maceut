@@ -1,5 +1,6 @@
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as captureService from '../services/capture.service'
+import * as notificationService from '../services/notification.service'
 import { parseTime, type CaptureInterval } from '../types/schedule'
 
 /**
@@ -183,6 +184,8 @@ export interface TickResult {
 export async function tick(now: Date = new Date()): Promise<TickResult> {
   const due = await scheduleRepo.claimDue(now)
   const result: TickResult = { fired: 0, refused: 0, missed: 0 }
+  // An outage is reported once per user, not once per window it swallowed.
+  const missedByUser = new Map<string, notificationService.MissedSummary>()
 
   for (const row of due) {
     const window = windowOf(row)
@@ -206,6 +209,11 @@ export async function tick(now: Date = new Date()): Promise<TickResult> {
           lateBySeconds: Math.round(lateBy / 1000),
         })
         result.missed++
+        const summary = missedByUser.get(row.userId) ?? { zoneIds: [], occurrences: 0, from: row.dueAt }
+        if (!summary.zoneIds.includes(row.zoneId)) summary.zoneIds.push(row.zoneId)
+        summary.occurrences += skipped
+        if (row.dueAt < summary.from) summary.from = row.dueAt
+        missedByUser.set(row.userId, summary)
         continue
       }
 
@@ -223,6 +231,10 @@ export async function tick(now: Date = new Date()): Promise<TickResult> {
         err instanceof Error ? err.message : err,
       )
     }
+  }
+
+  for (const [userId, summary] of missedByUser) {
+    await notificationService.onCapturesMissed(userId, summary, now)
   }
 
   if (result.fired || result.refused || result.missed) {

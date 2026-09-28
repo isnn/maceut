@@ -369,3 +369,107 @@ export const platformSettings = pgTable('platform_settings', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
 })
+
+// --- notifications (NOTIF) -------------------------------------------------------------
+
+export const notificationTypeEnum = pgEnum('notification_type', [
+  'capture_failing',
+  'capture_recovered',
+  'captures_missed',
+  'capture_limit_reached',
+  'capture_limit_near',
+  'export_ready',
+  'export_failed',
+  'plan_changed',
+  'here_budget_warning',
+  'here_budget_reached',
+])
+
+export const notificationToneEnum = pgEnum('notification_tone', ['warning', 'success', 'info'])
+
+/**
+ * Where a notification stands on the email side. Most never email (`none`). The few
+ * that may (see notification.service) start `pending` with an `email_due_at`, and the
+ * email sweep decides later: `sent`, or `skipped` with the reason — seen in the app
+ * first, already resolved, switched off, or already emailed today.
+ */
+export const notificationEmailStatusEnum = pgEnum('notification_email_status', ['none', 'pending', 'sent', 'skipped'])
+
+/**
+ * The bell. One row per thing worth telling a user about, written by the code where it
+ * happened (capture worker, scheduler, export worker, plan change, HERE metering).
+ *
+ * `dedupe_key` makes writing idempotent: the same event reported twice — a retried job,
+ * a failing zone on its fifth failed hour — inserts nothing the second time.
+ */
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    type: notificationTypeEnum('type').notNull(),
+    tone: notificationToneEnum('tone').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    actionLabel: text('action_label'),
+    actionHref: text('action_href'),
+    /** Ids behind the message (zone, capture, export) — for grouping and the email sweep. */
+    data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
+    dedupeKey: text('dedupe_key').notNull(),
+    readAt: timestamp('read_at', { withTimezone: true }),
+
+    emailStatus: notificationEmailStatusEnum('email_status').notNull().default('none'),
+    emailDueAt: timestamp('email_due_at', { withTimezone: true }),
+    emailAttempts: integer('email_attempts').notNull().default(0),
+    emailedAt: timestamp('emailed_at', { withTimezone: true }),
+    emailSkipReason: text('email_skip_reason'),
+
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('notifications_user_dedupe_uq').on(t.userId, t.dedupeKey),
+    // The bell: a user's newest first.
+    index('notifications_user_created_idx').on(t.userId, t.createdAt),
+    // The email sweep: pending rows that are due.
+    index('notifications_email_due_idx').on(t.emailStatus, t.emailDueAt),
+  ],
+)
+
+export type NotificationRow = typeof notifications.$inferSelect
+
+/**
+ * A user's email choices. One switch today: everything else a notification says stays
+ * in the app, where it costs nothing. No row = the defaults.
+ */
+export const notificationPreferences = pgTable('notification_preferences', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  emailCaptureProblems: boolean('email_capture_problems').notNull().default(true),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const emailLogStatusEnum = pgEnum('email_log_status', ['sent', 'failed', 'suppressed'])
+
+/**
+ * Every email the platform tried to send — the cost meter for the email provider, and
+ * the memory behind its limits: codes per address per 10 minutes and per day, and
+ * "this alert already went out" (`dedupe_key`). `suppressed` = not sent because a
+ * limit said no. Holds the recipient and category only, never the body or a code.
+ */
+export const emailLog = pgTable(
+  'email_log',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    to: text('to').notNull(),
+    category: text('category').notNull(),
+    dedupeKey: text('dedupe_key').unique('email_log_dedupe_uq'),
+    status: emailLogStatusEnum('status').notNull(),
+    provider: text('provider').notNull(),
+    error: text('error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('email_log_to_category_created_idx').on(t.to, t.category, t.createdAt)],
+)

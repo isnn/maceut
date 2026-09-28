@@ -94,6 +94,20 @@ function JamLegend() {
   )
 }
 
+/**
+ * The zone's current scheduled failure streak, if it is in one: the newest settled
+ * scheduled cycle failed. Manual, missed and limit-skipped cycles don't count — they say
+ * nothing about whether scheduled collection works. Mirrors the server's rule for the
+ * "stopped collecting" notification (NOTIF), so the banner and the bell agree.
+ */
+function failingStreak(cycles: zonesApi.Capture[]): { since: string; count: number; error: string | null } | null {
+  const settled = cycles.filter((c) => c.trigger === 'scheduled' && (c.status === 'done' || c.status === 'failed'))
+  if (settled[0]?.status !== 'failed') return null
+  let count = 0
+  while (count < settled.length && settled[count]!.status === 'failed') count++
+  return { since: settled[count - 1]!.capturedAt, count, error: settled[0]!.error }
+}
+
 /** "23 Sep 10:27" in WIB — enough to compare two columns without repeating the year. */
 function shortWib(iso: string): string {
   return new Intl.DateTimeFormat('id-ID', {
@@ -232,6 +246,7 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
   }
 
   const traffic = selected ? (traffics[selected.id] ?? null) : null
+  const streak = cycles ? failingStreak(cycles) : null
   const loadingTraffic = selected?.status === 'done' && !(selected.id in traffics)
 
   return (
@@ -248,6 +263,17 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
 
       {error && <Alert variant="warning">{error}</Alert>}
       {notice && <Alert variant="success">{notice}</Alert>}
+      {streak && zone.status === 'collecting' && (
+        <Alert variant="warning">
+          <span className="block font-semibold">Scheduled collection has been failing since {formatWib(streak.since)}</span>
+          <span className="block mt-xs">
+            {streak.count === 1 ? 'The last scheduled capture failed.' : `The last ${streak.count} scheduled captures failed.`}{' '}
+            We retry at every scheduled time and collection resumes on its own once the cause clears — you don&rsquo;t
+            need to do anything. Frames missed in the meantime can&rsquo;t be recovered.
+          </span>
+          {streak.error && <span className="block mt-xs text-caption opacity-80">Last error: {streak.error}</span>}
+        </Alert>
+      )}
 
       {cycles === null ? (
         <div className="h-80 bg-canvas-secondary rounded-lg animate-pulse" />

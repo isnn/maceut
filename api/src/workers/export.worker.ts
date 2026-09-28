@@ -3,6 +3,7 @@ import type { Browser } from 'playwright-core'
 import { launchBrowser, renderWithPage, type RenderPageJob } from '../lib/render-page'
 import { config } from '../config/env'
 import * as exportRepo from '../repositories/export.repository'
+import * as notificationService from '../services/notification.service'
 import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import { slimTraffic } from '../services/capture.service'
@@ -112,10 +113,11 @@ export async function runExport(exportId: string): Promise<void> {
     await r2.upload(path, file, row.format === 'zip' ? 'application/zip' : 'video/webm')
     await exportRepo.complete(exportId, path, file.length, expiryFrom(new Date()))
     console.log(`[export] ${exportId} done — ${row.format}, ${frameIds.length} frames, ${file.length} bytes`)
+    await notificationService.onExportFinished(exportId)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[export] ${exportId} failed: ${message}`)
-    await exportRepo.fail(exportId, message.slice(0, 500))
+    if (await exportRepo.fail(exportId, message.slice(0, 500))) await notificationService.onExportFinished(exportId)
   } finally {
     clearInterval(heartbeat)
     await browser?.close().catch(() => undefined)

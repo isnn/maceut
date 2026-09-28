@@ -6,7 +6,6 @@ import { Button, buttonClass } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
 import { UsageMeter, AttributeRow } from '@/components/ui/UsageMeter'
-import { Checkbox } from '@/components/ui/Input'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { cn } from '@/lib/utils'
 import { IconCheck } from '@/components/ui/icons'
@@ -19,6 +18,7 @@ import type { Plan } from '@/features/auth/types'
 import { ApiError } from '@/types/api'
 import { PlanChangeDialog } from '@/features/plan/PlanChangeDialog'
 import { previewOwnPlanChange, type PlanImpact } from '@/features/plan/impact'
+import { NotificationSettings } from '@/features/notifications/NotificationSettings'
 
 const ALL_TABS = ['Usage', 'Account', 'Billing', 'Notifications'] as const
 type Tab = (typeof ALL_TABS)[number]
@@ -241,23 +241,7 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
         </div>
       )}
 
-      {tab === 'Notifications' && (
-        <Card className="p-lg space-y-md">
-          {[
-            'Email when a scheduled capture fails',
-            'Email when an animation finishes rendering',
-            'Weekly summary of zone usage',
-          ].map((label, i) => (
-            <label key={label} className="flex items-center gap-sm text-body text-text-secondary">
-              <Checkbox defaultChecked={i < 2} />
-              {label}
-            </label>
-          ))}
-          <p className="text-caption text-text-muted pt-sm border-t border-divider">
-            Email notifications do not send in the MVP — these preferences are stored for later.
-          </p>
-        </Card>
-      )}
+      {tab === 'Notifications' && <NotificationSettings variant={variant} />}
     </div>
   )
 }

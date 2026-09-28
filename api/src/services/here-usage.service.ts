@@ -1,6 +1,7 @@
 import * as usageRepo from '../repositories/here-usage.repository'
 import * as here from '../lib/here-traffic-client'
 import { TrafficUnavailableError } from '../errors'
+import * as notificationService from './notification.service'
 import type { HereSource, UsageCounts } from '../repositories/here-usage.repository'
 
 /**
@@ -30,10 +31,15 @@ export interface HereBudget {
   monthlyLimit: number | null
   /** Optional price per 1,000 requests, only to show an estimated spend. */
   costPer1000: number | null
+  /**
+   * Where the 80% and cap-reached alerts are emailed (NOTIF) — one address, e.g. the
+   * ops inbox. Null = in-app only (every staff account's bell).
+   */
+  alertEmail: string | null
 }
 
 export const BUDGET_KEY = 'here_budget'
-export const NO_BUDGET: HereBudget = { dailyLimit: null, monthlyLimit: null, costPer1000: null }
+export const NO_BUDGET: HereBudget = { dailyLimit: null, monthlyLimit: null, costPer1000: null, alertEmail: null }
 /** The share of a limit at which the admin page starts warning. */
 export const WARN_AT = 0.8
 
@@ -72,12 +78,43 @@ export function limitReached(budget: HereBudget, today: UsageCounts, month: Usag
 }
 
 /**
+ * Tells staff when usage crosses 80% of a cap or reaches it (NOTIF). Fire-and-forget:
+ * the notification service remembers what it already sent, so this is cheap to call on
+ * every metered request.
+ */
+export function reportThresholds(budget: HereBudget, todayRequests: number, monthRequests: number, now: Date): void {
+  const caps = [
+    { period: 'daily' as const, limit: budget.dailyLimit, used: todayRequests, periodKey: wibDay(now) },
+    { period: 'monthly' as const, limit: budget.monthlyLimit, used: monthRequests, periodKey: wibMonthStart(now) },
+  ]
+  for (const cap of caps) {
+    if (cap.limit === null) continue
+    const level = cap.used >= cap.limit ? 'reached' : cap.used >= Math.ceil(cap.limit * WARN_AT) ? 'warning' : null
+    if (!level) continue
+    void notificationService.onHereBudget({
+      level,
+      period: cap.period,
+      used: cap.used,
+      limit: cap.limit,
+      periodKey: cap.periodKey,
+      alertEmail: budget.alertEmail,
+    })
+  }
+}
+
+/**
  * Refuses the call if a cap is reached. The refusal is recorded against the source, so
  * the admin page shows what the cap actually cost in missed work.
+ *
+ * Returns what it read, so the caller can report thresholds after the call without
+ * reading the totals again. Null when no cap is set.
  */
-export async function assertWithinBudget(source: HereSource, now: Date = new Date()): Promise<void> {
+export async function assertWithinBudget(
+  source: HereSource,
+  now: Date = new Date(),
+): Promise<{ budget: HereBudget; today: UsageCounts; month: UsageCounts } | null> {
   const budget = await getBudget(now.getTime())
-  if (budget.dailyLimit === null && budget.monthlyLimit === null) return
+  if (budget.dailyLimit === null && budget.monthlyLimit === null) return null
 
   const [today, month] = await Promise.all([
     usageRepo.totalsOn(wibDay(now)),
@@ -85,8 +122,10 @@ export async function assertWithinBudget(source: HereSource, now: Date = new Dat
   ])
   if (limitReached(budget, today, month)) {
     await usageRepo.increment(wibDay(now), source, { refused: 1 })
+    reportThresholds(budget, today.requests, month.requests, now)
     throw new TrafficUnavailableError()
   }
+  return { budget, today, month }
 }
 
 /**
@@ -98,15 +137,20 @@ export async function meteredTrafficFlow(
   bbox: here.BBox,
   opts: here.TrafficFlowOptions = {},
 ): Promise<here.TrafficCollection> {
-  await assertWithinBudget(source)
-  const day = wibDay(new Date())
+  const now = new Date()
+  const read = await assertWithinBudget(source, now)
+  const day = wibDay(now)
+  // Counts either way: a request that failed was still sent, and may still be billed.
+  const report = () => read && reportThresholds(read.budget, read.today.requests + 1, read.month.requests + 1, now)
   try {
     const flow = await here.getTrafficFlow(bbox, opts)
     await usageRepo.increment(day, source, { requests: 1 }).catch(() => undefined)
+    report()
     return flow
   } catch (err) {
     // A request that failed was still sent — it counts, and it may still be billed.
     await usageRepo.increment(day, source, { requests: 1, failed: 1 }).catch(() => undefined)
+    report()
     throw err
   }
 }

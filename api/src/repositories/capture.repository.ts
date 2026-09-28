@@ -1,4 +1,4 @@
-import { eq, and, asc, desc, gte, lte, sql } from 'drizzle-orm'
+import { eq, and, asc, desc, gte, inArray, lt, lte, ne, sql } from 'drizzle-orm'
 import { db } from '../lib/drizzle-client'
 import { captures, zones } from '../../drizzle/schema'
 import type { RoadClass } from '../types/plan'
@@ -151,6 +151,32 @@ export async function latestForZone(zoneId: string): Promise<CaptureRecord | und
     .select()
     .from(captures)
     .where(eq(captures.zoneId, zoneId))
+    .orderBy(desc(captures.capturedAt))
+    .limit(1)
+  return rows[0]
+}
+
+/**
+ * The zone's latest SETTLED scheduled cycle (done or failed) before `before` — what
+ * decides whether a failure starts an incident and whether a success ends one. Manual,
+ * missed and limit-skipped cycles are ignored: they say nothing about whether scheduled
+ * collection is working.
+ */
+export async function lastSettledScheduled(
+  zoneId: string,
+  opts: { before?: Date; excludeId?: string } = {},
+): Promise<Pick<CaptureRecord, 'id' | 'status' | 'capturedAt'> | undefined> {
+  const conditions = [
+    eq(captures.zoneId, zoneId),
+    eq(captures.trigger, 'scheduled'),
+    inArray(captures.status, ['done', 'failed']),
+  ]
+  if (opts.before) conditions.push(lt(captures.capturedAt, opts.before))
+  if (opts.excludeId) conditions.push(ne(captures.id, opts.excludeId))
+  const rows = await db
+    .select({ id: captures.id, status: captures.status, capturedAt: captures.capturedAt })
+    .from(captures)
+    .where(and(...conditions))
     .orderBy(desc(captures.capturedAt))
     .limit(1)
   return rows[0]
