@@ -26,6 +26,8 @@ export interface ExportSpec {
 
 export interface ExportJob {
   id: string
+  /** The zone's name when the export was requested. */
+  zoneName: string
   zoneId: string
   format: ExportFormat
   status: ExportStatus
@@ -63,6 +65,11 @@ export function createExport(zoneId: string, input: CreateExportInput): Promise<
 
 export function getZoneExports(zoneId: string): Promise<ExportJob[]> {
   return apiClient.get<ExportJob[]>(`/zones/${zoneId}/exports`)
+}
+
+/** The account's latest exports across zones — the dashboard card. */
+export function getRecentExports(limit = 4): Promise<ExportJob[]> {
+  return apiClient.get<ExportJob[]>(`/exports?limit=${limit}`)
 }
 
 export function getExport(id: string): Promise<ExportJob> {

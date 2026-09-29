@@ -134,6 +134,37 @@ router.get('/zones/:id/exports', exportController.listForZone)
 
 /**
  * @swagger
+ * /exports:
+ *   get:
+ *     summary: Export terbaru akun ini, lintas semua zona (dashboard)
+ *     description: >
+ *       Kartu "Recent exports" di dashboard. Bentuk tiap item sama dengan riwayat per
+ *       zona, termasuk `downloadUrl` (signed, pendek) bila sudah selesai.
+ *     tags: [Exports]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 5, maximum: 20 }
+ *     responses:
+ *       200:
+ *         description: Export terbaru, terbaru dulu
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/Export' }
+ *       401: { description: UNAUTHORIZED }
+ *       422: { description: VALIDATION_ERROR — limit di luar 1–20 }
+ */
+router.get('/exports', exportController.recent)
+
+/**
+ * @swagger
  * /exports/{id}:
  *   get:
  *     summary: Satu export — di-poll selama render berjalan

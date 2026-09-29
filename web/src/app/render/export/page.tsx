@@ -68,6 +68,22 @@ function toBase64(blob: Blob): Promise<string> {
   })
 }
 
+/** The capture thumbnail's width; 2× the dashboard tile, so it stays sharp on retina. */
+const THUMB_WIDTH = 320
+
+/** A downscaled JPEG of `source`, keeping its aspect ratio. */
+function thumbnailBlob(source: HTMLCanvasElement, width: number): Promise<Blob> {
+  const thumb = document.createElement('canvas')
+  thumb.width = width
+  thumb.height = Math.round((source.height / source.width) * width)
+  const ctx = thumb.getContext('2d')!
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(source, 0, 0, thumb.width, thumb.height)
+  return new Promise((resolve, reject) =>
+    thumb.toBlob((b) => (b ? resolve(b) : reject(new Error('Thumbnail could not be encoded.'))), 'image/jpeg', 0.8),
+  )
+}
+
 /** Output is handed over in pieces: one huge base64 string would strain the bridge. */
 const CHUNK_BYTES = 4 * 1024 * 1024
 
@@ -101,6 +117,13 @@ async function runExport(job: ExportJob): Promise<void> {
       const name = `${String(i + 1).padStart(3, '0')}-${wibStamp(frame.capturedAt)}.png`
       await bridge.__exportPng(i, name, await toBase64(png))
       if (!(await bridge.__exportProgress(i + 1))) return // cancelled
+    }
+    // A capture image (CAP-02) also gets a small JPEG for lists like the dashboard's
+    // "Latest captures" — ~20 KB instead of the ~1 MB full image, drawn from the same
+    // canvas, so it costs no second render.
+    if (job.format === 'png') {
+      const thumb = await thumbnailBlob(canvas, THUMB_WIDTH)
+      await bridge.__exportPng(1, 'thumb.jpg', await toBase64(thumb))
     }
     return
   }

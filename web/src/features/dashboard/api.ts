@@ -7,9 +7,8 @@
  * storage as `zones.length * 1.37`, and seats as `plan === 'free' ? 1 : 3`, none of
  * which measured anything.
  *
- * `null` currently means the captures table does not exist yet (CAP-01), or HERE is
- * not answering. Each becomes a real number when its feature lands, with no change
- * here.
+ * Every figure is measured. `null` is left only where there is truly nothing to say:
+ * no road counts while HERE is silent, no peak before anything is collected today.
  */
 
 import { apiClient } from '@/lib/api-client'
@@ -23,9 +22,14 @@ export interface CollectionHealth {
   nextCaptureInDays: number | null
   zonesCollecting: number
   roadsReporting: number | null
-  missedCaptures: number | null
+  /** Collecting zones whose latest scheduled capture failed. */
+  zonesFailing: number
+  /** Today (WIB). */
+  problemsToday: { failed: number; missed: number }
+  /** Today's highest mean jam factor, 0–10, with its WIB time and zone. */
   peakIndex: number | null
   peakAt: string | null
+  peakZoneName: string | null
 }
 
 export interface UsageSummary {
@@ -41,8 +45,9 @@ export interface UsageSummary {
   capturesLimit: number
 
   capturesToday: number | null
-  rendersThisMonth: number | null
-  storageUsedGb: number | null
+  exportsThisMonth: number
+  storageUsedBytes: number
+  storageUsedGb: number
   storageLimitGb: number
 
   /**

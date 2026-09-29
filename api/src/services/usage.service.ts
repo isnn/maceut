@@ -2,6 +2,8 @@ import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as userRepo from '../repositories/user.repository'
 import * as captureRepo from '../repositories/capture.repository'
+import * as exportRepo from '../repositories/export.repository'
+import { wibMonthStart } from './here-usage.service'
 import { NotFoundError } from '../errors'
 import { PLAN_LIMITS, type Plan } from '../types/plan'
 import { framesPerDay, type CaptureInterval } from '../types/schedule'
@@ -13,9 +15,10 @@ import { framesPerDay, type CaptureInterval } from '../types/schedule'
  * dashboard's whole job is to be trusted at a glance — a plausible-looking number
  * that was invented is worse than a dash, since nobody thinks to check it.
  *
- * `null` currently means "captures do not exist yet" (CAP-01) or "HERE is not
- * answering". Each one becomes a real number when its feature lands; no caller
- * changes.
+ * Every figure is now measured. The last `null`s — exports, storage, missed captures,
+ * the day's peak — became real once exports (FE-21) and capture images (CAP-02)
+ * existed. `null` is left only where there is genuinely nothing to report (no capture
+ * collected today has a peak).
  */
 
 export interface UsageSummary {
@@ -32,8 +35,11 @@ export interface UsageSummary {
 
   /** Measured since the captures table landed. */
   capturesToday: number | null
-  rendersThisMonth: number | null
-  storageUsedGb: number | null
+  /** Studio exports finished this WIB calendar month. */
+  exportsThisMonth: number
+  /** Capture images plus export files still held in R2. */
+  storageUsedBytes: number
+  storageUsedGb: number
   storageLimitGb: number
 
   /**
@@ -62,10 +68,14 @@ export interface CollectionHealth {
   zonesCollecting: number
   /** Summed from zones' roadsCount; null while HERE is unavailable. */
   roadsReporting: number | null
-  /** Null until captures exist. */
-  missedCaptures: number | null
+  /** Collecting zones whose latest scheduled capture failed — a failure streak. */
+  zonesFailing: number
+  /** Today (WIB): captures that failed, and firings missed while the system was down. */
+  problemsToday: { failed: number; missed: number }
+  /** Today's highest mean jam factor (0–10) and when/where; null before any capture today. */
   peakIndex: number | null
   peakAt: string | null
+  peakZoneName: string | null
 }
 
 const WIB_OFFSET_MINUTES = 7 * 60
@@ -92,8 +102,15 @@ export async function getUsage(userId: string): Promise<UsageSummary> {
 
   const activeSchedules = schedules.filter((s) => s.status === 'active')
 
-  // BR-006 counts per WIB calendar day, and excludes rows that record a refusal.
-  const capturesToday = await captureRepo.countForWibDay(userId, new Date())
+  const now = new Date()
+  const [capturesToday, exportsThisMonth, imageBytes, exportBytes] = await Promise.all([
+    // BR-006 counts per WIB calendar day, and excludes rows that record a refusal.
+    captureRepo.countForWibDay(userId, now),
+    exportRepo.countDoneSince(userId, new Date(`${wibMonthStart(now)}T00:00:00+07:00`)),
+    captureRepo.imageBytesForUser(userId),
+    exportRepo.fileBytesForUser(userId),
+  ])
+  const storageUsedBytes = imageBytes + exportBytes
 
   // The busiest day, not the sum across the week — the daily limit is per day, and a
   // window that only runs on Sunday costs Monday nothing.
@@ -122,8 +139,9 @@ export async function getUsage(userId: string): Promise<UsageSummary> {
     capturesLimit: limits.capturesLimit,
 
     capturesToday,
-    rendersThisMonth: null,
-    storageUsedGb: null,
+    exportsThisMonth,
+    storageUsedBytes,
+    storageUsedGb: Math.round((storageUsedBytes / 1024 ** 3) * 100) / 100,
     storageLimitGb: limits.storageGb,
 
     pausedByPlan: {
@@ -157,14 +175,26 @@ export async function getCollectionHealth(userId: string): Promise<CollectionHea
   const roadsReporting =
     withRoads.length > 0 ? withRoads.reduce((sum, z) => sum + (z.roadsCount ?? 0), 0) : null
 
-  const pausedCount =
-    zones.filter((z) => z.status === 'paused').length + schedules.filter((s) => s.status === 'paused').length
+  // Only what the PLAN paused counts against health (ADR-020). A zone the user paused
+  // is doing exactly what they asked; calling it a problem would cry wolf.
+  const pausedByPlanCount =
+    zones.filter((z) => z.status === 'paused' && z.pausedByPlan).length +
+    schedules.filter((s) => s.status === 'paused' && s.pausedByPlan).length
+
+  // A zone is failing when its latest scheduled capture failed — the same rule as the
+  // "stopped collecting" notification and the zone page banner (NOTIF).
+  const latest = await Promise.all(collecting.map((z) => captureRepo.lastSettledScheduled(z.id)))
+  const zonesFailing = latest.filter((c) => c?.status === 'failed').length
+
+  const [problemsToday, peak] = await Promise.all([
+    captureRepo.problemsForWibDay(userId, now),
+    captureRepo.peakForWibDay(userId, now),
+  ])
 
   // `idle` is not a failure — an account that has not scheduled anything is working
   // exactly as configured, and calling that "degraded" would cry wolf.
   const status: CollectionHealth['status'] =
-    active.length === 0 ? 'idle' : pausedCount > 0 ? 'degraded' : 'healthy'
-
+    active.length === 0 ? 'idle' : zonesFailing > 0 || pausedByPlanCount > 0 ? 'degraded' : 'healthy'
 
 
   return {
@@ -174,9 +204,11 @@ export async function getCollectionHealth(userId: string): Promise<CollectionHea
     nextCaptureInDays: nextFire ? wibDayOffset(now, nextFire) : null,
     zonesCollecting: collecting.length,
     roadsReporting,
-    missedCaptures: null,
-    peakIndex: null,
-    peakAt: null,
+    zonesFailing,
+    problemsToday,
+    peakIndex: peak ? Math.round(peak.jamFactorAvg * 10) / 10 : null,
+    peakAt: peak ? formatHHMM(nowInWibMinutes(peak.capturedAt)) : null,
+    peakZoneName: peak?.zoneName ?? null,
   }
 }
 
