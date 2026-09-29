@@ -14,19 +14,12 @@ const PILL_TONE: Record<PillTone, string> = {
   neutral: 'bg-canvas-secondary text-text-secondary',
 }
 
-const PILL_DOT: Record<PillTone, string> = {
-  success: 'bg-success-icon',
-  warning: 'bg-warning-icon',
-  danger: 'bg-danger-icon',
-  brand: 'bg-primary',
-  info: 'bg-info',
-  neutral: 'bg-text-muted',
-}
-
 /**
- * The one status shape: a tinted pill with a coloured dot. Zone, capture window,
- * capture and export statuses all use it, so "running", "failed" and "paused" look the
- * same wherever they appear. `pulse` marks something still in progress.
+ * The one label shape: a tinted pill. Zone, capture window, capture and export statuses,
+ * and categories (road class, plan, role), all use it, so they look the same wherever
+ * they appear. No dot: the tint already carries the colour, and a dot on every label
+ * crowded tables and sat off-centre in tight cells. `pulse` gently pulses a label for
+ * something still in progress.
  */
 export function StatusPill({
   tone,
@@ -45,12 +38,12 @@ export function StatusPill({
     <span
       title={title}
       className={cn(
-        'inline-flex items-center gap-xs text-micro font-semibold rounded-full px-sm py-xs whitespace-nowrap tabular-nums',
+        'inline-flex items-center text-micro font-semibold rounded-full px-sm py-xs whitespace-nowrap tabular-nums',
         PILL_TONE[tone],
+        pulse && 'animate-pulse',
         className,
       )}
     >
-      <span aria-hidden className={cn('w-1.5 h-1.5 rounded-full shrink-0', PILL_DOT[tone], pulse && 'animate-pulse')} />
       {children}
     </span>
   )

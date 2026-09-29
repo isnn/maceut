@@ -174,6 +174,17 @@ export function NotificationBell() {
     if (row.href) router.push(row.href)
   }
 
+  /** Marks a row read without leaving the page — the check button on each unread row. */
+  async function markRowRead(row: Row) {
+    const unread = row.items.filter((n) => !n.read)
+    if (!unread.length) return
+    setFeed((f) => ({
+      items: f.items.map((n) => (unread.some((u) => u.id === n.id) ? { ...n, read: true } : n)),
+      unreadCount: Math.max(0, f.unreadCount - unread.length),
+    }))
+    await Promise.allSettled(unread.map((n) => notificationsApi.markRead(n.id)))
+  }
+
   async function markAllRead() {
     setFeed((f) => ({ items: f.items.map((n) => ({ ...n, read: true })), unreadCount: 0 }))
     await notificationsApi.markAllRead().catch(() => undefined)
@@ -223,23 +234,23 @@ export function NotificationBell() {
                   const isUnread = row.items.some((n) => !n.read)
                   const { Icon, className } = TONE_MARK[head.tone]
                   return (
-                    <li key={row.key} className="border-b border-divider last:border-b-0">
+                    <li
+                      key={row.key}
+                      className={cn(
+                        'relative border-b border-divider last:border-b-0 transition-colors hover:bg-canvas-secondary',
+                        isUnread && 'bg-primary-soft/25',
+                      )}
+                    >
                       <button
                         type="button"
                         onClick={() => void open(row, close)}
-                        className={cn(
-                          'w-full text-left px-lg py-md flex gap-sm transition-colors hover:bg-canvas-secondary',
-                          isUnread && 'bg-primary-soft/25',
-                        )}
+                        className="w-full text-left pl-lg pr-[44px] py-md flex gap-sm"
                       >
                         <span aria-hidden className={cn('w-6 h-6 shrink-0 rounded-full flex items-center justify-center', className)}>
                           <Icon size={14} />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="flex items-start gap-sm">
-                            <span className="text-label font-semibold text-text-primary flex-1">{row.title}</span>
-                            {isUnread && <span aria-label="Unread" className="mt-[6px] w-2 h-2 rounded-full bg-primary shrink-0" />}
-                          </span>
+                          <span className="block text-label font-semibold text-text-primary">{row.title}</span>
                           <span className="block text-caption text-text-secondary mt-xs">{row.body}</span>
                           <span className="flex items-center gap-md mt-xs">
                             <span className="text-micro text-text-muted">{timeAgo(head.createdAt, now)}</span>
@@ -247,6 +258,22 @@ export function NotificationBell() {
                           </span>
                         </span>
                       </button>
+                      {/* A sibling, not nested: a button can't sit inside the row's button. */}
+                      {isUnread ? (
+                        <button
+                          type="button"
+                          onClick={() => void markRowRead(row)}
+                          aria-label={`Mark “${row.title}” as read`}
+                          title="Mark as read"
+                          className="absolute top-md right-md w-7 h-7 rounded-full flex items-center justify-center text-primary bg-primary-soft hover:bg-primary hover:text-on-primary transition-colors focus:outline-none focus-visible:outline-2 focus-visible:outline-primary"
+                        >
+                          <IconCheck size={14} />
+                        </button>
+                      ) : (
+                        <span aria-label="Read" title="Read" className="absolute top-md right-md w-7 h-7 flex items-center justify-center text-text-muted">
+                          <IconCheck size={14} />
+                        </span>
+                      )}
                     </li>
                   )
                 })}

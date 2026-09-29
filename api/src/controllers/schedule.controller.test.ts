@@ -30,11 +30,13 @@ vi.mock('../repositories/schedule.repository', () => ({
   softDelete: vi.fn(),
 }))
 vi.mock('../repositories/zone.repository', () => ({ findById: vi.fn() }))
+vi.mock('../repositories/capture.repository', () => ({ countDoneBySchedule: vi.fn(async () => new Map()) }))
 
 import { app } from '../app'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as userRepo from '../repositories/user.repository'
+import * as captureRepo from '../repositories/capture.repository'
 import { auth } from '../lib/auth'
 import type { Plan } from '../types/plan'
 
@@ -268,6 +270,21 @@ describe('GET /schedules', () => {
     expect(res.status).toBe(200)
     expect(res.body.data).toHaveLength(1)
     expect(scheduleRepo.findByUserId).toHaveBeenCalledWith(USER_ID)
+  })
+
+  it("reports each window's collected frames and the scheduler's next firing", async () => {
+    signedIn()
+    vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([
+      row({ nextFireAt: new Date('2026-09-30T00:00:00Z') } as never),
+      row({ id: 'paused-1', status: 'paused', nextFireAt: new Date('2026-09-30T00:00:00Z') } as never),
+    ])
+    vi.mocked(captureRepo.countDoneBySchedule).mockResolvedValue(new Map([[SCHEDULE_ID, 42]]))
+
+    const res = await request(app).get('/schedules')
+
+    expect(res.body.data[0]).toMatchObject({ capturedFrames: 42, nextFireAt: '2026-09-30T00:00:00.000Z' })
+    // A paused window has no next firing, whatever the column still holds.
+    expect(res.body.data[1]).toMatchObject({ capturedFrames: 0, nextFireAt: null })
   })
 
   it('filters to one zone when asked', async () => {

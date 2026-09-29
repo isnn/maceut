@@ -254,11 +254,7 @@ export default function SchedulePage() {
             </div>
           </Card>
 
-          <Card className="p-lg">
-            <p className="text-label text-text-secondary">Next collection</p>
-            <p className="text-page-title font-bold text-text-primary tabular-nums mt-xs">10:00</p>
-            <p className="text-caption text-text-muted mt-xs">in 21 minutes · {activeCount} windows</p>
-          </Card>
+          <NextCollectionCard windows={windows ?? []} zones={zones} />
         </div>
       </div>
 
@@ -607,3 +603,78 @@ function WindowDialog({
     </Dialog.Root>
   )
 }
+
+/** "06:00" in WIB. */
+function clockWib(d: Date): string {
+  return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jakarta' }).format(d)
+}
+
+/** Whole days between two instants on Jakarta's calendar. */
+function wibDaysBetween(from: Date, to: Date): number {
+  const day = (d: Date) => Math.floor((d.getTime() + 7 * 3600_000) / 86_400_000)
+  return day(to) - day(from)
+}
+
+/** "in 21 min", "in 2 h 5 min" — for the hours ahead; beyond a day the date says it. */
+function countdown(ms: number): string {
+  const minutes = Math.max(0, Math.round(ms / 60_000))
+  if (minutes < 1) return 'any moment now'
+  if (minutes < 60) return `in ${minutes} min`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m ? `in ${h} h ${m} min` : `in ${h} h`
+}
+
+/**
+ * When the scheduler fires next, from each window's `nextFireAt` — the instant the
+ * scheduler itself claims, not a prediction. This card used to be a hardcoded "10:00 ·
+ * in 21 minutes". Ticks every 30 s so the countdown stays true while the page is open.
+ */
+function NextCollectionCard({ windows, zones }: { windows: CaptureWindow[]; zones: Zone[] }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(t)
+  }, [])
+
+  const upcoming = windows
+    .filter((w) => w.active && w.nextFireAt)
+    .map((w) => ({ w, at: Date.parse(w.nextFireAt!) }))
+    .sort((a, b) => a.at - b.at)
+  const first = upcoming[0]
+
+  if (!first) {
+    return (
+      <Card className="p-lg">
+        <p className="text-label text-text-secondary">Next collection</p>
+        <p className="text-page-title font-bold text-text-primary tabular-nums mt-xs">—</p>
+        <p className="text-caption text-text-muted mt-xs">
+          {windows.some((w) => w.active) ? 'Being scheduled — check back in a moment.' : 'No active capture window.'}
+        </p>
+      </Card>
+    )
+  }
+
+  // Everything firing at that same instant.
+  const together = upcoming.filter((u) => u.at === first.at)
+  const zoneNames = [...new Set(together.map((u) => zones.find((z) => z.id === u.w.zoneId)?.name ?? 'a zone'))]
+  const at = new Date(first.at)
+  const days = wibDaysBetween(new Date(now), at)
+  const when = days <= 0 ? `today · ${countdown(first.at - now)}` : days === 1 ? 'tomorrow' : new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' }).format(at)
+  const who = zoneNames.length === 1 ? zoneNames[0] : `${zoneNames.length} zones`
+
+  return (
+    <Card className="p-lg">
+      <p className="text-label text-text-secondary">Next collection</p>
+      <p className="text-page-title font-bold text-text-primary tabular-nums mt-xs">
+        {clockWib(at)} <span className="text-body font-medium text-text-muted">WIB</span>
+      </p>
+      <p className="text-caption text-text-muted mt-xs">{when}</p>
+      <p className="text-caption text-text-secondary mt-xs truncate">
+        {who} · {together.length} {together.length === 1 ? 'window' : 'windows'}
+        {upcoming.length > together.length && <span className="text-text-muted"> · then {clockWib(new Date(upcoming.find((u) => u.at > first.at)!.at))}</span>}
+      </p>
+    </Card>
+  )
+}
+

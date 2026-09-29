@@ -146,6 +146,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-23** Halaman zona: label & tabel konsisten, pill status tunggal, tombol terisi warna brand (Capture now / Open in Studio), peta Captures lebih gelap dengan nama tempat tetap terbaca | permintaan user |
 | ✅ | **FE-24** Label konsisten di seluruh tabel (daftar zona, admin, jadwal, dashboard): satu bentuk pill untuk status & kategori; kartu Zone details baru; ikon Lucide; paginasi selalu tampil; format tanggal tunggal | permintaan user |
 | ✅ | **FE-25** Dashboard: semua metrik data nyata (storage, export bulan ini, zona gagal, masalah hari ini, puncak kemacetan), copy baru, thumbnail kecil di Latest captures | permintaan user |
+| ✅ | **FE-26** Pill tanpa titik, tombol tandai-dibaca per notifikasi, error teknis diterjemahkan, kartu Next collection & frame terkumpul dari data nyata | permintaan user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -1841,6 +1842,24 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
     signed (200 image/jpeg) & dicek visual; capture lama → 404 (fallback). /usage nyata:
     44 capture hari ini, 4 export bulan ini, 61,6 MB, puncak 2,6 pukul 16:45 di YOG.
   VERIFIKASI: 409 test API, tsc + eslint bersih kedua paket. UI belum dilihat di browser.
+
+[2026-09-29d] FE-26 — pill tanpa titik, tandai-dibaca, error ramah, Next collection nyata.
+
+  - `StatusPill` tanpa titik (warna sudah dibawa tint-nya; titik di setiap label memenuhi
+    tabel & tidak rata di sel sempit). Status yang sedang berjalan berdenyut pelan.
+  - Bell: tombol centang per notifikasi belum dibaca → tandai dibaca tanpa pindah halaman;
+    yang sudah dibaca menampilkan centang abu.
+  - Error teknis tidak lagi sampai ke user: `user-facing-errors.ts` menerjemahkan error
+    export ("page.evaluate: Target crashed" → "The render ran out of memory partway
+    through…") dan capture (limit, missed, HERE mati) ke bahasa Inggris yang jelas. Error
+    mentah tetap di database untuk debugging.
+  - Jadwal: kartu "Next collection" (dulu hardcode "10:00 · in 21 minutes") kini dari
+    `nextFireAt` tiap jendela — kolom yang dipakai scheduler sendiri — dengan hitung mundur
+    30 detik, zona & jumlah jendela yang menembak bersamaan, dan jadwal berikutnya.
+    `capturedFrames` (dulu selalu 0) kini hitungan capture selesai per jendela.
+  DIUJI LANGSUNG: jendela NOON → next 2026-09-29T23:00Z (06:00 WIB), 194 frame terkumpul;
+    export gagal → pesan ramah.
+  VERIFIKASI: 421 test API, tsc + eslint bersih kedua paket. UI belum dilihat di browser.
 
 ---
 
