@@ -23,7 +23,7 @@ import * as internalApi from '@/features/internal/api'
 import type { InternalUserRow } from '@/features/internal/types'
 import type { Plan, PlatformRole } from '@/features/auth/types'
 
-const ROLE_LABEL: Record<PlatformRole, string> = { user: 'User', internal: 'Internal' }
+const ROLE_LABEL: Record<PlatformRole, string> = { user: 'Customer', internal: 'Internal' }
 
 export default function InternalUsersPage() {
   const [rows, setRows] = useState<InternalUserRow[] | null>(null)

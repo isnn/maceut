@@ -10,7 +10,6 @@ import { RoadClassBadge, StatusPill, ZoneStatusPill } from '@/components/ui/Badg
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { CardTitle, SectionHeader } from '@/components/shared/SectionHeader'
-import { Stat } from '@/components/shared/Stat'
 import { showToast } from '@/components/ui/Toaster'
 import { HelpTip } from '@/components/ui/HelpTip'
 import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
@@ -19,18 +18,16 @@ import {
   IconArrowLeft,
   IconCalendar,
   IconCamera,
+  IconClipboardList,
   IconClock,
   IconFilm,
-  IconLayers,
-  IconMapPin,
+  IconMap,
   IconPause,
   IconPencil,
   IconPlay,
-  IconRoad,
-  IconRuler,
   IconTrash,
 } from '@/components/ui/icons'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDate, formatNumber } from '@/lib/utils'
 import { PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import { MapCanvas } from './MapCanvas'
@@ -250,7 +247,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
       <div className="grid grid-cols-1 laptop:grid-cols-[1fr_340px] gap-xl items-start">
         <div className="bg-card border border-border rounded-lg p-lg space-y-md">
           <CardTitle
-            icon={<IconMapPin size={16} />}
+            icon={<IconMap size={16} />}
             aside={
               <HelpTip label="About the boundary">
                 The boundary is set when the zone is created and can&rsquo;t be redrawn here. To cover a different
@@ -287,20 +284,48 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
             </>
           ) : (
             <>
-              <CardTitle icon={<IconLayers size={16} />}>Zone details</CardTitle>
+              <CardTitle icon={<IconClipboardList size={16} />}>Zone details</CardTitle>
 
-              <dl className="grid grid-cols-1 gap-lg">
-                <Stat
-                  icon={<IconLayers size={18} />}
-                  label="Road class"
-                  value={<RoadClassBadge roadClass={zone.roadClass} />}
-                  hint={cappedByPlan ? `Capped to ${ROAD_CLASS_LABEL[maxRoadClass]} on your plan` : undefined}
-                />
-                <Stat icon={<IconMapPin size={18} />} label="Area" value={`${zone.areaKm2} km²`} />
-                <Stat icon={<IconRoad size={18} />} label="Roads" value={zone.roadsCount ?? '—'} />
-                <Stat icon={<IconRuler size={18} />} label="Total length" value={zone.lengthKm === null ? '—' : `${zone.lengthKm} km`} />
-                <Stat icon={<IconClock size={18} />} label="Capture cadence" value={zone.cadence ?? 'Not scheduled'} />
-                <Stat icon={<IconCalendar size={18} />} label="Created" value={formatDate(zone.createdAt)} />
+              {/* What it collects: the class, and what that class adds up to here. */}
+              <div className="space-y-sm">
+                <div className="flex flex-wrap items-center justify-between gap-sm">
+                  <span className="text-caption text-text-muted">Road class</span>
+                  <RoadClassBadge roadClass={zone.roadClass} />
+                </div>
+                {cappedByPlan && (
+                  <p className="text-micro text-warning-text text-right">
+                    Captures use {ROAD_CLASS_LABEL[maxRoadClass]} on your plan
+                  </p>
+                )}
+              </div>
+
+              <dl className="grid grid-cols-3 gap-sm">
+                <Metric label="Area" value={formatNumber(zone.areaKm2, zone.areaKm2 < 10 ? 2 : 0)} unit="km²" />
+                <Metric label="Roads" value={zone.roadsCount === null ? '—' : formatNumber(zone.roadsCount)} />
+                <Metric label="Length" value={zone.lengthKm === null ? '—' : formatNumber(zone.lengthKm, zone.lengthKm < 100 ? 1 : 0)} unit={zone.lengthKm === null ? undefined : 'km'} />
+              </dl>
+
+              <dl className="divide-y divide-divider border-t border-divider">
+                <div className="flex items-start justify-between gap-md py-md">
+                  <dt className="flex items-center gap-sm text-caption text-text-muted shrink-0">
+                    <IconClock size={14} />
+                    Capture cadence
+                  </dt>
+                  <dd className="text-label font-semibold text-text-primary text-right">
+                    {zone.cadence ?? (
+                      <Link href="/schedule" className="text-info no-underline hover:underline font-medium">
+                        Not scheduled — set a window
+                      </Link>
+                    )}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-md pt-md">
+                  <dt className="flex items-center gap-sm text-caption text-text-muted">
+                    <IconCalendar size={14} />
+                    Created
+                  </dt>
+                  <dd className="text-label font-semibold text-text-primary tabular-nums">{formatDate(zone.createdAt)}</dd>
+                </div>
               </dl>
 
             </>
@@ -470,6 +495,20 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
         onConfirm={remove}
         onCancel={() => setConfirmDelete(false)}
       />
+    </div>
+  )
+}
+
+/** One headline number of the zone: big value, small unit, a label under it. */
+function Metric({ label, value, unit }: { label: string; value: string; unit?: string }) {
+  return (
+    // Label first in the markup (a <dl> wants dt before dd), shown under the number.
+    <div className="rounded-md bg-primary-soft/50 px-sm py-md text-center min-w-0 flex flex-col-reverse">
+      <dt className="text-micro text-text-muted mt-[2px]">{label}</dt>
+      <dd className="text-heading-sm font-bold text-text-primary tabular-nums truncate">
+        {value}
+        {unit && <span className="text-caption font-medium text-text-secondary ml-[2px]">{unit}</span>}
+      </dd>
     </div>
   )
 }

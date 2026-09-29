@@ -1,28 +1,16 @@
-import { ROAD_CLASS_LABEL } from '@/lib/constants'
+import { PLAN_LABEL, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import type { RoadClass } from '@/features/zones/types'
+import type { Plan } from '@/features/auth/types'
 
-const ROAD_CLASS_STYLE: Record<RoadClass, string> = {
-  nasional: 'bg-canvas-secondary text-text-muted border border-border',
-  nasional_provinsi: 'bg-primary-soft text-[#5A35F3]',
-  semua: 'bg-success-bg text-success-text',
-}
-
-export function RoadClassBadge({ roadClass, className }: { roadClass: RoadClass; className?: string }) {
-  return (
-    <span className={cn('text-micro rounded-xs px-sm py-xs', ROAD_CLASS_STYLE[roadClass], className)}>
-      {ROAD_CLASS_LABEL[roadClass]}
-    </span>
-  )
-}
-
-export type PillTone = 'success' | 'warning' | 'danger' | 'brand' | 'neutral'
+export type PillTone = 'success' | 'warning' | 'danger' | 'brand' | 'info' | 'neutral'
 
 const PILL_TONE: Record<PillTone, string> = {
   success: 'bg-success-bg text-success-text',
   warning: 'bg-warning-bg text-warning-text',
   danger: 'bg-danger-bg text-danger-text',
   brand: 'bg-primary-soft text-primary',
+  info: 'bg-info-bg text-info',
   neutral: 'bg-canvas-secondary text-text-secondary',
 }
 
@@ -31,6 +19,7 @@ const PILL_DOT: Record<PillTone, string> = {
   warning: 'bg-warning-icon',
   danger: 'bg-danger-icon',
   brand: 'bg-primary',
+  info: 'bg-info',
   neutral: 'bg-text-muted',
 }
 
@@ -67,6 +56,43 @@ export function StatusPill({
   )
 }
 
+// --- category labels, on the same pill -------------------------------------------------
+// Categories use blue and purple and grey only — green, amber and red stay reserved for
+// states (running, needs attention, failed), so a label never reads as a status.
+
+const ROAD_CLASS_TONE: Record<RoadClass, PillTone> = {
+  nasional: 'neutral',
+  nasional_provinsi: 'info',
+  semua: 'brand',
+}
+
+/** The road class a zone collects (BR-021). */
+export function RoadClassBadge({ roadClass, className }: { roadClass: RoadClass; className?: string }) {
+  return (
+    <StatusPill tone={ROAD_CLASS_TONE[roadClass]} className={className}>
+      {ROAD_CLASS_LABEL[roadClass]}
+    </StatusPill>
+  )
+}
+
+const PLAN_TONE: Record<Plan, PillTone> = { free: 'neutral', standard: 'info', premium: 'brand' }
+
+export function PlanPill({ plan, className }: { plan: Plan; className?: string }) {
+  return (
+    <StatusPill tone={PLAN_TONE[plan]} className={className}>
+      {PLAN_LABEL[plan]}
+    </StatusPill>
+  )
+}
+
+export function RolePill({ role, className }: { role: 'user' | 'internal'; className?: string }) {
+  return (
+    <StatusPill tone={role === 'internal' ? 'brand' : 'neutral'} className={className}>
+      {role === 'internal' ? 'Internal' : 'Customer'}
+    </StatusPill>
+  )
+}
+
 /** Whether a zone's windows are running (3f, 3g). */
 export function ZoneStatusPill({
   status,
@@ -90,17 +116,29 @@ export function ZoneStatusPill({
   )
 }
 
+const CAPTURE_TONE: Record<string, PillTone> = {
+  pending: 'neutral',
+  processing: 'brand',
+  done: 'success',
+  failed: 'danger',
+  skipped_limit: 'warning',
+  missed: 'warning',
+}
+
+const CAPTURE_LABEL: Record<string, string> = {
+  pending: 'Queued',
+  processing: 'Collecting…',
+  done: 'Collected',
+  failed: 'Failed',
+  skipped_limit: 'Skipped — daily limit',
+  missed: 'Missed — system was down',
+}
+
+/** A capture's status — the same words and colours as the zone page. */
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
-  const style: Record<string, string> = {
-    pending: 'bg-canvas-secondary text-text-muted border border-border',
-    processing: 'bg-primary-soft text-[#5A35F3]',
-    done: 'bg-success-bg text-success-text',
-    failed: 'bg-danger-bg text-danger-text',
-    skipped_limit: 'bg-warning-bg text-warning-text',
-  }
   return (
-    <span className={cn('text-micro rounded-xs px-sm py-xs capitalize', style[status] ?? style.pending, className)}>
-      {status.replace('_', ' ')}
-    </span>
+    <StatusPill tone={CAPTURE_TONE[status] ?? 'neutral'} pulse={status === 'pending' || status === 'processing'} className={className}>
+      {CAPTURE_LABEL[status] ?? status}
+    </StatusPill>
   )
 }
