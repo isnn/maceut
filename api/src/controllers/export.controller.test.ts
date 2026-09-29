@@ -24,6 +24,7 @@ vi.mock('../repositories/export.repository', () => ({
   create: vi.fn(),
   findById: vi.fn(),
   listByZone: vi.fn(),
+  listRecentForUser: vi.fn(),
   findActiveForUser: vi.fn(),
   countAhead: vi.fn(async () => 0),
   fail: vi.fn(async () => true),
@@ -272,6 +273,32 @@ describe('GET /exports/:id', () => {
     const res = await request(app).get(`/exports/${EXPORT_ID}`)
 
     expect(res.status).toBe(403)
+  })
+})
+
+describe('GET /exports', () => {
+  it("lists the account's latest exports across zones, with the zone's name", async () => {
+    signedIn()
+    vi.mocked(exportRepo.listRecentForUser).mockResolvedValue([exportRow({ status: 'done', filePath: 'exports/u/e.webm' })])
+
+    const res = await request(app).get('/exports?limit=3')
+
+    expect(res.status).toBe(200)
+    expect(exportRepo.listRecentForUser).toHaveBeenCalledWith(USER_ID, 3)
+    expect(res.body.data[0]).toMatchObject({ id: EXPORT_ID, zoneName: 'Sudirman', status: 'done', downloadUrl: 'https://r2.example/signed' })
+  })
+
+  it('defaults to 5 and caps the limit at 20', async () => {
+    signedIn()
+    vi.mocked(exportRepo.listRecentForUser).mockResolvedValue([])
+    await request(app).get('/exports')
+    expect(exportRepo.listRecentForUser).toHaveBeenCalledWith(USER_ID, 5)
+    expect((await request(app).get('/exports?limit=50')).status).toBe(422)
+  })
+
+  it('requires a session', async () => {
+    vi.mocked(auth.api.getSession).mockResolvedValue(null as never)
+    expect((await request(app).get('/exports')).status).toBe(401)
   })
 })
 

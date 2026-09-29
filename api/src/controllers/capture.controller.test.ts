@@ -19,11 +19,16 @@ vi.mock('better-auth/node', () => ({
 }))
 vi.mock('../repositories/user.repository', () => ({ findById: vi.fn(), findByIdWithPlan: vi.fn() }))
 vi.mock('../repositories/zone.repository', () => ({ findById: vi.fn() }))
-vi.mock('../repositories/capture.repository', () => ({ findById: vi.fn() }))
+vi.mock('../repositories/capture.repository', () => ({ findById: vi.fn(), recentForUser: vi.fn() }))
 vi.mock('../lib/r2-client', () => ({
-  getPresignedUrl: vi.fn(async () => 'https://r2.example/signed'),
+  getPresignedUrl: vi.fn(async (path: string) => `https://r2.example/${path}`),
+  thumbnailPath: (p: string) => p.replace(/\.png$/, '.thumb.jpg'),
   remove: vi.fn(),
 }))
+vi.mock('../config/env', async (orig) => {
+  const actual = (await orig()) as Record<string, unknown>
+  return { ...actual, isR2Configured: vi.fn(() => true) }
+})
 
 import { app } from '../app'
 import * as userRepo from '../repositories/user.repository'
@@ -68,7 +73,7 @@ describe('GET /captures/:id/image', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.data).toEqual({
-      url: 'https://r2.example/signed',
+      url: `https://r2.example/captures/${USER_ID}/2026/09/${CAPTURE_ID}.png`,
       fileName: 'Jl-Sudirman-2026-09-27_0730.png',
       expiresInSeconds: 300,
     })
@@ -119,5 +124,26 @@ describe('GET /captures/:id/image', () => {
     signedIn()
     const res = await request(app).get('/captures/not-a-uuid/image')
     expect(res.status).toBe(422)
+  })
+})
+
+describe('GET /captures (dashboard strip)', () => {
+  it('gives collected captures with an image a signed thumbnail link, and others none', async () => {
+    signedIn()
+    const base = { userId: USER_ID, zoneId: ZONE_ID, zoneName: 'Sudirman', trigger: 'scheduled', roadClass: 'semua', roadsCount: 10, jamFactorAvg: '3.20', fileSize: 1, styleUsed: null, error: null, scheduledFor: null, scheduleId: null, capturedAt: new Date('2026-09-29T01:00:00Z'), createdAt: new Date() }
+    vi.mocked(captureRepo.recentForUser).mockResolvedValue([
+      { ...base, id: 'a', status: 'done', filePath: 'captures/u/2026/09/a.png' },
+      { ...base, id: 'b', status: 'done', filePath: null },
+      { ...base, id: 'c', status: 'failed', filePath: null },
+    ] as never)
+
+    const res = await request(app).get('/captures?limit=3')
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.map((c: { thumbnailUrl: string | null }) => c.thumbnailUrl)).toEqual([
+      'https://r2.example/captures/u/2026/09/a.thumb.jpg',
+      null,
+      null,
+    ])
   })
 })

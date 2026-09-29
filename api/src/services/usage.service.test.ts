@@ -7,12 +7,24 @@ vi.mock('../repositories/schedule.repository', () => ({
   earliestDueForUser: vi.fn(async () => null),
 }))
 vi.mock('../repositories/user.repository', () => ({ findByIdWithPlan: vi.fn() }))
-vi.mock('../repositories/capture.repository', () => ({ countForWibDay: vi.fn(async () => 0) }))
+vi.mock('../repositories/capture.repository', () => ({
+  countForWibDay: vi.fn(async () => 0),
+  imageBytesForUser: vi.fn(async () => 0),
+  problemsForWibDay: vi.fn(async () => ({ failed: 0, missed: 0 })),
+  peakForWibDay: vi.fn(async () => undefined),
+  lastSettledScheduled: vi.fn(async () => undefined),
+}))
+vi.mock('../repositories/export.repository', () => ({
+  countDoneSince: vi.fn(async () => 0),
+  fileBytesForUser: vi.fn(async () => 0),
+}))
+vi.mock('../repositories/here-usage.repository', () => ({}))
 
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as userRepo from '../repositories/user.repository'
 import * as captureRepo from '../repositories/capture.repository'
+import * as exportRepo from '../repositories/export.repository'
 import { getUsage, getCollectionHealth } from './usage.service'
 
 const USER = 'user_01'
@@ -55,14 +67,24 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('getUsage', () => {
-  it('reports null rather than a guess for anything still unmeasured', async () => {
-    const usage = await getUsage(USER)
+  it('measures storage from what is actually in R2: capture images plus export files', async () => {
+    // The old dashboard reported storage as zones * 1.37 — invented. Now it's the bytes
+    // of the files we hold.
+    vi.mocked(captureRepo.imageBytesForUser).mockResolvedValue(600 * 1024 ** 2)
+    vi.mocked(exportRepo.fileBytesForUser).mockResolvedValue(424 * 1024 ** 2)
 
-    // The old dashboard reported rendersThisMonth: 7 and storage as zones * 1.37.
-    // A plausible invented number is worse than a dash: nobody re-checks it. These two
-    // stay null until images are rendered into R2.
-    expect(usage.rendersThisMonth).toBeNull()
-    expect(usage.storageUsedGb).toBeNull()
+    const usage = await getUsage(USER)
+    expect(usage.storageUsedBytes).toBe(1024 * 1024 ** 2)
+    expect(usage.storageUsedGb).toBe(1)
+  })
+
+  it('counts exports finished since the start of the WIB month', async () => {
+    atWib('2026-09-30T18:00:00Z') // 1 Oct 01:00 WIB — already October in Jakarta
+    vi.mocked(exportRepo.countDoneSince).mockResolvedValue(4)
+
+    const usage = await getUsage(USER)
+    expect(usage.exportsThisMonth).toBe(4)
+    expect(exportRepo.countDoneSince).toHaveBeenCalledWith(USER, new Date('2026-09-30T17:00:00Z'))
   })
 
   it('counts today’s captures for real now that the table exists', async () => {
@@ -216,9 +238,16 @@ describe('getCollectionHealth — status', () => {
 
   it('is degraded when the plan has paused something', async () => {
     vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
-    vi.mocked(zoneRepo.findByUserId).mockResolvedValue([zone(), zone({ id: 'b', status: 'paused' })])
+    vi.mocked(zoneRepo.findByUserId).mockResolvedValue([zone(), zone({ id: 'b', status: 'paused', pausedByPlan: true })])
 
     expect((await getCollectionHealth(USER)).status).toBe('degraded')
+  })
+
+  it('stays healthy when the user paused a zone themselves', async () => {
+    vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
+    vi.mocked(zoneRepo.findByUserId).mockResolvedValue([zone(), zone({ id: 'b', status: 'paused', pausedByPlan: false })])
+
+    expect((await getCollectionHealth(USER)).status).toBe('healthy')
   })
 
   it('is healthy when everything is running', async () => {
@@ -242,5 +271,41 @@ describe('getCollectionHealth — status', () => {
     ])
 
     expect((await getCollectionHealth(USER)).roadsReporting).toBe(42)
+  })
+})
+
+describe('getCollectionHealth — measured problems and peak', () => {
+  it('is degraded when a collecting zone is in a failure streak', async () => {
+    vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
+    vi.mocked(zoneRepo.findByUserId).mockResolvedValue([zone({ id: 'a' }), zone({ id: 'b' })])
+    vi.mocked(captureRepo.lastSettledScheduled).mockImplementation(async (zoneId: string) =>
+      zoneId === 'a' ? ({ id: 'c', status: 'failed', capturedAt: new Date() } as never) : undefined,
+    )
+
+    const health = await getCollectionHealth(USER)
+    expect(health.zonesFailing).toBe(1)
+    expect(health.status).toBe('degraded')
+  })
+
+  it("reports today's failed and missed captures", async () => {
+    vi.mocked(captureRepo.problemsForWibDay).mockResolvedValue({ failed: 2, missed: 5 })
+    expect((await getCollectionHealth(USER)).problemsToday).toEqual({ failed: 2, missed: 5 })
+  })
+
+  it("reports today's peak jam factor with its WIB time and zone", async () => {
+    vi.mocked(captureRepo.peakForWibDay).mockResolvedValue({
+      jamFactorAvg: 6.43,
+      capturedAt: new Date('2026-09-29T10:15:00Z'), // 17:15 WIB
+      zoneId: 'z1',
+      zoneName: 'Sudirman',
+    })
+    const health = await getCollectionHealth(USER)
+    expect(health).toMatchObject({ peakIndex: 6.4, peakAt: '17:15', peakZoneName: 'Sudirman' })
+  })
+
+  it('has no peak before anything is collected today', async () => {
+    vi.mocked(captureRepo.peakForWibDay).mockResolvedValue(undefined)
+    const health = await getCollectionHealth(USER)
+    expect(health).toMatchObject({ peakIndex: null, peakAt: null, peakZoneName: null })
   })
 })

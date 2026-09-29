@@ -73,6 +73,15 @@ export function capturePath(userId: string, captureId: string, at: Date = new Da
   return `captures/${userId}/${year}/${month}/${captureId}.${ext}`
 }
 
+/**
+ * The small JPEG beside a capture image — `…/{id}.png` → `…/{id}.thumb.jpg`. Derived,
+ * not stored: one image always has one thumbnail, so a column would only be a second
+ * place for the same fact to drift.
+ */
+export function thumbnailPath(imagePath: string): string {
+  return imagePath.replace(/\.png$/, '.thumb.jpg')
+}
+
 export async function upload(path: string, data: Buffer, contentType: string): Promise<void> {
   const s3 = getClient()
   try {
