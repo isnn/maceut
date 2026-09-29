@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { cn } from '@/lib/utils'
 
 /**
  * The one header every page section uses — title, an optional one-line description,
@@ -10,16 +11,22 @@ export function SectionHeader({
   title,
   description,
   actions,
+  icon,
 }: {
   title: ReactNode
   description?: ReactNode
   actions?: ReactNode
+  /** Optional brand-tinted chip before the title. */
+  icon?: ReactNode
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-md">
-      <div className="min-w-0">
-        <h2 className="text-section-title text-text-primary">{title}</h2>
-        {description && <p className="text-caption text-text-muted mt-xs">{description}</p>}
+      <div className="min-w-0 flex items-start gap-md">
+        {icon && <IconChip>{icon}</IconChip>}
+        <div className="min-w-0">
+          <h2 className="text-section-title text-text-primary">{title}</h2>
+          {description && <p className="text-caption text-text-muted mt-xs">{description}</p>}
+        </div>
       </div>
       {actions && <div className="flex flex-wrap items-center gap-sm ml-auto">{actions}</div>}
     </div>
@@ -27,11 +34,27 @@ export function SectionHeader({
 }
 
 /** The title inside a card — one step below a section title, the same on every card. */
-export function CardTitle({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
+export function CardTitle({ children, aside, icon }: { children: ReactNode; aside?: ReactNode; icon?: ReactNode }) {
   return (
     <div className="flex items-center gap-xs">
-      <h3 className="text-heading-sm text-text-primary">{children}</h3>
+      {icon && <IconChip size="sm">{icon}</IconChip>}
+      <h3 className={cn('text-heading-sm text-text-primary', Boolean(icon) && 'ml-xs')}>{children}</h3>
       {aside}
     </div>
+  )
+}
+
+/** The brand-tinted square an icon sits in — section titles and stats share it. */
+export function IconChip({ children, size = 'md' }: { children: ReactNode; size?: 'sm' | 'md' }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'shrink-0 rounded-md bg-primary-soft text-primary flex items-center justify-center',
+        size === 'md' ? 'w-9 h-9' : 'w-7 h-7',
+      )}
+    >
+      {children}
+    </span>
   )
 }

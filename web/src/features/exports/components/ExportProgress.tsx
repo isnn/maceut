@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from 'react'
 import { cn, formatFileSize } from '@/lib/utils'
+import { StatusPill, type PillTone } from '@/components/ui/Badge'
 import { getExport, getZoneExports, isActive, type ExportJob, type ExportStatus } from '../api'
 
 /** How often an active export is re-read. The worker writes progress about once a second. */
@@ -62,21 +63,20 @@ export function detailFor(job: ExportJob): string {
   }
 }
 
-const TONE: Record<ReturnType<typeof pillFor>['tone'], string> = {
-  neutral: 'bg-canvas-secondary text-text-secondary',
-  progress: 'bg-primary-soft text-primary',
-  success: 'bg-success-bg text-success-text',
-  danger: 'bg-danger-bg text-danger-text',
-  muted: 'bg-canvas-secondary text-text-muted',
+const TONE: Record<ReturnType<typeof pillFor>['tone'], PillTone> = {
+  neutral: 'neutral',
+  progress: 'brand',
+  success: 'success',
+  danger: 'danger',
+  muted: 'neutral',
 }
 
 export function ExportPill({ job }: { job: ExportJob }) {
   const pill = pillFor(job)
   return (
-    <span className={cn('inline-flex items-center gap-xs text-micro font-semibold rounded-xs px-sm py-xs tabular-nums whitespace-nowrap', TONE[pill.tone])}>
-      {isActive(job) && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />}
+    <StatusPill tone={TONE[pill.tone]} pulse={isActive(job)}>
       {pill.label}
-    </span>
+    </StatusPill>
   )
 }
 

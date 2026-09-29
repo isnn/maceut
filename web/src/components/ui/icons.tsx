@@ -336,3 +336,65 @@ export function IconX(props: IconProps) {
     </Svg>
   )
 }
+
+export function IconCamera(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M14.5 4h-5L7.5 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3.5z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </Svg>
+  )
+}
+
+export function IconFilm(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4M3 12h18" />
+    </Svg>
+  )
+}
+
+export function IconRuler(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M21.3 15.3 8.7 2.7a1 1 0 0 0-1.4 0L2.7 7.3a1 1 0 0 0 0 1.4l12.6 12.6a1 1 0 0 0 1.4 0l4.6-4.6a1 1 0 0 0 0-1.4z" />
+      <path d="m7.5 10.5 2-2M10.5 13.5l2-2M13.5 16.5l2-2" />
+    </Svg>
+  )
+}
+
+export function IconRoad(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 21 8 3M20 21 16 3M12 5v2M12 11v2M12 17v2" />
+    </Svg>
+  )
+}
+
+export function IconCalendar(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </Svg>
+  )
+}
+
+export function IconGauge(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 14 16 10" />
+      <path d="M3.3 17a10 10 0 1 1 17.4 0" />
+    </Svg>
+  )
+}
+
+export function IconLayers(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m12 2 10 5-10 5L2 7z" />
+      <path d="m2 17 10 5 10-5M2 12l10 5 10-5" />
+    </Svg>
+  )
+}

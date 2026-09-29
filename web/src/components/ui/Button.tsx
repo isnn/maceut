@@ -2,7 +2,7 @@ import { ButtonHTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'destructive'
+  variant?: 'primary' | 'ink' | 'tint' | 'secondary' | 'destructive'
   /** `md` (44px) is the app-wide control height; `sm` (36px) is for inline row actions. */
   size?: 'md' | 'sm'
 }
@@ -18,8 +18,15 @@ const SIZES = {
   sm: 'h-9 px-md text-label',
 } as const
 
+/**
+ * Filled, on-brand: `primary` (purple) for the main action, `ink` (near-black) for the
+ * second headline action, `tint` (soft purple) for everyday actions. `secondary` is the
+ * quiet outline; `destructive` stays apart on purpose.
+ */
 const VARIANTS = {
   primary: 'bg-primary hover:bg-primary-hover text-on-primary',
+  ink: 'bg-text-primary hover:opacity-90 text-on-primary',
+  tint: 'bg-primary-soft hover:bg-primary-soft/60 text-primary',
   secondary: 'bg-canvas border border-border text-text-primary hover:bg-canvas-secondary',
   destructive: 'bg-canvas border border-border text-danger-text hover:bg-danger-bg',
 } as const
