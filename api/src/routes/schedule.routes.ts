@@ -33,7 +33,8 @@ router.use(['/schedules', '/schedules/:id'], authMiddleware, planCheck)
  *         active: { type: boolean }
  *         framesPerDay: { type: integer, example: 2 }
  *         cron: { type: string, example: "0 7-8 * * 1-5", description: Diturunkan, tidak disimpan }
- *         capturedFrames: { type: integer }
+ *         capturedFrames: { type: integer, description: Frame yang sudah terkumpul oleh jendela ini }
+ *         nextFireAt: { type: string, format: date-time, nullable: true, description: Kapan scheduler menembak berikutnya (next_fire_at); null saat di-pause }
  *         createdAt: { type: string, format: date-time }
  */
 

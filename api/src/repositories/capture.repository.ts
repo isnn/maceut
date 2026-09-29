@@ -192,6 +192,16 @@ export async function imageBytesForUser(userId: string): Promise<number> {
   return Number(rows[0]?.bytes ?? 0)
 }
 
+/** Collected frames per capture window, for the account's windows. */
+export async function countDoneBySchedule(userId: string): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ scheduleId: captures.scheduleId, count: sql<number>`count(*)::int` })
+    .from(captures)
+    .where(and(eq(captures.userId, userId), eq(captures.status, 'done'), sql`${captures.scheduleId} IS NOT NULL`))
+    .groupBy(captures.scheduleId)
+  return new Map(rows.map((r) => [r.scheduleId!, r.count]))
+}
+
 /** The most recent capture for a zone, whatever its outcome. */
 export async function latestForZone(zoneId: string): Promise<CaptureRecord | undefined> {
   const rows = await db
