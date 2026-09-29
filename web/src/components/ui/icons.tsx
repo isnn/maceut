@@ -4,6 +4,9 @@ import { cn } from '@/lib/utils'
  * One icon family for the whole app: 24×24 grid, stroked in `currentColor` at
  * 1.75px, round caps and joins. Sized 16px by default so icons sit on the
  * 14px body baseline; pass `size` for the few larger cases.
+ *
+ * Icons marked "Lucide" use path data from Lucide (https://lucide.dev), ISC licence,
+ * © Lucide contributors — the same 24×24 stroked grid, so they sit with the rest.
  */
 interface IconProps {
   size?: number
@@ -395,6 +398,65 @@ export function IconLayers(props: IconProps) {
     <Svg {...props}>
       <path d="m12 2 10 5-10 5L2 7z" />
       <path d="m2 17 10 5 10-5M2 12l10 5 10-5" />
+    </Svg>
+  )
+}
+
+/** Lucide "map" — a zone's boundary on the map. */
+export function IconMap(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z" />
+      <path d="M15 5.764v15" />
+      <path d="M9 3.236v15" />
+    </Svg>
+  )
+}
+
+/** Lucide "clipboard-list" — a zone's details. */
+export function IconClipboardList(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="M12 11h4" />
+      <path d="M12 16h4" />
+      <path d="M8 11h.01" />
+      <path d="M8 16h.01" />
+    </Svg>
+  )
+}
+
+/** Lucide "route" — which roads a zone collects. */
+export function IconRoute(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="6" cy="19" r="3" />
+      <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+      <circle cx="18" cy="5" r="3" />
+    </Svg>
+  )
+}
+
+/** Lucide "car-front" — congestion (the jam factor). */
+export function IconCarFront(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m21 8-2 2-1.5-3.7A2 2 0 0 0 15.646 5H8.4a2 2 0 0 0-1.903 1.257L5 10 3 8" />
+      <path d="M7 14h.01" />
+      <path d="M17 14h.01" />
+      <rect width="18" height="8" x="3" y="10" rx="2" />
+      <path d="M5 18v2" />
+      <path d="M19 18v2" />
+    </Svg>
+  )
+}
+
+/** Lucide "zap" — what triggered a capture. */
+export function IconZap(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" />
     </Svg>
   )
 }

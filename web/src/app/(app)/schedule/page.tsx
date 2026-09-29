@@ -1,5 +1,6 @@
 'use client'
 
+import { StatusPill } from '@/components/ui/Badge'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PlanPausedNotice } from '@/features/plan/PlanPausedNotice'
 import Link from 'next/link'
@@ -355,19 +356,12 @@ export default function SchedulePage() {
                       </Td>
                       <Td className="text-right tabular-nums">{framesPerDay(w)}</Td>
                       <Td>
-                        <span
-                          className={cn(
-                            'text-micro font-semibold rounded-xs px-sm py-xs',
-                            w.active
-                              ? 'bg-success-bg text-success-text'
-                              : w.pausedByPlan
-                                ? 'bg-warning-bg text-warning-text'
-                                : 'bg-canvas-secondary text-text-muted'
-                          )}
+                        <StatusPill
+                          tone={w.active ? 'success' : w.pausedByPlan ? 'warning' : 'neutral'}
                           title={!w.active && w.pausedByPlan ? 'Paused because it is over your plan’s limits' : undefined}
                         >
                           {w.active ? 'Active' : w.pausedByPlan ? 'Paused · plan limit' : 'Paused'}
-                        </span>
+                        </StatusPill>
                       </Td>
                       <Td className="text-right">
                         <button onClick={() => setEditing(w)} className="text-label text-info hover:underline">
