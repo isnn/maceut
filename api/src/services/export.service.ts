@@ -1,3 +1,4 @@
+import { exportErrorForUser } from './user-facing-errors'
 import * as exportRepo from '../repositories/export.repository'
 import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
@@ -120,7 +121,8 @@ export async function toPublic(row: ExportRecord, now: Date = new Date()): Promi
     height: spec.height,
     range: spec.range,
     fileSize: row.fileSize,
-    error: row.error,
+    // The raw error stays in the row for debugging; users get what it means.
+    error: exportErrorForUser(row.error),
     queuePosition: row.status === 'queued' ? await exportRepo.countAhead(row.createdAt) : null,
     etaSeconds,
     downloadUrl:

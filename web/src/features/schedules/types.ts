@@ -14,8 +14,10 @@ export interface CaptureWindow {
   active: boolean
   /** Paused by a plan change (ADR-020), not by the user. */
   pausedByPlan: boolean
-  /** Frames already collected by this window, shown when editing (3l). */
+  /** Frames this window has collected, shown when editing (3l). */
   capturedFrames: number
+  /** When the scheduler fires it next (ISO). Null when paused or not yet seeded. */
+  nextFireAt: string | null
   createdAt: string
 }
 
