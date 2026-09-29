@@ -169,6 +169,8 @@ export interface CaptureDetail extends Capture {
 
 export interface RecentCapture extends Capture {
   zoneName: string
+  /** Signed link to the capture's small JPEG; null when it has no image. May 404 for older captures. */
+  thumbnailUrl: string | null
 }
 
 /** This account's latest cycles across every zone — the dashboard strip. */

@@ -39,6 +39,8 @@ export interface StoredSpec extends ExportSpec {
 export interface PublicExport {
   id: string
   zoneId: string
+  /** As it was named when the export was requested. */
+  zoneName: string
   format: exportRepo.ExportFormat
   status: exportRepo.ExportStatus
   frameCount: number
@@ -108,6 +110,7 @@ export async function toPublic(row: ExportRecord, now: Date = new Date()): Promi
   return {
     id: row.id,
     zoneId: row.zoneId,
+    zoneName: spec.zoneName,
     format: row.format,
     status: row.status,
     frameCount: row.frameCount,
@@ -208,6 +211,13 @@ export async function createExport(
 export async function listForZone(userId: string, zoneId: string, limit = 20): Promise<PublicExport[]> {
   await ownedZone(userId, zoneId)
   const rows = await exportRepo.listByZone(zoneId, limit)
+  const now = new Date()
+  return Promise.all(rows.map((r) => toPublic(r, now)))
+}
+
+/** The account's latest exports across every zone — the dashboard's "Recent exports". */
+export async function listRecent(userId: string, limit = 5): Promise<PublicExport[]> {
+  const rows = await exportRepo.listRecentForUser(userId, limit)
   const now = new Date()
   return Promise.all(rows.map((r) => toPublic(r, now)))
 }

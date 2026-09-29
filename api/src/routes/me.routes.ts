@@ -189,8 +189,10 @@ router.get('/plan/impact', authMiddleware, meController.planImpact)
  *                     schedulesLimit: { type: integer }
  *                     framesPerDay: { type: integer, description: Hari tersibuk, bukan jumlah seminggu }
  *                     capturesToday: { type: integer, nullable: true }
- *                     rendersThisMonth: { type: integer, nullable: true }
- *                     storageUsedGb: { type: number, nullable: true }
+ *                     exportsThisMonth: { type: integer, description: Export Studio yang selesai bulan ini (WIB) }
+ *                     storageUsedBytes: { type: integer, description: Gambar capture + file export yang masih di R2 }
+ *                     storageUsedGb: { type: number }
+ *                     storageLimitGb: { type: number }
  *                     pausedByPlan:
  *                       type: object
  *                       properties:
@@ -201,7 +203,18 @@ router.get('/plan/impact', authMiddleware, meController.planImpact)
  *                       properties:
  *                         status: { type: string, enum: [healthy, degraded, idle] }
  *                         nextCaptureAt: { type: string, nullable: true, example: "07:00" }
+ *                         nextCaptureInDays: { type: integer, nullable: true }
+ *                         zonesCollecting: { type: integer }
  *                         roadsReporting: { type: integer, nullable: true }
+ *                         zonesFailing: { type: integer, description: Zona yang capture terjadwal terakhirnya gagal }
+ *                         problemsToday:
+ *                           type: object
+ *                           properties:
+ *                             failed: { type: integer }
+ *                             missed: { type: integer }
+ *                         peakIndex: { type: number, nullable: true, description: Jam factor rata-rata tertinggi hari ini (0–10) }
+ *                         peakAt: { type: string, nullable: true, example: "17:15" }
+ *                         peakZoneName: { type: string, nullable: true }
  *       401: { description: UNAUTHORIZED }
  */
 router.get('/usage', authMiddleware, usageController.usage)

@@ -4,7 +4,7 @@ import { config, isR2Configured } from '../config/env'
 import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import { slimTraffic } from '../services/capture.service'
-import { capturePath, upload } from '../lib/r2-client'
+import { capturePath, thumbnailPath, upload } from '../lib/r2-client'
 import { launchBrowser, renderWithPage, type RenderPageJob } from '../lib/render-page'
 
 /**
@@ -102,8 +102,13 @@ export async function renderCaptureImage(captureId: string): Promise<void> {
 
   const path = capturePath(capture.userId, capture.id, capture.capturedAt, 'png')
   await upload(path, png, 'image/png')
-  await captureRepo.setImage(capture.id, path, png.length, spec)
-  console.log(`[render] capture ${captureId} image — ${png.length} bytes`)
+  // The small JPEG for lists (dashboard). Optional: a capture without one still has its
+  // image, and lists fall back to a plain tile.
+  const thumb = pngs.find((p) => p.name === 'thumb.jpg')?.data
+  if (thumb?.length) await upload(thumbnailPath(path), thumb, 'image/jpeg')
+  // file_size counts both, so storage figures match what R2 actually holds.
+  await captureRepo.setImage(capture.id, path, png.length + (thumb?.length ?? 0), spec)
+  console.log(`[render] capture ${captureId} image — ${png.length} bytes, thumbnail ${thumb?.length ?? 0} bytes`)
 }
 
 export async function registerRenderConsumer(ch: Channel): Promise<void> {

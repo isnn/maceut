@@ -33,6 +33,17 @@ export async function listForZone(req: Request, res: Response, next: NextFunctio
   }
 }
 
+/** The account's latest exports, across zones (dashboard). */
+export async function recent(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) throw new UnauthorizedError()
+    const limit = z.coerce.number().int().positive().max(20).default(5).parse(req.query.limit)
+    return res.status(200).json(ok(await exportService.listRecent(req.userId, limit)))
+  } catch (err) {
+    next(err)
+  }
+}
+
 /** One export — polled while it renders. */
 export async function detail(req: Request, res: Response, next: NextFunction) {
   try {
