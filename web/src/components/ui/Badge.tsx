@@ -16,6 +16,57 @@ export function RoadClassBadge({ roadClass, className }: { roadClass: RoadClass;
   )
 }
 
+export type PillTone = 'success' | 'warning' | 'danger' | 'brand' | 'neutral'
+
+const PILL_TONE: Record<PillTone, string> = {
+  success: 'bg-success-bg text-success-text',
+  warning: 'bg-warning-bg text-warning-text',
+  danger: 'bg-danger-bg text-danger-text',
+  brand: 'bg-primary-soft text-primary',
+  neutral: 'bg-canvas-secondary text-text-secondary',
+}
+
+const PILL_DOT: Record<PillTone, string> = {
+  success: 'bg-success-icon',
+  warning: 'bg-warning-icon',
+  danger: 'bg-danger-icon',
+  brand: 'bg-primary',
+  neutral: 'bg-text-muted',
+}
+
+/**
+ * The one status shape: a tinted pill with a coloured dot. Zone, capture window,
+ * capture and export statuses all use it, so "running", "failed" and "paused" look the
+ * same wherever they appear. `pulse` marks something still in progress.
+ */
+export function StatusPill({
+  tone,
+  pulse = false,
+  title,
+  className,
+  children,
+}: {
+  tone: PillTone
+  pulse?: boolean
+  title?: string
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <span
+      title={title}
+      className={cn(
+        'inline-flex items-center gap-xs text-micro font-semibold rounded-full px-sm py-xs whitespace-nowrap tabular-nums',
+        PILL_TONE[tone],
+        className,
+      )}
+    >
+      <span aria-hidden className={cn('w-1.5 h-1.5 rounded-full shrink-0', PILL_DOT[tone], pulse && 'animate-pulse')} />
+      {children}
+    </span>
+  )
+}
+
 /** Whether a zone's windows are running (3f, 3g). */
 export function ZoneStatusPill({
   status,
@@ -29,20 +80,13 @@ export function ZoneStatusPill({
 }) {
   const byPlan = status === 'paused' && pausedByPlan
   return (
-    <span
+    <StatusPill
+      tone={status === 'collecting' ? 'success' : byPlan ? 'warning' : 'neutral'}
       title={byPlan ? 'Paused because it is over your plan’s limits' : undefined}
-      className={cn(
-        'text-micro font-semibold rounded-xs px-sm py-xs whitespace-nowrap',
-        status === 'collecting'
-          ? 'bg-success-bg text-success-text'
-          : byPlan
-            ? 'bg-warning-bg text-warning-text'
-            : 'bg-canvas-secondary text-text-muted border border-border',
-        className
-      )}
+      className={className}
     >
       {status === 'collecting' ? 'Collecting' : byPlan ? 'Paused · plan limit' : 'Paused'}
-    </span>
+    </StatusPill>
   )
 }
 

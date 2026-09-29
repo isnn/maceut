@@ -143,6 +143,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Frontend: rework halaman login & register (tanpa header, show/hide password) | permintaan user |
 | ✅ | **AUTH-OTP** Abstraksi provider email (console · Resend · Mailtrap) + kode OTP untuk verifikasi email (wajib) & lupa password | ADR-026, permintaan user |
 | ✅ | **NOTIF** Notifikasi berjalan: bell in-app + banner/toast, email hemat (capture gagal >2 jam, ringkas 1/hari; perubahan paket oleh staf; alert HERE ke satu alamat) + batas kirim OTP | permintaan user |
+| ✅ | **FE-23** Halaman zona: label & tabel konsisten, pill status tunggal, tombol terisi warna brand (Capture now / Open in Studio), peta Captures lebih gelap dengan nama tempat tetap terbaca | permintaan user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -1779,6 +1780,24 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
     Bug ditemukan & diperbaiki: email menulis "gagal sejak" = waktu baris dibuat, bukan
     waktu capture gagal (sekarang `data.failedAt`).
   BELUM: UI belum dilihat di browser; email sungguhan via Resend/Mailtrap.
+
+[2026-09-29] FE-23 — halaman zona: konsisten, berwarna, tombol brand, peta gelap.
+
+  - Tombol: varian baru `ink` (hitam brand) & `tint` (ungu lembut), semua dengan ikon.
+    Header: Capture now (ungu, pindah dari seksi Captures, konfirmasi lewat toast NOTIF)
+    · Open in Studio (ink, `/studio?zone=<id>` — Studio kini memilih zona dari URL)
+    · Edit / Pause·Resume (tint) · Delete (destructive).
+  - `StatusPill` (satu bentuk + titik warna) untuk status zona, jendela, capture, export.
+  - `Stat` (ikon dalam chip ungu + label kecil + nilai tebal) untuk Zone details dan angka
+    di bawah peta capture; Avg jam factor diberi titik warna pita kemacetan.
+  - Judul seksi/kartu diberi chip ikon brand (SectionHeader/CardTitle `icon`).
+  - Kosakata tunggal: Scheduled/Manual (bukan "Auto"), Avg jam factor, Roads.
+  - Tabel (atas permintaan user): kolom waktu "… (WIB)", urutan identitas → waktu →
+    detail → angka (rata kanan) → Status → Actions; satu format waktu `formatWibShort`
+    ("23 Sep 10:27") untuk ketiga tabel (sebelumnya "23 Sep 10.27" vs "23 Sept, 10:27").
+  - Peta Captures: filter `.maceut-map-night` lebih gelap, nama tempat tetap terbaca
+    (dicek sekali lewat screenshot tile OSM). Peta Boundary tidak berubah.
+  VERIFIKASI: tsc + eslint web bersih, halaman 200. UI belum dilihat di browser.
 
 ---
 
