@@ -20,10 +20,12 @@ import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { SectionHeader } from '@/components/shared/SectionHeader'
+import { Stat } from '@/components/shared/Stat'
+import { StatusPill, type PillTone } from '@/components/ui/Badge'
 import { Pagination, SortableTh, Table, TableWrap, Td } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
-import { IconArrowLeft, IconArrowRight, IconClock, IconDownload } from '@/components/ui/icons'
-import { cn, formatNumber } from '@/lib/utils'
+import { IconArrowLeft, IconArrowRight, IconCamera, IconClock, IconDownload, IconGauge, IconLayers, IconRoad } from '@/components/ui/icons'
+import { cn, formatNumber, formatWibShort } from '@/lib/utils'
 import { ROAD_CLASS_LABEL, TRAFFIC_COLORS } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import { MapCanvas } from './MapCanvas'
@@ -40,13 +42,21 @@ const STATUS_LABEL: Record<zonesApi.CaptureStatus, string> = {
   missed: 'Missed — system was down',
 }
 
-const STATUS_STYLE: Record<zonesApi.CaptureStatus, string> = {
-  pending: 'bg-canvas-secondary text-text-muted border border-border',
-  processing: 'bg-primary-soft text-[#5A35F3]',
-  done: 'bg-success-bg text-success-text',
-  failed: 'bg-danger-bg text-danger-text',
-  skipped_limit: 'bg-warning-bg text-warning-text',
-  missed: 'bg-warning-bg text-warning-text',
+const STATUS_TONE: Record<zonesApi.CaptureStatus, PillTone> = {
+  pending: 'neutral',
+  processing: 'brand',
+  done: 'success',
+  failed: 'danger',
+  skipped_limit: 'warning',
+  missed: 'warning',
+}
+
+/** One word for the trigger, everywhere on the page. */
+const TRIGGER_LABEL: Record<zonesApi.Capture['trigger'], string> = { scheduled: 'Scheduled', manual: 'Manual' }
+
+/** The jam band a mean jam factor falls in — its colour goes beside the number. */
+function jamBand(value: number) {
+  return value >= 8 ? JAM_BANDS[3] : value >= 6 ? JAM_BANDS[2] : value >= 4 ? JAM_BANDS[1] : JAM_BANDS[0]
 }
 
 /**
@@ -108,18 +118,7 @@ function failingStreak(cycles: zonesApi.Capture[]): { since: string; count: numb
   return { since: settled[count - 1]!.capturedAt, count, error: settled[0]!.error }
 }
 
-/** "23 Sep 10:27" in WIB — enough to compare two columns without repeating the year. */
-function shortWib(iso: string): string {
-  return new Intl.DateTimeFormat('id-ID', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Asia/Jakarta',
-  })
-    .format(new Date(iso))
-    .replace(/\./g, ':')
-}
+const shortWib = formatWibShort
 
 /** "22 Sep 2026 19:27 WIB" — BR-018's format, which the rendered image will also use. */
 function formatWib(iso: string): string {
@@ -135,7 +134,11 @@ function formatWib(iso: string): string {
     .replace(/\./g, ':') + ' WIB'
 }
 
-export function ZoneCaptures({ zone }: { zone: Zone }) {
+/**
+ * `refreshKey`: bumped by the page header's "Capture now" — reloads the list and jumps
+ * back to the newest cycle.
+ */
+export function ZoneCaptures({ zone, refreshKey = 0 }: { zone: Zone; refreshKey?: number }) {
   const [cycles, setCycles] = useState<zonesApi.Capture[] | null>(null)
   const [index, setIndex] = useState(0)
   /**
@@ -150,19 +153,23 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
   const [traffics, setTraffics] = useState<Record<string, zonesApi.SlimTraffic | null>>({})
   const inFlight = useRef(new Set<string>())
   const [error, setError] = useState<string | null>(null)
-  const [running, setRunning] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
 
-  const load = useCallback(() => {
-    zonesApi
-      .getZoneCaptures(zone.id)
-      .then(setCycles)
-      .catch(() => setCycles([]))
-  }, [zone.id])
+  const load = useCallback(
+    (toNewest: boolean) => {
+      zonesApi
+        .getZoneCaptures(zone.id)
+        .then((rows) => {
+          setCycles(rows)
+          if (toNewest) setIndex(0)
+        })
+        .catch(() => setCycles([]))
+    },
+    [zone.id],
+  )
 
   useEffect(() => {
-    load()
-  }, [load])
+    load(refreshKey > 0)
+  }, [load, refreshKey])
 
   // The full history as a list. The stepper answers "what did this look like at 07:00?";
   // the table answers "did everything that was supposed to run actually run?" — which is
@@ -204,28 +211,6 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
     if (newer?.status === 'done' && !(newer.id in traffics)) void ensureLoaded(newer.id)
   }, [selected, cycles, index, traffics, ensureLoaded])
 
-  async function runNow() {
-    setRunning(true)
-    setError(null)
-    setNotice(null)
-    try {
-      const res = await zonesApi.runCapture(zone.id)
-      if (res.queued) {
-        setNotice('Collecting now — the new cycle appears here in a few seconds.')
-        // The worker needs a moment; reload once rather than polling forever.
-        setTimeout(load, 4000)
-      } else {
-        setNotice(res.capture.error ?? 'Refused by the daily capture limit.')
-        load()
-      }
-      setIndex(0)
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not start a capture. Please try again.')
-    } finally {
-      setRunning(false)
-    }
-  }
-
   const [downloading, setDownloading] = useState(false)
 
   /**
@@ -252,17 +237,12 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
   return (
     <section className="space-y-md">
       <SectionHeader
+        icon={<IconCamera size={18} />}
         title="Captures"
         description="Every cycle this zone has collected, newest first."
-        actions={
-          <Button variant="secondary" onClick={runNow} disabled={running}>
-            {running ? 'Starting…' : 'Capture now'}
-          </Button>
-        }
       />
 
       {error && <Alert variant="warning">{error}</Alert>}
-      {notice && <Alert variant="success">{notice}</Alert>}
       {streak && zone.status === 'collecting' && (
         <Alert variant="warning">
           <span className="block font-semibold">Scheduled collection has been failing since {formatWib(streak.since)}</span>
@@ -310,7 +290,7 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
                 {selected && (
                   <>
                     <span aria-hidden> · </span>
-                    {selected.trigger === 'scheduled' ? 'Scheduled' : 'Manual'}
+                    {TRIGGER_LABEL[selected.trigger]}
                     {lateness(selected) && (
                       <>
                         <span aria-hidden> · </span>
@@ -342,14 +322,9 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
               {/* Only when something went wrong. On a collected cycle the map below says so
                   already, and the table carries status for every row. */}
               {selected.status !== 'done' && (
-                <span
-                  className={cn(
-                    'inline-block text-micro font-semibold rounded-xs px-sm py-xs',
-                    STATUS_STYLE[selected.status],
-                  )}
-                >
+                <StatusPill tone={STATUS_TONE[selected.status]} pulse={selected.status === 'pending' || selected.status === 'processing'}>
                   {STATUS_LABEL[selected.status]}
-                </span>
+                </StatusPill>
               )}
 
               {selected.status === 'done' ? (
@@ -374,7 +349,7 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
                         failed, have none — the map above is the capture either way. */}
                     {selected.filePath && (
                       <Button
-                        variant="secondary"
+                        variant="tint"
                         size="sm"
                         onClick={() => downloadImage(selected.id)}
                         disabled={downloading}
@@ -403,14 +378,19 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
               )}
 
               <dl className="grid grid-cols-2 tablet:grid-cols-4 gap-lg">
-                <Figure label="Roads" value={selected.roadsCount === null ? '—' : formatNumber(selected.roadsCount)} />
-                <Figure
+                <Stat
+                  icon={<IconRoad size={18} />}
+                  label="Roads"
+                  value={selected.roadsCount === null ? '—' : formatNumber(selected.roadsCount)}
+                />
+                <Stat
+                  icon={<IconGauge size={18} />}
                   label="Avg jam factor"
-                  value={selected.jamFactorAvg === null ? '—' : selected.jamFactorAvg.toFixed(2)}
+                  value={selected.jamFactorAvg === null ? '—' : <JamValue value={selected.jamFactorAvg} />}
                   hint="0 clear · 10 closed"
                 />
-                <Figure label="Road class" value={ROAD_CLASS_LABEL[selected.roadClass]} />
-                <Figure label="Trigger" value={selected.trigger === 'scheduled' ? 'Auto' : 'Manual'} />
+                <Stat icon={<IconLayers size={18} />} label="Road class" value={ROAD_CLASS_LABEL[selected.roadClass]} />
+                <Stat icon={<IconClock size={18} />} label="Trigger" value={TRIGGER_LABEL[selected.trigger]} />
               </dl>
 
             </>
@@ -427,50 +407,50 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
             <Table>
               <thead>
                 <tr>
-          <SortableTh
-            active={table.sort?.key === 'planned'}
-            direction={table.sort?.direction ?? 'asc'}
-            onSort={() => table.toggleSort('planned')}
-          >
-            Time
-          </SortableTh>
-          <SortableTh
-            active={table.sort?.key === 'actual'}
-            direction={table.sort?.direction ?? 'asc'}
-            onSort={() => table.toggleSort('actual')}
-          >
-            Collected at
-          </SortableTh>
-          <SortableTh
-            active={table.sort?.key === 'status'}
-            direction={table.sort?.direction ?? 'asc'}
-            onSort={() => table.toggleSort('status')}
-          >
-            Status
-          </SortableTh>
-          <SortableTh
-            active={table.sort?.key === 'trigger'}
-            direction={table.sort?.direction ?? 'asc'}
-            onSort={() => table.toggleSort('trigger')}
-          >
-            Trigger
-          </SortableTh>
-          <SortableTh
-            className="text-right"
-            active={table.sort?.key === 'roads'}
-            direction={table.sort?.direction ?? 'asc'}
-            onSort={() => table.toggleSort('roads')}
-          >
-            Roads
-          </SortableTh>
-          <SortableTh
-            className="text-right"
-            active={table.sort?.key === 'jam'}
-            direction={table.sort?.direction ?? 'asc'}
-            onSort={() => table.toggleSort('jam')}
-          >
-            Avg jam
-          </SortableTh>
+                  <SortableTh
+                    active={table.sort?.key === 'planned'}
+                    direction={table.sort?.direction ?? 'asc'}
+                    onSort={() => table.toggleSort('planned')}
+                  >
+                    Scheduled for (WIB)
+                  </SortableTh>
+                  <SortableTh
+                    active={table.sort?.key === 'actual'}
+                    direction={table.sort?.direction ?? 'asc'}
+                    onSort={() => table.toggleSort('actual')}
+                  >
+                    Collected at (WIB)
+                  </SortableTh>
+                  <SortableTh
+                    active={table.sort?.key === 'trigger'}
+                    direction={table.sort?.direction ?? 'asc'}
+                    onSort={() => table.toggleSort('trigger')}
+                  >
+                    Trigger
+                  </SortableTh>
+                  <SortableTh
+                    className="text-right"
+                    active={table.sort?.key === 'roads'}
+                    direction={table.sort?.direction ?? 'asc'}
+                    onSort={() => table.toggleSort('roads')}
+                  >
+                    Roads
+                  </SortableTh>
+                  <SortableTh
+                    className="text-right"
+                    active={table.sort?.key === 'jam'}
+                    direction={table.sort?.direction ?? 'asc'}
+                    onSort={() => table.toggleSort('jam')}
+                  >
+                    Avg jam factor
+                  </SortableTh>
+                  <SortableTh
+                    active={table.sort?.key === 'status'}
+                    direction={table.sort?.direction ?? 'asc'}
+                    onSort={() => table.toggleSort('status')}
+                  >
+                    Status
+                  </SortableTh>
                 </tr>
               </thead>
               <tbody>
@@ -504,19 +484,17 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
                         </>
                       )}
                     </Td>
-                    <Td>
-                      <span className={cn('text-micro font-semibold rounded-xs px-sm py-xs', STATUS_STYLE[c.status])}>
-                        {STATUS_LABEL[c.status]}
-                      </span>
-                    </Td>
-                    <Td className="text-text-secondary">
-                      {c.trigger === 'scheduled' ? 'Auto' : 'Manual'}
-                    </Td>
+                    <Td className="text-text-secondary">{TRIGGER_LABEL[c.trigger]}</Td>
                     <Td className="text-right tabular-nums text-text-secondary">
                       {c.roadsCount === null ? <span className="text-text-muted">&mdash;</span> : formatNumber(c.roadsCount)}
                     </Td>
                     <Td className="text-right tabular-nums text-text-secondary">
-                      {c.jamFactorAvg === null ? <span className="text-text-muted">&mdash;</span> : c.jamFactorAvg.toFixed(2)}
+                      {c.jamFactorAvg === null ? <span className="text-text-muted">&mdash;</span> : <JamValue value={c.jamFactorAvg} />}
+                    </Td>
+                    <Td>
+                      <StatusPill tone={STATUS_TONE[c.status]} pulse={c.status === 'pending' || c.status === 'processing'}>
+                        {STATUS_LABEL[c.status]}
+                      </StatusPill>
                     </Td>
                   </tr>
                 ))}
@@ -546,12 +524,13 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
   )
 }
 
-function Figure({ label, value, hint }: { label: string; value: string; hint?: string }) {
+/** A mean jam factor with the colour of the band it falls in. */
+function JamValue({ value }: { value: number }) {
+  const band = jamBand(value)
   return (
-    <div>
-      <dt className="text-label text-text-secondary">{label}</dt>
-      <dd className="text-body font-semibold text-text-primary mt-xs tabular-nums">{value}</dd>
-      {hint && <p className="text-micro text-text-muted mt-xs">{hint}</p>}
-    </div>
+    <span className="inline-flex items-center gap-xs" title={band.label}>
+      <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: band.color }} />
+      {value.toFixed(2)}
+    </span>
   )
 }

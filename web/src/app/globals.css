@@ -18,11 +18,11 @@ body {
 }
 
 /* The fully dark treatment, for maps whose job is to show traffic — the zone page's
-   Captures map. The same chain as Studio's Dark theme, and in the order that works:
-   `invert` FIRST, then dim. The dimmed filter above brightens before inverting, which
-   the invert then turns into a mid-grey map rather than a dark one. */
+   Captures map. `invert` FIRST, then dim: inverting turns OSM's light ground near-black
+   and its dark place and region names light, a mild brightness keeps those names
+   readable, and near-zero saturation leaves the traffic lines as the only colour. */
 .maceut-map-night .leaflet-tile-pane {
-  filter: invert(1) hue-rotate(180deg) brightness(0.45) contrast(1.25) saturate(0.35);
+  filter: invert(1) hue-rotate(180deg) brightness(0.8) contrast(1.1) saturate(0.15);
 }
 
 /* Leaflet's default zoom buttons sit on the dark basemap, so give them the
