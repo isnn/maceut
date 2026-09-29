@@ -1,5 +1,6 @@
 'use client'
 
+import { PlanPill, RolePill } from '@/components/ui/Badge'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
@@ -208,16 +209,10 @@ export default function InternalOverviewPage() {
                     )}
                   </Td>
                   <Td>
-                    <span className="text-micro bg-canvas-secondary text-text-secondary border border-border rounded-xs px-sm py-xs">
-                      {PLAN_LABEL[row.plan]}
-                    </span>
+                    <PlanPill plan={row.plan} />
                   </Td>
                   <Td>
-                    {row.role === 'internal' ? (
-                      <span className="text-micro bg-primary-soft text-[#5A35F3] rounded-xs px-sm py-xs font-semibold">Internal</span>
-                    ) : (
-                      <span className="text-micro text-text-muted">User</span>
-                    )}
+                    <RolePill role={row.role} />
                   </Td>
                   <Td className="text-text-secondary">{formatDate(row.createdAt)}</Td>
                 </tr>

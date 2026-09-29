@@ -11,11 +11,11 @@
  * database, and one mistyped value could take the platform down.
  */
 
+import { StatusPill } from '@/components/ui/Badge'
 import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
 import { CardTitle } from '@/components/shared/SectionHeader'
-import { cn } from '@/lib/utils'
 import { ApiError } from '@/types/api'
 import { getServerConfig, type ServerConfigEntry } from '@/features/internal/api'
 import { CONFIG_GROUPS, VAR_BY_KEY, type ConfigGroupId } from '@/features/internal/catalog'
@@ -102,7 +102,7 @@ function ConfigRow({ entry }: { entry: ServerConfigEntry }) {
       </dt>
       <dd className="min-w-0 flex items-start">
         {entry.secret ? (
-          <StatusPill ok={entry.set}>{entry.set ? 'Set · hidden' : 'Not set'}</StatusPill>
+          <StatusPill tone={entry.set ? 'success' : 'warning'}>{entry.set ? 'Set · hidden' : 'Not set'}</StatusPill>
         ) : entry.set ? (
           <code className="text-label text-text-primary break-all bg-canvas-secondary rounded-xs px-sm py-xs">{entry.value}</code>
         ) : (
@@ -112,18 +112,5 @@ function ConfigRow({ entry }: { entry: ServerConfigEntry }) {
         )}
       </dd>
     </div>
-  )
-}
-
-function StatusPill({ ok, children }: { ok: boolean; children: React.ReactNode }) {
-  return (
-    <span
-      className={cn(
-        'text-micro font-semibold rounded-xs px-sm py-xs',
-        ok ? 'bg-success-bg text-success-text' : 'bg-warning-bg text-warning-text',
-      )}
-    >
-      {children}
-    </span>
   )
 }

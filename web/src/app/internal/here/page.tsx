@@ -9,6 +9,7 @@
  * billed); customers see only that traffic data is briefly unavailable, never why.
  */
 
+import { StatusPill } from '@/components/ui/Badge'
 import { useCallback, useEffect, useState } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
@@ -321,9 +322,9 @@ function UsageTile({
               style={{ width: `${Math.min(share * 100, 100)}%` }}
             />
           </div>
-          <p className={cn('text-micro font-semibold tabular-nums', level === 'blocked' ? 'text-danger-text' : level === 'warning' ? 'text-warning-text' : 'text-text-muted')}>
-            {pct(share)} used
-          </p>
+          <StatusPill tone={level === 'blocked' ? 'danger' : level === 'warning' ? 'warning' : 'success'}>
+            {level === 'blocked' ? 'Cap reached' : level === 'warning' ? 'Near cap' : 'Within budget'} · {pct(share)} used
+          </StatusPill>
         </div>
       )}
       <p className="text-caption text-text-muted mt-sm">{note}</p>

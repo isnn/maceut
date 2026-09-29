@@ -195,7 +195,7 @@ export default function ZonesPage() {
                   <SortableTh active={sort?.key === 'name'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('name')}>
                     Zone
                   </SortableTh>
-                  <Th>Road classes</Th>
+                  <Th>Road class</Th>
                   <SortableTh
                     className="text-right"
                     active={sort?.key === 'area'}
@@ -213,7 +213,7 @@ export default function ZonesPage() {
                     Roads
                   </SortableTh>
                   <SortableTh active={sort?.key === 'cadence'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('cadence')}>
-                    Capture
+                    Capture cadence
                   </SortableTh>
                   <SortableTh active={sort?.key === 'status'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('status')}>
                     Status

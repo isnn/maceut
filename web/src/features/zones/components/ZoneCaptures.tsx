@@ -24,7 +24,7 @@ import { Stat } from '@/components/shared/Stat'
 import { StatusPill, type PillTone } from '@/components/ui/Badge'
 import { Pagination, SortableTh, Table, TableWrap, Td } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
-import { IconArrowLeft, IconArrowRight, IconCamera, IconClock, IconDownload, IconGauge, IconLayers, IconRoad } from '@/components/ui/icons'
+import { IconArrowLeft, IconArrowRight, IconCamera, IconCarFront, IconClock, IconDownload, IconRoad, IconRoute, IconZap } from '@/components/ui/icons'
 import { cn, formatNumber, formatWibShort } from '@/lib/utils'
 import { ROAD_CLASS_LABEL, TRAFFIC_COLORS } from '@/lib/constants'
 import { ApiError } from '@/types/api'
@@ -384,13 +384,13 @@ export function ZoneCaptures({ zone, refreshKey = 0 }: { zone: Zone; refreshKey?
                   value={selected.roadsCount === null ? '—' : formatNumber(selected.roadsCount)}
                 />
                 <Stat
-                  icon={<IconGauge size={18} />}
+                  icon={<IconCarFront size={18} />}
                   label="Avg jam factor"
                   value={selected.jamFactorAvg === null ? '—' : <JamValue value={selected.jamFactorAvg} />}
                   hint="0 clear · 10 closed"
                 />
-                <Stat icon={<IconLayers size={18} />} label="Road class" value={ROAD_CLASS_LABEL[selected.roadClass]} />
-                <Stat icon={<IconClock size={18} />} label="Trigger" value={TRIGGER_LABEL[selected.trigger]} />
+                <Stat icon={<IconRoute size={18} />} label="Road class" value={ROAD_CLASS_LABEL[selected.roadClass]} />
+                <Stat icon={<IconZap size={18} />} label="Trigger" value={TRIGGER_LABEL[selected.trigger]} />
               </dl>
 
             </>

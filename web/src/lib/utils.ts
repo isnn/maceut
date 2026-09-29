@@ -36,9 +36,22 @@ export function formatTimestampWIB(date: Date | string): string {
 }
 
 /** Short date for table rows, e.g. "22 Jul". */
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * "23 Sep 2026" in WIB — the one date format for the app. It used to be id-ID without
+ * a year ("23 Sep", but "5 Agu", "12 Mei"): Indonesian month names in an English UI,
+ * and no way to tell last year's zone from this year's.
+ */
 export function formatDate(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' }).format(d)
+  const parts = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    timeZone: 'Asia/Jakarta',
+  }).formatToParts(typeof date === 'string' ? new Date(date) : date)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${get('day')} ${SHORT_MONTHS[Number(get('month')) - 1]} ${get('year')}`
 }
 
 export function formatFileSize(bytes: number): string {
@@ -69,8 +82,6 @@ export function formatNumber(value: number, fractionDigits = 0): string {
 export function formatKm(value: number): string {
   return `${formatNumber(value, 2)} km`
 }
-
-const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /**
  * "23 Sep 10:27" in WIB — the one time format for table cells. The column header says
