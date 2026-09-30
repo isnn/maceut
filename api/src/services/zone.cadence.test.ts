@@ -55,6 +55,18 @@ describe('zone cadence', () => {
     expect((await getZonesForUser(USER))[0]!.cadence).toBe('Hourly · 07:00–09:00')
   })
 
+  it('also gives the parts, for tables with separate interval and hours columns', async () => {
+    vi.mocked(scheduleRepo.cadenceByZone).mockResolvedValue(
+      new Map([['z1', { activeWindows: 1, finestInterval: '15min', earliestStart: '06:00', latestEnd: '17:00' }]]),
+    )
+
+    expect((await getZonesForUser(USER))[0]!.schedule).toEqual({ interval: '15min', start: '06:00', end: '17:00', windows: 1 })
+  })
+
+  it('has no parts when nothing is scheduled', async () => {
+    expect((await getZonesForUser(USER))[0]!.schedule).toBeNull()
+  })
+
   it('counts windows instead of listing hours once there are several', async () => {
     vi.mocked(scheduleRepo.cadenceByZone).mockResolvedValue(
       new Map([['z1', { activeWindows: 4, finestInterval: 'hourly', earliestStart: '07:00', latestEnd: '21:00' }]]),

@@ -22,7 +22,8 @@ beforeEach(() => {
 describe('export sweeper', () => {
   it('fails renders whose heartbeat stopped more than two minutes ago', async () => {
     const now = new Date('2026-09-28T10:00:00Z')
-    vi.mocked(exportRepo.findStale).mockResolvedValue([{ id: 'e1' }] as never)
+    vi.mocked(exportRepo.findStale).mockResolvedValue([{ id: 'e1', updatedAt: new Date('2026-09-28T09:55:00Z') }] as never)
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
     const r = await sweep(now)
 

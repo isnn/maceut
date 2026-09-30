@@ -147,6 +147,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-24** Label konsisten di seluruh tabel (daftar zona, admin, jadwal, dashboard): satu bentuk pill untuk status & kategori; kartu Zone details baru; ikon Lucide; paginasi selalu tampil; format tanggal tunggal | permintaan user |
 | ✅ | **FE-25** Dashboard: semua metrik data nyata (storage, export bulan ini, zona gagal, masalah hari ini, puncak kemacetan), copy baru, thumbnail kecil di Latest captures | permintaan user |
 | ✅ | **FE-26** Pill tanpa titik, tombol tandai-dibaca per notifikasi, error teknis diterjemahkan, kartu Next collection & frame terkumpul dari data nyata | permintaan user |
+| ✅ | **FE-27** Kelas jalan berwarna (teal/biru/ungu), kolom Interval & Hours terpisah, pesan gagal export berupa aksi (Retry), subjudul zona dihapus + peta capture lebih tinggi, kartu Next collection baru | permintaan user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -1860,6 +1861,24 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   DIUJI LANGSUNG: jendela NOON → next 2026-09-29T23:00Z (06:00 WIB), 194 frame terkumpul;
     export gagal → pesan ramah.
   VERIFIKASI: 421 test API, tsc + eslint bersih kedua paket. UI belum dilihat di browser.
+
+[2026-09-30] FE-27 — warna kelas jalan, kolom jadwal terpisah, gagal export = aksi.
+
+  - Kelas jalan tanpa abu: Nasional teal · Nasional + Provinsi biru · All roads ungu.
+    Token baru `teal-bg`/`teal-text` (tailwind.config.ts + design.md, bagian "Category").
+  - Daftar zona: "Capture cadence" dipecah jadi **Interval** (Every 15 min / Hourly /
+    Daily) dan **Hours (WIB)** ("06:00–17:00", atau "N windows" bila lebih dari satu —
+    satu rentang akan menyiratkan koleksi terus-menerus). API: `schedule` {interval,
+    start, end, windows} di samping `cadence`.
+  - Gagal export: pesan tidak lagi menyebut sebab ("out of memory" pun teknis bagi user) —
+    "This export couldn’t be finished. Retry to render it again." Sebab tetap di log
+    worker/sweeper dan kolom `error`. Tombol "Retry export" kini tombol utama di tabel
+    Exports, dan dialog Studio untuk export gagal punya tombol Retry (dulu hanya Close).
+  - Halaman zona: deskripsi di bawah judul seksi dihapus; peta Captures 26rem/32rem.
+  - Jadwal: kartu Next collection baru — chip ikon, pill hitung mundur, jam besar,
+    hari/tanggal, daftar jendela yang menembak (zona · label · interval), "After that".
+  VERIFIKASI: 423 test API, tsc + eslint bersih kedua paket, halaman 200. UI belum dilihat
+    di browser.
 
 ---
 
