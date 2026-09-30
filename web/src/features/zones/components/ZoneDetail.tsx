@@ -339,7 +339,6 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
         <SectionHeader
           icon={<IconClock size={18} />}
           title="Capture windows"
-          description="When this zone collects. Windows are set on the Schedule page."
           actions={
             <>
               {/* Only worth showing once there is enough to look through. */}

@@ -239,7 +239,6 @@ export function ZoneCaptures({ zone, refreshKey = 0 }: { zone: Zone; refreshKey?
       <SectionHeader
         icon={<IconCamera size={18} />}
         title="Captures"
-        description="Every cycle this zone has collected, newest first."
       />
 
       {error && <Alert variant="warning">{error}</Alert>}
@@ -334,7 +333,7 @@ export function ZoneCaptures({ zone, refreshKey = 0 }: { zone: Zone; refreshKey?
                       polygon={zone.geometry}
                       slimTraffic={traffic}
                       tone="dark"
-                      className="h-80 rounded-md overflow-hidden"
+                      className="h-[26rem] laptop:h-[32rem] rounded-md overflow-hidden"
                     />
                     {loadingTraffic && (
                       <span className="absolute top-md right-md z-[500] text-micro font-semibold bg-canvas text-text-secondary border border-border rounded-xs px-sm py-xs">
@@ -361,7 +360,7 @@ export function ZoneCaptures({ zone, refreshKey = 0 }: { zone: Zone; refreshKey?
                   </div>
                 </div>
               ) : (
-                <div className="h-80 rounded-md bg-canvas-secondary flex items-center justify-center text-center px-xl">
+                <div className="h-[26rem] laptop:h-[32rem] rounded-md bg-canvas-secondary flex items-center justify-center text-center px-xl">
                   <p className="text-body text-text-secondary max-w-[48ch]">
                     {selected.error ??
                       (selected.status === 'pending' || selected.status === 'processing'

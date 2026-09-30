@@ -28,6 +28,8 @@ export interface Zone {
   /** Human label for the zone's cadence, e.g. "Per jam" (set on Schedule). */
   /** Null when no active window points at this zone. */
   cadence: string | null
+  /** The cadence in parts, for tables with separate interval and hours columns. */
+  schedule: { interval: '15min' | 'hourly' | 'daily'; start: string; end: string; windows: number } | null
   createdAt: string
 }
 
