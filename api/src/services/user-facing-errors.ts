@@ -7,18 +7,18 @@
  * in their terms, and whether they need to act.
  */
 
+/**
+ * Export failures say what to do, never why. Out of memory, a timeout, a stalled
+ * worker — the user can't act on any of those, and naming them reads as "your server
+ * is broken". The cause goes to the log (the worker logs it, and the row keeps it);
+ * the user gets the one action that works: retry.
+ */
 export function exportErrorForUser(raw: string | null): string | null {
   if (!raw) return null
-  if (/target crashed|crash|out of memory|oom/i.test(raw)) {
-    return 'The render ran out of memory partway through. Try again — a smaller size or fewer frames makes it lighter.'
-  }
-  if (/timeout|timed out/i.test(raw)) return 'Rendering took too long and was stopped. Please try again.'
-  if (/berhenti di tengah|stopped unexpectedly/i.test(raw)) return 'Rendering stopped unexpectedly. Please try again.'
-  if (/antrian|queue/i.test(raw)) return 'The export queue was busy. Please try again in a moment.'
   if (/dibatalkan|cancel/i.test(raw)) return 'Cancelled.'
-  if (/tanpa menghasilkan|no file/i.test(raw)) return 'The render finished without a file. Please try again.'
-  if (/zona sudah dihapus/i.test(raw)) return 'The zone was deleted.'
-  return 'Something went wrong while rendering. Please try again.'
+  if (/zona sudah dihapus/i.test(raw)) return 'Its zone was deleted, so it can’t be rendered.'
+  if (/antrian|queue/i.test(raw)) return 'This export couldn’t start. Retry in a moment.'
+  return 'This export couldn’t be finished. Retry to render it again.'
 }
 
 export function captureErrorForUser(status: string, raw: string | null): string | null {

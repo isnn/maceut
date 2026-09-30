@@ -2,20 +2,22 @@ import { describe, it, expect } from 'vitest'
 import { captureErrorForUser, exportErrorForUser } from './user-facing-errors'
 
 describe('exportErrorForUser', () => {
-  it('never shows the renderer’s own words', () => {
-    const msg = exportErrorForUser('page.evaluate: Target crashed ')
-    expect(msg).toBe('The render ran out of memory partway through. Try again — a smaller size or fewer frames makes it lighter.')
-    expect(msg).not.toMatch(/page\.evaluate|Target/)
+  it.each([
+    'page.evaluate: Target crashed ',
+    'page.waitForFunction: Timeout 120000ms exceeded.',
+    'Render berhenti di tengah jalan. Silakan coba lagi.',
+    'Render selesai tanpa menghasilkan file.',
+    'net::ERR_ABORTED; maybe frame was detached?',
+  ])('says what to do, not what broke: %s', (raw) => {
+    const msg = exportErrorForUser(raw)!
+    expect(msg).toBe('This export couldn’t be finished. Retry to render it again.')
+    expect(msg).not.toMatch(/memory|crash|timeout|page\.|render berhenti/i)
   })
 
-  it.each([
-    ['page.waitForFunction: Timeout 120000ms exceeded.', 'Rendering took too long and was stopped. Please try again.'],
-    ['Render berhenti di tengah jalan. Silakan coba lagi.', 'Rendering stopped unexpectedly. Please try again.'],
-    ['Antrian export tidak tersedia. Coba lagi sebentar lagi.', 'The export queue was busy. Please try again in a moment.'],
-    ['Dibatalkan.', 'Cancelled.'],
-    ['net::ERR_ABORTED; maybe frame was detached?', 'Something went wrong while rendering. Please try again.'],
-  ])('%s', (raw, expected) => {
-    expect(exportErrorForUser(raw)).toBe(expected)
+  it('keeps the few that are the user’s own business', () => {
+    expect(exportErrorForUser('Dibatalkan.')).toBe('Cancelled.')
+    expect(exportErrorForUser('Antrian export tidak tersedia. Coba lagi sebentar lagi.')).toBe('This export couldn’t start. Retry in a moment.')
+    expect(exportErrorForUser('Zona sudah dihapus.')).toBe('Its zone was deleted, so it can’t be rendered.')
   })
 
   it('passes "no error" through', () => {

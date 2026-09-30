@@ -80,6 +80,7 @@ import {
   exportErrorMessage,
   getZoneExports,
   isActive,
+  retryExport,
   type ExportJob,
 } from '@/features/exports/api'
 import {
@@ -1286,6 +1287,15 @@ export default function StudioPage() {
                 job={activeExport}
                 zoneHref={activeExport ? `/zones/${activeExport.zoneId}?export=${activeExport.id}#exports` : null}
                 busy={activeExport ? isActive(activeExport) : false}
+                onRetry={async (job) => {
+                  setExportError(null)
+                  try {
+                    const again = await retryExport(job.id)
+                    setServerExport({ zoneId: again.zoneId, id: again.id, initial: again })
+                  } catch (err) {
+                    setExportError(exportErrorMessage(err))
+                  }
+                }}
                 items={[
                   {
                     label: 'This frame',
@@ -1495,6 +1505,7 @@ function ExportDialog({
   job,
   zoneHref,
   busy,
+  onRetry,
 }: {
   view: 'closed' | 'choose' | 'progress'
   onClose: () => void
@@ -1504,7 +1515,10 @@ function ExportDialog({
   zoneHref: string | null
   /** An export is already queued or rendering — only one at a time. */
   busy: boolean
+  /** Renders a failed export again with the same settings. */
+  onRetry: (job: ExportJob) => Promise<void>
 }) {
+  const [retrying, setRetrying] = useState(false)
   const showProgress = view === 'progress' && job !== null
   return (
     <Dialog.Root open={view !== 'closed'} onOpenChange={(next) => !next && onClose()}>
@@ -1518,7 +1532,7 @@ function ExportDialog({
                   {job.status === 'done'
                     ? 'Your export is ready'
                     : job.status === 'failed'
-                      ? 'The export failed'
+                      ? 'This export didn’t finish'
                       : job.format === 'webm'
                         ? 'Making your animation'
                         : 'Collecting your frames'}
@@ -1553,6 +1567,22 @@ function ExportDialog({
                   <a href={job.downloadUrl} download className={buttonClass()}>
                     Download
                   </a>
+                ) : job.status === 'failed' ? (
+                  <>
+                    <Dialog.Close className={buttonClass('secondary')}>Close</Dialog.Close>
+                    <button
+                      type="button"
+                      disabled={retrying}
+                      onClick={async () => {
+                        setRetrying(true)
+                        await onRetry(job)
+                        setRetrying(false)
+                      }}
+                      className={buttonClass()}
+                    >
+                      {retrying ? 'Starting…' : 'Retry export'}
+                    </button>
+                  </>
                 ) : (
                   <Dialog.Close className={buttonClass(isActive(job) ? 'primary' : 'secondary')}>
                     {isActive(job) ? 'Keep editing' : 'Close'}

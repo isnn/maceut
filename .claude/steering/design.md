@@ -61,6 +61,10 @@ const config: Config = {
 
         // Semantic — Info
         'info': '#3178F6',
+
+        // Category (label colour, never a state)
+        'teal-bg':   '#E0F4F1',
+        'teal-text': '#0F6E64',
       },
       borderRadius: {
         xs: '4px',
@@ -156,6 +160,17 @@ export default config
 | `text-warning-text` | `#946200` | Teks alert warning |
 | `text-warning-icon` | `#F4A300` | Icon alert warning |
 | `text-info` | `#3178F6` | Link inline, info aksi |
+
+### Category (label kategori, bukan status)
+
+Hijau/kuning/merah khusus STATUS (berjalan, perlu perhatian, gagal). Label kategori —
+kelas jalan, paket, peran — memakai biru (`info`), ungu (`primary`) dan teal, supaya
+tidak pernah terbaca sebagai status.
+
+| Token Tailwind | Hex | Penggunaan |
+|---------------|-----|-----------|
+| `bg-teal-bg` | `#E0F4F1` | Pill kategori teal (kelas jalan Nasional) |
+| `text-teal-text` | `#0F6E64` | Teks pill teal |
 
 ---
 

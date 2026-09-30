@@ -37,6 +37,11 @@ export interface PublicZone {
    * scheduled" in its own language.
    */
   cadence: string | null
+  /**
+   * The same facts as `cadence`, in parts — for tables that show the interval and the
+   * hours in separate columns. Null when nothing is scheduled.
+   */
+  schedule: { interval: CaptureInterval; start: string; end: string; windows: number } | null
   createdAt: string
 }
 
@@ -74,6 +79,10 @@ export function toPublic(zone: ZoneRecord, cadence?: scheduleRepo.ZoneCadence): 
     roadsCount: zone.roadsCount,
     lengthKm: zone.lengthKm,
     cadence: describeCadence(cadence),
+    schedule:
+      cadence && cadence.activeWindows > 0
+        ? { interval: cadence.finestInterval, start: cadence.earliestStart, end: cadence.latestEnd, windows: cadence.activeWindows }
+        : null,
     createdAt: zone.createdAt.toISOString(),
   }
 }
