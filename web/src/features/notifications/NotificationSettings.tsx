@@ -106,8 +106,8 @@ function StaffNotificationSettings() {
         When HERE usage reaches 80% of a cap, and when a cap is reached, every staff account sees it under the bell. One
         email goes to the alert address set on the HERE usage page.
       </p>
-      <Link href="/internal/here" className="text-body text-info font-medium no-underline hover:underline">
-        Set the alert address →
+      <Link href="/internal/here" className="text-body text-primary font-semibold no-underline hover:underline">
+        Set the alert address
       </Link>
     </Card>
   )
