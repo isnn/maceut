@@ -148,6 +148,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-25** Dashboard: semua metrik data nyata (storage, export bulan ini, zona gagal, masalah hari ini, puncak kemacetan), copy baru, thumbnail kecil di Latest captures | permintaan user |
 | ✅ | **FE-26** Pill tanpa titik, tombol tandai-dibaca per notifikasi, error teknis diterjemahkan, kartu Next collection & frame terkumpul dari data nyata | permintaan user |
 | ✅ | **FE-27** Kelas jalan berwarna (teal/biru/ungu), kolom Interval & Hours terpisah, pesan gagal export berupa aksi (Retry), subjudul zona dihapus + peta capture lebih tinggi, kartu Next collection baru | permintaan user |
+| ✅ | **FE-28** Lebar header = lebar halaman, Collection health ringkas, notifikasi warna brand & copy singkat, judul seksi sejajar ikon, "Retry" | permintaan user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -1877,6 +1878,24 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   - Halaman zona: deskripsi di bawah judul seksi dihapus; peta Captures 26rem/32rem.
   - Jadwal: kartu Next collection baru — chip ikon, pill hitung mundur, jam besar,
     hari/tanggal, daftar jendela yang menembak (zona · label · interval), "After that".
+  VERIFIKASI: 423 test API, tsc + eslint bersih kedua paket, halaman 200. UI belum dilihat
+    di browser.
+
+[2026-10-01] FE-28 — header sejajar, health ringkas, notifikasi brand & singkat.
+
+  - `page-width.ts`: satu aturan lebar untuk header DAN halaman (Studio 1600, lainnya
+    1180). Dulu header selalu 1180 sementara Studio 1600 → tidak sejajar di layar besar.
+  - Collection health: satu baris per metrik dengan ikon brand, tanpa catatan kecil di
+    bawah tiap nilai (detail pindah ke tooltip); nilai nol yang baik berwarna hijau, masalah
+    kuning. "Peak today" menampilkan nilai + jam.
+  - Recent exports: "ZIP · 28 frames" (dulu "Frames · ZIP · 28 frames").
+  - Notifikasi: tanpa panah, tanpa biru (aksi, "Mark all read", ikon info, link toast →
+    ungu brand); tombol tandai-dibaca pindah ke baris meta (kanan bawah), ikon Lucide
+    check-check, hanya pada yang belum dibaca. Copy dipersingkat — apa yang terjadi + apa
+    yang dilakukan ("We’re retrying — no action needed.", "Retry it from the zone page.").
+    Notifikasi lama di DB tetap dengan teks lamanya.
+  - Judul seksi tanpa deskripsi kini rata tengah dengan chip ikonnya.
+  - Tombol "Retry export" → "Retry".
   VERIFIKASI: 423 test API, tsc + eslint bersih kedua paket, halaman 200. UI belum dilihat
     di browser.
 

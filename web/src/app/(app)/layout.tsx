@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import { pageWidthClass } from '@/components/shared/page-width'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useCurrentUser()
@@ -24,9 +25,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-page">
       <AppHeader />
-      {/* Studio is a canvas plus a tool drawer — it gets the room; every other page
-          keeps the reading width. */}
-      <main className={cn('mx-auto px-xl py-xl', pathname.startsWith('/studio') ? 'max-w-[1600px]' : 'max-w-[1180px]')}>
+      {/* Same width as the header (page-width.ts), so they always line up. */}
+      <main className={cn('mx-auto px-xl py-xl', pageWidthClass(pathname))}>
         {children}
       </main>
     </div>

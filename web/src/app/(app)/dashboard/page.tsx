@@ -7,13 +7,13 @@ import { StatusPill, ZoneStatusPill } from '@/components/ui/Badge'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { buttonClass } from '@/components/ui/Button'
-import { IconFilm } from '@/components/ui/icons'
+import { IconAlert, IconCarFront, IconClock, IconFilm, IconRoad, IconZap } from '@/components/ui/icons'
 import { cn, formatFileSize, formatKm, formatNumber } from '@/lib/utils'
 import { PLAN_LABEL, TRAFFIC_COLORS } from '@/lib/constants'
 import * as dashboardApi from '@/features/dashboard/api'
 import * as zonesApi from '@/features/zones/api'
 import * as exportsApi from '@/features/exports/api'
-import { ExportPill, FORMAT_LABEL } from '@/features/exports/components/ExportProgress'
+import { ExportPill } from '@/features/exports/components/ExportProgress'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import type { CollectionHealth, UsageSummary } from '@/features/dashboard/api'
 import type { Zone } from '@/features/zones/types'
@@ -252,52 +252,45 @@ export default function DashboardPage() {
                 {health.status === 'healthy' ? 'Healthy' : health.status === 'degraded' ? 'Needs attention' : 'Idle'}
               </StatusPill>
             </div>
-            <dl className="space-y-md">
+            {/* One line each — the label says what it is, the value says how it is. The
+                explanations that used to sit under every value read as fine print. */}
+            <dl className="divide-y divide-divider">
+              <HealthRow icon={<IconClock size={16} />} label="Next capture">
+                {health.nextCaptureAt ? (
+                  <>
+                    {health.nextCaptureAt}
+                    <span className="text-caption font-normal text-text-muted ml-xs">{dayWord(health.nextCaptureInDays)}</span>
+                  </>
+                ) : (
+                  <span className="text-text-muted">Not scheduled</span>
+                )}
+              </HealthRow>
+              <HealthRow icon={<IconAlert size={16} />} label="Zones failing" tone={health.zonesFailing > 0 ? 'warning' : 'ok'}>
+                {health.zonesFailing}
+              </HealthRow>
               <HealthRow
-                label="Next capture"
-                value={health.nextCaptureAt ? `${health.nextCaptureAt} WIB` : '—'}
-                note={
-                  health.nextCaptureAt
-                    ? `${dayWord(health.nextCaptureInDays)} · ${health.zonesCollecting} ${health.zonesCollecting === 1 ? 'zone' : 'zones'}`
-                    : 'No capture window is active'
-                }
-              />
-              <HealthRow
-                label="Zones failing"
-                value={String(health.zonesFailing)}
-                tone={health.zonesFailing > 0 ? 'warning' : undefined}
-                note={health.zonesFailing > 0 ? 'Their latest scheduled capture failed' : 'Every zone collected on its last try'}
-              />
-              <HealthRow
+                icon={<IconZap size={16} />}
                 label="Problems today"
-                value={String(health.problemsToday.failed + health.problemsToday.missed)}
-                tone={health.problemsToday.failed + health.problemsToday.missed > 0 ? 'warning' : undefined}
-                note={`${health.problemsToday.failed} failed · ${health.problemsToday.missed} missed while offline`}
-              />
-              <HealthRow
-                label="Busiest moment today"
-                value={
-                  health.peakIndex === null ? (
-                    '—'
-                  ) : (
-                    <span className="inline-flex items-center gap-xs">
-                      <span aria-hidden className="w-2 h-2 rounded-full" style={{ background: jamColor(health.peakIndex) }} />
-                      {health.peakIndex.toFixed(1)}
-                      <span className="text-caption font-normal text-text-muted">/ 10</span>
-                    </span>
-                  )
-                }
-                note={
-                  health.peakIndex === null
-                    ? 'Appears after today’s first capture'
-                    : `Avg jam factor · ${health.peakAt} WIB · ${health.peakZoneName}`
-                }
-              />
-              <HealthRow
-                label="Roads watched"
-                value={health.roadsReporting === null ? '—' : formatNumber(health.roadsReporting)}
-                note={health.roadsReporting === null ? 'Waiting on HERE traffic data' : 'across your collecting zones'}
-              />
+                tone={health.problemsToday.failed + health.problemsToday.missed > 0 ? 'warning' : 'ok'}
+              >
+                <span title={`${health.problemsToday.failed} failed · ${health.problemsToday.missed} missed while offline`}>
+                  {health.problemsToday.failed + health.problemsToday.missed}
+                </span>
+              </HealthRow>
+              <HealthRow icon={<IconCarFront size={16} />} label="Peak today">
+                {health.peakIndex === null ? (
+                  <span className="text-text-muted">—</span>
+                ) : (
+                  <span className="inline-flex items-center gap-xs" title={`Avg jam factor at ${health.peakAt} WIB in ${health.peakZoneName}`}>
+                    <span aria-hidden className="w-2 h-2 rounded-full" style={{ background: jamColor(health.peakIndex) }} />
+                    {health.peakIndex.toFixed(1)}
+                    <span className="text-caption font-normal text-text-muted">at {health.peakAt}</span>
+                  </span>
+                )}
+              </HealthRow>
+              <HealthRow icon={<IconRoad size={16} />} label="Roads watched">
+                {health.roadsReporting === null ? <span className="text-text-muted">—</span> : formatNumber(health.roadsReporting)}
+              </HealthRow>
             </dl>
           </Card>
 
@@ -320,7 +313,7 @@ export default function DashboardPage() {
                         {job.zoneName}
                       </p>
                       <p className="text-micro text-text-muted mt-[2px]">
-                        {FORMAT_LABEL[job.format]} · {job.frameCount} frames
+                        {job.format === 'webm' ? 'WebM' : 'ZIP'} · {job.frameCount} frames
                       </p>
                     </Link>
                     <ExportPill job={job} />
@@ -404,24 +397,32 @@ function StatTile({
 }
 
 function HealthRow({
+  icon,
   label,
-  value,
-  note,
   tone,
+  children,
 }: {
+  icon: React.ReactNode
   label: string
-  value: React.ReactNode
-  note?: string
-  tone?: 'warning'
+  /** `warning` turns the value amber; `ok` marks a zero that is good news. */
+  tone?: 'warning' | 'ok'
+  children: React.ReactNode
 }) {
   return (
-    <div className="flex items-start justify-between gap-md">
-      <dt className="text-body text-text-secondary">{label}</dt>
-      <dd className="text-right min-w-0">
-        <span className={cn('text-body font-semibold tabular-nums', tone === 'warning' ? 'text-warning-text' : 'text-text-primary')}>
-          {value}
+    <div className="flex items-center justify-between gap-md py-sm first:pt-0 last:pb-0">
+      <dt className="flex items-center gap-sm text-body text-text-secondary">
+        <span aria-hidden className="text-primary">
+          {icon}
         </span>
-        {note && <span className="block text-micro text-text-muted mt-xs">{note}</span>}
+        {label}
+      </dt>
+      <dd
+        className={cn(
+          'text-body font-semibold tabular-nums text-right',
+          tone === 'warning' ? 'text-warning-text' : tone === 'ok' ? 'text-success-text' : 'text-text-primary',
+        )}
+      >
+        {children}
       </dd>
     </div>
   )
