@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { Logo } from '@/components/ui/Logo'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { cn } from '@/lib/utils'
+import { pageWidthClass } from './page-width'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
 import { PLAN_LABEL } from '@/lib/constants'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
@@ -28,7 +29,7 @@ export function AppHeader() {
   const logout = useLogout()
   return (
     <header className="sticky top-0 z-20 bg-canvas border-b border-border">
-      <div className="mx-auto max-w-[1180px] px-xl h-16 flex items-center gap-xxl">
+      <div className={cn('mx-auto px-xl h-16 flex items-center gap-xxl', pageWidthClass(pathname))}>
         <Logo href="/dashboard" />
 
         <nav className="flex items-center gap-lg overflow-x-auto">

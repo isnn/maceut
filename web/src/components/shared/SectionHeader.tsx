@@ -20,11 +20,13 @@ export function SectionHeader({
   icon?: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-md">
-      <div className="min-w-0 flex items-start gap-md">
+    <div className={cn('flex flex-wrap justify-between gap-md', description ? 'items-end' : 'items-center')}>
+      {/* With a description the chip sits beside both lines; without one it centres on
+          the title, so the icon and the words share a middle line. */}
+      <div className={cn('min-w-0 flex gap-md', description ? 'items-start' : 'items-center')}>
         {icon && <IconChip>{icon}</IconChip>}
         <div className="min-w-0">
-          <h2 className="text-section-title text-text-primary">{title}</h2>
+          <h2 className="text-section-title text-text-primary leading-tight">{title}</h2>
           {description && <p className="text-caption text-text-muted mt-xs">{description}</p>}
         </div>
       </div>

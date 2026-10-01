@@ -139,7 +139,7 @@ describe('onExportFinished', () => {
     } as never)
     await svc.onExportFinished('e1')
     const row = vi.mocked(notificationRepo.insertOnce).mock.calls[0]![0]
-    expect(row).toMatchObject({ type: 'export_ready', title: 'Animation ready — Sudirman', dedupeKey: 'export-done:e1' })
+    expect(row).toMatchObject({ type: 'export_ready', title: 'Animation ready · Sudirman', dedupeKey: 'export-done:e1' })
     expect(row.emailStatus).toBeUndefined()
   })
 })
@@ -152,7 +152,7 @@ describe('onPlanChanged', () => {
       emailStatus: 'pending',
       emailDueAt: at,
     })
-    expect(vi.mocked(notificationRepo.insertOnce).mock.calls[0]![0].body).toContain('Paused to fit the new limits: Sudirman')
+    expect(vi.mocked(notificationRepo.insertOnce).mock.calls[0]![0].body).toContain('Paused to fit: Sudirman')
 
     vi.mocked(notificationRepo.insertOnce).mockClear()
     await svc.onPlanChanged('u1', { from: 'standard', to: 'free', paused: [], byStaff: false }, at)
@@ -244,7 +244,7 @@ describe('onHereBudget', () => {
     await svc.onHereBudget(alert)
     expect(notificationRepo.insertOnce).toHaveBeenCalledTimes(2)
     expect(notificationRepo.insertOnce).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'staff1', type: 'here_budget_warning', title: 'HERE usage at 80% of the monthly cap' }),
+      expect.objectContaining({ userId: 'staff1', type: 'here_budget_warning', title: 'HERE at 80% of the monthly cap' }),
     )
     expect(notificationRepo.claimEmail).toHaveBeenCalledWith('here-budget:warning:monthly:2026-09-01', 'ops@maceut.id', 'here-budget', 'console')
     expect(email.hereBudgetEmail).toHaveBeenCalledWith('ops@maceut.id', expect.anything())

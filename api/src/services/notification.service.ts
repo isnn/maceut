@@ -110,8 +110,8 @@ export async function onCaptureFailed(capture: SettledCapture, zoneName: string)
         type: 'capture_failing',
         tone: 'warning',
         title: `${zoneName} stopped collecting`,
-        body: `The ${wibTime(capture.capturedAt)} capture failed. We retry at every scheduled time — nothing to do unless it keeps failing.`,
-        actionLabel: 'Open zone',
+        body: `The ${wibTime(capture.capturedAt)} capture failed. We’re retrying — no action needed.`,
+        actionLabel: 'View zone',
         actionHref: `/zones/${capture.zoneId}`,
         data: {
           zoneId: capture.zoneId,
@@ -147,8 +147,8 @@ export async function onCaptureDone(capture: SettledCapture, zoneName: string): 
         type: 'capture_recovered',
         tone: 'success',
         title: `${zoneName} is collecting again`,
-        body: `The ${wibTime(capture.capturedAt)} capture succeeded.`,
-        actionLabel: 'Open zone',
+        body: `Back to normal since ${wibTime(capture.capturedAt)}.`,
+        actionLabel: 'View zone',
         actionHref: `/zones/${capture.zoneId}`,
         data: { zoneId: capture.zoneId, zoneName, captureId: capture.id },
         dedupeKey: `capture-recovered:${capture.zoneId}:${capture.id}`,
@@ -180,9 +180,9 @@ export async function onCapturesMissed(userId: string, missed: MissedSummary, de
       userId,
       type: 'captures_missed',
       tone: 'info',
-      title: `${missed.occurrences} scheduled ${missed.occurrences === 1 ? 'capture was' : 'captures were'} missed`,
-      body: `Maceut was unavailable from ${wibTime(missed.from)} to ${wibTime(detectedAt)}, so ${zones} skipped those times. Collection has resumed; missed frames can't be recovered.`,
-      actionLabel: 'Open zones',
+      title: `${missed.occurrences} ${missed.occurrences === 1 ? 'capture' : 'captures'} missed`,
+      body: `Maceut was offline ${wibTime(missed.from)}–${wibTime(detectedAt)} (${zones}). Collection has resumed — no action needed.`,
+      actionLabel: 'View zones',
       actionHref: '/zones',
       data: { zoneIds: missed.zoneIds, occurrences: missed.occurrences, from: missed.from.toISOString() },
       dedupeKey: `missed:${detectedAt.toISOString().slice(0, 16)}`,
@@ -200,8 +200,8 @@ export async function onLimitReached(userId: string, plan: Plan, now: Date = new
       type: 'capture_limit_reached',
       tone: 'warning',
       title: 'Daily capture limit reached',
-      body: `You've used all ${limit} captures for today, so further captures are skipped until 00:00 WIB. Scheduled windows resume tomorrow.`,
-      actionLabel: 'See usage',
+      body: `All ${limit} used. Captures resume at 00:00 WIB.`,
+      actionLabel: 'View usage',
       actionHref: '/profile',
       data: { limit, day: wibDay(now) },
       dedupeKey: `limit-reached:${wibDay(now)}`,
@@ -219,9 +219,9 @@ export async function onCaptureQueued(userId: string, plan: Plan, usedIncludingT
       userId,
       type: 'capture_limit_near',
       tone: 'info',
-      title: 'Almost at your daily capture limit',
-      body: `${usedIncludingThis} of ${limit} captures used today. Captures past the limit are skipped until 00:00 WIB.`,
-      actionLabel: 'See usage',
+      title: 'Almost at your daily limit',
+      body: `${usedIncludingThis} of ${limit} captures used today. Extra captures are skipped until 00:00 WIB.`,
+      actionLabel: 'View usage',
       actionHref: '/profile',
       data: { used: usedIncludingThis, limit, day: wibDay(now) },
       dedupeKey: `limit-near:${wibDay(now)}`,
@@ -245,11 +245,9 @@ export async function onExportFinished(exportId: string): Promise<void> {
         userId: row.userId,
         type: done ? 'export_ready' : 'export_failed',
         tone: done ? 'success' : 'warning',
-        title: done ? `${kind} ready — ${zoneName}` : `${kind} failed — ${zoneName}`,
-        body: done
-          ? 'Download it from the zone page. Files are kept for 7 days.'
-          : 'The render stopped before it finished. You can try again from the zone page.',
-        actionLabel: done ? 'Download' : 'Try again',
+        title: done ? `${kind} ready · ${zoneName}` : `${kind} didn’t finish · ${zoneName}`,
+        body: done ? 'Download it within 7 days.' : 'Retry it from the zone page.',
+        actionLabel: done ? 'Download' : 'Retry',
         actionHref: `/zones/${row.zoneId}#exports`,
         data: { exportId: row.id, zoneId: row.zoneId, zoneName, format: row.format },
         dedupeKey: `export-${done ? 'done' : 'failed'}:${row.id}`,
@@ -277,16 +275,16 @@ export async function onPlanChanged(
   if (change.from === change.to) return
   const up = PLAN_LIMITS[change.to].capturesLimit > PLAN_LIMITS[change.from].capturesLimit
   const pausedText = change.paused.length
-    ? ` Paused to fit the new limits: ${change.paused.join(', ')}. Nothing was deleted — they resume if you move up again.`
-    : ''
+    ? ` Paused to fit: ${change.paused.join(', ')}. Nothing was deleted.`
+    : ' New limits apply now.'
   await write(
     {
       userId,
       type: 'plan_changed',
       tone: up ? 'success' : 'info',
       title: `Your plan is now ${PLAN_NAME[change.to]}`,
-      body: `${change.byStaff ? 'The Maceut team moved' : 'You moved'} your account from ${PLAN_NAME[change.from]} to ${PLAN_NAME[change.to]}.${pausedText}`,
-      actionLabel: 'See your plan',
+      body: `${change.byStaff ? 'Changed by the Maceut team.' : `Changed from ${PLAN_NAME[change.from]}.`}${pausedText}`,
+      actionLabel: 'View plan',
       actionHref: '/profile',
       data: { from: change.from, to: change.to, paused: change.paused },
       dedupeKey: `plan:${change.from}->${change.to}:${now.toISOString()}`,
@@ -325,14 +323,13 @@ export async function onHereBudget(alert: HereBudgetAlert): Promise<void> {
 
   const pct = Math.round((alert.used / alert.limit) * 100)
   const periodWord = alert.period === 'daily' ? 'daily' : 'monthly'
+  const used = `${alert.used.toLocaleString('en-US')} of ${alert.limit.toLocaleString('en-US')} requests`
   const title =
-    alert.level === 'reached'
-      ? `HERE ${periodWord} cap reached — captures are paused`
-      : `HERE usage at ${pct}% of the ${periodWord} cap`
+    alert.level === 'reached' ? `HERE ${periodWord} cap reached` : `HERE at ${pct}% of the ${periodWord} cap`
   const body =
     alert.level === 'reached'
-      ? `${alert.used.toLocaleString('en-US')} of ${alert.limit.toLocaleString('en-US')} requests used. HERE calls are refused until the ${alert.period === 'daily' ? 'day' : 'month'} rolls over or the cap is raised; customers see traffic as temporarily unavailable.`
-      : `${alert.used.toLocaleString('en-US')} of ${alert.limit.toLocaleString('en-US')} requests used. At the cap, HERE calls are refused and captures fail.`
+      ? `${used}. Captures stop until the ${alert.period === 'daily' ? 'day' : 'month'} resets — raise the cap to resume.`
+      : `${used}. Raise the cap if captures should keep running.`
 
   try {
     const staff = await userRepo.listInternalIds(config.internalEmails)
@@ -344,7 +341,7 @@ export async function onHereBudget(alert: HereBudgetAlert): Promise<void> {
           tone: alert.level === 'reached' ? 'warning' : 'info',
           title,
           body,
-          actionLabel: 'Open HERE usage',
+          actionLabel: 'View usage',
           actionHref: '/internal/here',
           data: { ...alert },
           dedupeKey: key,
