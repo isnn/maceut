@@ -153,7 +153,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **EXP-A1** Export: ZIP di-stream ke R2 (multipart, ZIP64), lanjut setelah crash, satu browser per worker, log waktu per frame (fix #58, #63, #67) | rencana optimasi export |
 | ✅ | **EXP-A2** Export: proses browser lebih ringan, data slim disimpan per capture, pakai ulang frame yang sudah dirender | rencana optimasi export |
 | ✅ | **EXP-B** Export video lewat ffmpeg (tanpa merekam real-time) | rencana optimasi export |
-| 🔴 | **EXP-C** Batas frame × piksel per paket, antrian bergiliran, opsi WebP | rencana optimasi export |
+| ✅ | **EXP-C** Batas frame × piksel per paket, antrian bergiliran, opsi WebP | rencana optimasi export |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -1988,6 +1988,20 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
     dilaporkan bukan menggantung), worker video (webm & mp4, lanjut setelah crash, batal →
     ffmpeg dihentikan & folder dihapus).
   VERIFIKASI: 459 test API, tsc + eslint bersih kedua paket, worker boot dengan kode baru.
+
+[2026-10-05e] EXP-C — anggaran export, antrean kerja-terkecil, WebP (ADR-031).
+
+  - `exportBudgetMpFrames` per paket (120 / 500 / 2.900) di samping batas frame; error
+    EXPORT_BUDGET_EXCEEDED menyebut maksimal frame pada ukuran itu. Berlaku juga di retry.
+    `createExport` kini memakai `findLiteById` (tidak memuat 2 × 2 MB traffic).
+  - Antrean: `pickNextQueued` (kerja ÷ (1 + menit menunggu/10)); `chooseNext` menjalankan yang
+    termurah dan menerbitkan ulang pesan yang diterima. Diuji di DB nyata: kecil-baru → besar
+    yang menunggu 2 jam → besar-baru. Export yang sedang berjalan tidak dijeda (alasan di ADR-031).
+  - WebP q90 untuk ZIP (`spec.imageFormat`): nama & cache .webp, tak pernah memakai gambar
+    capture PNG; video selalu PNG.
+  - Studio: tiap opsi export menampilkan % anggaran atau alasan dinonaktifkan; sakelar
+    "Smaller ZIP (WebP)"; pesan error anggaran dalam bahasa Inggris.
+  VERIFIKASI: 465 test API, tsc + eslint bersih kedua paket.
 
 ---
 

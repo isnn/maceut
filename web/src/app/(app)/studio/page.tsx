@@ -27,6 +27,9 @@ import { Button, buttonClass } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
 import { Switch } from '@/components/ui/Switch'
+import { PLAN_LIMITS } from '@/lib/constants'
+import { useCurrentUser } from '@/features/auth/hooks/useAuth'
+import type { Plan } from '@/features/auth/types'
 import { Input as BaseInput } from '@base-ui/react/input'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -686,6 +689,10 @@ export default function StudioPage() {
   const [serverExport, setServerExport] = useState<{ zoneId: string; id: string; initial: ExportJob | null } | null>(null)
   const [exportDialog, setExportDialog] = useState<'closed' | 'choose' | 'progress'>('closed')
   const [starting, setStarting] = useState(false)
+  /** ZIP frames as WebP instead of PNG (EXP-C). */
+  const [zipWebp, setZipWebp] = useState(false)
+  const { user } = useCurrentUser()
+  const fit = exportFit(user?.plan ?? 'free', frames.length, outputSize.width, outputSize.height)
   const activeExportId = serverExport?.zoneId === zoneId ? serverExport.id : null
   const activeExport = useExport(activeExportId, serverExport?.zoneId === zoneId ? serverExport.initial : null)
 
@@ -724,6 +731,7 @@ export default function StudioPage() {
             width: outputSize.width,
             height: outputSize.height,
             holdMs: SPEEDS[speed]!.ms,
+            imageFormat: format === 'zip' && zipWebp ? 'webp' : 'png',
           },
         })
         setServerExport({ zoneId, id: job.id, initial: job })
@@ -734,7 +742,7 @@ export default function StudioPage() {
         setStarting(false)
       }
     },
-    [startFrame, endFrame, zoneId, themeId, congestionId, overlay, view, outputSize, speed],
+    [startFrame, endFrame, zoneId, themeId, congestionId, overlay, view, outputSize, speed, zipWebp],
   )
 
   const zone = selectedZone
@@ -1308,10 +1316,15 @@ export default function StudioPage() {
                   },
                   {
                     label: 'All frames',
-                    format: 'ZIP',
-                    detail: `${frames.length} image${frames.length === 1 ? '' : 's'} in the selected time range`,
+                    format: zipWebp ? 'ZIP · WebP' : 'ZIP',
+                    detail:
+                      frames.length === 0
+                        ? 'No frames in range'
+                        : fit.ok
+                          ? `${frames.length} image${frames.length === 1 ? '' : 's'} · ${fit.note}`
+                          : fit.note,
                     onSelect: () => void startServerExport('zip'),
-                    disabled: frames.length === 0,
+                    disabled: frames.length === 0 || !fit.ok,
                   },
                   {
                     label: 'Animation',
@@ -1319,9 +1332,11 @@ export default function StudioPage() {
                     detail:
                       frames.length < 2
                         ? 'Needs at least 2 frames in range'
-                        : `${frames.length} frames at ${SPEEDS[speed]!.label} speed`,
+                        : fit.ok
+                          ? `${frames.length} frames at ${SPEEDS[speed]!.label} speed · ${fit.note}`
+                          : fit.note,
                     onSelect: () => void startServerExport('webm'),
-                    disabled: frames.length < 2,
+                    disabled: frames.length < 2 || !fit.ok,
                   },
                   {
                     // Same animation as WebM, in the format that plays everywhere:
@@ -1331,11 +1346,22 @@ export default function StudioPage() {
                     detail:
                       frames.length < 2
                         ? 'Needs at least 2 frames in range'
-                        : `${frames.length} frames · plays on phones, slides and chat apps`,
+                        : fit.ok
+                          ? `${frames.length} frames · plays on phones, slides and chat apps`
+                          : fit.note,
                     onSelect: () => void startServerExport('mp4'),
-                    disabled: frames.length < 2,
+                    disabled: frames.length < 2 || !fit.ok,
                   },
                 ]}
+                extra={
+                  <label className="flex items-center justify-between gap-md rounded-lg border border-border px-lg py-md cursor-pointer">
+                    <span className="min-w-0">
+                      <span className="block text-body font-semibold text-text-primary">Smaller ZIP (WebP)</span>
+                      <span className="block text-caption text-text-muted mt-xs">4–8× smaller files, near-identical look</span>
+                    </span>
+                    <Switch checked={zipWebp} onCheckedChange={setZipWebp} aria-label="Smaller ZIP (WebP)" />
+                  </label>
+                }
               />
             </div>
           </div>
@@ -1499,6 +1525,22 @@ interface ExportItem {
 }
 
 /**
+ * How a server export sits against the plan (EXP-C): a frame limit, and a budget of
+ * frames × pixels. Mirrors the API's check so an option that would be refused is
+ * disabled with the reason, rather than failing after a click.
+ */
+function exportFit(plan: Plan, frames: number, width: number, height: number): { ok: boolean; note: string } {
+  const limits = PLAN_LIMITS[plan]
+  if (frames > limits.exportFramesLimit) return { ok: false, note: `Your plan exports up to ${limits.exportFramesLimit} frames` }
+  const used = (frames * width * height) / 1_000_000
+  if (used > limits.exportBudgetMpFrames) {
+    const max = Math.floor((limits.exportBudgetMpFrames * 1_000_000) / (width * height))
+    return { ok: false, note: `Too big for your plan — at ${width} × ${height} up to ${max} frames` }
+  }
+  return { ok: true, note: `${Math.max(1, Math.round((used / limits.exportBudgetMpFrames) * 100))}% of your export budget` }
+}
+
+/**
  * The Export dialog, in two views.
  *
  * **Choose:** three option cards. A PNG downloads right away; ZIP and animation are
@@ -1518,6 +1560,7 @@ function ExportDialog({
   zoneHref,
   busy,
   onRetry,
+  extra,
 }: {
   view: 'closed' | 'choose' | 'progress'
   onClose: () => void
@@ -1529,6 +1572,8 @@ function ExportDialog({
   busy: boolean
   /** Renders a failed export again with the same settings. */
   onRetry: (job: ExportJob) => Promise<void>
+  /** Shown above the options — export settings, like the ZIP image format. */
+  extra?: React.ReactNode
 }) {
   const [retrying, setRetrying] = useState(false)
   const showProgress = view === 'progress' && job !== null
@@ -1611,6 +1656,7 @@ function ExportDialog({
                   you can keep working while they render.
                 </Dialog.Description>
               </div>
+              {extra}
               <div className="space-y-sm">
                 {items.map((item) => {
                   const blocked = item.format !== 'PNG' && busy

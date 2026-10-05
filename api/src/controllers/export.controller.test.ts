@@ -18,7 +18,7 @@ vi.mock('better-auth/node', () => ({
 }))
 vi.mock('../repositories/user.repository', () => ({ findById: vi.fn(), findByIdWithPlan: vi.fn() }))
 vi.mock('../repositories/zone.repository', () => ({ findById: vi.fn() }))
-vi.mock('../repositories/capture.repository', () => ({ findById: vi.fn(), listDoneIdsBetween: vi.fn() }))
+vi.mock('../repositories/capture.repository', () => ({ findById: vi.fn(), findLiteById: vi.fn(), listDoneIdsBetween: vi.fn() }))
 vi.mock('../repositories/export.repository', () => ({
   ACTIVE_STATUSES: ['queued', 'rendering', 'uploading'],
   create: vi.fn(),
@@ -111,7 +111,7 @@ beforeEach(() => {
   vi.mocked(isR2Configured).mockReturnValue(true)
   vi.mocked(zoneRepo.findById).mockResolvedValue({ id: ZONE_ID, userId: USER_ID, name: 'Sudirman' } as never)
   vi.mocked(exportRepo.findActiveForUser).mockResolvedValue(undefined)
-  vi.mocked(captureRepo.findById).mockImplementation(async (id: string) => ({
+  vi.mocked(captureRepo.findLiteById).mockImplementation(async (id: string) => ({
     id,
     zoneId: ZONE_ID,
     capturedAt: id === CAP_A ? new Date('2026-09-27T00:00:00Z') : new Date('2026-09-27T10:00:00Z'),
@@ -174,6 +174,20 @@ describe('POST /zones/:id/exports', () => {
     expect(res.body.error.details).toMatchObject({ limit: 60, requested: 61 })
   })
 
+  it('refuses more frames × pixels than the plan budget — 422 EXPORT_BUDGET_EXCEEDED', async () => {
+    signedIn('free') // 120 megapixel-frames
+    vi.mocked(captureRepo.listDoneIdsBetween).mockResolvedValue(frames(40))
+    // 40 frames at 4000×4000 = 640 MP·frames — under the frame cap, far over the budget.
+    const big = { ...body('zip'), spec: { ...spec, width: 4000, height: 4000 } }
+
+    const res = await request(app).post(`/zones/${ZONE_ID}/exports`).send(big)
+
+    expect(res.status).toBe(422)
+    expect(res.body.error.code).toBe('EXPORT_BUDGET_EXCEEDED')
+    expect(res.body.error.details).toMatchObject({ budget: 120, requested: 640, maxFrames: 7 })
+    expect(exportRepo.create).not.toHaveBeenCalled()
+  })
+
   it('refuses an animation of a single frame', async () => {
     signedIn()
     vi.mocked(captureRepo.listDoneIdsBetween).mockResolvedValue(frames(1))
@@ -186,7 +200,7 @@ describe('POST /zones/:id/exports', () => {
 
   it('refuses captures from another zone', async () => {
     signedIn()
-    vi.mocked(captureRepo.findById).mockResolvedValue({ id: CAP_A, zoneId: 'other', capturedAt: new Date() } as never)
+    vi.mocked(captureRepo.findLiteById).mockResolvedValue({ id: CAP_A, zoneId: 'other', capturedAt: new Date() } as never)
 
     const res = await request(app).post(`/zones/${ZONE_ID}/exports`).send(body())
 

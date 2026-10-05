@@ -18,6 +18,9 @@ export const PLAN_LIMITS = {
     storageGb: 1,
     captureInterval: 'Daily',
     historyLabel: '7 days',
+    /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
+    exportFramesLimit: 60,
+    exportBudgetMpFrames: 120,
     exportLabel: 'Images only',
   },
   standard: {
@@ -29,6 +32,9 @@ export const PLAN_LIMITS = {
     storageGb: 10,
     captureInterval: 'Hourly',
     historyLabel: '90 days',
+    /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
+    exportFramesLimit: 240,
+    exportBudgetMpFrames: 500,
     exportLabel: 'GIF + MP4',
   },
   premium: {
@@ -40,6 +46,9 @@ export const PLAN_LIMITS = {
     storageGb: 100,
     captureInterval: '15 minutes',
     historyLabel: 'Unlimited',
+    /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
+    exportFramesLimit: 720,
+    exportBudgetMpFrames: 2900,
     exportLabel: 'All formats + API',
   },
 } as const

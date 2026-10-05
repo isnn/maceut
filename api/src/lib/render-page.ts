@@ -29,6 +29,8 @@ export interface RenderPageJob {
     width: number
     height: number
     holdMs: number
+    /** Frame encoding (EXP-C). PNG unless a ZIP asked for WebP. */
+    imageFormat?: 'png' | 'webp'
   }
   frameCount: number
   /** First frame to render — after a browser crash, the export resumes here. */

@@ -9,7 +9,10 @@ vi.mock('../repositories/export.repository', () => ({
   markUploading: vi.fn(async () => true),
   complete: vi.fn(async () => true),
   fail: vi.fn(async () => true),
+  pickNextQueued: vi.fn(async () => undefined),
+  isQueued: vi.fn(async () => false),
 }))
+vi.mock('../lib/rabbitmq-client', () => ({ publishExportJob: vi.fn(async () => undefined) }))
 vi.mock('../repositories/capture.repository', () => ({
   findLiteByIds: vi.fn(async (ids: string[]) =>
     ids.map((id) => ({ id, capturedAt: new Date('2026-10-05T00:00:00Z'), trafficSlim: null, filePath: null, styleUsed: null })),
@@ -345,5 +348,55 @@ describe('runExport — video through ffmpeg (EXP-B)', () => {
     expect(exportRepo.complete).not.toHaveBeenCalled()
     const fs = await import('node:fs')
     expect(fs.existsSync(video.outPath)).toBe(false)
+  })
+})
+
+describe('chooseNext — least work first (EXP-C)', () => {
+  it('runs a cheaper queued export first and re-queues the message it received', async () => {
+    const { chooseNext } = await import('./export.worker')
+    const { publishExportJob } = await import('../lib/rabbitmq-client')
+    vi.mocked(exportRepo.pickNextQueued).mockResolvedValue('small')
+    vi.mocked(exportRepo.isQueued).mockResolvedValue(true)
+
+    expect(await chooseNext('big')).toBe('small')
+    expect(publishExportJob).toHaveBeenCalledWith({ exportId: 'big' })
+  })
+
+  it('runs the message’s own export when it is the cheapest', async () => {
+    const { chooseNext } = await import('./export.worker')
+    const { publishExportJob } = await import('../lib/rabbitmq-client')
+    vi.mocked(exportRepo.pickNextQueued).mockResolvedValue('e1')
+    expect(await chooseNext('e1')).toBe('e1')
+    expect(publishExportJob).not.toHaveBeenCalled()
+  })
+
+  it('does not re-queue a message whose export was cancelled', async () => {
+    const { chooseNext } = await import('./export.worker')
+    const { publishExportJob } = await import('../lib/rabbitmq-client')
+    vi.mocked(exportRepo.pickNextQueued).mockResolvedValue('other')
+    vi.mocked(exportRepo.isQueued).mockResolvedValue(false)
+    expect(await chooseNext('gone')).toBe('other')
+    expect(publishExportJob).not.toHaveBeenCalled()
+  })
+})
+
+describe('WebP frames (EXP-C)', () => {
+  it('names and caches ZIP frames as .webp, and never reuses PNG capture images for them', async () => {
+    vi.mocked(exportRepo.markRendering).mockResolvedValue(
+      exportRow({ spec: { zoneName: 'YOG', width: 1600, height: 1000, themeId: 'dark', congestionId: 'standard', overlay: {}, view: {}, holdMs: 1000, imageFormat: 'webp' } }),
+    )
+    page()
+    await runExport('e1')
+    expect(vi.mocked(renderWithPage).mock.calls[0]![1].spec.imageFormat).toBe('webp')
+    expect(r2.upload).toHaveBeenCalledWith(expect.stringMatching(/\.webp$/), expect.any(Buffer), 'image/webp')
+  })
+
+  it('draws PNG frames for a video even when the spec says WebP', async () => {
+    vi.mocked(exportRepo.markRendering).mockResolvedValue(
+      exportRow({ format: 'mp4', spec: { zoneName: 'YOG', width: 1600, height: 1000, themeId: 'dark', congestionId: 'standard', overlay: {}, view: {}, holdMs: 1000, imageFormat: 'webp' } }),
+    )
+    page()
+    await runExport('e1')
+    expect(vi.mocked(renderWithPage).mock.calls[0]![1].spec.imageFormat).toBe('png')
   })
 })

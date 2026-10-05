@@ -29,6 +29,11 @@ export const exportSpecSchema = z.object({
   height: z.number().int().min(200).max(4000),
   /** How long each animation frame is held, in ms — the preview's playback speed. */
   holdMs: z.number().int().min(100).max(5000),
+  /**
+   * EXP-C — ZIP frame format. PNG is exact; WebP (quality 90) is 4–8× smaller and looks
+   * the same to the eye. Videos always encode from PNG frames, whatever this says.
+   */
+  imageFormat: z.enum(['png', 'webp']).default('png'),
 })
 
 export type ExportSpec = z.infer<typeof exportSpecSchema>

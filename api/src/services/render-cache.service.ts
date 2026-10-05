@@ -23,6 +23,8 @@ export const RENDER_CACHE_DAYS = 7
 
 /** The parts of an export spec that change the picture. */
 export interface PictureSpec {
+  /** PNG unless a ZIP asked for WebP (EXP-C). Part of the key: the bytes differ. */
+  imageFormat?: 'png' | 'webp'
   themeId: string
   congestionId: string
   overlay: unknown
@@ -47,6 +49,7 @@ export function stableStringify(value: unknown): string {
 
 function picture(spec: PictureSpec) {
   return {
+    imageFormat: spec.imageFormat ?? 'png',
     themeId: spec.themeId,
     congestionId: spec.congestionId,
     overlay: spec.overlay,
@@ -67,8 +70,8 @@ export function specHash(spec: PictureSpec, zone: { id: string; name: string }):
     .slice(0, 32)
 }
 
-export function cachePath(userId: string, hash: string, captureId: string): string {
-  return `render-cache/${userId}/${hash}/${captureId}.png`
+export function cachePath(userId: string, hash: string, captureId: string, ext: 'png' | 'webp' = 'png'): string {
+  return `render-cache/${userId}/${hash}/${captureId}.${ext}`
 }
 
 /**
