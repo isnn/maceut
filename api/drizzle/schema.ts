@@ -257,7 +257,8 @@ export type CaptureRow = typeof captures.$inferSelect
 
 // --- exports (FE-21) ------------------------------------------------------------------
 
-export const exportFormatEnum = pgEnum('export_format', ['zip', 'webm'])
+/** `mp4` since EXP-B: H.264 plays everywhere (iPhone, PowerPoint, WhatsApp); WebM doesn't. */
+export const exportFormatEnum = pgEnum('export_format', ['zip', 'webm', 'mp4'])
 
 /**
  * `uploading` is its own state because it can take a while on a large file, and a

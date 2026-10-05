@@ -313,7 +313,7 @@ export default function DashboardPage() {
                         {job.zoneName}
                       </p>
                       <p className="text-micro text-text-muted mt-[2px]">
-                        {job.format === 'webm' ? 'WebM' : 'ZIP'} · {job.frameCount} frames
+                        {job.format === 'zip' ? 'ZIP' : job.format === 'webm' ? 'WebM' : 'MP4'} · {job.frameCount} frames
                       </p>
                     </Link>
                     <ExportPill job={job} />

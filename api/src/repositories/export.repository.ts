@@ -5,7 +5,7 @@ import { exports } from '../../drizzle/schema'
 /** Export data access. Rules live in the service (BR-007). */
 
 export type ExportRecord = typeof exports.$inferSelect
-export type ExportFormat = 'zip' | 'webm'
+export type ExportFormat = 'zip' | 'webm' | 'mp4'
 export type ExportStatus = 'queued' | 'rendering' | 'uploading' | 'done' | 'failed' | 'expired'
 
 /** The states in which an export still has work in front of it. */

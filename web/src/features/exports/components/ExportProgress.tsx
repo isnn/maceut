@@ -100,7 +100,11 @@ export function ExportBar({ job, className }: { job: ExportJob; className?: stri
   )
 }
 
-export const FORMAT_LABEL: Record<ExportJob['format'], string> = { zip: 'Frames · ZIP', webm: 'Animation · WebM' }
+export const FORMAT_LABEL: Record<ExportJob['format'], string> = {
+  zip: 'Frames · ZIP',
+  webm: 'Animation · WebM',
+  mp4: 'Animation · MP4',
+}
 
 /** True while the page is visible — polling pauses in a background tab. */
 function useVisible(): boolean {

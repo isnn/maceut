@@ -25,6 +25,11 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 COPY package.json package-lock.json* ./
 RUN npm install
 
+# ffmpeg encodes export videos from rendered frames (EXP-B, ADR-030) — VP9 for WebM,
+# H.264 for MP4. Its own layer AFTER npm install, so adding it didn't throw away the
+# dependency cache.
+RUN apk add --no-cache ffmpeg
+
 COPY . .
 
 EXPOSE 8080

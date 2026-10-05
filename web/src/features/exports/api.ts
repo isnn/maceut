@@ -11,7 +11,7 @@ import { apiClient } from '@/lib/api-client'
 import { ApiError } from '@/types/api'
 import type { RenderOverlay, RenderView } from '@/features/studio/render'
 
-export type ExportFormat = 'zip' | 'webm'
+export type ExportFormat = 'zip' | 'webm' | 'mp4'
 export type ExportStatus = 'queued' | 'rendering' | 'uploading' | 'done' | 'failed' | 'expired'
 
 export interface ExportSpec {

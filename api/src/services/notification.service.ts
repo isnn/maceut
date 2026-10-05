@@ -238,7 +238,7 @@ export async function onExportFinished(exportId: string): Promise<void> {
     const row = await exportRepo.findById(exportId)
     if (!row || (row.status !== 'done' && row.status !== 'failed')) return
     const zoneName = (row.spec as { zoneName?: string }).zoneName ?? 'your zone'
-    const kind = row.format === 'webm' ? 'Animation' : 'Frames ZIP'
+    const kind = row.format === 'zip' ? 'Frames ZIP' : 'Animation'
     const done = row.status === 'done'
     await write(
       {

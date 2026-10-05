@@ -105,7 +105,7 @@ export function fileNameFor(row: Pick<ExportRecord, 'format'>, spec: Pick<Stored
   const from = wibParts(spec.range.from)
   const to = wibParts(spec.range.to)
   const span = from.date === to.date ? `${from.date}_${from.time}-${to.time}` : `${from.date}_${from.time}_to_${to.date}_${to.time}`
-  return `${safe}-${span}.${row.format === 'zip' ? 'zip' : 'webm'}`
+  return `${safe}-${span}.${row.format}`
 }
 
 export async function toPublic(row: ExportRecord, now: Date = new Date()): Promise<PublicExport> {
@@ -187,7 +187,7 @@ export async function createExport(
 
   const frames = await captureRepo.listDoneIdsBetween(zoneId, from, to)
   if (frames.length === 0) throw new ValidationError('Tidak ada capture yang selesai di rentang ini.')
-  if (input.format === 'webm' && frames.length < 2) {
+  if (input.format !== 'zip' && frames.length < 2) {
     throw new ValidationError('Animasi butuh minimal 2 frame di rentang yang dipilih.')
   }
 
