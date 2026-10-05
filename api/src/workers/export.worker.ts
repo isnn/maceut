@@ -1,6 +1,8 @@
+import fs from 'node:fs'
 import type { Channel, ConsumeMessage } from 'amqplib'
 import type { Browser } from 'playwright-core'
 import { launchBrowser, renderWithPage, type RenderPageJob } from '../lib/render-page'
+import { withBrowserSlot } from '../lib/browser-slot'
 import { config } from '../config/env'
 import * as exportRepo from '../repositories/export.repository'
 import * as notificationService from '../services/notification.service'
@@ -9,7 +11,8 @@ import * as zoneRepo from '../repositories/zone.repository'
 import { slimTraffic } from '../services/capture.service'
 import { exportPath, expiryFrom, type StoredSpec } from '../services/export.service'
 import * as r2 from '../lib/r2-client'
-import { buildZip } from '../lib/zip'
+import { MultipartUpload } from '../lib/r2-client'
+import { ZipStream } from '../lib/zip-stream'
 
 /**
  * Renders Studio exports (FE-21) — a ZIP of frames or a WebM animation — in headless
@@ -19,24 +22,31 @@ import { buildZip } from '../lib/zip'
  *
  * Nothing here draws. The worker opens Studio's own render page (`/render/export` on
  * the web app) and hands it the job; that page runs the exact `renderCapture` and
- * `recordAnimation` Studio's preview uses. A second, server-side renderer would drift
- * from the preview one palette tweak at a time. This way the file is the preview.
- *
- * The page is a bare shell with no data of its own: it asks the worker for each frame
+ * `recordAnimation` Studio's preview uses. The page asks the worker for each frame
  * (`__exportFrame`), reports progress (`__exportProgress`), and hands back its output
- * (`__exportPng` / `__exportChunk`) — Playwright's exposeFunction, in-process, so the
- * page needs no session, token or network access to the API.
+ * (`__exportPng` / `__exportChunk`) — Playwright's exposeFunction, in-process.
  *
- * ## Progress
+ * ## Built for a small host (EXP-A1)
  *
- * The page reports every frame; the worker writes at most once a second (and always on
- * the last frame) to `exports.frames_done`, which is what every progress bar reads.
- * Each write also touches `updated_at`: the heartbeat the sweeper checks.
+ * This host has no swap and about 0.5–1 GB free; long exports used to die with
+ * "Target crashed". Three things keep an export inside that:
  *
- * ## One at a time
+ * - **Streamed, not held.** Each ZIP frame goes straight into a streaming ZIP writer
+ *   whose bytes upload to R2 in 16 MiB parts as they're produced. Memory is about one
+ *   frame plus one part, whatever the frame count; ZIP64 past 4 GB (issue #63).
+ * - **Resumed, not restarted.** Frames are independent. If Chromium dies mid-export,
+ *   a fresh browser picks up at the next frame (up to MAX_BROWSER_RESTARTS times) —
+ *   a crash costs one frame, not the export.
+ * - **One browser per worker.** The export holds the process's only browser slot; the
+ *   capture-image consumer waits (issue #67).
  *
- * prefetch 1. A headless Chromium rendering 1920px frames takes hundreds of MB, and
- * this host has repeatedly OOM-killed browsers. Two at once would risk both.
+ * ## Progress and cancellation
+ *
+ * The page reports every frame; the worker writes `frames_done` at most once a second
+ * (and on the last frame) — every progress bar reads it, and each write is also the
+ * heartbeat the sweeper checks. A cancelled or swept export is never resurrected:
+ * `markUploading` and `complete` only move a row that is still where they expect it
+ * (issue #58), and the upload is aborted instead.
  */
 
 interface ExportJob {
@@ -45,6 +55,74 @@ interface ExportJob {
 
 const PROGRESS_WRITE_MS = 1000
 const HEARTBEAT_MS = 30_000
+/** Browser relaunches per export before giving up. Each costs one frame of work. */
+export const MAX_BROWSER_RESTARTS = 2
+
+/** Errors that mean "the browser went away", not "this export can't be rendered". */
+export function isBrowserCrash(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return /target crashed|page crashed|has been closed|target closed|browser closed|browser has disconnected/i.test(message)
+}
+
+// --- Step 0: where the time and memory go ---------------------------------------------
+
+interface Timing {
+  frames: number
+  dataMs: number
+  drawMs: number
+  encodeMs: number
+  writeMs: number
+  restarts: number
+}
+
+/** Resident memory of every Chromium process, in MB (Linux /proc; 0 elsewhere). */
+function chromiumRssMb(): number {
+  let kb = 0
+  try {
+    for (const pid of fs.readdirSync('/proc')) {
+      if (!/^\d+$/.test(pid)) continue
+      try {
+        if (!/chrom/i.test(fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8'))) continue
+        kb += Number(/VmRSS:\s+(\d+)/.exec(fs.readFileSync(`/proc/${pid}/status`, 'utf8'))?.[1] ?? 0)
+      } catch {
+        // The process ended between listing and reading.
+      }
+    }
+  } catch {
+    return 0
+  }
+  return Math.round(kb / 1024)
+}
+
+/** Samples peak memory every 2 s while an export runs. */
+function startMemorySampler() {
+  const peak = { chromiumMb: 0, workerMb: 0 }
+  const sample = () => {
+    peak.chromiumMb = Math.max(peak.chromiumMb, chromiumRssMb())
+    peak.workerMb = Math.max(peak.workerMb, Math.round(process.memoryUsage().rss / 1048576))
+  }
+  sample()
+  const timer = setInterval(sample, 2000)
+  timer.unref()
+  return {
+    stop: () => {
+      clearInterval(timer)
+      sample()
+      return peak
+    },
+  }
+}
+
+function logSummary(exportId: string, row: { format: string }, spec: StoredSpec, t: Timing, startedAt: number, peak: { chromiumMb: number; workerMb: number }, outcome: string) {
+  const per = (ms: number) => (t.frames ? Math.round(ms / t.frames) : 0)
+  console.log(
+    `[export] ${exportId} ${outcome} — ${row.format} ${t.frames} frames ${spec.width}×${spec.height} in ${Math.round((Date.now() - startedAt) / 1000)}s · ` +
+      `per frame: data ${per(t.dataMs)}ms, draw ${per(t.drawMs)}ms, encode ${per(t.encodeMs)}ms, write ${per(t.writeMs)}ms · ` +
+      `peak RSS: chromium ${peak.chromiumMb}MB, worker ${peak.workerMb}MB · browser restarts ${t.restarts}`,
+  )
+}
+
+// --- the job --------------------------------------------------------------------------
 
 export async function runExport(exportId: string): Promise<void> {
   // The claim is the lock: only a row still `queued` moves to `rendering`. A duplicate
@@ -57,14 +135,18 @@ export async function runExport(exportId: string): Promise<void> {
 
   const spec = row.spec as StoredSpec
   const frameIds = row.frameIds
-  let browser: Browser | null = null
+  const timing: Timing = { frames: 0, dataMs: 0, drawMs: 0, encodeMs: 0, writeMs: 0, restarts: 0 }
+  const startedAt = Date.now()
+  const sampler = startMemorySampler()
   const heartbeat = setInterval(() => void exportRepo.touch(exportId).catch(() => undefined), HEARTBEAT_MS)
+  let browser: Browser | null = null
+  let upload: MultipartUpload | null = null
+  let outcome = 'failed'
 
   try {
     const zone = await zoneRepo.findById(row.zoneId)
     if (!zone) throw new Error('Zona sudah dihapus.')
 
-    browser = await launchBrowser()
     let cancelled = false
     let lastWrite = 0
     const job: RenderPageJob = {
@@ -74,53 +156,138 @@ export async function runExport(exportId: string): Promise<void> {
       zoneName: spec.zoneName,
       ring: zone.geometry.coordinates[0] as [number, number][],
     }
-    const { pngs, video } = await renderWithPage(
-      browser,
-      job,
-      {
-        frame: async (i) => {
-          const capture = await captureRepo.findById(frameIds[i]!)
-          // A capture deleted since the export was queued renders as an empty frame
-          // rather than failing the whole file over one missing moment.
-          return {
-            capturedAt: (capture?.capturedAt ?? new Date()).toISOString(),
-            traffic: capture?.traffic ? slimTraffic(capture.traffic) : null,
+    const frame = async (i: number) => {
+      const t = Date.now()
+      const capture = await captureRepo.findById(frameIds[i]!)
+      timing.dataMs += Date.now() - t
+      // A capture deleted since the export was queued renders as an empty frame
+      // rather than failing the whole file over one missing moment.
+      return {
+        capturedAt: (capture?.capturedAt ?? new Date()).toISOString(),
+        traffic: capture?.traffic ? slimTraffic(capture.traffic) : null,
+      }
+    }
+    const progress = async (done: number) => {
+      const now = Date.now()
+      if (done >= frameIds.length || now - lastWrite >= PROGRESS_WRITE_MS) {
+        lastWrite = now
+        // Lands only while the row is still `rendering` — false means it was cancelled.
+        if (!(await exportRepo.reportProgress(exportId, done))) cancelled = true
+      }
+      return !cancelled
+    }
+    const path = exportPath(row)
+
+    await withBrowserSlot(
+      async () => {
+        if (row.format === 'zip') {
+          upload = await MultipartUpload.start(path, 'application/zip')
+          await exportRepo.setUploadId(exportId, upload.uploadId)
+          const zip = new ZipStream((chunk) => upload!.write(chunk))
+          let written = 0
+
+          while (written < frameIds.length && !cancelled) {
+            if (!browser?.isConnected()) browser = await launchBrowser()
+            try {
+              await renderWithPage(
+                browser,
+                { ...job, startFrame: written },
+                {
+                  frame,
+                  progress,
+                  png: async (i, name, data, stats) => {
+                    // After a restart the page starts at `written`; anything else is a
+                    // repeat of a frame already in the file.
+                    if (i !== written) return
+                    const t = Date.now()
+                    await zip.add(name, data)
+                    timing.writeMs += Date.now() - t
+                    if (stats) {
+                      timing.drawMs += stats.drawMs
+                      timing.encodeMs += stats.encodeMs
+                    }
+                    written++
+                    timing.frames = written
+                  },
+                },
+                `export ${exportId}`,
+              )
+              if (!cancelled && written < frameIds.length) throw new Error(`Render berhenti di frame ${written + 1}.`)
+            } catch (err) {
+              if (cancelled) break
+              if (!isBrowserCrash(err) || timing.restarts >= MAX_BROWSER_RESTARTS) throw err
+              timing.restarts++
+              console.warn(
+                `[export] ${exportId} browser crashed at frame ${written + 1}/${frameIds.length} — ` +
+                  `restarting (${timing.restarts}/${MAX_BROWSER_RESTARTS}) and continuing from there`,
+              )
+              await browser?.close().catch(() => undefined)
+              browser = null
+            }
           }
-        },
-        progress: async (done) => {
-          const now = Date.now()
-          if (done >= frameIds.length || now - lastWrite >= PROGRESS_WRITE_MS) {
-            lastWrite = now
-            // Lands only while the row is still `rendering` — false means it was cancelled.
-            if (!(await exportRepo.reportProgress(exportId, done))) cancelled = true
+
+          if (cancelled) {
+            outcome = 'cancelled'
+            return
           }
-          return !cancelled
-        },
+          await zip.finish()
+          // Guarded (#58): false = cancelled or swept while the last frames rendered.
+          if (!(await exportRepo.markUploading(exportId))) {
+            outcome = 'cancelled'
+            return
+          }
+          await upload.complete()
+          const size = upload.bytes
+          upload = null
+          if (!(await exportRepo.complete(exportId, path, size, expiryFrom(new Date())))) {
+            // Cancelled during the final upload: the file exists but nobody wants it.
+            await r2.remove(path).catch(() => undefined)
+            outcome = 'cancelled'
+            return
+          }
+          outcome = `done (${size} bytes)`
+          return
+        }
+
+        // WebM: recorded by the page, then uploaded whole — small (≈34 KB/frame).
+        browser = await launchBrowser()
+        const { video } = await renderWithPage(browser, job, { frame, progress }, `export ${exportId}`)
+        timing.frames = frameIds.length
+        if (cancelled) {
+          outcome = 'cancelled'
+          return
+        }
+        if (video.length === 0) throw new Error('Render selesai tanpa menghasilkan file.')
+        if (!(await exportRepo.markUploading(exportId))) {
+          outcome = 'cancelled'
+          return
+        }
+        await r2.upload(path, video, 'video/webm')
+        if (!(await exportRepo.complete(exportId, path, video.length, expiryFrom(new Date())))) {
+          await r2.remove(path).catch(() => undefined)
+          outcome = 'cancelled'
+          return
+        }
+        outcome = `done (${video.length} bytes)`
       },
-      `export ${exportId}`,
+      { closeIdle: true },
     )
 
-    if (cancelled) {
-      console.log(`[export] ${exportId} cancelled`)
-      return
-    }
-
-    const file = row.format === 'zip' ? buildZip(pngs) : video
-    if (file.length === 0) throw new Error('Render selesai tanpa menghasilkan file.')
-
-    await exportRepo.markUploading(exportId)
-    const path = exportPath(row)
-    await r2.upload(path, file, row.format === 'zip' ? 'application/zip' : 'video/webm')
-    await exportRepo.complete(exportId, path, file.length, expiryFrom(new Date()))
-    console.log(`[export] ${exportId} done — ${row.format}, ${frameIds.length} frames, ${file.length} bytes`)
-    await notificationService.onExportFinished(exportId)
+    if (outcome.startsWith('done')) await notificationService.onExportFinished(exportId)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[export] ${exportId} failed: ${message}`)
     if (await exportRepo.fail(exportId, message.slice(0, 500))) await notificationService.onExportFinished(exportId)
   } finally {
     clearInterval(heartbeat)
-    await browser?.close().catch(() => undefined)
+    // Anything still open here is unfinished: discard its parts rather than leave them billed.
+    const pending = upload as MultipartUpload | null
+    if (pending) {
+      await pending.abort()
+      await exportRepo.setUploadId(exportId, null).catch(() => undefined)
+    }
+    await (browser as Browser | null)?.close().catch(() => undefined)
+    logSummary(exportId, row, spec, timing, startedAt, sampler.stop(), outcome)
   }
 }
 
@@ -145,5 +312,5 @@ export async function registerExportConsumer(ch: Channel): Promise<void> {
       ch.ack(msg)
     })()
   })
-  console.log(`[worker] consuming ${config.rabbitmqQueueExport} (prefetch 1)`)
+  console.log(`[worker] consuming ${config.rabbitmqQueueExport} (prefetch 1, streamed, one browser per worker)`)
 }

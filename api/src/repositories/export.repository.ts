@@ -97,16 +97,34 @@ export async function touch(id: string): Promise<void> {
     .where(and(eq(exports.id, id), inArray(exports.status, ['rendering', 'uploading'])))
 }
 
-export async function markUploading(id: string): Promise<void> {
-  await db.update(exports).set({ status: 'uploading', updatedAt: new Date() }).where(eq(exports.id, id))
+/** Records (or clears, with null) the R2 multipart upload the file is streaming into. */
+export async function setUploadId(id: string, uploadId: string | null): Promise<void> {
+  await db.update(exports).set({ uploadId }).where(eq(exports.id, id))
 }
 
-export async function complete(id: string, filePath: string, fileSize: number, expiresAt: Date): Promise<void> {
-  const now = new Date()
-  await db
+/**
+ * Moves a rendering export to `uploading`. False when it is no longer rendering — it was
+ * cancelled, or the sweeper failed it — and the caller must then drop its upload rather
+ * than finish it (issue #58: a cancelled export used to come back as `done`).
+ */
+export async function markUploading(id: string): Promise<boolean> {
+  const rows = await db
     .update(exports)
-    .set({ status: 'done', filePath, fileSize, finishedAt: now, updatedAt: now, expiresAt, error: null })
-    .where(eq(exports.id, id))
+    .set({ status: 'uploading', updatedAt: new Date() })
+    .where(and(eq(exports.id, id), eq(exports.status, 'rendering')))
+    .returning({ id: exports.id })
+  return rows.length > 0
+}
+
+/** Marks an uploading export done. False when it was cancelled or failed meanwhile (#58). */
+export async function complete(id: string, filePath: string, fileSize: number, expiresAt: Date): Promise<boolean> {
+  const now = new Date()
+  const rows = await db
+    .update(exports)
+    .set({ status: 'done', filePath, fileSize, finishedAt: now, updatedAt: now, expiresAt, error: null, uploadId: null })
+    .where(and(eq(exports.id, id), eq(exports.status, 'uploading')))
+    .returning({ id: exports.id })
+  return rows.length > 0
 }
 
 /** Fails an export that is still active. A finished or already-failed row is left alone. */

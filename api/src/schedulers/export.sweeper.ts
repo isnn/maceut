@@ -1,5 +1,6 @@
 import * as exportRepo from '../repositories/export.repository'
 import * as r2 from '../lib/r2-client'
+import { exportPath } from '../services/export.service'
 import * as notificationService from '../services/notification.service'
 
 /**
@@ -28,6 +29,13 @@ export async function sweep(now: Date = new Date()): Promise<SweepResult> {
     if (await exportRepo.fail(row.id, 'Render berhenti di tengah jalan. Silakan coba lagi.')) {
       // The cause is for the log; the user is told to retry.
       console.warn(`[export-sweeper] ${row.id} stalled — no heartbeat since ${row.updatedAt.toISOString()} (worker likely killed)`)
+      // Its worker died with an upload open: abort it, or the parts stay in R2, billed.
+      if (row.uploadId) {
+        await r2.MultipartUpload.abortById(exportPath(row), row.uploadId).catch((err) =>
+          console.error(`[export-sweeper] could not abort upload for ${row.id}:`, err instanceof Error ? err.message : err),
+        )
+        await exportRepo.setUploadId(row.id, null)
+      }
       failed++
       await notificationService.onExportFinished(row.id)
     }

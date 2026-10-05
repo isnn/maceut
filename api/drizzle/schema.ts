@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, numeric, jsonb, pgEnum, unique, index, date, primaryKey, boolean } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, integer, bigint, numeric, jsonb, pgEnum, unique, index, date, primaryKey, boolean } from 'drizzle-orm/pg-core'
 import { user } from './auth-schema'
 
 /**
@@ -302,7 +302,15 @@ export const exports = pgTable(
 
     /** R2 object path. Null until uploaded, and again once expired. */
     filePath: text('file_path'),
-    fileSize: integer('file_size'),
+    /** bigint: a streamed ZIP can pass integer's 2.1 GB ceiling (EXP-A1). */
+    fileSize: bigint('file_size', { mode: 'number' }),
+    /**
+     * The R2 multipart upload in progress while the file streams up (EXP-A1). Kept so a
+     * stalled export's upload can be aborted by the sweeper — otherwise its uploaded
+     * parts sit in the bucket, billed, until R2's lifecycle rule clears them. Null once
+     * the upload completes or is aborted.
+     */
+    uploadId: text('upload_id'),
     error: text('error'),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

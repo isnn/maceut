@@ -28,8 +28,16 @@ export interface RenderPageJob {
     holdMs: number
   }
   frameCount: number
+  /** First frame to render — after a browser crash, the export resumes here. */
+  startFrame?: number
   zoneName: string
   ring: [number, number][]
+}
+
+/** What the page measured for one frame (EXP-A1 Step 0: where the time goes). */
+export interface FrameStats {
+  drawMs: number
+  encodeMs: number
 }
 
 export interface RenderFrame {
@@ -41,6 +49,12 @@ export interface RenderBridge {
   frame: (i: number) => Promise<RenderFrame>
   /** Called as frames finish. Resolve false to stop the render (a cancelled export). */
   progress?: (done: number) => Promise<boolean> | boolean
+  /**
+   * Receives each PNG as soon as it's encoded. When given, PNGs are streamed to it and
+   * NOT collected in `RenderOutput.pngs` — an export's memory stays at one frame. The
+   * page waits for this to resolve before drawing the next frame (backpressure).
+   */
+  png?: (i: number, name: string, data: Buffer, stats: FrameStats | null) => Promise<void>
 }
 
 export interface RenderOutput {
@@ -69,8 +83,10 @@ export async function renderWithPage(browser: Browser, job: RenderPageJob, bridg
     const chunks: Buffer[] = []
     await page.exposeFunction('__exportFrame', (i: number) => bridge.frame(i))
     await page.exposeFunction('__exportProgress', async (done: number) => (bridge.progress ? bridge.progress(done) : true))
-    await page.exposeFunction('__exportPng', (i: number, name: string, base64: string) => {
-      pngs[i] = { name, data: Buffer.from(base64, 'base64') }
+    await page.exposeFunction('__exportPng', async (i: number, name: string, base64: string, stats?: FrameStats) => {
+      const data = Buffer.from(base64, 'base64')
+      if (bridge.png) await bridge.png(i, name, data, stats ?? null)
+      else pngs[i] = { name, data }
     })
     await page.exposeFunction('__exportChunk', (base64: string) => {
       chunks.push(Buffer.from(base64, 'base64'))

@@ -6,6 +6,7 @@ import * as zoneRepo from '../repositories/zone.repository'
 import { slimTraffic } from '../services/capture.service'
 import { capturePath, thumbnailPath, upload } from '../lib/r2-client'
 import { launchBrowser, renderWithPage, type RenderPageJob } from '../lib/render-page'
+import { registerIdleBrowser, withBrowserSlot } from '../lib/browser-slot'
 
 /**
  * Renders one PNG per collected capture and stores it in R2 (CAP-02, BR-009, BR-011).
@@ -68,6 +69,16 @@ async function sharedBrowser(): Promise<Browser> {
   return launched
 }
 
+/** Closes the kept-warm browser now — an export is about to take the slot. */
+async function closeIdleBrowser(): Promise<void> {
+  if (idleTimer) clearTimeout(idleTimer)
+  idleTimer = null
+  const b = browser
+  browser = null
+  await b?.close().catch(() => undefined)
+}
+registerIdleBrowser(closeIdleBrowser)
+
 function releaseBrowser(): void {
   if (idleTimer) clearTimeout(idleTimer)
   idleTimer = setTimeout(() => {
@@ -86,17 +97,16 @@ export async function renderCaptureImage(captureId: string): Promise<void> {
   if (!zone) return
 
   const spec = captureImageSpec()
-  const { pngs } = await renderWithPage(
-    await sharedBrowser(),
-    { format: 'png', spec, frameCount: 1, zoneName: zone.name, ring: zone.geometry.coordinates[0] as [number, number][] },
-    {
-      frame: async () => ({
-        capturedAt: capture.capturedAt.toISOString(),
-        traffic: capture.traffic ? slimTraffic(capture.traffic) : null,
-      }),
-    },
-    `capture ${captureId}`,
-  )
+  // Only one Chromium per worker: this waits while an export renders (EXP-A1, #67).
+  const job = { format: 'png' as const, spec, frameCount: 1, zoneName: zone.name, ring: zone.geometry.coordinates[0] as [number, number][] }
+  const bridge = {
+    frame: async () => ({
+      capturedAt: capture.capturedAt.toISOString(),
+      traffic: capture.traffic ? slimTraffic(capture.traffic) : null,
+    }),
+  }
+  // Only one Chromium per worker: this waits while an export renders (EXP-A1, #67).
+  const { pngs } = await withBrowserSlot(async () => renderWithPage(await sharedBrowser(), job, bridge, `capture ${captureId}`))
   const png = pngs[0]?.data
   if (!png || png.length === 0) throw new Error('render produced no image')
 
