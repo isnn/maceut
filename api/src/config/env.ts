@@ -115,6 +115,10 @@ const schema = z.object({
   /** How many captures the worker runs at once. Raise for throughput, lower if HERE rate-limits. */
   CAPTURE_CONCURRENCY: z.coerce.number().int().positive().max(32).default(4),
   RABBITMQ_QUEUE_DEAD_LETTER: z.string().trim().default('capture-dead-letter'),
+  /** FE-21 — Studio exports rendered by the worker. Consumed one at a time. */
+  RABBITMQ_QUEUE_EXPORT: z.string().trim().default('export-jobs'),
+  /** Days a finished export file is kept in R2 before the sweeper deletes it. */
+  EXPORT_RETENTION_DAYS: z.coerce.number().int().positive().max(90).default(7),
 
   // Optional at boot — see rule 2 above.
   R2_ACCOUNT_ID: optionalStr,
@@ -205,6 +209,8 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
     rabbitmqQueueCapture: e.RABBITMQ_QUEUE_CAPTURE,
     captureConcurrency: e.CAPTURE_CONCURRENCY,
     rabbitmqQueueDeadLetter: e.RABBITMQ_QUEUE_DEAD_LETTER,
+    rabbitmqQueueExport: e.RABBITMQ_QUEUE_EXPORT,
+    exportRetentionDays: e.EXPORT_RETENTION_DAYS,
 
     r2AccountId: e.R2_ACCOUNT_ID,
     r2AccessKeyId: e.R2_ACCESS_KEY_ID,

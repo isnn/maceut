@@ -2,6 +2,7 @@ import { config } from '../config/env'
 import { getChannel, closeQueue } from '../lib/rabbitmq-client'
 import { closeDb } from '../lib/drizzle-client'
 import { registerCaptureConsumer } from './capture.worker'
+import { registerExportConsumer } from './export.worker'
 
 /**
  * Worker process entry point.
@@ -18,6 +19,7 @@ async function main() {
   const ch = await getChannel()
   console.log(`[worker] connected — queues ${config.rabbitmqQueueCapture}, ${config.rabbitmqQueueDeadLetter} asserted`)
   await registerCaptureConsumer(ch)
+  await registerExportConsumer(ch)
 
   ch.on('close', () => {
     console.error('[worker] channel closed — exiting so the container restarts')

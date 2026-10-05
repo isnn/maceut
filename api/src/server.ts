@@ -3,6 +3,7 @@ import { config, missingIntegrationKeys } from './config/env'
 import { closeDb } from './lib/drizzle-client'
 import { closeQueue } from './lib/rabbitmq-client'
 import { startScheduler, stopScheduler } from './schedulers/capture.scheduler'
+import { startExportSweeper, stopExportSweeper } from './schedulers/export.sweeper'
 
 const server = app.listen(config.port, () => {
   console.log(`[api] listening on :${config.port} (${config.nodeEnv})`)
@@ -22,11 +23,13 @@ const server = app.listen(config.port, () => {
   // window. That is a real constraint to remove with a Postgres lock before scaling
   // out, not something to discover in production.
   startScheduler()
+  startExportSweeper()
 })
 
 async function shutdown(signal: string) {
   console.log(`[api] ${signal} — shutting down`)
   stopScheduler()
+  stopExportSweeper()
   server.close(async () => {
     await Promise.allSettled([closeDb(), closeQueue()])
     process.exit(0)

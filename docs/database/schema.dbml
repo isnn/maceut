@@ -11,7 +11,7 @@
 // Convention: every timestamp is `timestamptz`. A bare `timestamp` carries no
 // offset and means whatever the reading process assumes.
 //
-// Last updated: 2026-09-21 (migration 0006_drop_organisation)
+// Last updated: 2026-09-28 (migration 0009_exports)
 // =============================================================================
 
 Project maceut {
@@ -183,6 +183,7 @@ Table schedules {
   status schedule_status [not null, default: 'active']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
+  next_fire_at timestamptz [note: 'The next instant this window is due. Claimed with UPDATE ... RETURNING / FOR UPDATE SKIP LOCKED, so a restart resumes and a second replica is safe (0008)']
 
   Note: 'Stored as a WINDOW, not cron (ADR-019). Window -> cron is total; cron -> window is not, so the lossy direction happens in memory. See api/src/types/schedule.ts'
 
@@ -190,6 +191,8 @@ Table schedules {
     user_id [name: 'schedules_user_id_idx']
     zone_id [name: 'schedules_zone_id_idx']
     (user_id, status) [name: 'schedules_user_status_idx', note: 'BR-005 counts active only']
+    next_fire_at [name: 'schedules_due_idx', note: 'Partial: active windows only (0008)']
+    id [name: 'schedules_unseeded_idx', note: 'Partial: active AND next_fire_at IS NULL (0008)']
   }
 }
 
@@ -197,9 +200,102 @@ Ref: schedules.user_id > user.id [delete: cascade]
 Ref: schedules.zone_id > zones.id [delete: cascade]
 
 // -----------------------------------------------------------------------------
+// Captures — one row per cycle a zone collects (0007). Added to this file late:
+// 0007 and 0008 shipped without their DBML update, caught and fixed with 0009.
+// -----------------------------------------------------------------------------
+
+Enum capture_status {
+  pending
+  processing
+  done
+  failed
+  skipped_limit [note: 'BR-008 — refused by the daily limit, recorded not retried']
+  missed [note: 'The system was down when this was due. Not attempted, so not a failure']
+}
+
+Enum capture_trigger {
+  manual
+  scheduled
+}
+
+Table captures {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id text [not null]
+  zone_id uuid [not null]
+  schedule_id uuid [note: 'SET NULL on schedule delete — the frame still happened']
+  status capture_status [not null, default: 'pending']
+  trigger capture_trigger [not null]
+  road_class road_class [not null, note: 'Class actually collected, after BR-022 cap']
+  traffic jsonb [note: 'HERE FeatureCollection, clipped to the zone polygon']
+  roads_count integer
+  jam_factor_avg "numeric(4,2)"
+  file_path text [note: 'BR-011 R2 path. Null until CAP-02 renders an image']
+  file_size integer
+  style_used jsonb [note: 'BR-023 — history only']
+  error text
+  scheduled_for timestamptz [note: 'When the cycle was due; null for manual']
+  captured_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (zone_id, captured_at) [name: 'captures_zone_captured_idx']
+    (user_id, captured_at) [name: 'captures_user_captured_idx', note: 'BR-006 daily count']
+    schedule_id [name: 'captures_schedule_idx']
+  }
+}
+
+Ref: captures.user_id > user.id [delete: cascade]
+Ref: captures.zone_id > zones.id [delete: cascade]
+Ref: captures.schedule_id > schedules.id [delete: set null]
+
+// -----------------------------------------------------------------------------
+// Exports — Studio ZIP/WebM rendered by the worker (FE-21, 0009)
+// -----------------------------------------------------------------------------
+
+Enum export_format {
+  zip
+  webm
+}
+
+Enum export_status {
+  queued
+  rendering
+  uploading
+  done
+  failed
+  expired [note: 'File deleted after retention; row kept as history']
+}
+
+Table exports {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id text [not null]
+  zone_id uuid [not null]
+  format export_format [not null]
+  status export_status [not null, default: 'queued']
+  spec jsonb [not null, note: 'Render settings as Studio showed them; themes by id']
+  frame_ids jsonb [not null, note: 'Capture ids, frozen at request time']
+  frame_count integer [not null]
+  frames_done integer [not null, default: 0, note: 'Written by the worker as it renders — the progress bar']
+  file_path text [note: 'R2 path; null until uploaded and again once expired']
+  file_size integer
+  error text
+  created_at timestamptz [not null, default: `now()`]
+  started_at timestamptz
+  updated_at timestamptz [not null, default: `now()`, note: 'Heartbeat — a stale render is swept to failed']
+  finished_at timestamptz
+  expires_at timestamptz
+
+  Indexes {
+    (zone_id, created_at) [name: 'exports_zone_created_idx']
+    (user_id, status) [name: 'exports_user_status_idx', note: 'One active export per user']
+    status [name: 'exports_status_idx', note: 'Sweeper scans']
+  }
+}
+
+Ref: exports.user_id > user.id [delete: cascade]
+Ref: exports.zone_id > zones.id [delete: cascade]
+
+// -----------------------------------------------------------------------------
 // Not built yet — listed so the gap is visible rather than forgotten
 // -----------------------------------------------------------------------------
-// captures          — CAP-01 (next ticket). Note: captures.schedule_id ships as a
-//                     nullable uuid with NO foreign key, because schedules does not
-//                     exist yet. The FK is added with that table.
 // branding_configs  — Sprint 2 (F-11, F-12). BR-018's logo compositing needs it.

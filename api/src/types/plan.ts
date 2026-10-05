@@ -71,10 +71,23 @@ export interface PlanLimits {
   zonesLimit: number
   seatsLimit: number
   storageGb: number
+  /**
+   * FE-21 — most frames one Studio export may render. Bounds a single worker job:
+   * at poster sizes a frame takes seconds, and the queue is shared by every account.
+   */
+  exportFramesLimit: number
 }
 
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
-  free: { maxRoadClass: 'nasional', schedulesLimit: 10, capturesLimit: 10, zonesLimit: 1, seatsLimit: 1, storageGb: 1 },
+  free: {
+    maxRoadClass: 'nasional',
+    schedulesLimit: 10,
+    capturesLimit: 10,
+    zonesLimit: 1,
+    seatsLimit: 1,
+    storageGb: 1,
+    exportFramesLimit: 60,
+  },
   standard: {
     maxRoadClass: 'nasional_provinsi',
     schedulesLimit: 20,
@@ -82,8 +95,17 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     zonesLimit: 5,
     seatsLimit: 5,
     storageGb: 10,
+    exportFramesLimit: 240,
   },
-  premium: { maxRoadClass: 'semua', schedulesLimit: 50, capturesLimit: 100, zonesLimit: 25, seatsLimit: 25, storageGb: 100 },
+  premium: {
+    maxRoadClass: 'semua',
+    schedulesLimit: 50,
+    capturesLimit: 100,
+    zonesLimit: 25,
+    seatsLimit: 25,
+    storageGb: 100,
+    exportFramesLimit: 720,
+  },
 }
 
 export function roadClassRank(rc: RoadClass): number {
