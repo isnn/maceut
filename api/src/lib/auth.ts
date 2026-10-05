@@ -1,9 +1,11 @@
 import { betterAuth } from 'better-auth'
+import { emailOTP } from 'better-auth/plugins'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { db } from './drizzle-client'
 import * as schema from '../../drizzle/schema'
 import { config } from '../config/env'
 import { expiryToSeconds } from './duration'
+import { OTP_EXPIRES_SECONDS, sendOtpEmail } from '../services/email.service'
 
 /**
  * Better Auth owns the auth module (ADR-009).
@@ -41,8 +43,46 @@ export const auth = betterAuth({
     // megabyte-long password cannot burn CPU in the KDF, and is set well clear of any
     // real passphrase.
     maxPasswordLength: 128,
-    autoSignIn: true, // F-08: registering signs you in.
+    // No session until the address is verified with the emailed code. Sign-up answers
+    // with no session (Better Auth skips autoSignIn under this flag), and a password
+    // sign-in to an unverified account is refused with 403 EMAIL_NOT_VERIFIED.
+    //
+    // Side effect, deliberate: sign-up with an address that already exists answers
+    // exactly like a fresh one (no "email taken"), so the form can't be used to find
+    // out who has an account.
+    requireEmailVerification: true,
   },
+
+  emailVerification: {
+    // Refused sign-in of an unverified account sends a fresh code, so the verify
+    // screen it lands on already has one on the way.
+    sendOnSignIn: true,
+    // Entering the right code signs the user in — registering still ends signed in.
+    autoSignInAfterVerification: true,
+  },
+
+  plugins: [
+    // One-time codes by email (lib/email → EMAIL_PROVIDER), for verifying a new
+    // address and for resetting a forgotten password. Codes, not links: they survive
+    // mail scanners that pre-open links, and work when the email is read on a phone
+    // but the app is open on a laptop.
+    emailOTP({
+      otpLength: 6,
+      expiresIn: OTP_EXPIRES_SECONDS,
+      allowedAttempts: 5,
+      // Stored hashed: a database read must not hand out working codes.
+      storeOTP: 'hashed',
+      // Replaces Better Auth's link-based verification email with a code, including
+      // the one sent on sign-up and on a refused sign-in.
+      overrideDefaultEmailVerification: true,
+      sendVerificationOnSignUp: true,
+      // Not awaited: whether a send happens (it doesn't for an unknown address on
+      // password reset) must not show up in the response time.
+      async sendVerificationOTP({ email, otp, type }) {
+        void sendOtpEmail(email, otp, type)
+      },
+    }),
+  ],
 
   session: {
     expiresIn: expiryToSeconds(config.jwtExpiry),
