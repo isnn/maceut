@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { Logo } from '@/components/ui/Logo'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { cn } from '@/lib/utils'
-import { pageWidthClass } from './page-width'
+import { PAGE_WIDTH } from './page-width'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 
@@ -30,7 +30,7 @@ export function InternalHeader() {
 
   return (
     <header className="sticky top-0 z-20 bg-canvas border-b border-border">
-      <div className={cn('mx-auto px-xl h-16 flex items-center gap-xxl', pageWidthClass(pathname))}>
+      <div className={cn('mx-auto px-xl h-16 flex items-center gap-xxl', PAGE_WIDTH)}>
         <div className="flex items-center gap-sm">
           <Logo href="/internal" />
           <span className="bg-primary-soft text-[#5A35F3] text-micro font-semibold rounded-xs px-sm py-xs uppercase tracking-wide">
@@ -38,7 +38,7 @@ export function InternalHeader() {
           </span>
         </div>
 
-        <nav className="flex items-center gap-lg overflow-x-auto">
+        <nav className="flex items-center gap-xl overflow-x-auto">
           {NAV_ITEMS.map((item) => {
             const active = item.href === '/internal' ? pathname === item.href : pathname.startsWith(item.href)
             return (

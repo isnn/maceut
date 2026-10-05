@@ -1,12 +1,9 @@
 /**
- * The content width for a route — used by BOTH the header and the page, so the logo and
- * nav always line up with the content below them. They used to be set separately: the
- * header was fixed at 1180px while Studio's page grew to 1600px, so on a large screen
- * the header sat indented from everything under it.
+ * The content width — one value for every page and every header, so the logo, nav and
+ * page edges line up everywhere. Studio set the reference: it needed 1600px for the
+ * canvas and tool drawer, and the rest of the app now matches it rather than sitting in
+ * a narrower 1180px column with a header that changed width between pages.
  *
- * Studio is a canvas plus a tool drawer and gets the room; every other page keeps the
- * reading width.
+ * Pages that are mostly text (Profile, forms) keep their own readable inner widths.
  */
-export function pageWidthClass(pathname: string): string {
-  return pathname.startsWith('/studio') ? 'max-w-[1600px]' : 'max-w-[1180px]'
-}
+export const PAGE_WIDTH = 'max-w-[1600px]'

@@ -30,7 +30,7 @@ export default function LandingPage() {
 
       <main className="flex-1">
         {/* Hero */}
-        <section className="mx-auto max-w-[1180px] px-xl py-section grid grid-cols-1 laptop:grid-cols-2 gap-xxl items-center">
+        <section className="mx-auto max-w-[1600px] px-xl py-section grid grid-cols-1 laptop:grid-cols-2 gap-xxl items-center">
           <div>
             <span className="inline-block bg-primary-soft text-[#5A35F3] text-micro font-semibold uppercase tracking-wide rounded-xs px-sm py-xs">
               For Indonesian road agencies
@@ -84,7 +84,7 @@ export default function LandingPage() {
 
         {/* Services */}
         <section id="product" className="border-t border-border bg-canvas-secondary">
-          <div className="mx-auto max-w-[1180px] px-xl py-section">
+          <div className="mx-auto max-w-[1600px] px-xl py-section">
             <p className="text-label text-text-secondary">What Maceut does</p>
             <h2 className="mt-xs text-page-title font-bold text-text-primary">Four services, one workspace.</h2>
             <div className="mt-xl grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-lg">
@@ -101,7 +101,7 @@ export default function LandingPage() {
 
         {/* Plans */}
         <section id="pricing" className="border-t border-border">
-          <div className="mx-auto max-w-[1180px] px-xl py-section">
+          <div className="mx-auto max-w-[1600px] px-xl py-section">
             <div className="flex flex-wrap items-end justify-between gap-md mb-xl">
               <div>
                 <p className="text-label text-text-secondary">Plans</p>
@@ -119,7 +119,7 @@ export default function LandingPage() {
 
         {/* Closing */}
         <section id="support" className="border-t border-border bg-primary">
-          <div className="mx-auto max-w-[1180px] px-xl py-section flex flex-wrap items-center justify-between gap-xl">
+          <div className="mx-auto max-w-[1600px] px-xl py-section flex flex-wrap items-center justify-between gap-xl">
             <div>
               <h2 className="text-page-title font-bold text-on-primary">Start with one zone today.</h2>
               <p className="mt-sm text-body text-on-primary/80">
@@ -137,7 +137,7 @@ export default function LandingPage() {
       </main>
 
       <footer id="docs" className="border-t border-border">
-        <div className="mx-auto max-w-[1180px] px-xl py-xl flex flex-wrap items-center justify-between gap-md">
+        <div className="mx-auto max-w-[1600px] px-xl py-xl flex flex-wrap items-center justify-between gap-md">
           <p className="text-caption text-text-muted">© 2026 Maceut — map-based congestion monitoring.</p>
           <p className="text-caption text-text-muted">Used by provincial and city road agencies across Java and Sumatra.</p>
         </div>

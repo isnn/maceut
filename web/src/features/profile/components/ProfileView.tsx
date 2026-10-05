@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { Alert } from '@/components/ui/Alert'
+import { Dialog } from '@base-ui/react/dialog'
+import { PlanPill } from '@/components/ui/Badge'
+import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { UsageMeter, AttributeRow } from '@/components/ui/UsageMeter'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { cn } from '@/lib/utils'
@@ -42,6 +44,7 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
   const [tab, setTab] = useState<Tab>(variant === 'internal' ? 'Account' : 'Usage')
   const [pendingPlan, setPendingPlan] = useState<Plan | null>(null)
   const [planError, setPlanError] = useState<string | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   useEffect(() => {
     if (variant === 'internal') return
@@ -152,14 +155,12 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
               <p className="text-micro font-semibold uppercase tracking-wide text-text-muted">Current plan</p>
               <p className="text-page-title font-bold text-text-primary mt-xs">{PLAN_LABEL[usage.plan]}</p>
               <p className="text-caption text-text-muted mt-xs">
-                {PLAN_PRICE[usage.plan].amount} {PLAN_PRICE[usage.plan].period} · renews 1 Oct
+                {PLAN_PRICE[usage.plan].amount} {PLAN_PRICE[usage.plan].period}
               </p>
-              {usage.plan !== 'premium' && (
-                <p className="text-caption text-text-secondary mt-lg">
-                  Need more room? Contact the Maceut team and we&rsquo;ll move you up — upgrades aren&rsquo;t self-serve
-                  while billing is being built.
-                </p>
-              )}
+              <Button variant="tint" className="w-full mt-lg" onClick={() => setPickerOpen(true)}>
+                Change plan
+              </Button>
+              {planError && !confirming && <p className="text-caption text-danger-text mt-sm">{planError}</p>}
             </Card>
 
             {usage.plan !== 'premium' && (
@@ -180,40 +181,56 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
       )}
 
       {tab === 'Billing' && usage && (
-        <div className="space-y-lg">
-          <p className="text-body text-text-secondary">
-            Payments aren&rsquo;t wired up yet, so upgrades are arranged with the Maceut team. You can move down a plan
-            here at any time.
-          </p>
-          <Alert variant="warning">
-            Moving down pauses anything over the new plan&rsquo;s limits — zones, capture windows and intervals. Nothing
-            is deleted, and it all comes back if you move up again.
-          </Alert>
-          {planError && <p className="text-caption text-danger-text">{planError}</p>}
-          <PlanCards
-            selected={usage.plan}
-            onSelect={changePlan}
-            pendingPlan={pendingPlan}
-            disabledPlan={(plan) => PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(usage.plan)}
-            actionLabel={(plan) =>
-              plan === usage.plan
-                ? 'Current plan'
-                : PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(usage.plan)
-                  ? 'Contact us'
-                  : `Move down to ${PLAN_LABEL[plan]}`
-            }
-          />
-          <PlanChangeDialog
-            open={confirming !== null}
-            title={confirming ? `Move down to ${PLAN_LABEL[confirming.plan]}?` : ''}
-            planLabel={confirming ? PLAN_LABEL[confirming.plan] : ''}
-            impact={confirming?.impact ?? null}
-            loading={confirming !== null && confirming.impact === null}
-            pending={pendingPlan !== null}
-            error={planError}
-            onConfirm={confirmPlanChange}
-            onCancel={() => setConfirming(null)}
-          />
+        <div className="grid grid-cols-1 laptop:grid-cols-[1fr_320px] gap-xl items-start">
+          <Card className="p-lg space-y-md">
+            <h2 className="text-heading-sm text-text-primary">Billing history</h2>
+            {/* No invoices are invented: until payments exist this is honestly empty. */}
+            <TableWrap>
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Date</Th>
+                    <Th>Description</Th>
+                    <Th className="text-right">Amount</Th>
+                    <Th>Status</Th>
+                    <Th className="text-right">Invoice</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <Td colSpan={5} className="text-center text-text-muted py-xl">
+                      No invoices yet
+                    </Td>
+                  </tr>
+                </tbody>
+              </Table>
+            </TableWrap>
+          </Card>
+
+          <div className="space-y-lg">
+            <Card className="p-lg space-y-md">
+              <h2 className="text-heading-sm text-text-primary">Plan</h2>
+              <dl className="divide-y divide-divider">
+                <div className="flex items-center justify-between gap-md pb-md">
+                  <dt className="text-body text-text-secondary">Plan</dt>
+                  <dd>
+                    <PlanPill plan={usage.plan} />
+                  </dd>
+                </div>
+                <AttributeRow label="Price" value={`${PLAN_PRICE[usage.plan].amount} ${PLAN_PRICE[usage.plan].period}`} />
+              </dl>
+            </Card>
+
+            <Card className="p-lg space-y-md">
+              <h2 className="text-heading-sm text-text-primary">Payment method</h2>
+              <p className="text-body text-text-muted">No card on file</p>
+            </Card>
+
+            <Card className="p-lg space-y-md">
+              <h2 className="text-heading-sm text-text-primary">Billing contact</h2>
+              <p className="text-body font-semibold text-text-primary break-all">{user.email}</p>
+            </Card>
+          </div>
         </div>
       )}
 
@@ -223,18 +240,14 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
             <dl className="divide-y divide-divider">
               <AttributeRow label="Full name" value={user.fullName || '—'} />
               <AttributeRow label="Email" value={user.email} />
-              <AttributeRow label="Platform role" value={user.role === 'internal' ? 'Internal (Maceut staff)' : 'Customer'} />
             </dl>
           </Card>
 
           {user.role === 'internal' && (
             <Card className="p-lg">
-              <h2 className="text-heading-sm text-text-primary">Internal access</h2>
-              <p className="text-body text-text-secondary mt-xs">
-                This account is configured for the staff area.
-              </p>
-              <Link href="/internal" className={cn(buttonClass('secondary'), 'mt-lg')}>
-                Open internal tools
+              <h2 className="text-heading-sm text-text-primary">Staff tools</h2>
+              <Link href="/internal" className={cn(buttonClass('tint'), 'mt-md')}>
+                Open staff tools
               </Link>
             </Card>
           )}
@@ -242,6 +255,52 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
       )}
 
       {tab === 'Notifications' && <NotificationSettings variant={variant} />}
+
+      {usage && (
+        <>
+          {/* Step 1: pick a plan. Moving down goes on to step 2, the warning. */}
+          <Dialog.Root open={pickerOpen} onOpenChange={setPickerOpen}>
+            <Dialog.Portal>
+              <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
+              <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[60rem] max-h-[90vh] overflow-y-auto bg-page border border-border rounded-lg p-xl shadow-elevation-3 space-y-lg">
+                <Dialog.Title className="text-section-title text-text-primary">Change plan</Dialog.Title>
+                <PlanCards
+                  selected={usage.plan}
+                  onSelect={(plan) => {
+                    setPickerOpen(false)
+                    changePlan(plan)
+                  }}
+                  pendingPlan={pendingPlan}
+                  // Upgrades are arranged with the team until payments exist.
+                  disabledPlan={(plan) => PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(usage.plan)}
+                  actionLabel={(plan) =>
+                    plan === usage.plan
+                      ? 'Current plan'
+                      : PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(usage.plan)
+                        ? 'Contact us to upgrade'
+                        : `Move to ${PLAN_LABEL[plan]}`
+                  }
+                />
+                <div className="flex justify-end">
+                  <Dialog.Close className={buttonClass('secondary')}>Close</Dialog.Close>
+                </div>
+              </Dialog.Popup>
+            </Dialog.Portal>
+          </Dialog.Root>
+
+          <PlanChangeDialog
+            open={confirming !== null}
+            title={confirming ? `Move to ${PLAN_LABEL[confirming.plan]}?` : ''}
+            planLabel={confirming ? PLAN_LABEL[confirming.plan] : ''}
+            impact={confirming?.impact ?? null}
+            loading={confirming !== null && confirming.impact === null}
+            pending={pendingPlan !== null}
+            error={planError}
+            onConfirm={confirmPlanChange}
+            onCancel={() => setConfirming(null)}
+          />
+        </>
+      )}
     </div>
   )
 }

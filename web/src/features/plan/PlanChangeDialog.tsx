@@ -43,17 +43,12 @@ export function PlanChangeDialog({
           {loading || !impact ? (
             <div className="h-24 bg-canvas-secondary rounded-md animate-pulse" />
           ) : impact.clean ? (
-            <Dialog.Description className="text-body text-text-secondary">
-              Everything fits within {planLabel}&rsquo;s limits, so nothing will be paused.
-            </Dialog.Description>
+            <Dialog.Description className="text-body text-text-secondary">Nothing will be paused.</Dialog.Description>
           ) : (
             <>
-              <Dialog.Description className="text-body text-text-secondary">
-                These are over {planLabel}&rsquo;s limits and will be <strong>paused</strong>. Nothing is deleted —
-                they resume after moving back up, or once they fit again.
-              </Dialog.Description>
-              <ImpactList title="Zones" items={impact.zonesToPause} />
-              <ImpactList title="Capture windows" items={impact.schedulesToPause} />
+              <ImpactList title="Will be paused — zones" items={impact.zonesToPause} />
+              <ImpactList title="Will be paused — capture windows" items={impact.schedulesToPause} />
+              <Dialog.Description className="text-caption text-text-muted">Nothing is deleted.</Dialog.Description>
             </>
           )}
 

@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation'
 import { Logo } from '@/components/ui/Logo'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { cn } from '@/lib/utils'
-import { pageWidthClass } from './page-width'
+import { PlanPill } from '@/components/ui/Badge'
+import { PAGE_WIDTH } from './page-width'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
-import { PLAN_LABEL } from '@/lib/constants'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 
 const NAV_ITEMS = [
@@ -29,10 +29,10 @@ export function AppHeader() {
   const logout = useLogout()
   return (
     <header className="sticky top-0 z-20 bg-canvas border-b border-border">
-      <div className={cn('mx-auto px-xl h-16 flex items-center gap-xxl', pageWidthClass(pathname))}>
+      <div className={cn('mx-auto px-xl h-16 flex items-center gap-xxl', PAGE_WIDTH)}>
         <Logo href="/dashboard" />
 
-        <nav className="flex items-center gap-lg overflow-x-auto">
+        <nav className="flex items-center gap-xl overflow-x-auto">
           {NAV_ITEMS.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
@@ -67,9 +67,7 @@ export function AppHeader() {
                   <div className="px-lg py-md border-b border-divider">
                     <p className="text-label font-semibold text-text-primary truncate">{user.fullName || user.email}</p>
                     <p className="text-caption text-text-muted truncate">{user.email}</p>
-                    <span className="inline-block mt-sm bg-primary-soft text-[#5A35F3] text-micro font-semibold rounded-xs px-sm py-xs">
-                      {PLAN_LABEL[user.plan]} plan
-                    </span>
+                    <PlanPill plan={user.plan} className="mt-sm" />
                   </div>
                   <nav className="py-xs">
                     {[

@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { InternalHeader } from '@/components/shared/InternalHeader'
-import { pageWidthClass } from '@/components/shared/page-width'
+import { PAGE_WIDTH } from '@/components/shared/page-width'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 
 /**
@@ -28,7 +28,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
     <div className="min-h-screen bg-page">
       <InternalHeader />
       {/* Same width as the header (page-width.ts), so they always line up. */}
-      <main className={`mx-auto px-xl py-xl ${pageWidthClass(pathname)}`}>{children}</main>
+      <main className={`mx-auto px-xl py-xl ${PAGE_WIDTH}`}>{children}</main>
     </div>
   )
 }
