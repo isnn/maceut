@@ -42,7 +42,7 @@ interface ServerUsage {
   storageUsedGb: number | null
 }
 
-type DirectoryUser = User & { usage?: ServerUsage }
+type DirectoryUser = User & { usage?: ServerUsage; roleLockedByConfig?: boolean }
 
 async function fetchAllUsers(): Promise<DirectoryUser[]> {
   const all: DirectoryUser[] = []
@@ -85,6 +85,7 @@ export async function getUserDirectory(): Promise<InternalUserRow[]> {
     email: user.email,
     plan: user.plan,
     role: user.role,
+    roleLockedByConfig: user.roleLockedByConfig ?? false,
     createdAt: user.createdAt,
     isYou: user.id === me.id,
     usage: usageFor(user.plan, user.usage),
@@ -98,6 +99,7 @@ export async function getPlatformStats(): Promise<PlatformStats> {
     apiClient.get<{
       totalUsers: number
       internalUsers: number
+      internalByConfig: number
       planMix: Record<Plan, number>
       zonesCollecting: number
       schedulesActive: number
@@ -116,6 +118,7 @@ export async function getPlatformStats(): Promise<PlatformStats> {
   return {
     totalAccounts: stats.totalUsers,
     internalUsers: stats.internalUsers,
+    internalByConfig: stats.internalByConfig,
     signupsLast7d: rows.filter((r) => new Date(r.createdAt).getTime() >= weekAgo).length,
     byPlan: stats.planMix,
     zonesTotal: stats.zonesCollecting,
@@ -202,3 +205,16 @@ export function formatIdr(amount: number): string {
 }
 
 export { PLAN_PRICE }
+
+/** One key of the running server's configuration (GET /internal/config, ADR-018). */
+export interface ServerConfigEntry {
+  key: string
+  /** Null for secrets (never sent) and for keys the environment leaves unset. */
+  value: string | null
+  set: boolean
+  secret: boolean
+}
+
+export function getServerConfig(): Promise<ServerConfigEntry[]> {
+  return apiClient.get<ServerConfigEntry[]>('/internal/config')
+}
