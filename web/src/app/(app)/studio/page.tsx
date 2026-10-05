@@ -213,7 +213,11 @@ export default function StudioPage() {
   useEffect(() => {
     zonesApi.getZones().then((next) => {
       setZones(next)
-      if (next.length > 0) setZoneId((z) => z || next[0]!.id)
+      // "Open in Studio" on a zone page arrives with ?zone=<id>. Read here rather than
+      // with useSearchParams, which would need a Suspense boundary around the page.
+      const wanted = new URLSearchParams(window.location.search).get('zone')
+      const pick = next.find((z) => z.id === wanted) ?? next[0]
+      if (pick) setZoneId((z) => z || pick.id)
     })
   }, [])
 

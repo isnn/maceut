@@ -69,3 +69,24 @@ export function formatNumber(value: number, fractionDigits = 0): string {
 export function formatKm(value: number): string {
   return `${formatNumber(value, 2)} km`
 }
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * "23 Sep 10:27" in WIB — the one time format for table cells. The column header says
+ * "(WIB)", so the cell doesn't repeat it. Built from parts because the locales disagree
+ * with each other ("Sept", "10.27", a stray comma).
+ */
+export function formatWibShort(date: Date | string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: 'Asia/Jakarta',
+  }).formatToParts(new Date(date))
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${get('day').padStart(2, '0')} ${SHORT_MONTHS[Number(get('month')) - 1]} ${get('hour')}:${get('minute')}`
+}

@@ -6,14 +6,30 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { FormLabel, Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
-import { RoadClassBadge, ZoneStatusPill } from '@/components/ui/Badge'
+import { RoadClassBadge, StatusPill, ZoneStatusPill } from '@/components/ui/Badge'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { CardTitle, SectionHeader } from '@/components/shared/SectionHeader'
+import { Stat } from '@/components/shared/Stat'
+import { showToast } from '@/components/ui/Toaster'
 import { HelpTip } from '@/components/ui/HelpTip'
 import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
-import { IconArrowLeft } from '@/components/ui/icons'
+import {
+  IconArrowLeft,
+  IconCalendar,
+  IconCamera,
+  IconClock,
+  IconFilm,
+  IconLayers,
+  IconMapPin,
+  IconPause,
+  IconPencil,
+  IconPlay,
+  IconRoad,
+  IconRuler,
+  IconTrash,
+} from '@/components/ui/icons'
 import { cn, formatDate } from '@/lib/utils'
 import { PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { ApiError } from '@/types/api'
@@ -61,6 +77,10 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
 
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  // "Capture now" lives in the page header; the Captures section reloads when this bumps.
+  const [capturing, setCapturing] = useState(false)
+  const [capturesKey, setCapturesKey] = useState(0)
 
   const load = useCallback(async () => {
     const [found, all, allWindows] = await Promise.all([
@@ -148,6 +168,30 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
     setZone(updated)
   }
 
+  async function captureNow() {
+    setCapturing(true)
+    try {
+      const res = await zonesApi.runCapture(zone!.id)
+      if (res.queued) {
+        showToast({ tone: 'success', title: 'Collecting now', description: 'The new capture appears below in a few seconds.' })
+        setCapturesKey((k) => k + 1)
+        // The worker needs a moment; reload once more rather than polling.
+        setTimeout(() => setCapturesKey((k) => k + 1), 4000)
+      } else {
+        showToast({ tone: 'warning', title: 'Capture not started', description: res.capture.error ?? 'Your daily capture limit is used up.' })
+        setCapturesKey((k) => k + 1)
+      }
+    } catch (err) {
+      showToast({
+        tone: 'warning',
+        title: 'Capture not started',
+        description: err instanceof ApiError ? err.message : 'Could not start a capture. Please try again.',
+      })
+    } finally {
+      setCapturing(false)
+    }
+  }
+
   async function remove() {
     setDeleting(true)
     await zonesApi.deleteZone(zone!.id)
@@ -176,13 +220,24 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
             </>
           ) : (
             <>
-              <Button variant="secondary" onClick={startEdit}>
+              <Button onClick={captureNow} disabled={capturing}>
+                <IconCamera size={18} />
+                {capturing ? 'Starting…' : 'Capture now'}
+              </Button>
+              <Link href={`/studio?zone=${zone.id}`} className={buttonClass('ink')}>
+                <IconFilm size={18} />
+                Open in Studio
+              </Link>
+              <Button variant="tint" onClick={startEdit}>
+                <IconPencil size={16} />
                 Edit
               </Button>
-              <Button variant="secondary" onClick={toggleStatus}>
+              <Button variant="tint" onClick={toggleStatus}>
+                {zone.status === 'collecting' ? <IconPause size={16} /> : <IconPlay size={16} />}
                 {zone.status === 'collecting' ? 'Pause' : 'Resume'}
               </Button>
               <Button variant="destructive" onClick={() => setConfirmDelete(true)}>
+                <IconTrash size={16} />
                 Delete
               </Button>
             </>
@@ -195,6 +250,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
       <div className="grid grid-cols-1 laptop:grid-cols-[1fr_340px] gap-xl items-start">
         <div className="bg-card border border-border rounded-lg p-lg space-y-md">
           <CardTitle
+            icon={<IconMapPin size={16} />}
             aside={
               <HelpTip label="About the boundary">
                 The boundary is set when the zone is created and can&rsquo;t be redrawn here. To cover a different
@@ -231,24 +287,20 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
             </>
           ) : (
             <>
-              <CardTitle>Zone details</CardTitle>
+              <CardTitle icon={<IconLayers size={16} />}>Zone details</CardTitle>
 
-              <dl className="space-y-md">
-                <Row label="Road class">
-                  <span className="flex flex-wrap items-center justify-end gap-xs">
-                    <RoadClassBadge roadClass={zone.roadClass} />
-                    {cappedByPlan && (
-                      <span className="text-micro text-text-muted">
-                        capped to {ROAD_CLASS_LABEL[maxRoadClass]} on your plan
-                      </span>
-                    )}
-                  </span>
-                </Row>
-                <Row label="Area">{zone.areaKm2} km²</Row>
-                <Row label="Roads collected">{zone.roadsCount ?? '—'}</Row>
-                <Row label="Total length">{zone.lengthKm === null ? '—' : `${zone.lengthKm} km`}</Row>
-                <Row label="Capture cadence">{zone.cadence}</Row>
-                <Row label="Created">{formatDate(zone.createdAt)}</Row>
+              <dl className="grid grid-cols-1 gap-lg">
+                <Stat
+                  icon={<IconLayers size={18} />}
+                  label="Road class"
+                  value={<RoadClassBadge roadClass={zone.roadClass} />}
+                  hint={cappedByPlan ? `Capped to ${ROAD_CLASS_LABEL[maxRoadClass]} on your plan` : undefined}
+                />
+                <Stat icon={<IconMapPin size={18} />} label="Area" value={`${zone.areaKm2} km²`} />
+                <Stat icon={<IconRoad size={18} />} label="Roads" value={zone.roadsCount ?? '—'} />
+                <Stat icon={<IconRuler size={18} />} label="Total length" value={zone.lengthKm === null ? '—' : `${zone.lengthKm} km`} />
+                <Stat icon={<IconClock size={18} />} label="Capture cadence" value={zone.cadence ?? 'Not scheduled'} />
+                <Stat icon={<IconCalendar size={18} />} label="Created" value={formatDate(zone.createdAt)} />
               </dl>
 
             </>
@@ -260,6 +312,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
           sits idle, which is invisible from its attributes alone. */}
       <section className="space-y-md">
         <SectionHeader
+          icon={<IconClock size={18} />}
           title="Capture windows"
           description="When this zone collects. Windows are set on the Schedule page."
           actions={
@@ -274,7 +327,8 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                   className="w-full tablet:w-56"
                 />
               )}
-              <Link href="/schedule" className={buttonClass('secondary')}>
+              <Link href="/schedule" className={buttonClass('tint')}>
+                <IconCalendar size={16} />
                 Manage on Schedule
               </Link>
             </>
@@ -286,7 +340,8 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
             <p className="text-body text-text-secondary">
               No capture windows yet — this zone stays idle until one is set.
             </p>
-            <Link href="/schedule" className={cn(buttonClass('secondary'), 'mt-md')}>
+            <Link href="/schedule" className={cn(buttonClass('tint'), 'mt-md')}>
+              <IconCalendar size={16} />
               Set a window
             </Link>
           </div>
@@ -308,8 +363,9 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                       direction={windowTable.sort?.direction ?? 'asc'}
                       onSort={() => windowTable.toggleSort('hours')}
                     >
-                      Hours
+                      Hours (WIB)
                     </SortableTh>
+                    <Th>Days</Th>
                     <SortableTh
                       active={windowTable.sort?.key === 'interval'}
                       direction={windowTable.sort?.direction ?? 'asc'}
@@ -317,7 +373,6 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                     >
                       Interval
                     </SortableTh>
-                    <Th>Days</Th>
                     <SortableTh
                       className="text-right"
                       active={windowTable.sort?.key === 'frames'}
@@ -347,7 +402,6 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                       <Td className="tabular-nums text-text-secondary">
                         {w.start}–{w.end}
                       </Td>
-                      <Td className="text-text-secondary">{INTERVAL_LABEL[w.interval]}</Td>
                       <Td>
                         <span className="flex gap-xs">
                           {DAY_LABEL.map((label, index) => (
@@ -366,21 +420,15 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                           ))}
                         </span>
                       </Td>
+                      <Td className="text-text-secondary">{INTERVAL_LABEL[w.interval]}</Td>
                       <Td className="text-right tabular-nums">{framesPerDay(w)}</Td>
                       <Td>
-                        <span
-                          className={cn(
-                            'text-micro font-semibold rounded-xs px-sm py-xs whitespace-nowrap',
-                            w.active
-                              ? 'bg-success-bg text-success-text'
-                              : w.pausedByPlan
-                                ? 'bg-warning-bg text-warning-text'
-                                : 'bg-canvas-secondary text-text-muted border border-border'
-                          )}
+                        <StatusPill
+                          tone={w.active ? 'success' : w.pausedByPlan ? 'warning' : 'neutral'}
                           title={!w.active && w.pausedByPlan ? 'Paused because it is over your plan’s limits' : undefined}
                         >
                           {w.active ? 'Active' : w.pausedByPlan ? 'Paused · plan limit' : 'Paused'}
-                        </span>
+                        </StatusPill>
                       </Td>
                     </tr>
                   ))}
@@ -407,7 +455,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
         )}
       </section>
 
-      <ZoneCaptures zone={zone} />
+      <ZoneCaptures zone={zone} refreshKey={capturesKey} />
 
       {/* Last on the page: exports are made in Studio and collected here. */}
       <ZoneExports zoneId={zone.id} />
@@ -422,15 +470,6 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
         onConfirm={remove}
         onCancel={() => setConfirmDelete(false)}
       />
-    </div>
-  )
-}
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className={cn('flex items-start justify-between gap-md')}>
-      <dt className="text-body text-text-secondary">{label}</dt>
-      <dd className="text-body font-semibold text-text-primary tabular-nums text-right">{children}</dd>
     </div>
   )
 }

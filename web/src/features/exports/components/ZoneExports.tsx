@@ -13,26 +13,17 @@
  */
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { SectionHeader } from '@/components/shared/SectionHeader'
-import { cn } from '@/lib/utils'
+import { cn, formatWibShort } from '@/lib/utils'
+import { IconDownload, IconFilm } from '@/components/ui/icons'
 import { isActive, removeExport, retryExport, exportErrorMessage, type ExportJob } from '../api'
 import { ExportBar, ExportPill, FORMAT_LABEL, detailFor, useZoneExports } from './ExportProgress'
 
-function when(iso: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'Asia/Jakarta',
-  }).format(new Date(iso))
-}
+const when = formatWibShort
 
 function range(job: ExportJob): string {
   return `${when(job.range.from)} → ${when(job.range.to)}`
@@ -68,13 +59,9 @@ export function ZoneExports({ zoneId }: { zoneId: string }) {
   return (
     <section id="exports" className="space-y-md scroll-mt-xl">
       <SectionHeader
+        icon={<IconFilm size={18} />}
         title="Exports"
         description="ZIPs and animations made from this zone in Studio. Files are kept for 7 days."
-        actions={
-          <Link href="/studio" className={buttonClass('secondary')}>
-            Open Studio
-          </Link>
-        }
       />
 
       {error && <Alert variant="warning">{error}</Alert>}
@@ -93,9 +80,9 @@ export function ZoneExports({ zoneId }: { zoneId: string }) {
           <Table>
             <thead>
               <tr>
-                <Th>Requested</Th>
-                <Th>Export</Th>
-                <Th>Time range</Th>
+                <Th>Requested at (WIB)</Th>
+                <Th>File</Th>
+                <Th>Time range (WIB)</Th>
                 <Th className="w-[34%]">Status</Th>
                 <Th className="text-right">Actions</Th>
               </tr>
@@ -127,15 +114,16 @@ export function ZoneExports({ zoneId }: { zoneId: string }) {
                     <div className="inline-flex items-center gap-sm">
                       {job.status === 'done' && job.downloadUrl && (
                         <a href={job.downloadUrl} className={buttonClass('primary', 'sm')} download>
+                          <IconDownload size={14} />
                           Download
                         </a>
                       )}
                       {(job.status === 'failed' || job.status === 'expired') && (
-                        <Button variant="secondary" size="sm" onClick={() => act(job, 'retry')} disabled={busy !== null}>
+                        <Button variant="tint" size="sm" onClick={() => act(job, 'retry')} disabled={busy !== null}>
                           {busy === job.id ? 'Retrying…' : 'Retry'}
                         </Button>
                       )}
-                      <Button variant="secondary" size="sm" onClick={() => act(job, 'remove')} disabled={busy !== null}>
+                      <Button variant="destructive" size="sm" onClick={() => act(job, 'remove')} disabled={busy !== null}>
                         {isActive(job) ? 'Cancel' : 'Delete'}
                       </Button>
                     </div>
