@@ -54,6 +54,13 @@ export const trafficPreviewQuerySchema = z.object({
     }),
   roadClass: roadClass.optional(),
   /**
+   * ZONE-PERF — one tier only: the roads a class ADDS over the class below it. The wizard
+   * loads nasional, then provinsi, then local roads, drawing each as it arrives.
+   */
+  tier: roadClass.optional(),
+  /** `slim`: lines + colour keys only (≈70% smaller) — all a map draws. */
+  format: z.enum(['full', 'slim']).default('full'),
+  /**
    * The zone's outer ring as `lng,lat;lng,lat;…`, so the answer can be trimmed to the
    * shape actually drawn. HERE only accepts a bounding box, and a box is always larger
    * than the polygon inside it — without this the preview shows roads outside the

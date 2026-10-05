@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { LatLngExpression } from 'leaflet'
 import { Button } from '@/components/ui/Button'
@@ -22,6 +22,9 @@ const STEPS = ['Boundary', 'Road class', 'Review']
 
 
 
+/** Road classes from narrowest to widest; each includes the ones before it. */
+const ROAD_CLASS_ORDER: RoadClass[] = ['nasional', 'nasional_provinsi', 'semua']
+
 export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones: Zone[] }) {
   const router = useRouter()
   const [step, setStep] = useState(0)
@@ -30,7 +33,6 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
   const [roadClass, setRoadClass] = useState<RoadClass | null>(null)
   const [mode, setMode] = useState<'draw' | 'import'>('draw')
   const [withTraffic, setWithTraffic] = useState(true)
-  const [traffic, setTraffic] = useState<zonesApi.TrafficPreview | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -65,21 +67,58 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
   const matched = roadClass && roadCounts?.key === bboxKey ? roadCounts.counts[roadClass] : undefined
 
 
+  /**
+   * The preview, loaded tier by tier up to the selected class (ZONE-PERF): Nasional first
+   * (few roads, draws at once), then Provinsi, then local roads — each drawn as it
+   * arrives, and nothing beyond the class the user chose.
+   *
+   * Keyed by a STRING of the ring. `geometry` is a new object on every render, and the
+   * old effect depended on it: every render re-fetched the preview, whose result caused
+   * another render — a loop that redrew thousands of roads and could re-ask HERE.
+   */
+  const ringKey = geometry ? JSON.stringify(geometry.coordinates[0]) : null
+  const wantedTiers = useMemo(
+    () => ROAD_CLASS_ORDER.slice(0, ROAD_CLASS_ORDER.indexOf(roadClass ?? 'nasional') + 1),
+    [roadClass],
+  )
+  const [tiers, setTiers] = useState<{ key: string; byClass: Partial<Record<RoadClass, zonesApi.SlimTraffic>> }>({
+    key: '',
+    byClass: {},
+  })
+  const tiersRef = useRef(tiers)
   useEffect(() => {
-    if (step !== 1 || !geometry || !withTraffic) return
-    const ring = geometry.coordinates[0]
+    tiersRef.current = tiers
+  }, [tiers])
+  useEffect(() => {
+    if (step !== 1 || !ringKey || !withTraffic) return
+    const ring = JSON.parse(ringKey) as [number, number][]
     const lngs = ring.map(([lng]) => lng)
     const lats = ring.map(([, lat]) => lat)
-    zonesApi
-      .getTrafficPreview(
-        [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)],
-        undefined,
-        // Trim to the shape being drawn, not the box around it.
-        ring as [number, number][],
-      )
-      .then(setTraffic)
-      .catch(() => setTraffic(null))
-  }, [step, geometry, withTraffic])
+    const bbox: [number, number, number, number] = [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)]
+    let cancelled = false
+    void (async () => {
+      for (const tier of wantedTiers) {
+        if (cancelled) return
+        // Already loaded for this ring — switching class down and back costs nothing.
+        const t = tiersRef.current
+        if (t.key === ringKey && t.byClass[tier] !== undefined) continue
+        const roads = await zonesApi.getTrafficTier(bbox, tier, ring).catch(() => null)
+        if (cancelled || !roads) return
+        setTiers((t) => ({ key: ringKey, byClass: { ...(t.key === ringKey ? t.byClass : {}), [tier]: roads } }))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [step, ringKey, withTraffic, wantedTiers])
+
+  // What the map draws: the loaded tiers up to the selected class, merged.
+  const shownRoads = useMemo(() => {
+    if (tiers.key !== ringKey) return null
+    const features = wantedTiers.flatMap((t) => tiers.byClass[t]?.features ?? [])
+    return { type: 'FeatureCollection' as const, features }
+  }, [tiers, ringKey, wantedTiers])
+  const loadingTier = step === 1 && withTraffic ? wantedTiers.find((t) => tiers.key !== ringKey || !tiers.byClass[t]) : undefined
 
 
   async function submit() {
@@ -215,9 +254,14 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
 
               <MapCanvas
                 polygon={geometry}
-                trafficGeoJSON={step === 1 && withTraffic && traffic ? traffic : undefined}
+                slimTraffic={step === 1 && withTraffic ? shownRoads : undefined}
                 className="h-96 w-full"
               />
+              {loadingTier && (
+                <p className="text-caption text-text-muted" aria-live="polite">
+                  Loading {ROAD_CLASS_LABEL[loadingTier].toLowerCase()} roads…
+                </p>
+              )}
 
               {step === 1 && (
                 <div className="space-y-sm">

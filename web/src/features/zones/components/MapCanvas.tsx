@@ -102,6 +102,8 @@ export function MapCanvas({
         dragging
         doubleClickZoom
         zoomControl
+        // Canvas, not one SVG path per road: thousands of roads stay smooth (ZONE-PERF).
+        preferCanvas
         style={{ height: '100%', width: '100%', background: '#0a0a0a' }}
       >
         <TileLayer url={OSM_TILE_URL} attribution={OSM_ATTRIBUTION} />
@@ -109,13 +111,7 @@ export function MapCanvas({
         {latLngs && latLngs.length >= 3 && (
           <Polygon positions={latLngs} pathOptions={{ color: '#5A35F3', fillOpacity: 0.15, weight: 2 }} />
         )}
-        {slimTraffic?.features.map((feature, idx) => (
-          <Polyline
-            key={`slim-${idx}`}
-            positions={feature.c.map(([lng, lat]) => [lat, lng] as LatLngExpression)}
-            pathOptions={{ color: feature.k, weight: 4 }}
-          />
-        ))}
+        {slimTraffic && <BatchedRoads roads={slimTraffic} />}
         {trafficGeoJSON?.features.map((feature, i) => (
           <Polyline
             key={i}
@@ -127,4 +123,43 @@ export function MapCanvas({
       </MapContainer>
     </div>
   )
+}
+
+/**
+ * Draws many roads without freezing the map (ZONE-PERF). Roads are grouped into one
+ * multi-line layer per colour — a dozen layers instead of thousands of components — on
+ * Leaflet's canvas renderer, added a chunk per animation frame so a big tier streams in
+ * while the map stays responsive. Re-run only when the road set itself changes.
+ */
+const ROADS_PER_FRAME = 2000
+
+function BatchedRoads({ roads }: { roads: NonNullable<MapCanvasProps['slimTraffic']> }) {
+  const map = useMap()
+  useEffect(() => {
+    const renderer = L.canvas({ padding: 0.5 })
+    const group = L.layerGroup().addTo(map)
+    const features = roads.features
+    let i = 0
+    let raf = 0
+    const step = () => {
+      const byColor = new Map<string, LatLngExpression[][]>()
+      for (const end = Math.min(i + ROADS_PER_FRAME, features.length); i < end; i++) {
+        const f = features[i]!
+        const line = f.c.map(([lng, lat]) => [lat, lng] as LatLngExpression)
+        const list = byColor.get(f.k)
+        if (list) list.push(line)
+        else byColor.set(f.k, [line])
+      }
+      for (const [color, lines] of byColor) {
+        L.polyline(lines, { color, weight: 4, renderer, interactive: false }).addTo(group)
+      }
+      if (i < features.length) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => {
+      cancelAnimationFrame(raf)
+      group.remove()
+    }
+  }, [map, roads])
+  return null
 }

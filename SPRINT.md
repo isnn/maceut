@@ -154,6 +154,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **EXP-A2** Export: proses browser lebih ringan, data slim disimpan per capture, pakai ulang frame yang sudah dirender | rencana optimasi export |
 | ✅ | **EXP-B** Export video lewat ffmpeg (tanpa merekam real-time) | rencana optimasi export |
 | ✅ | **EXP-C** Batas frame × piksel per paket, antrian bergiliran, opsi WebP | rencana optimasi export |
+| ✅ | **ZONE-PERF** Create zone: jalan dimuat per kelas & bertahap, cache HERE dipakai bersama hitungan, peta canvas berlapis (tanpa lag) | rencana optimasi part 2 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -178,6 +179,16 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-05f] ZONE-PERF — Create zone tanpa lag (part 2 rencana optimasi).
+
+  - API: cache flow HERE 5 menit (`traffic-cache.service`) dipakai bersama road-class-counts
+    & preview → preview tak lagi memanggil HERE ke-4. `/traffic/preview` + `tier` (hanya ruas
+    baru di kelas itu; di atas paket = kosong tanpa HERE) + `format=slim`.
+  - Web: wizard memuat tier satu per satu sampai kelas terpilih (Nasional dulu), cache per
+    ring; efek dikunci ke string ring (dulu `geometry` objek baru tiap render → fetch ulang).
+    MapCanvas: `preferCanvas`, satu layer per warna, 2.000 ruas per frame.
+  VERIFIKASI: 426 test API (3 baru: selisih tier, tier terkunci, tanpa HERE ekstra), tsc + eslint bersih.
 
 [2026-07-29] Frontend-first pass (web/) — scaffolded Next.js 16 (App Router, TS, Tailwind v4) + tailwind.config.ts
   tokens from design.md (loaded via @config directive, Tailwind v4). Installed @base-ui/react, leaflet, react-leaflet.

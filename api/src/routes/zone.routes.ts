@@ -223,9 +223,20 @@ router.delete('/zones/:id', zoneController.remove)
  *       - in: query
  *         name: roadClass
  *         schema: { type: string, enum: [nasional, nasional_provinsi, semua] }
+ *       - in: query
+ *         name: tier
+ *         description: >
+ *           ZONE-PERF — hanya ruas yang DITAMBAHKAN kelas ini dibanding kelas di bawahnya.
+ *           Tier di atas paket → kosong, tanpa panggilan HERE. Dibaca dari cache 5 menit
+ *           yang sama dengan /traffic/road-class-counts.
+ *         schema: { type: string, enum: [nasional, nasional_provinsi, semua] }
+ *       - in: query
+ *         name: format
+ *         description: "`slim` = { features: [{ c: [[lng,lat]...], k: warna }] } (±70% lebih kecil)"
+ *         schema: { type: string, enum: [full, slim], default: full }
  *     responses:
  *       200:
- *         description: GeoJSON FeatureCollection berisi LineString per ruas
+ *         description: GeoJSON FeatureCollection berisi LineString per ruas (atau bentuk slim)
  *         content:
  *           application/json:
  *             schema:

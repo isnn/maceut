@@ -136,6 +136,21 @@ export async function getTrafficPreview(
   return apiClient.get<TrafficPreview>(`/traffic/preview?${params.toString()}`)
 }
 
+/**
+ * One tier of roads for the wizard's preview (ZONE-PERF): only the roads `tier` adds
+ * over the class below it, as lines + colours. The server answers from the same cached
+ * HERE flows the road-class counts fetched, so this costs no extra HERE calls.
+ */
+export async function getTrafficTier(
+  bbox: [number, number, number, number],
+  tier: RoadClass,
+  ring: [number, number][],
+): Promise<SlimTraffic> {
+  const params = new URLSearchParams({ bbox: bbox.join(','), tier, format: 'slim' })
+  params.set('ring', ring.map(([lng, lat]) => `${lng},${lat}`).join(';'))
+  return apiClient.get<SlimTraffic>(`/traffic/preview?${params.toString()}`)
+}
+
 // --- captures: one row per cycle a zone collects (F-07) -------------------------
 
 export type CaptureStatus = 'pending' | 'processing' | 'done' | 'failed' | 'skipped_limit' | 'missed'
