@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card'
 import { StatusPill, ZoneStatusPill } from '@/components/ui/Badge'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { buttonClass } from '@/components/ui/Button'
+import { buttonClass, linkClass } from '@/components/ui/Button'
 import { IconAlert, IconCarFront, IconClock, IconFilm, IconRoad, IconZap } from '@/components/ui/icons'
 import { cn, formatFileSize, formatKm, formatNumber } from '@/lib/utils'
 import { PLAN_LABEL, TRAFFIC_COLORS } from '@/lib/constants'
@@ -175,7 +175,7 @@ export default function DashboardPage() {
           <section>
             <div className="flex items-center justify-between mb-md">
               <h2 className="text-section-title text-text-primary">Your zones</h2>
-              <Link href="/zones" className="text-body text-info no-underline hover:underline">
+              <Link href="/zones" className={linkClass()}>
                 {zones.length > ZONES_ON_DASHBOARD ? `See all ${zones.length}` : 'See all'}
               </Link>
             </div>
@@ -211,8 +211,8 @@ export default function DashboardPage() {
                 ))}
                 {zones.length > ZONES_ON_DASHBOARD && (
                   <li className="px-lg py-md">
-                    <Link href="/zones" className="text-caption text-info no-underline hover:underline">
-                      And {zones.length - ZONES_ON_DASHBOARD} more {zones.length - ZONES_ON_DASHBOARD === 1 ? 'zone' : 'zones'}
+                    <Link href="/zones" className={linkClass('caption')}>
+                      {zones.length - ZONES_ON_DASHBOARD} more
                     </Link>
                   </li>
                 )}
@@ -223,8 +223,8 @@ export default function DashboardPage() {
           <section>
             <div className="flex items-center justify-between mb-md">
               <h2 className="text-section-title text-text-primary">Latest captures</h2>
-              <Link href="/studio" className="text-body text-info no-underline hover:underline">
-                Play them in Studio
+              <Link href="/studio" className={linkClass()}>
+                Open Studio
               </Link>
             </div>
             <div className="bg-card border border-border rounded-lg p-lg">

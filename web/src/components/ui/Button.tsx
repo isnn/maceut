@@ -39,3 +39,15 @@ export function Button({ variant = 'primary', size = 'md', className, ...props }
 export function buttonClass(variant: keyof typeof VARIANTS = 'primary', size: keyof typeof SIZES = 'md') {
   return cn(BASE, SIZES[size], VARIANTS[variant])
 }
+
+/**
+ * A text link in the brand style — section links ("See all", "Open Studio") and inline
+ * actions. Purple and semibold, underlined only on hover. It replaces the default blue
+ * (`text-info`), which read as a browser link rather than part of the product.
+ */
+export function linkClass(size: 'body' | 'caption' = 'body') {
+  return cn(
+    'font-semibold text-primary no-underline hover:underline underline-offset-2 transition-colors',
+    size === 'body' ? 'text-body' : 'text-caption',
+  )
+}

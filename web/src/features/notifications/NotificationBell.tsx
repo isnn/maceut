@@ -162,34 +162,50 @@ export function NotificationBell() {
 
   const rows = useMemo(() => toRows(feed.items), [feed.items])
 
+  /**
+   * Marks notifications read: instantly on screen, then on the server. Anything the
+   * server refused goes back to unread with a toast — it used to stay "read" here while
+   * still unread on the server, and reappear on the next refresh as if the click had
+   * been ignored. A refresh afterwards makes the badge match the server exactly.
+   */
+  async function markRead(ids: string[]) {
+    if (!ids.length) return
+    const setRead = (which: string[], read: boolean) =>
+      setFeed((f) => {
+        const items = f.items.map((n) => (which.includes(n.id) ? { ...n, read } : n))
+        return { items, unreadCount: items.filter((n) => !n.read).length }
+      })
+    setRead(ids, true)
+    const results = await Promise.allSettled(ids.map((id) => notificationsApi.markRead(id)))
+    const failed = ids.filter((_, i) => results[i]!.status === 'rejected')
+    if (failed.length) {
+      setRead(failed, false)
+      showToast({ tone: 'warning', title: 'Couldn’t mark as read', description: 'Check your connection and try again.' })
+    }
+    await refresh()
+  }
+
   async function open(row: Row, close: () => void) {
     close()
-    const unread = row.items.filter((n) => !n.read)
-    if (unread.length) {
-      setFeed((f) => ({
-        items: f.items.map((n) => (unread.some((u) => u.id === n.id) ? { ...n, read: true } : n)),
-        unreadCount: Math.max(0, f.unreadCount - unread.length),
-      }))
-      await Promise.allSettled(unread.map((n) => notificationsApi.markRead(n.id)))
-    }
+    void markRead(row.items.filter((n) => !n.read).map((n) => n.id))
     if (row.href) router.push(row.href)
   }
 
-  /** Marks a row read without leaving the page — the check button on each unread row. */
-  async function markRowRead(row: Row) {
-    const unread = row.items.filter((n) => !n.read)
-    if (!unread.length) return
-    setFeed((f) => ({
-      items: f.items.map((n) => (unread.some((u) => u.id === n.id) ? { ...n, read: true } : n)),
-      unreadCount: Math.max(0, f.unreadCount - unread.length),
-    }))
-    await Promise.allSettled(unread.map((n) => notificationsApi.markRead(n.id)))
+  /** The check button on each unread row: mark read without leaving the page. */
+  function markRowRead(row: Row) {
+    void markRead(row.items.filter((n) => !n.read).map((n) => n.id))
   }
 
   async function markAllRead() {
+    const before = feed
     setFeed((f) => ({ items: f.items.map((n) => ({ ...n, read: true })), unreadCount: 0 }))
-    await notificationsApi.markAllRead().catch(() => undefined)
-    void refresh()
+    try {
+      await notificationsApi.markAllRead()
+    } catch {
+      setFeed(before)
+      showToast({ tone: 'warning', title: 'Couldn’t mark all as read', description: 'Check your connection and try again.' })
+    }
+    await refresh()
   }
 
   const unread = feed.unreadCount
@@ -245,7 +261,7 @@ export function NotificationBell() {
                       <button
                         type="button"
                         onClick={() => void open(row, close)}
-                        className="w-full text-left pl-lg pr-[44px] py-md flex gap-sm"
+                        className="w-full text-left pl-lg pr-[56px] py-md flex gap-sm"
                       >
                         <span aria-hidden className={cn('w-6 h-6 shrink-0 rounded-full flex items-center justify-center', className)}>
                           <Icon size={14} />
@@ -265,10 +281,10 @@ export function NotificationBell() {
                       {isUnread && (
                         <button
                           type="button"
-                          onClick={() => void markRowRead(row)}
+                          onClick={() => markRowRead(row)}
                           aria-label={`Mark “${row.title}” as read`}
                           title="Mark as read"
-                          className="absolute bottom-sm right-md w-7 h-7 rounded-md flex items-center justify-center text-text-muted hover:text-primary hover:bg-primary-soft transition-colors focus:outline-none focus-visible:outline-2 focus-visible:outline-primary"
+                          className="absolute bottom-sm right-md w-8 h-8 rounded-md flex items-center justify-center text-primary bg-primary-soft/60 hover:bg-primary hover:text-on-primary transition-colors focus:outline-none focus-visible:outline-2 focus-visible:outline-primary"
                         >
                           <IconCheckCheck size={16} />
                         </button>

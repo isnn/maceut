@@ -149,6 +149,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-26** Pill tanpa titik, tombol tandai-dibaca per notifikasi, error teknis diterjemahkan, kartu Next collection & frame terkumpul dari data nyata | permintaan user |
 | ✅ | **FE-27** Kelas jalan berwarna (teal/biru/ungu), kolom Interval & Hours terpisah, pesan gagal export berupa aksi (Retry), subjudul zona dihapus + peta capture lebih tinggi, kartu Next collection baru | permintaan user |
 | ✅ | **FE-28** Lebar header = lebar halaman, Collection health ringkas, notifikasi warna brand & copy singkat, judul seksi sejajar ikon, "Retry" | permintaan user |
+| ✅ | **FE-29** Semua halaman & header 1600px, Profil: ganti paket di Usage (popup), Billing = info pembayaran, Notifikasi satu toggle; tandai-dibaca andal; link dashboard gaya brand | permintaan user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -1898,6 +1899,29 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   - Tombol "Retry export" → "Retry".
   VERIFIKASI: 423 test API, tsc + eslint bersih kedua paket, halaman 200. UI belum dilihat
     di browser.
+
+[2026-10-05] FE-29 — halaman lebar, profil & billing dirapikan, header, link brand.
+
+  - `PAGE_WIDTH` = 1600px untuk SEMUA halaman & header (app, staf, publik, onboarding);
+    Studio jadi acuan. Jarak nav header gap-xl.
+  - Profil:
+    · Account: baris "Platform role" dihapus; kartu staf → "Staff tools".
+    · Usage → kartu Current plan: tombol "Change plan" → popup pilihan paket (PlanCards);
+      turun paket → popup peringatan (PlanChangeDialog) seperti sebelumnya. Teks "renews
+      1 Oct" (karangan — belum ada billing) dihapus.
+    · Popup peringatan: tanpa paragraf penjelasan — daftar yang akan di-pause + "Nothing is
+      deleted."
+    · Billing: kini info pembayaran saja — Billing history (tabel, kosong "No invoices
+      yet"), Plan & harga, Payment method ("No card on file"), Billing contact. Tidak ada
+      data karangan.
+    · Notifications: satu toggle "Email me if a zone stops collecting · At most once a day."
+  - Header: dropdown akun menampilkan pill "Premium" (bukan "Premium plan"). Tandai-dibaca:
+    tombol 32px selalu tampil di yang belum dibaca; gagal di server → kembali belum dibaca
+    + toast; setelahnya daftar disegarkan supaya badge cocok dengan server. Mark all read
+    juga dikembalikan bila gagal.
+  - Dashboard: link seksi pakai `linkClass()` (ungu, semibold) — "See all", "Open Studio",
+    "3 more".
+  VERIFIKASI: 423 test API, tsc + eslint bersih, 7 halaman 200. UI belum dilihat di browser.
 
 ---
 

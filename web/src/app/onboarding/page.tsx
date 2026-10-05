@@ -57,7 +57,7 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-page flex flex-col">
       <header className="border-b border-border bg-canvas">
-        <div className="mx-auto max-w-[1180px] px-xl h-16 flex items-center gap-lg">
+        <div className="mx-auto max-w-[1600px] px-xl h-16 flex items-center gap-lg">
           <Logo href="/onboarding" />
           <span className="ml-auto text-caption text-text-secondary">{user.email}</span>
           <button

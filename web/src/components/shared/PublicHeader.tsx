@@ -13,7 +13,7 @@ const NAV = [
 export function PublicHeader({ minimal, trailing }: { minimal?: boolean; trailing?: React.ReactNode }) {
   return (
     <header className="border-b border-border bg-canvas">
-      <div className="mx-auto max-w-[1180px] px-xl h-16 flex items-center gap-xxl">
+      <div className="mx-auto max-w-[1600px] px-xl h-16 flex items-center gap-xxl">
         <Logo />
         {!minimal && (
           <nav className="hidden laptop:flex items-center gap-xl">
