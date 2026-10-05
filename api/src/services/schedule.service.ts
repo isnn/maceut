@@ -1,3 +1,4 @@
+import * as captureRepo from '../repositories/capture.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import { NotFoundError, ForbiddenError, ScheduleLimitExceededError, ValidationError } from '../errors'
@@ -33,12 +34,18 @@ export interface PublicSchedule {
   framesPerDay: number
   /** Derived, never stored. Shown for transparency and used by the scheduler. */
   cron: string
-  /** Frames already collected. Zero until captures exist. */
+  /** Frames this window has collected (captures that finished). */
   capturedFrames: number
+  /**
+   * When the scheduler will next fire it — read from `next_fire_at`, the column the
+   * scheduler itself claims by, so this is what WILL happen, not a prediction. Null
+   * when paused, or in the moments before a new/edited window is seeded.
+   */
+  nextFireAt: string | null
   createdAt: string
 }
 
-export function toPublic(row: ScheduleRecord): PublicSchedule {
+export function toPublic(row: ScheduleRecord, capturedFrames = 0): PublicSchedule {
   const shape = { start: row.startTime, end: row.endTime, interval: row.interval as CaptureInterval, days: row.days }
   return {
     id: row.id,
@@ -52,9 +59,8 @@ export function toPublic(row: ScheduleRecord): PublicSchedule {
     pausedByPlan: row.pausedByPlan,
     framesPerDay: framesPerDay(shape),
     cron: toCron(shape),
-    // Real counts arrive with the captures table; zero is honest here because a
-    // window that has produced nothing has produced nothing.
-    capturedFrames: 0,
+    capturedFrames,
+    nextFireAt: row.status === 'active' && row.nextFireAt ? row.nextFireAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
   }
 }
@@ -147,13 +153,15 @@ async function requireDailyBudget(
 }
 
 export async function listSchedules(userId: string): Promise<PublicSchedule[]> {
-  return (await scheduleRepo.findByUserId(userId)).map(toPublic)
+  const [rows, captured] = await Promise.all([scheduleRepo.findByUserId(userId), captureRepo.countDoneBySchedule(userId)])
+  return rows.map((row) => toPublic(row, captured.get(row.id) ?? 0))
 }
 
 export async function listForZone(userId: string, zoneId: string): Promise<PublicSchedule[]> {
   const zone = await zoneRepo.findById(zoneId)
   if (!zone || zone.userId !== userId) throw new NotFoundError('Zona')
-  return (await scheduleRepo.findByZoneId(zoneId)).map(toPublic)
+  const [rows, captured] = await Promise.all([scheduleRepo.findByZoneId(zoneId), captureRepo.countDoneBySchedule(userId)])
+  return rows.map((row) => toPublic(row, captured.get(row.id) ?? 0))
 }
 
 export async function createSchedule(
@@ -252,7 +260,7 @@ export async function updateSchedule(
     ...(status ? { status } : {}),
   })
   if (!updated) throw new NotFoundError('Jadwal')
-  return toPublic(updated)
+  return toPublic(updated, (await captureRepo.countDoneBySchedule(userId)).get(updated.id) ?? 0)
 }
 
 export async function deleteSchedule(userId: string, id: string): Promise<void> {

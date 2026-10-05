@@ -1,3 +1,4 @@
+import { captureErrorForUser } from './user-facing-errors'
 import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as userRepo from '../repositories/user.repository'
@@ -65,7 +66,8 @@ export function toPublic(row: AnyCaptureRow): PublicCapture {
     jamFactorAvg: row.jamFactorAvg === null ? null : Number(row.jamFactorAvg),
     filePath: row.filePath,
     fileSize: row.fileSize,
-    error: row.error,
+    // The raw error stays in the row for debugging; users get what it means.
+    error: captureErrorForUser(row.status, row.error),
     scheduledFor: row.scheduledFor?.toISOString() ?? null,
     lateBySeconds: row.scheduledFor
       ? Math.round((row.capturedAt.getTime() - row.scheduledFor.getTime()) / 1000)
