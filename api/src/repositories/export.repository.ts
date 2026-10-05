@@ -145,3 +145,26 @@ export async function findExpired(now: Date, limit = 50): Promise<ExportRecord[]
 export async function markExpired(id: string): Promise<void> {
   await db.update(exports).set({ status: 'expired', filePath: null, updatedAt: new Date() }).where(eq(exports.id, id))
 }
+
+/** Finished exports since an instant — the dashboard's "this month". */
+export async function countDoneSince(userId: string, since: Date): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(exports)
+    .where(and(eq(exports.userId, userId), eq(exports.status, 'done'), sql`${exports.finishedAt} >= ${since}`))
+  return rows[0]?.count ?? 0
+}
+
+/** Bytes of export files still held in R2 (done, not yet expired). */
+export async function fileBytesForUser(userId: string): Promise<number> {
+  const rows = await db
+    .select({ bytes: sql<number>`coalesce(sum(${exports.fileSize}), 0)::bigint` })
+    .from(exports)
+    .where(and(eq(exports.userId, userId), eq(exports.status, 'done')))
+  return Number(rows[0]?.bytes ?? 0)
+}
+
+/** The account's latest exports across every zone, newest first. */
+export async function listRecentForUser(userId: string, limit: number): Promise<ExportRecord[]> {
+  return db.select().from(exports).where(eq(exports.userId, userId)).orderBy(desc(exports.createdAt)).limit(limit)
+}

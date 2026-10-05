@@ -145,6 +145,53 @@ export async function countForWibDay(userId: string, when: Date): Promise<number
   return rows[0]?.count ?? 0
 }
 
+/** Same-WIB-day condition as `countForWibDay`, for the dashboard's "today" figures. */
+function onWibDay(when: Date) {
+  return sql`(${captures.capturedAt} AT TIME ZONE 'Asia/Jakarta')::date = (${when.toISOString()}::timestamptz AT TIME ZONE 'Asia/Jakarta')::date`
+}
+
+/** Today's (WIB) captures that failed, and firings missed while the system was down. */
+export async function problemsForWibDay(userId: string, when: Date): Promise<{ failed: number; missed: number }> {
+  const rows = await db
+    .select({
+      failed: sql<number>`count(*) FILTER (WHERE ${captures.status} = 'failed')::int`,
+      missed: sql<number>`count(*) FILTER (WHERE ${captures.status} = 'missed')::int`,
+    })
+    .from(captures)
+    .where(and(eq(captures.userId, userId), onWibDay(when)))
+  return { failed: rows[0]?.failed ?? 0, missed: rows[0]?.missed ?? 0 }
+}
+
+/** Today's (WIB) most congested collected moment across the account's zones. */
+export async function peakForWibDay(
+  userId: string,
+  when: Date,
+): Promise<{ jamFactorAvg: number; capturedAt: Date; zoneId: string; zoneName: string } | undefined> {
+  const rows = await db
+    .select({
+      jamFactorAvg: captures.jamFactorAvg,
+      capturedAt: captures.capturedAt,
+      zoneId: captures.zoneId,
+      zoneName: zones.name,
+    })
+    .from(captures)
+    .innerJoin(zones, eq(zones.id, captures.zoneId))
+    .where(and(eq(captures.userId, userId), eq(captures.status, 'done'), sql`${captures.jamFactorAvg} IS NOT NULL`, onWibDay(when)))
+    .orderBy(desc(captures.jamFactorAvg), desc(captures.capturedAt))
+    .limit(1)
+  const row = rows[0]
+  return row ? { ...row, jamFactorAvg: Number(row.jamFactorAvg) } : undefined
+}
+
+/** Bytes of rendered capture images the account holds in R2 (CAP-02). */
+export async function imageBytesForUser(userId: string): Promise<number> {
+  const rows = await db
+    .select({ bytes: sql<number>`coalesce(sum(${captures.fileSize}), 0)::bigint` })
+    .from(captures)
+    .where(and(eq(captures.userId, userId), sql`${captures.filePath} IS NOT NULL`))
+  return Number(rows[0]?.bytes ?? 0)
+}
+
 /** The most recent capture for a zone, whatever its outcome. */
 export async function latestForZone(zoneId: string): Promise<CaptureRecord | undefined> {
   const rows = await db

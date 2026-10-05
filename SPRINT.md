@@ -145,6 +145,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **NOTIF** Notifikasi berjalan: bell in-app + banner/toast, email hemat (capture gagal >2 jam, ringkas 1/hari; perubahan paket oleh staf; alert HERE ke satu alamat) + batas kirim OTP | permintaan user |
 | ✅ | **FE-23** Halaman zona: label & tabel konsisten, pill status tunggal, tombol terisi warna brand (Capture now / Open in Studio), peta Captures lebih gelap dengan nama tempat tetap terbaca | permintaan user |
 | ✅ | **FE-24** Label konsisten di seluruh tabel (daftar zona, admin, jadwal, dashboard): satu bentuk pill untuk status & kategori; kartu Zone details baru; ikon Lucide; paginasi selalu tampil; format tanggal tunggal | permintaan user |
+| ✅ | **FE-25** Dashboard: semua metrik data nyata (storage, export bulan ini, zona gagal, masalah hari ini, puncak kemacetan), copy baru, thumbnail kecil di Latest captures | permintaan user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -1817,6 +1818,29 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   - `formatDate` jadi "23 Sep 2026" (en, dengan tahun) di seluruh aplikasi; sebelumnya
     id-ID tanpa tahun ("5 Agu", "12 Mei" di UI berbahasa Inggris).
   VERIFIKASI: tsc + eslint web bersih, halaman 200. UI belum dilihat di browser.
+
+[2026-09-29c] FE-25 — dashboard dengan data nyata, copy baru, thumbnail kecil.
+
+  - `/usage`: `exportsThisMonth` (export selesai sejak awal bulan WIB), `storageUsedBytes`
+    (gambar capture + file export yang masih di R2), health: `zonesFailing` (capture
+    terjadwal terakhir gagal — aturan sama dengan notifikasi & banner zona),
+    `problemsToday` {failed, missed}, puncak hari ini (`peakIndex` jam factor, jam WIB,
+    zona). `rendersThisMonth`/`missedCaptures` dihapus. Status "degraded" kini hanya bila
+    ada zona gagal atau yang di-pause OLEH PAKET — zona yang di-pause user sendiri bukan
+    masalah.
+  - `GET /exports?limit=` — export terbaru lintas zona (kartu Recent exports); export kini
+    membawa `zoneName`.
+  - Thumbnail: render worker membuat JPEG 320 px dari kanvas yang sama (~9 KB vs ~1 MB),
+    `…/{id}.thumb.jpg` (diturunkan dari path gambar, tanpa kolom baru). `/captures`
+    mengembalikan `thumbnailUrl` (signed 30 menit). Capture lama tanpa thumbnail → 404 →
+    tile biasa.
+  - Web: sapaan menurut jam WIB + satu kalimat status, tombol Open Studio, tile metrik dengan
+    catatan jelas, kartu Collection health & Recent exports nyata, strip capture bergambar
+    dengan titik warna jam factor. `formatFileSize` kini sampai GB.
+  DIUJI LANGSUNG: render ulang capture terbaru → thumbnail 9.298 B, diunduh lewat link
+    signed (200 image/jpeg) & dicek visual; capture lama → 404 (fallback). /usage nyata:
+    44 capture hari ini, 4 export bulan ini, 61,6 MB, puncak 2,6 pukul 16:45 di YOG.
+  VERIFIKASI: 409 test API, tsc + eslint bersih kedua paket. UI belum dilihat di browser.
 
 ---
 

@@ -6,6 +6,7 @@ import * as r2 from '../lib/r2-client'
 import * as notificationService from './notification.service'
 import { wibParts } from './export.service'
 import { NotFoundError, ForbiddenError } from '../errors'
+import { isR2Configured } from '../config/env'
 import { PLAN_LIMITS, effectiveRoadClass, type Plan, type RoadClass } from '../types/plan'
 
 /**
@@ -295,12 +296,32 @@ export async function recordMissed(
 
 export interface RecentCapture extends PublicCapture {
   zoneName: string
+  /**
+   * A signed link to the capture's small JPEG (320 px wide, CAP-02), or null when it
+   * has no image. Captures rendered before thumbnails existed have an image but no
+   * thumbnail — the link then 404s and the dashboard shows its plain tile instead.
+   */
+  thumbnailUrl: string | null
 }
+
+/** Long enough to outlive a dashboard visit; the page asks again on the next load. */
+const THUMBNAIL_URL_TTL_SECONDS = 30 * 60
 
 /** The dashboard strip: this account's latest cycles across every zone. */
 export async function recentForUser(userId: string, limit = 12): Promise<RecentCapture[]> {
   const rows = await captureRepo.recentForUser(userId, limit)
-  return rows.map((row) => ({ ...toPublic(row), zoneName: row.zoneName }))
+  const r2Ready = isR2Configured()
+  return Promise.all(
+    rows.map(async (row) => ({
+      ...toPublic(row),
+      zoneName: row.zoneName,
+      // Signing is local (no request to R2), so a dozen of these cost nothing.
+      thumbnailUrl:
+        r2Ready && row.status === 'done' && row.filePath
+          ? await r2.getPresignedUrl(r2.thumbnailPath(row.filePath), THUMBNAIL_URL_TTL_SECONDS)
+          : null,
+    })),
+  )
 }
 
 /**
