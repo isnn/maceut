@@ -27,6 +27,8 @@ export interface PublicSchedule {
   /** 0 = Monday … 6 = Sunday. */
   days: number[]
   active: boolean
+  /** Paused by a plan change (ADR-020), not by the user. */
+  pausedByPlan: boolean
   /** Frames this window yields on a day it runs — the board's budget figure. */
   framesPerDay: number
   /** Derived, never stored. Shown for transparency and used by the scheduler. */
@@ -47,6 +49,7 @@ export function toPublic(row: ScheduleRecord): PublicSchedule {
     interval: row.interval as CaptureInterval,
     days: row.days,
     active: row.status === 'active',
+    pausedByPlan: row.pausedByPlan,
     framesPerDay: framesPerDay(shape),
     cron: toCron(shape),
     // Real counts arrive with the captures table; zero is honest here because a

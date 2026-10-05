@@ -10,6 +10,8 @@ import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/u
 import { useTableControls } from '@/components/ui/useTableControls'
 import { ActionMenu } from '@/components/ui/ActionMenu'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { PlanChangeDialog } from '@/features/plan/PlanChangeDialog'
+import { previewAccountPlanChange, type PlanImpact } from '@/features/plan/impact'
 import { UsageMeter } from '@/components/ui/UsageMeter'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { AddUserDialog } from '@/features/internal/components/AddUserDialog'
@@ -30,7 +32,9 @@ export default function InternalUsersPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [viewing, setViewing] = useState<InternalUserRow | null>(null)
-  const [downgrade, setDowngrade] = useState<{ row: InternalUserRow; plan: Plan } | null>(null)
+  const [downgrade, setDowngrade] = useState<{ row: InternalUserRow; plan: Plan; impact: PlanImpact | null } | null>(null)
+  const [downgradePending, setDowngradePending] = useState(false)
+  const [downgradeError, setDowngradeError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<InternalUserRow | null>(null)
   const [deleting, setDeleting] = useState<InternalUserRow | null>(null)
@@ -87,7 +91,14 @@ export default function InternalUsersPage() {
     setError(null)
     // Lowering a tier can put an account over its new limits — confirm first.
     if (PLAN_ORDER.indexOf(plan) < PLAN_ORDER.indexOf(row.plan)) {
-      setDowngrade({ row, plan })
+      // Ask the server exactly what this would pause — the same function the change
+      // runs. The old dialog guessed from counts in the browser and couldn't see
+      // intervals or daily frame budgets.
+      setDowngradeError(null)
+      setDowngrade({ row, plan, impact: null })
+      previewAccountPlanChange(row.id, plan)
+        .then((impact) => setDowngrade((d) => (d && d.row.id === row.id && d.plan === plan ? { ...d, impact } : d)))
+        .catch((err) => setDowngradeError(err instanceof ApiError ? err.message : 'Could not preview this change.'))
       return
     }
     await internalApi.setUserPlan(row.id, plan)
@@ -119,29 +130,19 @@ export default function InternalUsersPage() {
 
   async function confirmDowngrade() {
     if (!downgrade) return
-    await internalApi.setUserPlan(downgrade.row.id, downgrade.plan)
-    setDowngrade(null)
-    refetch()
+    setDowngradePending(true)
+    setDowngradeError(null)
+    try {
+      await internalApi.setUserPlan(downgrade.row.id, downgrade.plan)
+      setDowngrade(null)
+      refetch()
+    } catch (err) {
+      setDowngradeError(err instanceof ApiError ? err.message : 'Could not change the plan.')
+    } finally {
+      setDowngradePending(false)
+    }
   }
 
-  const overLimits = downgrade
-    ? (() => {
-        const next = PLAN_LIMITS[downgrade.plan]
-        const u = downgrade.row.usage
-        const over: string[] = []
-        // Zones and windows are measured, so this list is now real rather than always
-        // empty — the warning it feeds could never fire while every count was null.
-        if (u.zonesCount > next.zonesLimit)
-          over.push(`${u.zonesCount} zones over a ${next.zonesLimit}-zone limit`)
-        if (u.schedulesActiveCount > next.schedulesLimit)
-          over.push(`${u.schedulesActiveCount} active windows over a ${next.schedulesLimit} limit`)
-        // Storage is still unmeasured; null means "not known", not "zero", so it is
-        // skipped rather than reported as within limits.
-        if (u.storageUsedGb !== null && u.storageUsedGb > next.storageGb)
-          over.push(`${u.storageUsedGb} GB over a ${next.storageGb} GB limit`)
-        return over
-      })()
-    : []
 
   return (
     <div className="space-y-lg">
@@ -374,24 +375,14 @@ export default function InternalUsersPage() {
 
       {viewing && <UsageDialog row={viewing} onClose={() => setViewing(null)} />}
 
-      <ConfirmDialog
+      <PlanChangeDialog
         open={downgrade !== null}
         title={`Move ${downgrade?.row.fullName ?? ''} to ${downgrade ? PLAN_LABEL[downgrade.plan] : ''}?`}
-        description={
-          overLimits.length > 0 ? (
-            <>
-              This account would be over its new limits:
-              <ul className="mt-sm list-disc pl-lg space-y-xs">
-                {overLimits.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-            </>
-          ) : (
-            'This lowers the account’s limits. Existing zones and captures are kept.'
-          )
-        }
-        confirmLabel="Change plan"
+        planLabel={downgrade ? PLAN_LABEL[downgrade.plan] : ''}
+        impact={downgrade?.impact ?? null}
+        loading={downgrade !== null && downgrade.impact === null && !downgradeError}
+        pending={downgradePending}
+        error={downgradeError}
         onConfirm={confirmDowngrade}
         onCancel={() => setDowngrade(null)}
       />

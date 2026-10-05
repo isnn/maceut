@@ -154,10 +154,10 @@ export async function applyPlanChange(userId: string, plan: Plan): Promise<PlanI
   const impact = await previewPlanChange(userId, plan)
 
   for (const s of impact.schedulesToPause) {
-    await scheduleRepo.update(s.id, { status: 'paused' })
+    await scheduleRepo.update(s.id, { status: 'paused', pausedByPlan: true })
   }
   for (const z of impact.zonesToPause) {
-    await zoneRepo.update(z.id, { status: 'paused' })
+    await zoneRepo.update(z.id, { status: 'paused', pausedByPlan: true })
   }
 
   return impact

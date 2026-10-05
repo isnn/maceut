@@ -25,6 +25,8 @@ export interface PublicZone {
   geometry: ZoneGeometry
   roadClass: RoadClass
   status: ZoneStatus
+  /** Paused by a plan change (ADR-020), not by the user — resumes on an upgrade or a freed slot. */
+  pausedByPlan: boolean
   areaKm2: number
   /** Null when HERE is unconfigured — "not known", which the UI renders as "—". */
   roadsCount: number | null
@@ -67,6 +69,7 @@ export function toPublic(zone: ZoneRecord, cadence?: scheduleRepo.ZoneCadence): 
     geometry: zone.geometry,
     roadClass: zone.roadClass,
     status: zone.status,
+    pausedByPlan: zone.pausedByPlan,
     areaKm2: zone.areaKm2,
     roadsCount: zone.roadsCount,
     lengthKm: zone.lengthKm,

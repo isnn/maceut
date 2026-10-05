@@ -14,6 +14,8 @@ export interface Zone {
   geometry: ZoneGeometry
   roadClass: RoadClass
   status: ZoneStatus
+  /** Paused by a plan change (ADR-020), not by the user. */
+  pausedByPlan: boolean
   /** Computed by PostGIS from the stored boundary. */
   areaKm2: number
   /**

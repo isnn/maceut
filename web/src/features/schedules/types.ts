@@ -12,6 +12,8 @@ export interface CaptureWindow {
   /** 0 = Monday … 6 = Sunday. */
   days: number[]
   active: boolean
+  /** Paused by a plan change (ADR-020), not by the user. */
+  pausedByPlan: boolean
   /** Frames already collected by this window, shown when editing (3l). */
   capturedFrames: number
   createdAt: string

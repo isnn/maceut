@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { PlanPausedNotice } from '@/features/plan/PlanPausedNotice'
 import Link from 'next/link'
 import { Dialog } from '@base-ui/react/dialog'
 import { Button, buttonClass } from '@/components/ui/Button'
@@ -119,6 +120,11 @@ export default function SchedulePage() {
         </Button>
       </div>
 
+      <PlanPausedNotice
+        zones={zones.filter((z) => z.status === 'paused' && z.pausedByPlan)}
+        windows={(windows ?? []).filter((w) => !w.active && w.pausedByPlan)}
+      />
+
       <div className="grid grid-cols-1 laptop:grid-cols-[1fr_320px] gap-xl items-start">
         <div className="bg-card border border-border rounded-lg p-lg space-y-lg">
           {windows === null ? (
@@ -163,7 +169,9 @@ export default function SchedulePage() {
                         <p className="text-label font-semibold text-text-primary truncate">{zone.name}</p>
                         <p className="text-micro text-text-muted mt-xs">
                           {zone.status === 'paused'
-                            ? 'Paused — resume to collect'
+                            ? zone.pausedByPlan
+                              ? 'Paused — over your plan’s limits'
+                              : 'Paused — resume to collect'
                             : `${zoneWindows.length} windows · ${zoneWindows.reduce((s, w) => s + framesPerDay(w), 0)} frames/day`}
                         </p>
                       </div>
@@ -350,10 +358,15 @@ export default function SchedulePage() {
                         <span
                           className={cn(
                             'text-micro font-semibold rounded-xs px-sm py-xs',
-                            w.active ? 'bg-success-bg text-success-text' : 'bg-canvas-secondary text-text-muted'
+                            w.active
+                              ? 'bg-success-bg text-success-text'
+                              : w.pausedByPlan
+                                ? 'bg-warning-bg text-warning-text'
+                                : 'bg-canvas-secondary text-text-muted'
                           )}
+                          title={!w.active && w.pausedByPlan ? 'Paused because it is over your plan’s limits' : undefined}
                         >
-                          {w.active ? 'Active' : 'Paused'}
+                          {w.active ? 'Active' : w.pausedByPlan ? 'Paused · plan limit' : 'Paused'}
                         </span>
                       </Td>
                       <Td className="text-right">

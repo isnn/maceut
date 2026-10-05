@@ -13,6 +13,7 @@ import * as zonesApi from '@/features/zones/api'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import type { CollectionHealth, UsageSummary } from '@/features/dashboard/api'
 import type { Zone } from '@/features/zones/types'
+import { PlanPausedNotice } from '@/features/plan/PlanPausedNotice'
 
 /**
  * How many zones the dashboard lists before deferring to the Zones page.
@@ -121,6 +122,8 @@ export default function DashboardPage() {
         </Link>
       </div>
 
+      <PlanPausedNotice zones={zones.filter((z) => z.status === 'paused' && z.pausedByPlan)} windows={[]} />
+
       {/* Stat tiles */}
       <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-lg">
         <StatTile
@@ -195,7 +198,7 @@ export default function DashboardPage() {
                         {zone.lengthKm !== null && ` · ${formatKm(zone.lengthKm)}`}
                       </p>
                     </div>
-                    <ZoneStatusPill status={zone.status} />
+                    <ZoneStatusPill status={zone.status} pausedByPlan={zone.pausedByPlan} />
                   </li>
                 ))}
                   {zones.length > ZONES_ON_DASHBOARD && (
