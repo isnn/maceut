@@ -60,6 +60,10 @@ export async function assertTopology(ch: amqp.Channel): Promise<void> {
     durable: true,
     deadLetterExchange: DEAD_LETTER_EXCHANGE,
   })
+  await ch.assertQueue(config.rabbitmqQueueRender, {
+    durable: true,
+    deadLetterExchange: DEAD_LETTER_EXCHANGE,
+  })
 }
 
 export interface CaptureJob {
@@ -81,6 +85,15 @@ export async function publishExportJob(job: ExportJob): Promise<void> {
   ch.sendToQueue(config.rabbitmqQueueExport, Buffer.from(JSON.stringify(job)), { persistent: true })
 }
 
+export interface RenderJob {
+  captureId: string
+}
+
+export async function publishRenderJob(job: RenderJob): Promise<void> {
+  const ch = await getChannel()
+  ch.sendToQueue(config.rabbitmqQueueRender, Buffer.from(JSON.stringify(job)), { persistent: true })
+}
+
 export interface QueueHealth {
   connected: boolean
   queues?: { name: string; messages: number; consumers: number }[]
@@ -90,7 +103,7 @@ export interface QueueHealth {
 export async function checkQueue(): Promise<QueueHealth> {
   try {
     const ch = await getChannel()
-    const names = [config.rabbitmqQueueCapture, config.rabbitmqQueueExport, config.rabbitmqQueueDeadLetter]
+    const names = [config.rabbitmqQueueCapture, config.rabbitmqQueueExport, config.rabbitmqQueueRender, config.rabbitmqQueueDeadLetter]
     const queues = []
     for (const name of names) {
       const info = await ch.checkQueue(name)

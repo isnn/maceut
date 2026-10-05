@@ -22,7 +22,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { SectionHeader } from '@/components/shared/SectionHeader'
 import { Pagination, SortableTh, Table, TableWrap, Td } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
-import { IconArrowLeft, IconArrowRight, IconClock } from '@/components/ui/icons'
+import { IconArrowLeft, IconArrowRight, IconClock, IconDownload } from '@/components/ui/icons'
 import { cn, formatNumber } from '@/lib/utils'
 import { ROAD_CLASS_LABEL, TRAFFIC_COLORS } from '@/lib/constants'
 import { ApiError } from '@/types/api'
@@ -212,6 +212,25 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
     }
   }
 
+  const [downloading, setDownloading] = useState(false)
+
+  /**
+   * The link is signed for minutes, so it is asked for on click rather than carried in
+   * the list. It downloads as an attachment, so assigning it leaves this page in place.
+   */
+  async function downloadImage(captureId: string) {
+    setDownloading(true)
+    setError(null)
+    try {
+      const { url } = await zonesApi.getCaptureImage(captureId)
+      window.location.assign(url)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not download the image. Please try again.')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   const traffic = selected ? (traffics[selected.id] ?? null) : null
   const loadingTraffic = selected?.status === 'done' && !(selected.id in traffics)
 
@@ -322,7 +341,23 @@ export function ZoneCaptures({ zone }: { zone: Zone }) {
                       </span>
                     )}
                   </div>
-                  <JamLegend />
+                  <div className="flex flex-wrap items-center justify-between gap-md">
+                    <JamLegend />
+                    {/* Every collected cycle is also rendered to a PNG by the worker (CAP-02),
+                        a few seconds after it completes. Older cycles, and any whose render
+                        failed, have none — the map above is the capture either way. */}
+                    {selected.filePath && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => downloadImage(selected.id)}
+                        disabled={downloading}
+                      >
+                        <IconDownload size={16} />
+                        {downloading ? 'Preparing…' : 'Download image'}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="h-80 rounded-md bg-canvas-secondary flex items-center justify-center text-center px-xl">

@@ -29,7 +29,8 @@ import {
 import { wibStamp, type SlimTraffic } from '@/features/studio/api'
 
 interface ExportJob {
-  format: 'zip' | 'webm'
+  /** `png` is one capture's image (CAP-02) — frame 0, rendered the same way as a ZIP frame. */
+  format: 'png' | 'zip' | 'webm'
   spec: {
     themeId: string
     congestionId: string
@@ -92,7 +93,7 @@ async function runExport(job: ExportJob): Promise<void> {
     height: job.spec.height,
   })
 
-  if (job.format === 'zip') {
+  if (job.format === 'png' || job.format === 'zip') {
     for (let i = 0; i < job.frameCount; i++) {
       const frame = await bridge.__exportFrame(i)
       await renderCapture(canvas, inputFor(frame))

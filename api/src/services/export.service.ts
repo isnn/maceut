@@ -63,7 +63,7 @@ export interface PublicExport {
 }
 
 /** An instant in Jakarta time as { date: "YYYY-MM-DD", time: "HHmm" }. */
-function wibParts(iso: string): { date: string; time: string } {
+export function wibParts(iso: string): { date: string; time: string } {
   const parts = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric',
     month: '2-digit',

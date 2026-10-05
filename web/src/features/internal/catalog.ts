@@ -63,6 +63,7 @@ export const CONFIG_VARS: ConfigVarMeta[] = [
   { key: 'RABBITMQ_URL', group: 'queue', label: 'RabbitMQ URL' },
   { key: 'RABBITMQ_QUEUE_CAPTURE', group: 'queue', label: 'Capture queue', defaultValue: 'capture-jobs' },
   { key: 'RABBITMQ_QUEUE_EXPORT', group: 'queue', label: 'Export queue', defaultValue: 'export-jobs' },
+  { key: 'RABBITMQ_QUEUE_RENDER', group: 'queue', label: 'Capture-image queue', defaultValue: 'render-jobs' },
   { key: 'RABBITMQ_QUEUE_DEAD_LETTER', group: 'queue', label: 'Dead-letter queue', defaultValue: 'capture-dead-letter' },
   { key: 'CAPTURE_CONCURRENCY', group: 'queue', label: 'Captures at once', defaultValue: '4' },
   { key: 'EXPORT_RETENTION_DAYS', group: 'queue', label: 'Export file retention (days)', defaultValue: '7' },
