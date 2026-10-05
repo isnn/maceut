@@ -11,6 +11,7 @@ vi.mock('../repositories/export.repository', () => ({
 vi.mock('../lib/r2-client', () => ({ remove: vi.fn(), MultipartUpload: { abortById: vi.fn(async () => undefined) } }))
 vi.mock('../services/export.service', () => ({ exportPath: (row: { id: string }) => `exports/u1/${row.id}.zip` }))
 vi.mock('../services/notification.service', () => ({ onExportFinished: vi.fn(async () => undefined) }))
+vi.mock('../repositories/render-cache.repository', () => ({ findOlderThan: vi.fn(async () => []), remove: vi.fn(async () => undefined) }))
 
 import * as exportRepo from '../repositories/export.repository'
 import * as r2 from '../lib/r2-client'

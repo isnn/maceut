@@ -43,6 +43,8 @@ interface ExportJob {
   frameCount: number
   /** Resume point after a browser crash: frames before it are already in the file. */
   startFrame?: number
+  /** Stop before this frame — the worker reuses already-rendered frames past it. */
+  endFrame?: number
   zoneName: string
   ring: [number, number][]
 }
@@ -118,7 +120,8 @@ async function runExport(job: ExportJob): Promise<void> {
   })
 
   if (job.format === 'png' || job.format === 'zip') {
-    for (let i = job.startFrame ?? 0; i < job.frameCount; i++) {
+    const end = Math.min(job.endFrame ?? job.frameCount, job.frameCount)
+    for (let i = job.startFrame ?? 0; i < end; i++) {
       const frame = await bridge.__exportFrame(i)
       const t0 = performance.now()
       await renderCapture(canvas, inputFor(frame))
@@ -130,6 +133,9 @@ async function runExport(job: ExportJob): Promise<void> {
       // only one frame is ever in flight.
       await bridge.__exportPng(i, name, await toBase64(png), { drawMs: Math.round(t1 - t0), encodeMs: Math.round(t2 - t1) })
       if (!(await bridge.__exportProgress(i + 1))) return // cancelled
+      // The worker launches Chromium with --expose-gc: free this frame's canvas copies,
+      // blob and base64 string now, rather than whenever V8 gets round to it.
+      ;(globalThis as { gc?: () => void }).gc?.()
     }
     // A capture image (CAP-02) also gets a small JPEG for lists like the dashboard's
     // "Latest captures" — ~20 KB instead of the ~1 MB full image, drawn from the same

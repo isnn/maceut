@@ -19,6 +19,7 @@ vi.mock('../repositories/export.repository', () => ({
   fileBytesForUser: vi.fn(async () => 0),
 }))
 vi.mock('../repositories/here-usage.repository', () => ({}))
+vi.mock('../repositories/render-cache.repository', () => ({ bytesForUser: vi.fn(async () => 0) }))
 
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'

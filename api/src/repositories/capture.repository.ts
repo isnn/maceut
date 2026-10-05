@@ -43,6 +43,8 @@ export async function create(input: CreateCaptureRow): Promise<CaptureRecord> {
 
 export interface CompleteCaptureRow {
   traffic: TrafficCollection
+  /** The drawing-only version, stored beside the full one (EXP-A2). */
+  trafficSlim: unknown
   roadsCount: number
   jamFactorAvg: number | null
 }
@@ -54,6 +56,7 @@ export async function complete(id: string, result: CompleteCaptureRow): Promise<
     .set({
       status: 'done',
       traffic: result.traffic,
+      trafficSlim: result.trafficSlim,
       roadsCount: result.roadsCount,
       // numeric() round-trips as a string in pg; the service converts on the way out.
       jamFactorAvg: result.jamFactorAvg === null ? null : result.jamFactorAvg.toFixed(2),
@@ -76,6 +79,51 @@ export async function findById(id: string): Promise<CaptureRecord | undefined> {
   return rows[0]
 }
 
+/** Every column except the full `traffic` (≈2 MB) — for readers that only draw. */
+const LITE_COLUMNS = {
+  id: captures.id,
+  userId: captures.userId,
+  zoneId: captures.zoneId,
+  scheduleId: captures.scheduleId,
+  status: captures.status,
+  trigger: captures.trigger,
+  roadClass: captures.roadClass,
+  trafficSlim: captures.trafficSlim,
+  roadsCount: captures.roadsCount,
+  jamFactorAvg: captures.jamFactorAvg,
+  filePath: captures.filePath,
+  fileSize: captures.fileSize,
+  styleUsed: captures.styleUsed,
+  error: captures.error,
+  scheduledFor: captures.scheduledFor,
+  capturedAt: captures.capturedAt,
+  createdAt: captures.createdAt,
+}
+
+export type CaptureLite = Omit<CaptureRecord, 'traffic'>
+
+/** One capture without its full traffic — exports, playback and images read this. */
+export async function findLiteById(id: string): Promise<CaptureLite | undefined> {
+  const rows = await db.select(LITE_COLUMNS).from(captures).where(eq(captures.id, id)).limit(1)
+  return rows[0]
+}
+
+/** Many captures without their full traffic, in no particular order. */
+export async function findLiteByIds(ids: string[]): Promise<CaptureLite[]> {
+  if (!ids.length) return []
+  return db.select(LITE_COLUMNS).from(captures).where(inArray(captures.id, ids))
+}
+
+/** Only the full traffic — used once per older capture to make its slim version. */
+export async function findTraffic(id: string): Promise<unknown | null> {
+  const rows = await db.select({ traffic: captures.traffic }).from(captures).where(eq(captures.id, id)).limit(1)
+  return rows[0]?.traffic ?? null
+}
+
+export async function setTrafficSlim(id: string, trafficSlim: unknown): Promise<void> {
+  await db.update(captures).set({ trafficSlim }).where(eq(captures.id, id))
+}
+
 /**
  * A zone's history, newest first.
  *
@@ -86,7 +134,7 @@ export async function findById(id: string): Promise<CaptureRecord | undefined> {
 export async function listByZone(
   zoneId: string,
   opts: { limit: number; offset: number },
-): Promise<{ rows: Omit<CaptureRecord, 'traffic'>[]; total: number }> {
+): Promise<{ rows: Omit<CaptureRecord, 'traffic' | 'trafficSlim'>[]; total: number }> {
   const rows = await db
     .select({
       id: captures.id,
@@ -278,7 +326,7 @@ export async function countAllToday(): Promise<number> {
 export async function recentForUser(
   userId: string,
   limit: number,
-): Promise<(Omit<CaptureRecord, 'traffic'> & { zoneName: string })[]> {
+): Promise<(Omit<CaptureRecord, 'traffic' | 'trafficSlim'> & { zoneName: string })[]> {
   const rows = await db
     .select({
       id: captures.id,

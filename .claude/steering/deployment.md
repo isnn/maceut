@@ -309,6 +309,9 @@ menunjuknya. Jaring pengamannya aturan lifecycle bucket:
 
 - Cloudflare dashboard → R2 → bucket → **Settings → Object lifecycle rules → Add rule**
 - Scope: prefix `exports/` · Action: **Abort incomplete multipart uploads** after **1 day**
+- Scope: prefix `render-cache/` · Action: **Delete objects** after **8 days** — frame
+  cache (EXP-A2). Sweeper sudah menghapusnya setelah 7 hari; aturan ini menangkap file
+  yang barisnya ikut terhapus saat capture/zona dihapus (cascade).
 
 Tanpa aturan ini semuanya tetap berjalan; yang hilang hanya pembersihan untuk kasus
 kegagalan ganda.

@@ -8,8 +8,10 @@ import * as exportRepo from '../repositories/export.repository'
 import * as notificationService from '../services/notification.service'
 import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
-import { slimTraffic } from '../services/capture.service'
-import { exportPath, expiryFrom, type StoredSpec } from '../services/export.service'
+import { slimFor } from '../services/capture.service'
+import { exportPath, expiryFrom, frameFileName, type StoredSpec } from '../services/export.service'
+import { cachePath, matchesCaptureImage, specHash } from '../services/render-cache.service'
+import * as renderCacheRepo from '../repositories/render-cache.repository'
 import * as r2 from '../lib/r2-client'
 import { MultipartUpload } from '../lib/r2-client'
 import { ZipStream } from '../lib/zip-stream'
@@ -68,6 +70,8 @@ export function isBrowserCrash(err: unknown): boolean {
 
 interface Timing {
   frames: number
+  /** Frames taken from a capture image or the render cache instead of drawn. */
+  reused: number
   dataMs: number
   drawMs: number
   encodeMs: number
@@ -118,7 +122,7 @@ function logSummary(exportId: string, row: { format: string }, spec: StoredSpec,
   console.log(
     `[export] ${exportId} ${outcome} — ${row.format} ${t.frames} frames ${spec.width}×${spec.height} in ${Math.round((Date.now() - startedAt) / 1000)}s · ` +
       `per frame: data ${per(t.dataMs)}ms, draw ${per(t.drawMs)}ms, encode ${per(t.encodeMs)}ms, write ${per(t.writeMs)}ms · ` +
-      `peak RSS: chromium ${peak.chromiumMb}MB, worker ${peak.workerMb}MB · browser restarts ${t.restarts}`,
+      `peak RSS: chromium ${peak.chromiumMb}MB, worker ${peak.workerMb}MB · reused ${t.reused}/${t.frames} · browser restarts ${t.restarts}`,
   )
 }
 
@@ -135,7 +139,7 @@ export async function runExport(exportId: string): Promise<void> {
 
   const spec = row.spec as StoredSpec
   const frameIds = row.frameIds
-  const timing: Timing = { frames: 0, dataMs: 0, drawMs: 0, encodeMs: 0, writeMs: 0, restarts: 0 }
+  const timing: Timing = { frames: 0, reused: 0, dataMs: 0, drawMs: 0, encodeMs: 0, writeMs: 0, restarts: 0 }
   const startedAt = Date.now()
   const sampler = startMemorySampler()
   const heartbeat = setInterval(() => void exportRepo.touch(exportId).catch(() => undefined), HEARTBEAT_MS)
@@ -156,16 +160,17 @@ export async function runExport(exportId: string): Promise<void> {
       zoneName: spec.zoneName,
       ring: zone.geometry.coordinates[0] as [number, number][],
     }
+    // Every frame's capture, without the 2 MB full traffic: drawing needs only the slim
+    // version, stored at collection (EXP-A2).
+    const captures = new Map((await captureRepo.findLiteByIds(frameIds)).map((c) => [c.id, c]))
     const frame = async (i: number) => {
       const t = Date.now()
-      const capture = await captureRepo.findById(frameIds[i]!)
-      timing.dataMs += Date.now() - t
+      const capture = captures.get(frameIds[i]!)
       // A capture deleted since the export was queued renders as an empty frame
       // rather than failing the whole file over one missing moment.
-      return {
-        capturedAt: (capture?.capturedAt ?? new Date()).toISOString(),
-        traffic: capture?.traffic ? slimTraffic(capture.traffic) : null,
-      }
+      const traffic = capture ? await slimFor(capture) : null
+      timing.dataMs += Date.now() - t
+      return { capturedAt: (capture?.capturedAt ?? new Date()).toISOString(), traffic }
     }
     const progress = async (done: number) => {
       const now = Date.now()
@@ -184,14 +189,53 @@ export async function runExport(exportId: string): Promise<void> {
           upload = await MultipartUpload.start(path, 'application/zip')
           await exportRepo.setUploadId(exportId, upload.uploadId)
           const zip = new ZipStream((chunk) => upload!.write(chunk))
+
+          // Where each frame comes from (EXP-A2): the capture's own image when this
+          // export asks for exactly its style, a frame an earlier export already drew,
+          // or — only otherwise — the browser.
+          const hash = specHash(spec, zone)
+          const cached = await renderCacheRepo.findMany(hash, frameIds)
+          const sources = frameIds.map((id): { kind: 'image' | 'cache' | 'render'; path?: string } => {
+            const capture = captures.get(id)
+            if (capture?.filePath && matchesCaptureImage(capture.styleUsed, spec)) return { kind: 'image', path: capture.filePath }
+            const hit = cached.get(id)
+            return hit ? { kind: 'cache', path: hit.path } : { kind: 'render' }
+          })
+
           let written = 0
+          const append = async (i: number, name: string, data: Buffer) => {
+            const t = Date.now()
+            await zip.add(name, data)
+            timing.writeMs += Date.now() - t
+            written = i + 1
+            timing.frames = written
+          }
 
           while (written < frameIds.length && !cancelled) {
+            const source = sources[written]!
+            if (source.kind !== 'render') {
+              try {
+                const data = await r2.download(source.path!)
+                const capture = captures.get(frameIds[written]!)
+                await append(written, frameFileName(written, capture?.capturedAt ?? new Date()), data)
+                timing.reused++
+                await progress(written)
+                continue
+              } catch {
+                // The stored file is gone (expired, deleted): draw this frame instead.
+                sources[written] = { kind: 'render' }
+              }
+            }
+
+            // The run of frames that must be drawn, from here to the next reusable one.
+            let end = written
+            while (end < frameIds.length && sources[end]!.kind === 'render') end++
+
             if (!browser?.isConnected()) browser = await launchBrowser()
             try {
               await renderWithPage(
                 browser,
-                { ...job, startFrame: written },
+                { ...job, startFrame: written, endFrame: end },
                 {
                   frame,
                   progress,
@@ -199,20 +243,24 @@ export async function runExport(exportId: string): Promise<void> {
                     // After a restart the page starts at `written`; anything else is a
                     // repeat of a frame already in the file.
                     if (i !== written) return
-                    const t = Date.now()
-                    await zip.add(name, data)
-                    timing.writeMs += Date.now() - t
+                    await append(i, name, data)
                     if (stats) {
                       timing.drawMs += stats.drawMs
                       timing.encodeMs += stats.encodeMs
                     }
-                    written++
-                    timing.frames = written
+                    // Keep it for a retry or a repeat export of the same style. Never
+                    // fatal: a frame that isn't cached is simply drawn again next time.
+                    const captureId = frameIds[i]!
+                    const key = cachePath(row.userId, hash, captureId)
+                    await r2
+                      .upload(key, data, 'image/png')
+                      .then(() => renderCacheRepo.insert({ specHash: hash, captureId, userId: row.userId, path: key, size: data.length }))
+                      .catch((err) => console.warn(`[export] ${exportId} frame ${i + 1} not cached:`, err instanceof Error ? err.message : err))
                   },
                 },
                 `export ${exportId}`,
               )
-              if (!cancelled && written < frameIds.length) throw new Error(`Render berhenti di frame ${written + 1}.`)
+              if (!cancelled && written < end) throw new Error(`Render berhenti di frame ${written + 1}.`)
             } catch (err) {
               if (cancelled) break
               if (!isBrowserCrash(err) || timing.restarts >= MAX_BROWSER_RESTARTS) throw err

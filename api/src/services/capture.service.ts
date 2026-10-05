@@ -50,7 +50,7 @@ export interface PublicCapture {
   capturedAt: string
 }
 
-type AnyCaptureRow = Omit<captureRepo.CaptureRecord, 'traffic'> & { traffic?: unknown }
+type AnyCaptureRow = Omit<captureRepo.CaptureRecord, 'traffic' | 'trafficSlim'> & { traffic?: unknown; trafficSlim?: unknown }
 
 export function toPublic(row: AnyCaptureRow): PublicCapture {
   return {
@@ -366,9 +366,23 @@ export interface PlaybackFrame extends PublicCapture {
 
 /** One frame for the Studio player — same row, far fewer bytes. */
 export async function getPlaybackFrame(userId: string, captureId: string): Promise<PlaybackFrame> {
-  const row = await captureRepo.findById(captureId)
+  // Lite: the 2 MB full traffic is never read here — playback draws the slim version.
+  const row = await captureRepo.findLiteById(captureId)
   if (!row) throw new NotFoundError('Capture')
   if (row.userId !== userId) throw new ForbiddenError('Capture ini bukan milik Anda.')
 
-  return { ...toPublic(row), traffic: row.traffic ? slimTraffic(row.traffic) : null }
+  return { ...toPublic(row), traffic: await slimFor(row) }
+}
+
+/**
+ * A capture's slim traffic (EXP-A2). Stored at collection since EXP-A2; for an older
+ * capture it is made once from the full traffic and saved, so the next read is free.
+ */
+export async function slimFor(capture: { id: string; trafficSlim: unknown }): Promise<SlimTraffic | null> {
+  if (capture.trafficSlim) return capture.trafficSlim as SlimTraffic
+  const full = await captureRepo.findTraffic(capture.id)
+  if (!full) return null
+  const slim = slimTraffic(full)
+  await captureRepo.setTrafficSlim(capture.id, slim).catch(() => undefined)
+  return slim
 }

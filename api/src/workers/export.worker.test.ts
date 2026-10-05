@@ -11,7 +11,13 @@ vi.mock('../repositories/export.repository', () => ({
   fail: vi.fn(async () => true),
 }))
 vi.mock('../repositories/capture.repository', () => ({
-  findById: vi.fn(async (id: string) => ({ id, capturedAt: new Date('2026-10-05T00:00:00Z'), traffic: null })),
+  findLiteByIds: vi.fn(async (ids: string[]) =>
+    ids.map((id) => ({ id, capturedAt: new Date('2026-10-05T00:00:00Z'), trafficSlim: null, filePath: null, styleUsed: null })),
+  ),
+}))
+vi.mock('../repositories/render-cache.repository', () => ({
+  findMany: vi.fn(async () => new Map()),
+  insert: vi.fn(async () => undefined),
 }))
 vi.mock('../repositories/zone.repository', () => ({
   findById: vi.fn(async () => ({ geometry: { coordinates: [[[110, -7], [110.1, -7], [110.1, -7.1], [110, -7]]] } })),
@@ -20,8 +26,9 @@ vi.mock('../services/notification.service', () => ({ onExportFinished: vi.fn(asy
 vi.mock('../services/export.service', () => ({
   exportPath: () => 'exports/u1/e1.zip',
   expiryFrom: () => new Date('2026-10-12T00:00:00Z'),
+  frameFileName: (i: number) => `${i + 1}.png`,
 }))
-vi.mock('../services/capture.service', () => ({ slimTraffic: () => ({ type: 'FeatureCollection', features: [] }) }))
+vi.mock('../services/capture.service', () => ({ slimFor: async () => ({ type: 'FeatureCollection', features: [] }) }))
 vi.mock('../lib/render-page', () => ({
   launchBrowser: vi.fn(async () => ({ isConnected: () => true, close: vi.fn(async () => undefined) })),
   renderWithPage: vi.fn(),
@@ -35,6 +42,7 @@ const upload = vi.hoisted(() => ({
 vi.mock('../lib/r2-client', () => ({
   remove: vi.fn(async () => undefined),
   upload: vi.fn(async () => undefined),
+  download: vi.fn(async (path: string) => Buffer.from(`stored:${path}`)),
   MultipartUpload: {
     start: vi.fn(async () => ({
       uploadId: 'up-1',
@@ -51,6 +59,9 @@ vi.mock('../lib/r2-client', () => ({
 
 import { runExport, MAX_BROWSER_RESTARTS } from './export.worker'
 import * as exportRepo from '../repositories/export.repository'
+import * as captureRepo from '../repositories/capture.repository'
+import * as renderCacheRepo from '../repositories/render-cache.repository'
+import { RENDER_VERSION } from '../services/render-cache.service'
 import * as notificationService from '../services/notification.service'
 import * as r2 from '../lib/r2-client'
 import { launchBrowser, renderWithPage, type RenderBridge, type RenderPageJob } from '../lib/render-page'
@@ -76,7 +87,7 @@ function page(opts: { crashAt?: number[]; error?: string; cancelAt?: number } = 
   vi.mocked(renderWithPage).mockImplementation(async (_b, job: RenderPageJob, bridge: RenderBridge) => {
     const start = job.startFrame ?? 0
     starts.push(start)
-    for (let i = start; i < job.frameCount; i++) {
+    for (let i = start; i < (job.endFrame ?? job.frameCount); i++) {
       if (crashes[0] === i) {
         crashes.shift()
         throw new Error(opts.error ?? 'page.evaluate: Target crashed')
@@ -111,6 +122,12 @@ beforeEach(() => {
   upload.completed = false
   upload.aborted = false
   vi.mocked(exportRepo.markRendering).mockResolvedValue(exportRow())
+  // clearAllMocks keeps implementations, so tests that change these must not leak.
+  vi.mocked(captureRepo.findLiteByIds).mockImplementation(async (ids: string[]) =>
+    ids.map((id) => ({ id, capturedAt: new Date('2026-10-05T00:00:00Z'), trafficSlim: null, filePath: null, styleUsed: null })) as never,
+  )
+  vi.mocked(renderCacheRepo.findMany).mockImplementation(async () => new Map())
+  vi.mocked(r2.download).mockImplementation(async (path: string) => Buffer.from(`stored:${path}`))
   vi.mocked(exportRepo.reportProgress).mockResolvedValue(true)
   vi.mocked(exportRepo.markUploading).mockResolvedValue(true)
   vi.mocked(exportRepo.complete).mockResolvedValue(true)
@@ -196,6 +213,78 @@ describe('runExport — ZIP', () => {
     vi.mocked(exportRepo.markRendering).mockResolvedValue(undefined)
     await runExport('e1')
     expect(renderWithPage).not.toHaveBeenCalled()
+  })
+})
+
+/** File contents inside the uploaded ZIP, in order. */
+function zipContents(): string[] {
+  const zip = Buffer.concat(upload.chunks)
+  const out: string[] = []
+  let at = 0
+  while (zip.readUInt32LE(at) === 0x04034b50) {
+    const size = zip.readUInt32LE(at + 18)
+    const nameLen = zip.readUInt16LE(at + 26)
+    out.push(zip.subarray(at + 30 + nameLen, at + 30 + nameLen + size).toString())
+    at += 30 + nameLen + size
+  }
+  return out
+}
+
+describe('runExport — reusing rendered frames (EXP-A2)', () => {
+  const spec = { themeId: 'dark', congestionId: 'standard', overlay: {}, view: {}, width: 1600, height: 1000 }
+
+  it("uses a capture's own image when the export asks for exactly its style", async () => {
+    page()
+    vi.mocked(captureRepo.findLiteByIds).mockImplementation(async (ids: string[]) =>
+      ids.map((id, i) => ({
+        id,
+        capturedAt: new Date('2026-10-05T00:00:00Z'),
+        trafficSlim: null,
+        // Frame 1 was rendered in this exact style by the current renderer; frame 3 by an older one.
+        filePath: i === 1 || i === 3 ? `captures/u1/${id}.png` : null,
+        styleUsed: i === 1 ? { ...spec, holdMs: 1000, renderVersion: RENDER_VERSION } : i === 3 ? { ...spec } : null,
+      })) as never,
+    )
+    await runExport('e1')
+
+    expect(zipContents()).toEqual(['png-0', 'stored:captures/u1/c1.png', 'png-2', 'png-3', 'png-4'])
+    // Drawn around it: frame 0, then frames 2–4 — never frame 1.
+    const ranges = vi.mocked(renderWithPage).mock.calls.map(([, job]) => [job.startFrame, job.endFrame])
+    expect(ranges).toEqual([[0, 1], [2, 5]])
+  })
+
+  it('reads frames an earlier export already drew, and caches the ones it draws', async () => {
+    page()
+    vi.mocked(renderCacheRepo.findMany).mockResolvedValue(
+      new Map([['c2', { path: 'render-cache/u1/h/c2.png' }]]) as never,
+    )
+    await runExport('e1')
+
+    expect(zipContents()).toEqual(['png-0', 'png-1', 'stored:render-cache/u1/h/c2.png', 'png-3', 'png-4'])
+    // The four drawn frames are cached; the reused one is not written again.
+    expect(renderCacheRepo.insert).toHaveBeenCalledTimes(4)
+    expect(r2.upload).toHaveBeenCalledWith(expect.stringMatching(/^render-cache\/u1\/[0-9a-f]{32}\/c0\.png$/), Buffer.from('png-0'), 'image/png')
+  })
+
+  it('never starts a browser when every frame is reused', async () => {
+    page()
+    vi.mocked(renderCacheRepo.findMany).mockImplementation(
+      async (_h: string, ids: string[]) => new Map(ids.map((id) => [id, { path: `render-cache/x/${id}.png` }])) as never,
+    )
+    await runExport('e1')
+
+    expect(launchBrowser).not.toHaveBeenCalled()
+    expect(zipContents()).toHaveLength(FRAMES)
+    expect(upload.completed).toBe(true)
+  })
+
+  it('draws a frame whose stored file has gone missing', async () => {
+    page()
+    vi.mocked(renderCacheRepo.findMany).mockResolvedValue(new Map([['c0', { path: 'render-cache/gone.png' }]]) as never)
+    vi.mocked(r2.download).mockRejectedValueOnce(new Error('NoSuchKey'))
+    await runExport('e1')
+
+    expect(zipContents()).toEqual(['png-0', 'png-1', 'png-2', 'png-3', 'png-4'])
   })
 })
 
