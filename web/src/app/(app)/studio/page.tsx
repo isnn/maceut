@@ -1580,7 +1580,7 @@ function ExportDialog({
                       }}
                       className={buttonClass()}
                     >
-                      {retrying ? 'Starting…' : 'Retry export'}
+                      {retrying ? 'Starting…' : 'Retry'}
                     </button>
                   </>
                 ) : (

@@ -31,7 +31,7 @@ export function showToast(opts: { title: string; description?: string; tone: Toa
 const TONE: Record<ToastTone, { Icon: typeof IconCheck; mark: string }> = {
   success: { Icon: IconCheck, mark: 'bg-success-bg text-success-text' },
   warning: { Icon: IconAlert, mark: 'bg-warning-bg text-warning-text' },
-  info: { Icon: IconInfo, mark: 'bg-info-bg text-info' },
+  info: { Icon: IconInfo, mark: 'bg-primary-soft text-primary' },
 }
 
 function ToastList() {
@@ -57,7 +57,7 @@ function ToastList() {
             <Link
               href={toast.data.href}
               onClick={() => toastManager.close(toast.id)}
-              className="inline-block mt-xs text-caption text-info font-medium no-underline hover:underline"
+              className="inline-block mt-xs text-caption text-primary font-semibold no-underline hover:underline"
             >
               {toast.data.hrefLabel ?? 'Open'}
             </Link>

@@ -121,7 +121,7 @@ export function ZoneExports({ zoneId }: { zoneId: string }) {
                       {job.status === 'failed' && (
                         <Button size="sm" onClick={() => act(job, 'retry')} disabled={busy !== null}>
                           <IconRotate size={14} />
-                          {busy === job.id ? 'Starting…' : 'Retry export'}
+                          {busy === job.id ? 'Starting…' : 'Retry'}
                         </Button>
                       )}
                       {job.status === 'expired' && (

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { Toaster, showToast } from '@/components/ui/Toaster'
-import { IconAlert, IconBell, IconCheck, IconInfo } from '@/components/ui/icons'
+import { IconAlert, IconBell, IconCheck, IconCheckCheck, IconInfo } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
 import * as notificationsApi from './api'
 import type { AppNotification, NotificationFeed, NotificationType } from './api'
@@ -30,7 +30,8 @@ const GROUP_WINDOW_MS = 30 * 60 * 1000
 const TONE_MARK: Record<AppNotification['tone'], { Icon: typeof IconAlert; className: string }> = {
   warning: { Icon: IconAlert, className: 'bg-warning-bg text-warning-text' },
   success: { Icon: IconCheck, className: 'bg-success-bg text-success-text' },
-  info: { Icon: IconInfo, className: 'bg-info-bg text-info' },
+  // Brand, not the default blue: an "info" notification is Maceut telling you something.
+  info: { Icon: IconInfo, className: 'bg-primary-soft text-primary' },
 }
 
 interface Row {
@@ -66,7 +67,7 @@ function toRows(items: AppNotification[]): Row[] {
     const listed = names.length > 3 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more` : names.join(', ')
     const failing = row.items[0]!.type === 'capture_failing'
     row.title = failing ? `${row.items.length} zones stopped collecting` : `${row.items.length} zones are collecting again`
-    row.body = failing ? `${listed}. We retry at every scheduled time — nothing to do unless it keeps failing.` : listed
+    row.body = failing ? `${listed}. We’re retrying — no action needed.` : listed
     row.href = '/zones'
     row.actionLabel = 'Open zones'
   }
@@ -215,7 +216,7 @@ export function NotificationBell() {
             <div className="flex items-center justify-between px-lg py-md border-b border-divider">
               <span className="text-label font-semibold text-text-primary">Notifications</span>
               {unread > 0 && (
-                <button onClick={markAllRead} className="text-caption text-info hover:underline">
+                <button onClick={markAllRead} className="text-caption font-semibold text-primary hover:underline">
                   Mark all read
                 </button>
               )}
@@ -254,25 +255,23 @@ export function NotificationBell() {
                           <span className="block text-caption text-text-secondary mt-xs">{row.body}</span>
                           <span className="flex items-center gap-md mt-xs">
                             <span className="text-micro text-text-muted">{timeAgo(head.createdAt, now)}</span>
-                            {row.href && row.actionLabel && <span className="text-micro text-info">{row.actionLabel} →</span>}
+                            {row.href && row.actionLabel && <span className="text-micro font-semibold text-primary">{row.actionLabel}</span>}
                           </span>
                         </span>
                       </button>
-                      {/* A sibling, not nested: a button can't sit inside the row's button. */}
-                      {isUnread ? (
+                      {/* A sibling, not nested: a button can't sit inside the row's button. It sits
+                          on the meta line (time · action), where an action belongs, rather than
+                          beside the title. Read rows carry nothing — the lighter background says it. */}
+                      {isUnread && (
                         <button
                           type="button"
                           onClick={() => void markRowRead(row)}
                           aria-label={`Mark “${row.title}” as read`}
                           title="Mark as read"
-                          className="absolute top-md right-md w-7 h-7 rounded-full flex items-center justify-center text-primary bg-primary-soft hover:bg-primary hover:text-on-primary transition-colors focus:outline-none focus-visible:outline-2 focus-visible:outline-primary"
+                          className="absolute bottom-sm right-md w-7 h-7 rounded-md flex items-center justify-center text-text-muted hover:text-primary hover:bg-primary-soft transition-colors focus:outline-none focus-visible:outline-2 focus-visible:outline-primary"
                         >
-                          <IconCheck size={14} />
+                          <IconCheckCheck size={16} />
                         </button>
-                      ) : (
-                        <span aria-label="Read" title="Read" className="absolute top-md right-md w-7 h-7 flex items-center justify-center text-text-muted">
-                          <IconCheck size={14} />
-                        </span>
                       )}
                     </li>
                   )
