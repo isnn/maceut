@@ -22,17 +22,21 @@ import { ROAD_CLASS_ORDER } from '@/features/zones/components/RoadClassPicker'
 import type { RoadClass, Zone } from '@/features/zones/types'
 
 type Filter = 'all' | 'collecting' | 'paused'
-type SortKey = 'name' | 'area' | 'roads' | 'cadence' | 'status' | 'created'
+type SortKey = 'name' | 'area' | 'roads' | 'interval' | 'hours' | 'status' | 'created'
 
 /** Text sorts read best ascending; quantities read best largest-first. */
 const DEFAULT_DIRECTION: Record<SortKey, SortDirection> = {
   name: 'asc',
   area: 'desc',
   roads: 'desc',
-  cadence: 'asc',
+  interval: 'asc',
+  hours: 'asc',
   status: 'asc',
   created: 'desc',
 }
+
+const INTERVAL_WORD = { '15min': 'Every 15 min', hourly: 'Hourly', daily: 'Daily' } as const
+const INTERVAL_RANK = { '15min': 0, hourly: 1, daily: 2 } as const
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -84,7 +88,9 @@ export default function ZonesPage() {
       // Null rather than 0: a zone whose roads HERE has not reported is not a zone
       // with no roads, and the hook sorts unknowns last either way.
       roads: (zone) => zone.roadsCount,
-      cadence: (zone) => zone.cadence,
+      // Finest first: every 15 min before hourly before daily.
+      interval: (zone) => (zone.schedule ? INTERVAL_RANK[zone.schedule.interval] : null),
+      hours: (zone) => zone.schedule?.start ?? null,
       status: (zone) => zone.status,
       created: (zone) => zone.createdAt,
     },
@@ -212,8 +218,11 @@ export default function ZonesPage() {
                   >
                     Roads
                   </SortableTh>
-                  <SortableTh active={sort?.key === 'cadence'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('cadence')}>
-                    Capture cadence
+                  <SortableTh active={sort?.key === 'interval'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('interval')}>
+                    Interval
+                  </SortableTh>
+                  <SortableTh active={sort?.key === 'hours'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('hours')}>
+                    Hours (WIB)
                   </SortableTh>
                   <SortableTh active={sort?.key === 'status'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('status')}>
                     Status
@@ -240,7 +249,22 @@ export default function ZonesPage() {
                     </Td>
                     <Td className="text-right tabular-nums">{zone.areaKm2} km²</Td>
                     <Td className="text-right tabular-nums">{zone.roadsCount ?? '—'}</Td>
-                    <Td className="text-text-secondary">{zone.cadence ?? <span className="text-text-muted">Not scheduled</span>}</Td>
+                    <Td className="text-text-secondary whitespace-nowrap">
+                      {zone.schedule ? INTERVAL_WORD[zone.schedule.interval] : <span className="text-text-muted">Not scheduled</span>}
+                    </Td>
+                    <Td className="text-text-secondary tabular-nums whitespace-nowrap">
+                      {!zone.schedule ? (
+                        <span className="text-text-muted">&mdash;</span>
+                      ) : zone.schedule.windows === 1 ? (
+                        `${zone.schedule.start}–${zone.schedule.end}`
+                      ) : (
+                        // One span across several windows would suggest continuous collection
+                        // it doesn't do; the count says there are gaps.
+                        <span title={`Earliest ${zone.schedule.start}, latest ${zone.schedule.end}`}>
+                          {zone.schedule.windows} windows
+                        </span>
+                      )}
+                    </Td>
                     <Td>
                       <ZoneStatusPill status={zone.status} pausedByPlan={zone.pausedByPlan} />
                     </Td>

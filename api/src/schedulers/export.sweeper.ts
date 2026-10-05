@@ -26,6 +26,8 @@ export async function sweep(now: Date = new Date()): Promise<SweepResult> {
   let failed = 0
   for (const row of await exportRepo.findStale(new Date(now.getTime() - STALE_AFTER_MS))) {
     if (await exportRepo.fail(row.id, 'Render berhenti di tengah jalan. Silakan coba lagi.')) {
+      // The cause is for the log; the user is told to retry.
+      console.warn(`[export-sweeper] ${row.id} stalled — no heartbeat since ${row.updatedAt.toISOString()} (worker likely killed)`)
       failed++
       await notificationService.onExportFinished(row.id)
     }

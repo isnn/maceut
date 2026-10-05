@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 import type { RoadClass } from '@/features/zones/types'
 import type { Plan } from '@/features/auth/types'
 
-export type PillTone = 'success' | 'warning' | 'danger' | 'brand' | 'info' | 'neutral'
+export type PillTone = 'success' | 'warning' | 'danger' | 'brand' | 'info' | 'teal' | 'neutral'
 
 const PILL_TONE: Record<PillTone, string> = {
   success: 'bg-success-bg text-success-text',
@@ -11,6 +11,7 @@ const PILL_TONE: Record<PillTone, string> = {
   danger: 'bg-danger-bg text-danger-text',
   brand: 'bg-primary-soft text-primary',
   info: 'bg-info-bg text-info',
+  teal: 'bg-teal-bg text-teal-text',
   neutral: 'bg-canvas-secondary text-text-secondary',
 }
 
@@ -50,11 +51,12 @@ export function StatusPill({
 }
 
 // --- category labels, on the same pill -------------------------------------------------
-// Categories use blue and purple and grey only — green, amber and red stay reserved for
-// states (running, needs attention, failed), so a label never reads as a status.
+// Categories use teal, blue and purple — green, amber and red stay reserved for states
+// (running, needs attention, failed), so a label never reads as a status. Road classes
+// get a colour each, grey included none: grey read as "disabled" beside the others.
 
 const ROAD_CLASS_TONE: Record<RoadClass, PillTone> = {
-  nasional: 'neutral',
+  nasional: 'teal',
   nasional_provinsi: 'info',
   semua: 'brand',
 }

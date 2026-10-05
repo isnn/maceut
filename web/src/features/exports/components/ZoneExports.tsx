@@ -19,7 +19,7 @@ import { Alert } from '@/components/ui/Alert'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { SectionHeader } from '@/components/shared/SectionHeader'
 import { cn, formatWibShort } from '@/lib/utils'
-import { IconDownload, IconFilm } from '@/components/ui/icons'
+import { IconDownload, IconFilm, IconRotate } from '@/components/ui/icons'
 import { isActive, removeExport, retryExport, exportErrorMessage, type ExportJob } from '../api'
 import { ExportBar, ExportPill, FORMAT_LABEL, detailFor, useZoneExports } from './ExportProgress'
 
@@ -61,7 +61,6 @@ export function ZoneExports({ zoneId }: { zoneId: string }) {
       <SectionHeader
         icon={<IconFilm size={18} />}
         title="Exports"
-        description="ZIPs and animations made from this zone in Studio. Files are kept for 7 days."
       />
 
       {error && <Alert variant="warning">{error}</Alert>}
@@ -118,9 +117,17 @@ export function ZoneExports({ zoneId }: { zoneId: string }) {
                           Download
                         </a>
                       )}
-                      {(job.status === 'failed' || job.status === 'expired') && (
+                      {/* A failed export's one useful action, so it leads — filled, not tinted. */}
+                      {job.status === 'failed' && (
+                        <Button size="sm" onClick={() => act(job, 'retry')} disabled={busy !== null}>
+                          <IconRotate size={14} />
+                          {busy === job.id ? 'Starting…' : 'Retry export'}
+                        </Button>
+                      )}
+                      {job.status === 'expired' && (
                         <Button variant="tint" size="sm" onClick={() => act(job, 'retry')} disabled={busy !== null}>
-                          {busy === job.id ? 'Retrying…' : 'Retry'}
+                          <IconRotate size={14} />
+                          {busy === job.id ? 'Starting…' : 'Render again'}
                         </Button>
                       )}
                       <Button variant="destructive" size="sm" onClick={() => act(job, 'remove')} disabled={busy !== null}>
