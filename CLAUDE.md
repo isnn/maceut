@@ -181,4 +181,8 @@ DON'T → Pindah task sebelum yang aktif di-tandai ✅ dan test pass.
 DON'T → Commit langsung ke `develop`. Kerjakan di branch <type>/<kebab-case> dari `develop`,
         buka PR ke `develop` saat selesai, lalu BERHENTI — user yang me-review dan merge.
         Jangan pernah `gh pr merge` atau push ke `develop` sendiri.
+DON'T → Menjalankan pengujian browser sendiri untuk halaman Studio (Playwright, headless Chrome,
+        skrip verifikasi, subagent penguji). Pengujian Studio = DRY RUN: turunkan dari kode sebuah
+        daftar uji — langkah + hasil yang diharapkan — dan serahkan ke user untuk dijalankan.
+        tsc dan eslint tetap dijalankan seperti biasa.
 ```
