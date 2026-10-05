@@ -9,6 +9,8 @@ import { Alert } from '@/components/ui/Alert'
 import { RoadClassBadge, ZoneStatusPill } from '@/components/ui/Badge'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { CardTitle, SectionHeader } from '@/components/shared/SectionHeader'
+import { HelpTip } from '@/components/ui/HelpTip'
 import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
 import { IconArrowLeft } from '@/components/ui/icons'
@@ -192,11 +194,17 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
 
       <div className="grid grid-cols-1 laptop:grid-cols-[1fr_340px] gap-xl items-start">
         <div className="bg-card border border-border rounded-lg p-lg space-y-md">
-          <p className="text-label text-text-secondary">Boundary</p>
+          <CardTitle
+            aside={
+              <HelpTip label="About the boundary">
+                The boundary is set when the zone is created and can&rsquo;t be redrawn here. To cover a different
+                area, create a new zone.
+              </HelpTip>
+            }
+          >
+            Boundary
+          </CardTitle>
           <MapCanvas polygon={zone.geometry} className="h-96 w-full" />
-          <p className="text-caption text-text-secondary">
-            The boundary is set when the zone is created and can&rsquo;t be redrawn here.
-          </p>
         </div>
 
         <div className="bg-card border border-border rounded-lg p-lg space-y-lg">
@@ -223,9 +231,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
             </>
           ) : (
             <>
-              <div>
-                <p className="text-heading-sm text-text-primary">Zone details</p>
-              </div>
+              <CardTitle>Zone details</CardTitle>
 
               <dl className="space-y-md">
                 <Row label="Road class">
@@ -245,40 +251,35 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                 <Row label="Created">{formatDate(zone.createdAt)}</Row>
               </dl>
 
-              <p className="text-caption text-text-secondary border-t border-divider pt-lg">
-                Capture times are set on the <Link href="/schedule" className="text-info no-underline hover:underline">Schedule</Link> page.
-              </p>
             </>
           )}
         </div>
       </div>
 
-      <ZoneCaptures zone={zone} />
-
       {/* The windows that actually make this zone collect — without them a zone
           sits idle, which is invisible from its attributes alone. */}
       <section className="space-y-md">
-        <div className="flex flex-wrap items-center justify-between gap-md">
-          <h2 className="text-section-title text-text-primary">Capture windows</h2>
-          <div className="flex items-center gap-md ml-auto">
-            {/* Only worth showing once there is enough to look through. */}
-            {windows.length > 3 && (
-              <Input
-                type="search"
-                placeholder="Search windows…"
-                value={windowTable.search}
-                onChange={(e) => windowTable.setSearch(e.target.value)}
-                className="w-full tablet:w-56"
-              />
-            )}
-            <Link
-              href="/schedule"
-              className="text-body text-info no-underline hover:underline whitespace-nowrap"
-            >
-              Manage on Schedule
-            </Link>
-          </div>
-        </div>
+        <SectionHeader
+          title="Capture windows"
+          description="When this zone collects. Windows are set on the Schedule page."
+          actions={
+            <>
+              {/* Only worth showing once there is enough to look through. */}
+              {windows.length > 3 && (
+                <Input
+                  type="search"
+                  placeholder="Search windows…"
+                  value={windowTable.search}
+                  onChange={(e) => windowTable.setSearch(e.target.value)}
+                  className="w-full tablet:w-56"
+                />
+              )}
+              <Link href="/schedule" className={buttonClass('secondary')}>
+                Manage on Schedule
+              </Link>
+            </>
+          }
+        />
 
         {windows.length === 0 ? (
           <div className="bg-card border border-border rounded-lg p-lg">
@@ -356,7 +357,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                               className={cn(
                                 'w-5 h-5 rounded-xs text-micro flex items-center justify-center',
                                 w.days.includes(index)
-                                  ? 'bg-primary-soft text-[#5A35F3] font-semibold'
+                                  ? 'bg-primary-soft text-primary font-semibold'
                                   : 'bg-canvas-secondary text-text-muted'
                               )}
                             >
@@ -402,6 +403,8 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
           </Alert>
         )}
       </section>
+
+      <ZoneCaptures zone={zone} />
 
       {/* Last on the page: exports are made in Studio and collected here. */}
       <ZoneExports zoneId={zone.id} />

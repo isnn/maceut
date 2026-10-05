@@ -10,6 +10,7 @@
  */
 
 import { Card } from '@/components/ui/Card'
+import { CardTitle } from '@/components/shared/SectionHeader'
 import { cn, formatNumber } from '@/lib/utils'
 import { TRAFFIC_COLORS } from '@/lib/constants'
 import type { Capture } from '../api'
@@ -74,11 +75,11 @@ export function CaptureDay({
 
   return (
     <section className="space-y-md">
-      <h3 className="text-heading-sm text-text-primary">{dayLabel(anchor.capturedAt)}</h3>
+      <p className="text-micro font-semibold uppercase tracking-wider text-text-muted">{dayLabel(anchor.capturedAt)}</p>
 
       <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
         <Card className="p-lg space-y-md">
-          <p className="text-label font-semibold text-text-primary">This frame</p>
+          <CardTitle>This frame</CardTitle>
           {selected && selected.status === 'done' ? (
             <dl className="space-y-md">
               <Row label="Time" value={`${wibClock(selected.capturedAt)} WIB`} />
@@ -95,7 +96,7 @@ export function CaptureDay({
         </Card>
 
         <Card className="p-lg space-y-md">
-          <p className="text-label font-semibold text-text-primary">Day summary</p>
+          <CardTitle>Day summary</CardTitle>
           <dl className="space-y-md">
             <Row label="Captures" value={String(dayCaptures.length)} />
             <Row label="Busiest" value={extreme(dayCaptures, 'max')} />
@@ -105,7 +106,9 @@ export function CaptureDay({
       </div>
 
       <Card className="p-lg">
-        <p className="text-label font-semibold text-text-primary mb-md">Congestion through the day</p>
+        <div className="mb-md">
+          <CardTitle>Congestion through the day</CardTitle>
+        </div>
         <div className="flex items-end gap-[2px] h-24">
           {dayCaptures.map((c) => {
             const jam = c.jamFactorAvg ?? 0
