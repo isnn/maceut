@@ -144,6 +144,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **AUTH-OTP** Abstraksi provider email (console · Resend · Mailtrap) + kode OTP untuk verifikasi email (wajib) & lupa password | ADR-026, permintaan user |
 | ✅ | **NOTIF** Notifikasi berjalan: bell in-app + banner/toast, email hemat (capture gagal >2 jam, ringkas 1/hari; perubahan paket oleh staf; alert HERE ke satu alamat) + batas kirim OTP | permintaan user |
 | ✅ | **FE-23** Halaman zona: label & tabel konsisten, pill status tunggal, tombol terisi warna brand (Capture now / Open in Studio), peta Captures lebih gelap dengan nama tempat tetap terbaca | permintaan user |
+| ✅ | **FE-24** Label konsisten di seluruh tabel (daftar zona, admin, jadwal, dashboard): satu bentuk pill untuk status & kategori; kartu Zone details baru; ikon Lucide; paginasi selalu tampil; format tanggal tunggal | permintaan user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -1797,6 +1798,24 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
     ("23 Sep 10:27") untuk ketiga tabel (sebelumnya "23 Sep 10.27" vs "23 Sept, 10:27").
   - Peta Captures: filter `.maceut-map-night` lebih gelap, nama tempat tetap terbaca
     (dicek sekali lewat screenshot tile OSM). Peta Boundary tidak berubah.
+  VERIFIKASI: tsc + eslint web bersih, halaman 200. UI belum dilihat di browser.
+
+[2026-09-29b] FE-24 — label konsisten di semua tabel, Zone details baru, ikon Lucide.
+
+  - Satu bentuk label: `StatusPill` (pill + titik). Kategori memakai biru/ungu/abu SAJA —
+    hijau/kuning/merah khusus status, supaya label tidak terbaca sebagai status:
+    RoadClassBadge (Nasional abu · Nasional + Provinsi biru · All roads ungu), PlanPill
+    (Free abu · Standard biru · Premium ungu), RolePill (Customer abu · Internal ungu).
+    Dipakai di daftar zona, admin (overview, config, HERE), jadwal, dashboard.
+    "User" → "Customer" di pemilih peran admin (sama dengan Profil).
+  - Zone details: kelas jalan sebagai pill, tiga tile angka (Area · Roads · Length,
+    angka berformat 11,652), baris Capture cadence (atau link "set a window") & Created.
+  - Ikon dari Lucide (ISC, dicatat di icons.tsx): map (Boundary), clipboard-list (Zone
+    details), route (Road class), car-front (Avg jam factor), zap (Trigger).
+  - Paginasi: kontrol selalu tampil (satu halaman = ‹ 1 › nonaktif) — daftar zona dulu
+    tidak menampilkannya karena ≤10 zona.
+  - `formatDate` jadi "23 Sep 2026" (en, dengan tahun) di seluruh aplikasi; sebelumnya
+    id-ID tanpa tahun ("5 Agu", "12 Mei" di UI berbahasa Inggris).
   VERIFIKASI: tsc + eslint web bersih, halaman 200. UI belum dilihat di browser.
 
 ---

@@ -157,7 +157,9 @@ export function Pagination({
         )}
       </p>
 
-      {pageCount > 1 && (
+      {/* Always shown — one page renders as a disabled ‹ 1 › — so every table on every
+          page carries the same control, instead of it appearing only once a list grows. */}
+      {pageCount >= 1 && (
         <nav aria-label="Pagination" className="flex items-center gap-xs">
           <PageButton onClick={() => onPage(page - 1)} disabled={page <= 1} label="Previous page">
             <IconArrowLeft size={14} />

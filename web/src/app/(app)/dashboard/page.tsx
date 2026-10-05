@@ -1,5 +1,6 @@
 'use client'
 
+import { StatusPill } from '@/components/ui/Badge'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
@@ -276,17 +277,9 @@ export default function DashboardPage() {
           <Card className="p-lg">
             <div className="flex items-center justify-between mb-md">
               <h2 className="text-heading-sm text-text-primary">Collection health</h2>
-              <span
-                className={`text-micro font-semibold rounded-xs px-sm py-xs ${
-                  health.status === 'healthy'
-                    ? 'bg-success-bg text-success-text'
-                    : health.status === 'degraded'
-                      ? 'bg-warning-bg text-warning-text'
-                      : 'bg-canvas-secondary text-text-muted'
-                }`}
-              >
+              <StatusPill tone={health.status === 'healthy' ? 'success' : health.status === 'degraded' ? 'warning' : 'neutral'}>
                 {health.status === 'healthy' ? 'Healthy' : health.status === 'degraded' ? 'Degraded' : 'Idle'}
-              </span>
+              </StatusPill>
             </div>
             <dl className="space-y-md">
               <HealthRow
