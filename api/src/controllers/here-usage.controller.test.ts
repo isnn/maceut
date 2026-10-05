@@ -102,7 +102,25 @@ describe('PUT /internal/here-usage', () => {
     const res = await request(app).put('/internal/here-usage').send(body)
 
     expect(res.status).toBe(200)
-    expect(usageRepo.setSetting).toHaveBeenCalledWith('here_budget', body, STAFF)
+    // alertEmail is optional for older clients and saved as null.
+    expect(usageRepo.setSetting).toHaveBeenCalledWith('here_budget', { ...body, alertEmail: null }, STAFF)
+  })
+
+  it('saves the alert address, normalised', async () => {
+    signedIn('internal')
+    const res = await request(app)
+      .put('/internal/here-usage')
+      .send({ dailyLimit: 200, monthlyLimit: null, costPer1000: null, alertEmail: ' Ops@Maceut.id ' })
+    expect(res.status).toBe(200)
+    expect(usageRepo.setSetting).toHaveBeenCalledWith('here_budget', expect.objectContaining({ alertEmail: 'ops@maceut.id' }), STAFF)
+  })
+
+  it('rejects an alert address that is not an email', async () => {
+    signedIn('internal')
+    const res = await request(app)
+      .put('/internal/here-usage')
+      .send({ dailyLimit: 200, monthlyLimit: null, costPer1000: null, alertEmail: 'ops at maceut' })
+    expect(res.status).toBe(422)
   })
 
   it('rejects a zero or negative cap', async () => {

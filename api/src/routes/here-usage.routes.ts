@@ -43,6 +43,7 @@ router.use('/internal/here-usage', authMiddleware, internalOnly)
  *               dailyLimit: { type: integer, nullable: true }
  *               monthlyLimit: { type: integer, nullable: true }
  *               costPer1000: { type: number, nullable: true, description: Harga per 1.000 request, hanya untuk estimasi biaya }
+ *               alertEmail: { type: string, format: email, nullable: true, description: 'Satu alamat penerima email alert 80% & batas tercapai (NOTIF). Null = hanya di bell staf' }
  *     responses:
  *       200: { description: Ringkasan pemakaian dengan batas baru }
  *       401: { description: UNAUTHORIZED }

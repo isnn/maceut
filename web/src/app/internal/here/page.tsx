@@ -54,7 +54,7 @@ function fromField(s: string): number | null {
 export default function HereUsagePage() {
   const [data, setData] = useState<HereUsageSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [form, setForm] = useState<{ daily: string; monthly: string; cost: string } | null>(null)
+  const [form, setForm] = useState<{ daily: string; monthly: string; cost: string; alertEmail: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -64,6 +64,7 @@ export default function HereUsagePage() {
       daily: toField(next.budget.dailyLimit),
       monthly: toField(next.budget.monthlyLimit),
       cost: toField(next.budget.costPer1000),
+      alertEmail: next.budget.alertEmail ?? '',
     })
   }, [])
 
@@ -79,6 +80,7 @@ export default function HereUsagePage() {
       dailyLimit: fromField(form.daily),
       monthlyLimit: fromField(form.monthly),
       costPer1000: fromField(form.cost),
+      alertEmail: form.alertEmail.trim() || null,
     }
     setSaving(true)
     setSaved(false)
@@ -114,7 +116,8 @@ export default function HereUsagePage() {
   >
   const invalid =
     [form.daily, form.monthly].some((v) => v.trim() !== '' && (!Number.isInteger(Number(v)) || Number(v) < 1)) ||
-    (form.cost.trim() !== '' && (Number.isNaN(Number(form.cost)) || Number(form.cost) < 0))
+    (form.cost.trim() !== '' && (Number.isNaN(Number(form.cost)) || Number(form.cost) < 0)) ||
+    (form.alertEmail.trim() !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.alertEmail.trim()))
 
   return (
     <div className="space-y-xl">
@@ -257,6 +260,20 @@ export default function HereUsagePage() {
               />
             </div>
           </div>
+          <div className="space-y-xs tablet:max-w-[28rem]">
+            <FormLabel htmlFor="here-alert-email">Alert email</FormLabel>
+            <Input
+              id="here-alert-email"
+              type="email"
+              placeholder="ops@maceut.id — leave empty for bell only"
+              value={form.alertEmail}
+              onChange={(e) => setForm({ ...form, alertEmail: e.target.value })}
+            />
+            <p className="text-caption text-text-muted">
+              One email when usage reaches 80% of a cap and one when a cap is reached, per day or month. Every staff
+              account also sees them under the bell.
+            </p>
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-md border-t border-divider pt-lg">
             <p className="text-caption text-text-muted">
               {data.budgetUpdatedAt
@@ -268,7 +285,7 @@ export default function HereUsagePage() {
               {saving ? 'Saving…' : 'Save budget'}
             </Button>
           </div>
-          {invalid && <p className="text-caption text-danger-text">Limits must be whole numbers of 1 or more; the price can&rsquo;t be negative.</p>}
+          {invalid && <p className="text-caption text-danger-text">Limits must be whole numbers of 1 or more, the price can&rsquo;t be negative, and the alert email must be a valid address.</p>}
         </Card>
       </section>
     </div>

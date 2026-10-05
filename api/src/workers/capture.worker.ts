@@ -7,6 +7,7 @@ import { bboxOfGeometry } from '../services/zone.service'
 import * as here from '../lib/here-traffic-client'
 import { functionalClassesFor } from '../lib/here-traffic-client'
 import { meteredTrafficFlow } from '../services/here-usage.service'
+import * as notificationService from '../services/notification.service'
 import type { RoadClass } from '../types/plan'
 
 /**
@@ -55,9 +56,11 @@ export async function runCapture(captureId: string): Promise<void> {
 
   await captureRepo.markStatus(captureId, 'processing')
 
+  let zoneName = 'Zone'
   try {
     const zone = await zoneRepo.findById(capture.zoneId)
     if (!zone) throw new Error('Zona sudah dihapus sebelum capture dijalankan.')
+    zoneName = zone.name
 
     const flow = await meteredTrafficFlow('capture', bboxOfGeometry(zone.geometry), {
       // The class stored on the capture, already capped by BR-022 when it was queued.
@@ -78,6 +81,9 @@ export async function runCapture(captureId: string): Promise<void> {
 
     console.log(`[worker] capture ${captureId} done — ${flow.features.length} roads`)
 
+    // Ends a failure streak, if there was one (NOTIF).
+    await notificationService.onCaptureDone(capture, zoneName)
+
     // CAP-02 — the image is a separate, single-file job: see render.worker.ts. A failure
     // to queue it leaves a complete capture without an image, never a failed capture.
     if (isR2Configured()) {
@@ -89,6 +95,8 @@ export async function runCapture(captureId: string): Promise<void> {
     const message = err instanceof Error ? err.message : String(err)
     await captureRepo.markStatus(captureId, 'failed', message)
     console.error(`[worker] capture ${captureId} failed: ${message}`)
+    // Starts a failure streak, if this is the first (NOTIF). Never throws.
+    await notificationService.onCaptureFailed({ ...capture, error: message }, zoneName)
   }
 }
 
