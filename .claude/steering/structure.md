@@ -19,7 +19,6 @@ web/
         zones/              # Zone list & create
         captures/           # Capture history
         schedules/          # Schedule management
-        branding/           # Branding config
         settings/           # Account & plan
     components/
       ui/                   # Base UI wrappers + design token components
@@ -54,11 +53,6 @@ web/
         hooks/              # useSchedules
         api.ts
         types.ts
-      branding/
-        components/         # BrandingForm, LogoUploader, CapturePreview
-        hooks/              # useBranding
-        api.ts
-        types.ts
       auth/
         components/         # LoginForm, RegisterForm
         hooks/              # useAuth, useCurrentUser
@@ -85,7 +79,6 @@ api/
       zone.routes.ts
       schedule.routes.ts
       capture.routes.ts
-      branding.routes.ts
       usage.routes.ts
       traffic.routes.ts       # GET /traffic/preview
       index.ts               # Gabungkan semua route ke satu router utama
@@ -94,7 +87,6 @@ api/
       zone.controller.ts     + zone.controller.test.ts
       schedule.controller.ts + schedule.controller.test.ts
       capture.controller.ts  + capture.controller.test.ts
-      branding.controller.ts + branding.controller.test.ts
       usage.controller.ts    + usage.controller.test.ts
       traffic.controller.ts  + traffic.controller.test.ts
     services/                # Business logic — enforce semua BR di sini
@@ -102,14 +94,12 @@ api/
       zone.service.ts
       schedule.service.ts
       capture.service.ts
-      branding.service.ts
       plan.service.ts        # Enforce BR-001..007
     repositories/            # Akses data — Drizzle query builder + raw SQL untuk PostGIS
       user.repository.ts
       zone.repository.ts
       schedule.repository.ts
       capture.repository.ts
-      branding.repository.ts
     middlewares/
       auth.middleware.ts     # JWT parse dari cookie + inject req.userId
       plan-check.middleware.ts # Inject req.plan
@@ -370,11 +360,11 @@ mana yang berlaku di mana, dan itu biaya tanpa manfaat.
 <type>(<scope>): short description
 
 Types: feat · fix · refactor · docs · test · chore · perf
-Scope: auth · zone · capture · schedule · branding · worker · scheduler · infra · ui
+Scope: auth · zone · capture · schedule · export · worker · scheduler · infra · ui
 
 Contoh:
 feat(zone): add PostGIS polygon create endpoint
-feat(capture): implement Playwright screenshot with branding overlay
+feat(capture): render each capture to PNG with Playwright
 fix(scheduler): handle cron job not loading after server restart
 chore(infra): add R2 client with presigned URL support
 ```

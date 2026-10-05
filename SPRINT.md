@@ -35,7 +35,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Setup root .env dari .env.example | .env.example |
 | ✅ | Setup api/: init TypeScript + Express + package.json + tsconfig.json | structure.md |
 | ✅ | Setup api/: Dockerfile.dev + Dockerfile | deployment.md |
-| 🟡 | Setup api/.env dari .env.example (HERE + R2 masih kosong, menunggu kredensial) | api/.env.example |
+| ✅ | Setup api/.env dari .env.example (HERE + R2 terkonfigurasi & terverifikasi — /health: r2 configured, here configured) | api/.env.example |
 | ✅ | Setup web/: Next.js + Tailwind (token dari design.md) + Base UI | design.md |
 | 🟡 | Setup web/: Dockerfile.dev ✅ + Dockerfile (production) 🔴 | deployment.md |
 | ✅ | Setup web/.env.local dari .env.example | web/.env.example |
@@ -43,7 +43,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Setup Drizzle: drizzle.config.ts + schema.ts dasar (user, user_plans) | zone-management/tasks.md Phase 1 |
 | ✅ | Setup PostGIS extension + generate & jalankan migration awal | zone-management/tasks.md Phase 1 |
 | ✅ | Setup Swagger: swagger-jsdoc + swagger-ui-express di /api-docs | auth/tasks.md Phase 2 |
-| 🟡 | Migration: zones ✅ · captures ✅ (0007) · branding_configs 🔴 | zone-management/tasks.md Phase 1, 3 |
+| ✅ | Migration: zones ✅ · captures ✅ (0007) · exports ✅ (0009) | zone-management/tasks.md Phase 1, 3 |
 | ✅ | Auth: register via Better Auth `/api/auth/sign-up/email` + GET /me + unit test + swagger | auth/tasks.md Phase 2 |
 | ✅ | Auth: login/logout via Better Auth `/api/auth/sign-in\|sign-out` + unit test | auth/tasks.md Phase 2 |
 | ✅ | Middleware: auth (sesi Better Auth) + plan-check + internalOnly + error-handler | auth/tasks.md Phase 2 |
@@ -149,7 +149,6 @@ Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
 Jangan implement meskipun ada di spec:
 - Capture history page + filter → Sprint 2
-- Branding config (logo upload) → Sprint 2
 - Payment gateway / billing nyata → Sprint 3 (halaman Tagihan sekarang hanya simulasi ganti paket)
 - Production docker-compose.prod.yml deploy nyata → setelah MVP stabil di lokal
 
@@ -1590,6 +1589,16 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
     hex `#5A35F3` (aturan CLAUDE.md).
 
   VERIFIKASI: tsc + eslint bersih, /zones 200, tanpa error di log. Belum dilihat di browser.
+
+[2026-09-28d] Company branding (F-11/F-12/F-13) DIHAPUS dari scope — keputusan user.
+
+  Dihapus: spec `.claude/specs/branding/` (requirements + tasks), baris "Custom Branding"
+  di tabel paket & bagian Branding di product.md, tabel `branding_configs` + endpoint
+  `/branding` + relasi di tech.md, folder/route/service/repository branding di
+  structure.md, daftar spec di CLAUDE.md, task & acceptance criteria logo di spec
+  zone-management, baris "belum dibangun" di schema.dbml, `logoPath()` di r2-client (+
+  test-nya). BR-018 tetap, TANPA logo: gambar capture wajib memuat nama zona + timestamp.
+  Tidak ada tabel/migrasi yang perlu di-drop — `branding_configs` tidak pernah dibuat.
 
 ---
 
