@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, numeric, jsonb, pgEnum, unique, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, integer, numeric, jsonb, pgEnum, unique, index, date, primaryKey } from 'drizzle-orm/pg-core'
 import { user } from './auth-schema'
 
 /**
@@ -318,3 +318,46 @@ export const exports = pgTable(
 )
 
 export type ExportRow = typeof exports.$inferSelect
+
+// --- HERE usage & platform settings -------------------------------------------------
+
+/**
+ * Every request the platform makes to HERE Traffic, counted per WIB day and per
+ * source, so staff can see what the traffic bill is made of and cap it before it
+ * overruns (admin only — never shown to customers).
+ *
+ * `requests` is every call sent to HERE; `failed` the ones HERE or the network turned
+ * down (still attempted, possibly still billed); `refused` the ones the budget cap
+ * stopped BEFORE they were sent — not billed, but each is a capture or preview a
+ * customer didn't get, which is what makes a cap a trade-off rather than a free switch.
+ *
+ * A day is a `date`, not a timestamp: it is the WIB calendar day the call fell on,
+ * the same day the daily cap is counted against.
+ */
+export const hereUsage = pgTable(
+  'here_usage',
+  {
+    day: date('day').notNull(),
+    /** capture · preview · road_counts · zone_stats */
+    source: text('source').notNull(),
+    requests: integer('requests').notNull().default(0),
+    failed: integer('failed').notNull().default(0),
+    refused: integer('refused').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.source] })],
+)
+
+/**
+ * Operational settings staff change at runtime, one JSON value per key.
+ *
+ * Not `.env` (ADR-018 keeps that a read-only mirror): these hold no secrets, and their
+ * whole point is to change without a restart — a budget cap that needs a redeploy to
+ * tighten is no use on the day the bill is running away.
+ */
+export const platformSettings = pgTable('platform_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+})

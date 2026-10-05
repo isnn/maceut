@@ -105,6 +105,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-12** Studio: renderer canvas — PNG per frame, WebM animasi, 5 style, toggle layer | permintaan user |
 | ✅ | **FE-13** Studio: rentang waktu (start/end), ekspor banyak gambar (ZIP), viewer capture lebih cepat | permintaan user |
 | ✅ | **FE-20** Studio: judul panjang terbungkus, teks tanpa outline (90% opasitas), modal Export, UI output size, swatch tema berbeda, Default → Charcoal | permintaan user |
+| ✅ | **ADM-01** Admin: pantau pemakaian HERE (per hari & sumber) + batas harian/bulanan untuk mencegah over-budget; tidak terlihat oleh user | permintaan user |
 | ✅ | **FE-22** Detail zona: capture windows naik ke bawah detail, peta captures gelap, header tabel sejajar, pagination baru, help tip boundary, gaya konsisten | permintaan user |
 | ✅ | **FE-21** Export async di server: tabel `exports`, antrian RabbitMQ, worker Playwright + halaman render internal, riwayat & progres di detail zona, retry, sweeper | permintaan user |
 | ✅ | **FE-19** Studio: rentang waktu lintas hari; animasi 1:1 dengan preview (timing tepat, framing tak tergantung ukuran, bitrate sesuai resolusi) | permintaan user |
@@ -1599,6 +1600,32 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   zone-management, baris "belum dibangun" di schema.dbml, `logoPath()` di r2-client (+
   test-nya). BR-018 tetap, TANPA logo: gambar capture wajib memuat nama zona + timestamp.
   Tidak ada tabel/migrasi yang perlu di-drop — `branding_configs` tidak pernah dibuat.
+
+[2026-09-28e] Admin: pemakaian HERE & batas anggaran (ADM-01, ADR-025).
+
+  SATU TITIK: semua panggilan HERE (capture worker, preview wizard, hitungan kelas jalan,
+  statistik zona) kini lewat `meteredTrafficFlow` di `here-usage.service.ts`; tidak ada
+  lagi pemanggil `getTrafficFlow` langsung. Setiap panggilan dicatat di `here_usage`
+  (per hari WIB × sumber: requests, failed, refused — migrasi 0010).
+  BATAS: staf mengatur batas harian dan/atau bulanan (+ harga per 1.000 request untuk
+  estimasi biaya) di `/internal/here`, disimpan di `platform_settings` (bukan .env —
+  harus bisa diubah tanpa restart; bukan secret, jadi tidak bertentangan dengan ADR-018).
+  Saat tercapai: panggilan DITOLAK sebelum dikirim (tidak ditagih) dan dicatat `refused`;
+  pelanggan hanya melihat "Data lalu lintas sedang tidak tersedia" (503
+  TRAFFIC_UNAVAILABLE) — HERE/anggaran tidak pernah disebut di sisi pelanggan.
+  HALAMAN ADMIN: pemakaian hari ini & bulan ini dengan bar persen batas, estimasi biaya,
+  jumlah ditolak, grafik 30 hari bertumpuk per sumber dengan garis batas harian, form
+  batas. Peringatan di 80%, status "blocked" di 100%.
+
+  DIUJI LANGSUNG: batas harian 1 → capture pertama sukses (9.645 jalan) & tercatat,
+  capture kedua ditolak tanpa memanggil HERE, gagal dengan pesan generik, `refused` 1,
+  ringkasan admin "blocked". Batas dikosongkan lagi setelahnya.
+  Catatan: pengujian pertama controller menunjukkan "user biasa" dapat 200 — ternyata
+  email uji `ops@maceut.id` ada di INTERNAL_EMAILS (jadi memang staf); tes diperbaiki
+  memakai email pelanggan. Aplikasinya benar.
+
+  VERIFIKASI: 324 test API (10 service, 6 controller baru), tsc + eslint bersih kedua paket,
+  /internal/here 200. Halaman admin belum dilihat di browser.
 
 ---
 

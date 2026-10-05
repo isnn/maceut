@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express'
 import * as here from '../lib/here-traffic-client'
+import { meteredTrafficFlow } from '../services/here-usage.service'
 import { trafficPreviewQuerySchema } from '../schemas/zone.schema'
 import { UnauthorizedError } from '../errors'
 import { ok } from '../types/api'
@@ -27,7 +28,7 @@ export async function preview(req: Request, res: Response, next: NextFunction) {
     const requested: RoadClass = roadClass ?? 'semua'
     const effective = effectiveRoadClass(requested, plan)
 
-    const flow = await here.getTrafficFlow(bbox, {
+    const flow = await meteredTrafficFlow('preview', bbox, {
       functionalClasses: here.functionalClassesFor(effective),
       // Trimmed to the drawn shape when the caller sends one. The bbox is what HERE
       // needs; the ring is what the user actually drew.
@@ -66,7 +67,7 @@ export async function roadClassCounts(req: Request, res: Response, next: NextFun
 
     const results = await Promise.all(
       ROAD_CLASS_ORDER.map(async (roadClass) => {
-        const flow = await here.getTrafficFlow(bbox, {
+        const flow = await meteredTrafficFlow('road_counts', bbox, {
           functionalClasses: here.functionalClassesFor(roadClass),
         })
         return [roadClass, flow] as const
