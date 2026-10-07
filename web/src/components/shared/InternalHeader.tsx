@@ -7,14 +7,18 @@ import { Dropdown } from '@/components/ui/Dropdown'
 import { cn } from '@/lib/utils'
 import { PAGE_WIDTH } from './page-width'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
+import { ACCESS_LABEL, accessOf } from '@/features/auth/types'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 
 const NAV_ITEMS = [
-  { href: '/internal', label: 'Overview' },
-  { href: '/internal/users', label: 'Users' },
-  { href: '/internal/here', label: 'HERE usage' },
-  { href: '/internal/config', label: 'Configuration' },
+  { href: '/internal', label: 'Overview', superadmin: false },
+  { href: '/internal/users', label: 'Users', superadmin: false },
+  { href: '/internal/here', label: 'HERE usage', superadmin: true },
+  { href: '/internal/config', label: 'Configuration', superadmin: true },
 ]
+
+/** Staff pages only a superadmin may open (FE-34) — the layout and the API enforce it too. */
+export const SUPERADMIN_PATHS = NAV_ITEMS.filter((i) => i.superadmin).map((i) => i.href)
 
 function initials(name: string, email: string): string {
   const source = name.trim() || email
@@ -33,13 +37,13 @@ export function InternalHeader() {
       <div className={cn('mx-auto px-xl h-16 flex items-center gap-xxl', PAGE_WIDTH)}>
         <div className="flex items-center gap-sm">
           <Logo href="/internal" />
-          <span className="bg-primary-soft text-[#5A35F3] text-micro font-semibold rounded-xs px-sm py-xs uppercase tracking-wide">
-            Internal
+          <span className="bg-primary-soft text-primary text-micro font-semibold rounded-xs px-sm py-xs uppercase tracking-wide">
+            {user ? ACCESS_LABEL[accessOf(user)] : 'Staff'}
           </span>
         </div>
 
         <nav className="flex items-center gap-xl overflow-x-auto">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter((item) => !item.superadmin || (user && accessOf(user) === 'superadmin')).map((item) => {
             const active = item.href === '/internal' ? pathname === item.href : pathname.startsWith(item.href)
             return (
               <Link

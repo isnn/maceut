@@ -80,10 +80,11 @@ export function PlanPill({ plan, className }: { plan: Plan; className?: string }
   )
 }
 
-export function RolePill({ role, className }: { role: 'user' | 'internal'; className?: string }) {
+/** Customer, Admin or Superadmin (FE-34). */
+export function RolePill({ access, className }: { access: 'user' | 'admin' | 'superadmin'; className?: string }) {
   return (
-    <StatusPill tone={role === 'internal' ? 'brand' : 'neutral'} className={className}>
-      {role === 'internal' ? 'Internal' : 'Customer'}
+    <StatusPill tone={access === 'superadmin' ? 'brand' : access === 'admin' ? 'info' : 'neutral'} className={className}>
+      {access === 'superadmin' ? 'Superadmin' : access === 'admin' ? 'Admin' : 'Customer'}
     </StatusPill>
   )
 }

@@ -2,7 +2,9 @@
 
 import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { InternalHeader } from '@/components/shared/InternalHeader'
+import { InternalHeader, SUPERADMIN_PATHS } from '@/components/shared/InternalHeader'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { accessOf } from '@/features/auth/types'
 import { PAGE_WIDTH } from '@/components/shared/page-width'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 
@@ -28,7 +30,18 @@ export default function InternalLayout({ children }: { children: React.ReactNode
     <div className="min-h-screen bg-page">
       <InternalHeader />
       {/* Same width as the header (page-width.ts), so they always line up. */}
-      <main className={`mx-auto px-xl py-xl ${PAGE_WIDTH}`}>{children}</main>
+      <main className={`mx-auto px-xl py-xl ${PAGE_WIDTH}`}>
+        {/* Admins help customers; platform pages are for superadmins (FE-34). The API
+            refuses them too — this just says so instead of showing a failed load. */}
+        {accessOf(user) !== 'superadmin' && SUPERADMIN_PATHS.some((p) => pathname.startsWith(p)) ? (
+          <EmptyState
+            title="Superadmins only"
+            description="This page is managed by a superadmin. Overview and Users are available to you."
+          />
+        ) : (
+          children
+        )}
+      </main>
     </div>
   )
 }

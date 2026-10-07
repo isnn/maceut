@@ -7,12 +7,30 @@ export type Plan = 'free' | 'standard' | 'premium'
  */
 export type PlatformRole = 'user' | 'internal'
 
+/**
+ * FE-34 — the two kinds of staff. A superadmin runs the platform (config, HERE budget,
+ * staff, accounts); an admin helps customers (Overview, Users, usage, plan changes).
+ */
+export type StaffType = 'superadmin' | 'admin'
+
+/** An account's access level: a customer, or one of the two staff types. */
+export type Access = 'user' | StaffType
+
+export const ACCESS_LABEL: Record<Access, string> = { user: 'Customer', admin: 'Admin', superadmin: 'Superadmin' }
+
+/** Customer, admin or superadmin — what the server's role + staff type amount to. */
+export function accessOf(u: { role: PlatformRole; staffType?: StaffType | null }): Access {
+  return u.role === 'internal' ? (u.staffType ?? 'admin') : 'user'
+}
+
 export interface User {
   id: string
   email: string
   fullName: string
   plan: Plan
   role: PlatformRole
+  /** `superadmin` / `admin` for staff, null for customers (FE-34). */
+  staffType?: StaffType | null
   /** Cleared once the user finishes the onboarding wizard (3p). */
   onboardingDone: boolean
   createdAt: string

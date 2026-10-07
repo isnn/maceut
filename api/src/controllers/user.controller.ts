@@ -12,7 +12,7 @@ import {
 } from '../schemas/user.schema'
 import { UnauthorizedError } from '../errors'
 import { ok, paginated } from '../types/api'
-import type { Plan, PlatformRole } from '../types/plan'
+import type { Plan } from '../types/plan'
 
 /**
  * Not `.uuid()`: Better Auth issues its own string ids for `user.id` (the column is
@@ -53,7 +53,7 @@ export async function create(req: Request, res: Response, next: NextFunction) {
       email: body.email,
       fullName: body.fullName,
       plan: body.plan as Plan,
-      role: body.role as PlatformRole,
+      role: body.role,
       password: body.password,
     })
     return res.status(201).json(ok(created))
@@ -66,6 +66,16 @@ export async function detail(req: Request, res: Response, next: NextFunction) {
   try {
     const id = userIdParam.parse(req.params.id)
     return res.status(200).json(ok(await userService.getUser(id)))
+  } catch (err) {
+    next(err)
+  }
+}
+
+/** GET /internal/users/:id/usage — the staff usage page (FE-34). */
+export async function usage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = userIdParam.parse(req.params.id)
+    return res.status(200).json(ok(await userService.getAccountUsage(id)))
   } catch (err) {
     next(err)
   }
@@ -87,7 +97,7 @@ export async function changeRole(req: Request, res: Response, next: NextFunction
     const id = userIdParam.parse(req.params.id)
     const { role } = changeRoleSchema.parse(req.body)
     // The actor is passed through so the service can refuse self-edits.
-    return res.status(200).json(ok(await userService.changeRole(req.userId, id, role as PlatformRole)))
+    return res.status(200).json(ok(await userService.changeRole(req.userId, id, role)))
   } catch (err) {
     next(err)
   }
@@ -120,7 +130,7 @@ export async function update(req: Request, res: Response, next: NextFunction) {
           fullName: body.fullName,
           email: body.email,
           plan: body.plan as Plan | undefined,
-          role: body.role as PlatformRole | undefined,
+          role: body.role,
           password: body.password,
         }),
       ),

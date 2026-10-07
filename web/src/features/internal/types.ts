@@ -1,4 +1,4 @@
-import type { Plan, PlatformRole } from '@/features/auth/types'
+import type { Access, Plan, PlatformRole } from '@/features/auth/types'
 
 /**
  * Usage figures shown per account in the directory and drawer.
@@ -30,6 +30,8 @@ export interface InternalUserRow {
   email: string
   plan: Plan
   role: PlatformRole
+  /** Customer, admin or superadmin (FE-34). */
+  access: Access
   /** Staff by INTERNAL_EMAILS — can't be demoted here (BR-027). Decided by the server. */
   roleLockedByConfig: boolean
   createdAt: string

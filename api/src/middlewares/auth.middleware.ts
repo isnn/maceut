@@ -3,7 +3,7 @@ import { fromNodeHeaders } from 'better-auth/node'
 import { auth } from '../lib/auth'
 import { UnauthorizedError, ForbiddenError } from '../errors'
 import * as userRepo from '../repositories/user.repository'
-import { resolveRole } from '../lib/internal-access'
+import { accessOf, resolveRole } from '../lib/internal-access'
 import type { PlatformRole } from '../types/plan'
 
 /**
@@ -69,6 +69,24 @@ export async function internalOnly(req: Request, _res: Response, next: NextFunct
     if (resolveRole(found.email, (found.role ?? 'user') as PlatformRole) !== 'internal') {
       return next(new ForbiddenError('Halaman ini hanya untuk staf Maceut.'))
     }
+    next()
+  } catch (err) {
+    next(err)
+  }
+}
+
+/**
+ * Restricts a route to superadmins (FE-34): platform config, the HERE budget, staff
+ * access and creating, editing or deleting accounts. Admins — the customer-help staff
+ * type — get the Overview, Users and usage pages and plan changes, nothing more.
+ * Resolved per request like `internalOnly`, so a change of staff type applies at once.
+ */
+export async function superadminOnly(req: Request, _res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) return next(new UnauthorizedError())
+    const found = await userRepo.findById(req.userId)
+    if (!found) return next(new UnauthorizedError())
+    if (accessOf(found) !== 'superadmin') return next(new ForbiddenError('Superadmins only.'))
     next()
   } catch (err) {
     next(err)

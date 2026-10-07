@@ -27,6 +27,7 @@ vi.mock('../repositories/user.repository', () => ({
   ensurePlan: vi.fn(),
   listWithPlans: vi.fn(),
   countInternal: vi.fn(),
+  countSuperadmins: vi.fn(),
 }))
 // changePlan now runs the grandfather-and-block pass (ADR-020), which reads the
 // account's zones and schedules to work out what would exceed the new plan.
@@ -44,18 +45,34 @@ vi.mock('../repositories/schedule.repository', () => ({
   countsByUser: vi.fn(async () => new Map()),
   countAllActive: vi.fn(async () => 0),
 }))
+vi.mock('../services/usage.service', () => ({ getUsage: vi.fn() }))
 vi.mock('../repositories/capture.repository', () => ({
+  countsByZoneSince: vi.fn(async () => new Map()),
   countsToday: vi.fn(async () => new Map()),
   countAllToday: vi.fn(async () => 0),
 }))
-vi.mock('../lib/internal-access', () => ({
-  isInternalByConfig: vi.fn(() => false),
-  resolveRole: vi.fn((_email: string, stored: string) => stored),
-  configuredInternalEmails: vi.fn(() => []),
-}))
+vi.mock('../lib/internal-access', () => {
+  const isInternalByConfig = vi.fn((_email: string) => false)
+  const resolveRole = vi.fn((_email: string, stored: string) => stored)
+  // Same rules as the real module, built on the two mocks above (FE-34).
+  const resolveStaffType = (email: string, role: string, stored: string | null) =>
+    resolveRole(email, role) !== 'internal' ? null : isInternalByConfig(email) ? 'superadmin' : stored === 'superadmin' ? 'superadmin' : 'admin'
+  return {
+    isInternalByConfig,
+    resolveRole,
+    resolveStaffType,
+    accessOf: (r: { email: string; role: string | null; staffType?: string | null }) =>
+      resolveStaffType(r.email, r.role ?? 'user', r.staffType ?? null) ?? 'user',
+    columnsFor: (a: string) => (a === 'user' ? { role: 'user', staffType: null } : { role: 'internal', staffType: a }),
+    configuredInternalEmails: vi.fn(() => []),
+  }
+})
 
 import { app } from '../app'
 import * as userRepo from '../repositories/user.repository'
+import * as zoneRepoMock from '../repositories/zone.repository'
+import * as captureRepoMock from '../repositories/capture.repository'
+import * as usageServiceMock from '../services/usage.service'
 import * as internalAccess from '../lib/internal-access'
 import { auth } from '../lib/auth'
 
@@ -70,6 +87,7 @@ function row(over: Partial<userRepo.UserWithPlan> = {}): userRepo.UserWithPlan {
     emailVerified: true,
     image: null,
     role: 'user',
+    staffType: null,
     onboardingDone: true,
     createdAt: new Date('2026-09-18T00:00:00Z'),
     updatedAt: new Date('2026-09-18T00:00:00Z'),
@@ -85,10 +103,10 @@ function signedInAs(id: string) {
 
 function staffLookups() {
   vi.mocked(userRepo.findById).mockImplementation(async (id: string) =>
-    id === STAFF_ID ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal' }) : row(),
+    id === STAFF_ID ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal', staffType: 'superadmin' }) : row(),
   )
   vi.mocked(userRepo.findByIdWithPlan).mockImplementation(async (id: string) =>
-    id === STAFF_ID ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal' }) : row(),
+    id === STAFF_ID ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal', staffType: 'superadmin' }) : row(),
   )
 }
 
@@ -252,7 +270,7 @@ describe('PATCH /internal/users/:id/plan', () => {
   it('returns 404 for an account that does not exist', async () => {
     signedInAs(STAFF_ID)
     vi.mocked(userRepo.findById).mockImplementation(async (id: string) =>
-      id === STAFF_ID ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal' }) : undefined,
+      id === STAFF_ID ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal', staffType: 'superadmin' }) : undefined,
     )
 
     const res = await request(app).patch(`/internal/users/${TARGET_ID}/plan`).send({ plan: 'free' })
@@ -268,10 +286,10 @@ describe('PATCH /internal/users/:id/role', () => {
     vi.mocked(userRepo.updateUser).mockResolvedValue(undefined)
     vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(row({ role: 'internal' }))
 
-    const res = await request(app).patch(`/internal/users/${TARGET_ID}/role`).send({ role: 'internal' })
+    const res = await request(app).patch(`/internal/users/${TARGET_ID}/role`).send({ role: 'admin' })
 
     expect(res.status).toBe(200)
-    expect(userRepo.updateUser).toHaveBeenCalledWith(TARGET_ID, { role: 'internal' })
+    expect(userRepo.updateUser).toHaveBeenCalledWith(TARGET_ID, { role: 'internal', staffType: 'admin' })
   })
 
   it('refuses to let you change your own role', async () => {
@@ -298,35 +316,39 @@ describe('PATCH /internal/users/:id/role', () => {
     expect(userRepo.updateUser).not.toHaveBeenCalled()
   })
 
-  it('refuses to demote the last internal account', async () => {
+  it('refuses to demote the last superadmin', async () => {
     signedInAs(STAFF_ID)
     vi.mocked(userRepo.findById).mockImplementation(async (id: string) =>
-      id === STAFF_ID ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal' }) : row({ role: 'internal' }),
+      id === STAFF_ID
+        ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal', staffType: 'superadmin' })
+        : row({ role: 'internal', staffType: 'superadmin' }),
     )
-    vi.mocked(userRepo.countInternal).mockResolvedValue(1)
+    vi.mocked(userRepo.countSuperadmins).mockResolvedValue(1)
 
     const res = await request(app).patch(`/internal/users/${TARGET_ID}/role`).send({ role: 'user' })
 
     // Losing every internal account is unrecoverable through the API — the only fix
     // would be editing the database by hand.
     expect(res.status).toBe(422)
-    expect(res.body.error.message).toMatch(/satu-satunya/)
+    expect(res.body.error.message).toMatch(/last superadmin/)
     expect(userRepo.updateUser).not.toHaveBeenCalled()
   })
 
-  it('allows demoting one of several internal accounts', async () => {
+  it('allows demoting one of several superadmins', async () => {
     signedInAs(STAFF_ID)
     vi.mocked(userRepo.findById).mockImplementation(async (id: string) =>
-      id === STAFF_ID ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal' }) : row({ role: 'internal' }),
+      id === STAFF_ID
+        ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal', staffType: 'superadmin' })
+        : row({ role: 'internal', staffType: 'superadmin' }),
     )
-    vi.mocked(userRepo.countInternal).mockResolvedValue(3)
+    vi.mocked(userRepo.countSuperadmins).mockResolvedValue(3)
     vi.mocked(userRepo.updateUser).mockResolvedValue(undefined)
     vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(row({ role: 'user' }))
 
     const res = await request(app).patch(`/internal/users/${TARGET_ID}/role`).send({ role: 'user' })
 
     expect(res.status).toBe(200)
-    expect(userRepo.updateUser).toHaveBeenCalledWith(TARGET_ID, { role: 'user' })
+    expect(userRepo.updateUser).toHaveBeenCalledWith(TARGET_ID, { role: 'user', staffType: null })
   })
 })
 
@@ -394,5 +416,85 @@ describe('GET /internal/users/:id/plan-impact (ADR-020)', () => {
     signedInAs(STAFF_ID)
     staffLookups()
     expect((await request(app).get('/internal/users/u_1/plan-impact?plan=gold')).status).toBe(422)
+  })
+})
+
+describe('Superadmin vs Admin (FE-34)', () => {
+  const ADMIN_ID = 'staff_admin'
+  function asAdmin() {
+    signedInAs(ADMIN_ID)
+    const admin = row({ id: ADMIN_ID, email: 'help@maceut.id', role: 'internal', staffType: 'admin' })
+    vi.mocked(userRepo.findById).mockImplementation(async (id: string) => (id === ADMIN_ID ? admin : row()))
+    vi.mocked(userRepo.findByIdWithPlan).mockImplementation(async (id: string) => (id === ADMIN_ID ? admin : row()))
+  }
+
+  it.each([
+    ['get', '/internal/config'],
+    ['post', '/internal/users'],
+    ['patch', `/internal/users/${TARGET_ID}`],
+    ['delete', `/internal/users/${TARGET_ID}`],
+    ['patch', `/internal/users/${TARGET_ID}/role`],
+    ['get', '/internal/here-usage'],
+  ] as const)('an admin gets 403 on %s %s', async (method, path) => {
+    asAdmin()
+    const res = await request(app)[method](path).send({ role: 'user', fullName: 'X', email: 'x@y.z' })
+    expect(res.status).toBe(403)
+    expect(res.body.error.message).toBe('Superadmins only.')
+  })
+
+  it('an admin can still change a customer’s plan', async () => {
+    asAdmin()
+    vi.mocked(userRepo.setPlan).mockResolvedValue(undefined as never)
+    const res = await request(app).patch(`/internal/users/${TARGET_ID}/plan`).send({ plan: 'standard' })
+    expect(res.status).toBe(200)
+  })
+
+  it('reports the staff type on each account', async () => {
+    asAdmin()
+    const res = await request(app).get(`/internal/users/${ADMIN_ID}`)
+    expect(res.status).toBe(200)
+    expect(res.body.data).toMatchObject({ role: 'internal', staffType: 'admin' })
+  })
+
+  it('treats the legacy role value `internal` as admin, never superadmin', async () => {
+    signedInAs(STAFF_ID)
+    staffLookups()
+    vi.mocked(userRepo.updateUser).mockResolvedValue(undefined)
+    await request(app).patch(`/internal/users/${TARGET_ID}/role`).send({ role: 'internal' })
+    expect(userRepo.updateUser).toHaveBeenCalledWith(TARGET_ID, { role: 'internal', staffType: 'admin' })
+  })
+})
+
+describe('GET /internal/users/:id/usage (FE-34)', () => {
+  it('returns measured usage, zones with 7-day captures, and windows', async () => {
+    signedInAs(STAFF_ID)
+    staffLookups()
+    vi.mocked(usageServiceMock.getUsage).mockResolvedValue({ storageUsedGb: 1.25, capturesToday: 12 } as never)
+    vi.mocked(zoneRepoMock.findByUserId).mockResolvedValue([
+      { id: 'z1', name: 'YOG', status: 'collecting', pausedByPlan: false, roadClass: 'nasional', createdAt: new Date('2026-09-01T00:00:00Z') },
+    ] as never)
+    vi.mocked(captureRepoMock.countsByZoneSince).mockResolvedValue(new Map([['z1', 96]]))
+
+    const res = await request(app).get(`/internal/users/${TARGET_ID}/usage`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.usage).toMatchObject({ storageUsedGb: 1.25, capturesToday: 12 })
+    expect(res.body.data.zones[0]).toMatchObject({ name: 'YOG', capturesLast7Days: 96 })
+    expect(res.body.data.user.id).toBe(TARGET_ID)
+  })
+
+  it('is refused to customers', async () => {
+    signedInAs(TARGET_ID)
+    staffLookups()
+    expect((await request(app).get(`/internal/users/${TARGET_ID}/usage`)).status).toBe(403)
+  })
+
+  it('returns 404 for an unknown account', async () => {
+    signedInAs(STAFF_ID)
+    staffLookups()
+    vi.mocked(userRepo.findByIdWithPlan).mockImplementation(async (id: string) =>
+      id === STAFF_ID ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal', staffType: 'superadmin' }) : undefined,
+    )
+    expect((await request(app).get(`/internal/users/nobody/usage`)).status).toBe(404)
   })
 })

@@ -4,6 +4,8 @@ import { PlanPill, RolePill } from '@/components/ui/Badge'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
+import { linkClass } from '@/components/ui/Button'
+import { PausedCell } from '@/features/internal/components/PausedCell'
 import { Alert } from '@/components/ui/Alert'
 import { Pagination, SortableTh, Table, TableWrap, Td } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
@@ -48,11 +50,12 @@ export default function InternalOverviewPage() {
     sortOn: {
       account: (row) => row.fullName.toLowerCase(),
       zones: (row) => row.usage.zonesCount,
+      paused: (row) => row.usage.zonesPaused + row.usage.schedulesPaused,
       plan: (row) => PLAN_ORDER.indexOf(row.plan),
-      role: (row) => row.role,
+      role: (row) => ['user', 'admin', 'superadmin'].indexOf(row.access),
       joined: (row) => row.createdAt,
     },
-    defaultDirection: { zones: 'desc', joined: 'desc' },
+    defaultDirection: { zones: 'desc', paused: 'desc', joined: 'desc' },
     initialSort: { key: 'joined', direction: 'desc' },
     pageSize: 8,
   })
@@ -106,7 +109,7 @@ export default function InternalOverviewPage() {
       </div>
 
       <section className="space-y-md">
-        <h2 className="text-section-title text-text-primary mb-md">Plan mix</h2>
+        <h2 className="text-section-title text-text-primary">Plan mix</h2>
         <Card className="p-lg">
           <div className="flex h-3 rounded-full overflow-hidden gap-[2px]">
             {PLAN_ORDER.map((plan) => {
@@ -134,8 +137,8 @@ export default function InternalOverviewPage() {
         </Card>
       </section>
 
-      <section>
-        <div className="flex flex-wrap items-center justify-between gap-md mb-md">
+      <section className="space-y-md">
+        <div className="flex flex-wrap items-center justify-between gap-md">
           <h2 className="text-section-title text-text-primary">Accounts</h2>
           <div className="flex items-center gap-md ml-auto">
             <Input
@@ -145,7 +148,7 @@ export default function InternalOverviewPage() {
               onChange={(e) => table.setSearch(e.target.value)}
               className="w-full tablet:w-64"
             />
-            <Link href="/internal/users" className="text-body text-info no-underline hover:underline whitespace-nowrap">
+            <Link href="/internal/users" className={cn(linkClass(), 'whitespace-nowrap')}>
               Manage users
             </Link>
           </div>
@@ -168,6 +171,14 @@ export default function InternalOverviewPage() {
                   onSort={() => table.toggleSort('zones')}
                 >
                   Zones
+                </SortableTh>
+                <SortableTh
+                  className="text-right"
+                  active={table.sort?.key === 'paused'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('paused')}
+                >
+                  Paused
                 </SortableTh>
                 <SortableTh
                   active={table.sort?.key === 'plan'}
@@ -196,23 +207,27 @@ export default function InternalOverviewPage() {
               {table.visible.map((row) => (
                 <tr key={row.id} className="hover:bg-canvas-secondary/60 transition-colors">
                   <Td>
-                    <p className="font-semibold text-text-primary">
+                    <Link
+                      href={`/internal/users/${encodeURIComponent(row.id)}`}
+                      className="font-semibold text-text-primary no-underline hover:text-primary transition-colors"
+                    >
                       {row.fullName}
                       {row.isYou && <span className="ml-sm text-micro text-text-muted font-normal">You</span>}
-                    </p>
+                    </Link>
                     <p className="text-caption text-text-muted">{row.email}</p>
                   </Td>
                   <Td className="text-right tabular-nums text-text-secondary">
                     {row.usage.zonesCount}
-                    {row.usage.zonesPaused > 0 && (
-                      <span className="text-micro text-warning-text ml-sm">{row.usage.zonesPaused} paused</span>
-                    )}
+                    <span className="text-text-muted">/{row.usage.zonesLimit}</span>
+                  </Td>
+                  <Td className="text-right">
+                    <PausedCell zones={row.usage.zonesPaused} windows={row.usage.schedulesPaused} />
                   </Td>
                   <Td>
                     <PlanPill plan={row.plan} />
                   </Td>
                   <Td>
-                    <RolePill role={row.role} />
+                    <RolePill access={row.access} />
                   </Td>
                   <Td className="text-text-secondary">{formatDate(row.createdAt)}</Td>
                 </tr>
@@ -220,16 +235,16 @@ export default function InternalOverviewPage() {
             </tbody>
           </Table>
         </TableWrap>
-          <Pagination
-            page={table.page}
-            pageCount={table.pageCount}
-            pageSize={table.pageSize}
-            onPage={table.setPage}
-            matchCount={table.matchCount}
-            totalCount={table.totalCount}
-            noun="accounts"
-            onClearSearch={table.search ? () => table.setSearch('') : undefined}
-          />
+        <Pagination
+          page={table.page}
+          pageCount={table.pageCount}
+          pageSize={table.pageSize}
+          onPage={table.setPage}
+          matchCount={table.matchCount}
+          totalCount={table.totalCount}
+          noun="accounts"
+          onClearSearch={table.search ? () => table.setSearch('') : undefined}
+        />
       </section>
     </div>
   )

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import * as userController from '../controllers/user.controller'
-import { authMiddleware, internalOnly } from '../middlewares/auth.middleware'
+import { authMiddleware, internalOnly, superadminOnly } from '../middlewares/auth.middleware'
 
 const router = Router()
 
@@ -73,7 +73,7 @@ router.get('/internal/stats', userController.stats)
  *       401: { description: UNAUTHORIZED }
  *       403: { description: FORBIDDEN — bukan staf }
  */
-router.get('/internal/config', userController.config)
+router.get('/internal/config', superadminOnly, userController.config)
 
 /**
  * @swagger
@@ -153,6 +153,31 @@ router.get('/internal/users/:id', userController.detail)
 
 /**
  * @swagger
+ * /internal/users/{id}/usage:
+ *   get:
+ *     summary: Pemakaian satu akun untuk halaman usage staf (FE-34)
+ *     description: >
+ *       Semua angka terukur — penyimpanan (gambar + export + cache), capture hari ini,
+ *       export bulan ini, zona (dengan jumlah capture 7 hari) dan jendela capture.
+ *       Superadmin dan Admin.
+ *     tags: [Internal]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: "{ user, usage, zones[], windows[] }"
+ *       401: { description: UNAUTHORIZED }
+ *       403: { description: FORBIDDEN — bukan staf }
+ *       404: { description: NOT_FOUND }
+ */
+router.get('/internal/users/:id/usage', userController.usage)
+
+/**
+ * @swagger
  * /internal/users:
  *   post:
  *     summary: Buat akun baru untuk seseorang (F-21)
@@ -206,7 +231,7 @@ router.get('/internal/users/:id', userController.detail)
  *       403: { description: FORBIDDEN — bukan akun internal }
  *       422: { description: VALIDATION_ERROR atau EMAIL_ALREADY_TAKEN }
  */
-router.post('/internal/users', userController.create)
+router.post('/internal/users', superadminOnly, userController.create)
 
 /**
  * @swagger
@@ -273,7 +298,7 @@ router.post('/internal/users', userController.create)
  *       404: { description: NOT_FOUND }
  *       422: { description: VALIDATION_ERROR atau EMAIL_ALREADY_TAKEN }
  */
-router.patch('/internal/users/:id', userController.update)
+router.patch('/internal/users/:id', superadminOnly, userController.update)
 
 /**
  * @swagger
@@ -322,7 +347,7 @@ router.patch('/internal/users/:id', userController.update)
  *       404: { description: NOT_FOUND }
  *       422: { description: VALIDATION_ERROR — akun internal terakhir }
  */
-router.delete('/internal/users/:id', userController.remove)
+router.delete('/internal/users/:id', superadminOnly, userController.remove)
 
 /**
  * @swagger
@@ -429,6 +454,6 @@ router.patch('/internal/users/:id/plan', userController.changePlan)
  *       404: { description: NOT_FOUND }
  *       422: { description: VALIDATION_ERROR — role dikunci config, atau akun internal terakhir }
  */
-router.patch('/internal/users/:id/role', userController.changeRole)
+router.patch('/internal/users/:id/role', superadminOnly, userController.changeRole)
 
 export default router

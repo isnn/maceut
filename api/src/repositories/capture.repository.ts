@@ -428,3 +428,13 @@ export async function listForCsv(zoneId: string, since: Date | null, limit: numb
     .orderBy(asc(captures.capturedAt))
     .limit(limit)
 }
+
+/** Collected captures per zone since `since` (FE-34: the staff usage page). */
+export async function countsByZoneSince(userId: string, since: Date): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ zoneId: captures.zoneId, count: sql<number>`count(*)::int` })
+    .from(captures)
+    .where(and(eq(captures.userId, userId), eq(captures.status, 'done'), gte(captures.capturedAt, since)))
+    .groupBy(captures.zoneId)
+  return new Map(rows.map((r) => [r.zoneId, r.count]))
+}

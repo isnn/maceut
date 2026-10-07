@@ -159,6 +159,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-31** Review polish: strip capture terbaru menampilkan semua zona, Re-render, dialog jendela (notice ringkas, Save nonaktif bila tak bisa lanjut, tombol Delete), tombol ✕ di semua modal | review user |
 | ✅ | **FE-32** Detail zona: Export CSV jadi tombol + pemilih rentang waktu (dibatasi paket), Next collection di bawah kartu detail; Schedule tanpa tautan mahkota Unlimited | review user |
 | ✅ | **FE-33** Nama kelas jalan dalam bahasa Inggris (Highways · Highways + main roads · All roads); id internal tetap | permintaan user |
+| ✅ | **FE-34** Konsol staf: kolom Paused terpisah, spasi overview, halaman usage per akun (data nyata), tipe staf Superadmin / Admin (Admin hanya Overview & Users) | review user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -183,6 +184,21 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-07e] FE-34 — konsol staf: Superadmin / Admin, halaman usage, kolom Paused (ADR-032).
+
+  - Migrasi 0017: `user.staff_type` (superadmin | admin); staf lama → superadmin. DBML diperbarui.
+  - API: `resolveStaffType` / `accessOf`; `superadminOnly` di config, HERE usage, PATCH role,
+    tambah/edit/hapus akun. Admin tetap: overview, daftar user, usage, ganti paket. Guard
+    "superadmin terakhir" menggantikan "internal terakhir". `role` di API kini user | admin |
+    superadmin (`internal` lama = admin).
+  - GET /internal/users/:id/usage: penyimpanan, capture hari ini, export bulan ini, zona dengan
+    capture 7 hari, jendela. Dicek di DB nyata (sched@: 0,74 GB, 91 capture hari ini).
+  - Web: halaman /internal/users/[id] menggantikan modal usage (peringatan "belum terukur" yang
+    basi dihapus); kolom Paused terpisah di Overview & Users; spasi overview (section space-y-md,
+    pagination rapi, link brand); header & role pill menampilkan Superadmin / Admin; Admin hanya
+    melihat Overview & Users, halaman lain "Superadmins only".
+  VERIFIKASI: 485 test API (akses admin 403 di 6 rute, usage endpoint), tsc + eslint bersih.
 
 [2026-10-07d] FE-33 — nama kelas jalan dalam bahasa Inggris.
 

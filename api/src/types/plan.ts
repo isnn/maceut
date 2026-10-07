@@ -148,3 +148,13 @@ export function effectiveRoadClass(zoneRoadClass: RoadClass, plan: Plan): RoadCl
 
 /** Platform role: `user` = paying customer, `internal` = Maceut staff (BR-027). */
 export type PlatformRole = 'user' | 'internal'
+
+/**
+ * FE-34 — what kind of staff an internal account is. A superadmin runs the platform
+ * (config, HERE budget, staff and accounts); an admin helps customers (Overview, Users,
+ * usage, plan changes) and nothing else.
+ */
+export type StaffType = 'superadmin' | 'admin'
+
+/** An account's access level: a customer, or one of the two staff types. */
+export type Access = 'user' | StaffType

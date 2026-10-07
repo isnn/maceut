@@ -53,7 +53,7 @@ export async function findByIdWithPlan(id: string): Promise<UserWithPlan | undef
 
 export async function updateUser(
   id: string,
-  patch: Partial<Pick<UserRow, 'name' | 'role' | 'onboardingDone'>>,
+  patch: Partial<Pick<UserRow, 'name' | 'role' | 'staffType' | 'onboardingDone'>>,
 ): Promise<UserRow | undefined> {
   const rows = await db
     .update(user)
@@ -221,6 +221,18 @@ export async function countInternal(internalEmails: readonly string[]): Promise<
     .select({ count: sql<number>`count(*)::int` })
     .from(user)
     .where(isInternalSql(internalEmails))
+  return rows[0]?.count ?? 0
+}
+
+/**
+ * Superadmins (FE-34): config-granted staff, plus database staff stored as superadmin.
+ * Guards use it so the platform can never be left without one.
+ */
+export async function countSuperadmins(internalEmails: readonly string[]): Promise<number> {
+  const stored = and(eq(user.role, 'internal'), eq(user.staffType, 'superadmin')) as SQL
+  const where =
+    internalEmails.length === 0 ? stored : (or(stored, sql`lower(${user.email}) = ANY(${sql.param(internalEmails)})`) as SQL)
+  const rows = await db.select({ count: sql<number>`count(*)::int` }).from(user).where(where)
   return rows[0]?.count ?? 0
 }
 

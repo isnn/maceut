@@ -20,7 +20,7 @@ import { Alert } from '@/components/ui/Alert'
 import { PLAN_LABEL, PLAN_ORDER } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import * as internalApi from '@/features/internal/api'
-import type { Plan, PlatformRole } from '@/features/auth/types'
+import type { Access, Plan } from '@/features/auth/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -33,7 +33,7 @@ export function AddUserDialog({ open, onClose, onCreated }: { open: boolean; onC
   const [email, setEmail] = useState('')
   const [fullName, setFullName] = useState('')
   const [plan, setPlan] = useState<Plan>('free')
-  const [role, setRole] = useState<PlatformRole>('user')
+  const [role, setRole] = useState<Access>('user')
   const [setOwnPassword, setSetOwnPassword] = useState(false)
   const [password, setPassword] = useState('')
   const [submitted, setSubmitted] = useState(false)
@@ -188,19 +188,23 @@ export function AddUserDialog({ open, onClose, onCreated }: { open: boolean; onC
                     <FormLabel htmlFor="new-role">Role</FormLabel>
                     <Select
                       value={role}
-                      onValueChange={(v) => setRole(v as PlatformRole)}
+                      onValueChange={(v) => setRole(v as Access)}
                       options={[
-                        { value: 'user', label: 'User — a customer' },
-                        { value: 'internal', label: 'Internal — Maceut staff' },
+                        { value: 'user', label: 'Customer' },
+                        { value: 'admin', label: 'Admin — helps customers' },
+                        { value: 'superadmin', label: 'Superadmin — runs the platform' },
                       ]}
                       aria-label="Role for the new account"
                     />
                   </div>
                 </div>
 
-                {role === 'internal' && (
+                {role !== 'user' && (
                   <p className="text-caption text-text-muted">
-                    Internal accounts aren&rsquo;t counted as customers and don&rsquo;t appear in revenue figures.
+                    {role === 'admin'
+                      ? 'Admins see Overview and Users and can change a customer’s plan — nothing else.'
+                      : 'Superadmins can do everything, including config, the HERE budget and staff access.'}{' '}
+                    Staff aren&rsquo;t counted as customers.
                   </p>
                 )}
 
