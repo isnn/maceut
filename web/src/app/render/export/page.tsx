@@ -41,8 +41,16 @@ interface ExportJob {
     holdMs: number
   }
   frameCount: number
+  /** Resume point after a browser crash: frames before it are already in the file. */
+  startFrame?: number
   zoneName: string
   ring: [number, number][]
+}
+
+/** Per-frame timings the worker logs, to see where an export's time goes. */
+interface FrameStats {
+  drawMs: number
+  encodeMs: number
 }
 
 interface ExportFrame {
@@ -54,7 +62,7 @@ interface ExportBridge {
   __maceutExport?: (job: ExportJob) => Promise<void>
   __exportFrame: (i: number) => Promise<ExportFrame>
   __exportProgress: (done: number) => Promise<boolean>
-  __exportPng: (i: number, name: string, base64: string) => Promise<void>
+  __exportPng: (i: number, name: string, base64: string, stats?: FrameStats) => Promise<void>
   __exportChunk: (base64: string) => Promise<void>
 }
 
@@ -110,12 +118,17 @@ async function runExport(job: ExportJob): Promise<void> {
   })
 
   if (job.format === 'png' || job.format === 'zip') {
-    for (let i = 0; i < job.frameCount; i++) {
+    for (let i = job.startFrame ?? 0; i < job.frameCount; i++) {
       const frame = await bridge.__exportFrame(i)
+      const t0 = performance.now()
       await renderCapture(canvas, inputFor(frame))
+      const t1 = performance.now()
       const png = await canvasToPngBlob(canvas)
+      const t2 = performance.now()
       const name = `${String(i + 1).padStart(3, '0')}-${wibStamp(frame.capturedAt)}.png`
-      await bridge.__exportPng(i, name, await toBase64(png))
+      // Awaited: the worker writes this frame out before the next one is drawn, so
+      // only one frame is ever in flight.
+      await bridge.__exportPng(i, name, await toBase64(png), { drawMs: Math.round(t1 - t0), encodeMs: Math.round(t2 - t1) })
       if (!(await bridge.__exportProgress(i + 1))) return // cancelled
     }
     // A capture image (CAP-02) also gets a small JPEG for lists like the dashboard's

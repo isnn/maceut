@@ -5,6 +5,10 @@ import {
   DeleteObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { config, isR2Configured, missingIntegrationKeys } from '../config/env'
@@ -95,6 +99,130 @@ export async function upload(path: string, data: Buffer, contentType: string): P
     )
   } catch (err) {
     throw toUpstream('upload', path, err)
+  }
+}
+
+/**
+ * Part size for multipart uploads. R2 requires every part except the last to be the
+ * SAME size (and at least 5 MiB), so parts are cut to exactly this many bytes rather
+ * than flushed whenever a write happens to arrive.
+ */
+export const MULTIPART_PART_SIZE = 16 * 1024 * 1024
+
+type Sender = Pick<S3Client, 'send'>
+
+/**
+ * An object uploaded in fixed-size parts as it is produced — a long export's ZIP is
+ * streamed straight to R2 instead of being built in memory (EXP-A1). Memory stays at
+ * one part plus whatever write is in flight.
+ *
+ * `write` must not be called concurrently: await each call (it waits while a full part
+ * uploads, which is also what slows the producer down when R2 is slower than the
+ * renderer). `complete()` sends the remainder; `abort()` discards everything uploaded.
+ */
+export class MultipartUpload {
+  private pending: Buffer[] = []
+  private pendingBytes = 0
+  private readonly parts: { PartNumber: number; ETag: string }[] = []
+  private totalBytes = 0
+  private closed = false
+
+  private constructor(
+    private readonly s3: Sender,
+    readonly path: string,
+    readonly uploadId: string,
+    private readonly partSize: number,
+  ) {}
+
+  static async start(
+    path: string,
+    contentType: string,
+    opts: { client?: Sender; partSize?: number } = {},
+  ): Promise<MultipartUpload> {
+    const s3 = opts.client ?? getClient()
+    try {
+      const res = await s3.send(
+        new CreateMultipartUploadCommand({ Bucket: config.r2BucketName, Key: path, ContentType: contentType }),
+      )
+      if (!res.UploadId) throw new Error('no UploadId returned')
+      return new MultipartUpload(s3, path, res.UploadId, opts.partSize ?? MULTIPART_PART_SIZE)
+    } catch (err) {
+      throw toUpstream('start multipart upload', path, err)
+    }
+  }
+
+  /** Re-attaches to an upload started earlier — used to abort one left behind. */
+  static async abortById(path: string, uploadId: string, client?: Sender): Promise<void> {
+    const s3 = client ?? getClient()
+    await s3.send(new AbortMultipartUploadCommand({ Bucket: config.r2BucketName, Key: path, UploadId: uploadId }))
+  }
+
+  get bytes(): number {
+    return this.totalBytes
+  }
+
+  get partCount(): number {
+    return this.parts.length
+  }
+
+  async write(chunk: Buffer): Promise<void> {
+    if (this.closed) throw new Error('MultipartUpload: write after complete/abort')
+    if (chunk.length === 0) return
+    this.pending.push(chunk)
+    this.pendingBytes += chunk.length
+    this.totalBytes += chunk.length
+    while (this.pendingBytes >= this.partSize) {
+      const all = Buffer.concat(this.pending, this.pendingBytes)
+      await this.uploadPart(all.subarray(0, this.partSize))
+      const rest = all.subarray(this.partSize)
+      // Copy the remainder so the large concatenated buffer can be freed.
+      this.pending = rest.length ? [Buffer.from(rest)] : []
+      this.pendingBytes = rest.length
+    }
+  }
+
+  async complete(): Promise<void> {
+    if (this.closed) throw new Error('MultipartUpload: complete twice')
+    if (this.pendingBytes > 0 || this.parts.length === 0) {
+      await this.uploadPart(Buffer.concat(this.pending, this.pendingBytes))
+      this.pending = []
+      this.pendingBytes = 0
+    }
+    this.closed = true
+    try {
+      await this.s3.send(
+        new CompleteMultipartUploadCommand({
+          Bucket: config.r2BucketName,
+          Key: this.path,
+          UploadId: this.uploadId,
+          MultipartUpload: { Parts: this.parts },
+        }),
+      )
+    } catch (err) {
+      throw toUpstream('complete multipart upload', this.path, err)
+    }
+  }
+
+  /** Discards the upload. Never throws — it runs on failure paths. */
+  async abort(): Promise<void> {
+    this.closed = true
+    this.pending = []
+    await MultipartUpload.abortById(this.path, this.uploadId, this.s3).catch((err) =>
+      console.error(`[r2] abort of ${this.path} failed:`, describe(err)),
+    )
+  }
+
+  private async uploadPart(body: Buffer): Promise<void> {
+    const PartNumber = this.parts.length + 1
+    try {
+      const res = await this.s3.send(
+        new UploadPartCommand({ Bucket: config.r2BucketName, Key: this.path, UploadId: this.uploadId, PartNumber, Body: body }),
+      )
+      if (!res.ETag) throw new Error('no ETag returned')
+      this.parts.push({ PartNumber, ETag: res.ETag })
+    } catch (err) {
+      throw toUpstream(`upload part ${PartNumber}`, this.path, err)
+    }
   }
 }
 

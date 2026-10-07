@@ -6,8 +6,11 @@ vi.mock('../repositories/export.repository', () => ({
   findExpired: vi.fn(),
   fail: vi.fn(async () => true),
   markExpired: vi.fn(),
+  setUploadId: vi.fn(async () => undefined),
 }))
-vi.mock('../lib/r2-client', () => ({ remove: vi.fn() }))
+vi.mock('../lib/r2-client', () => ({ remove: vi.fn(), MultipartUpload: { abortById: vi.fn(async () => undefined) } }))
+vi.mock('../services/export.service', () => ({ exportPath: (row: { id: string }) => `exports/u1/${row.id}.zip` }))
+vi.mock('../services/notification.service', () => ({ onExportFinished: vi.fn(async () => undefined) }))
 
 import * as exportRepo from '../repositories/export.repository'
 import * as r2 from '../lib/r2-client'
@@ -50,5 +53,17 @@ describe('export sweeper', () => {
 
     expect(exportRepo.markExpired).not.toHaveBeenCalled()
     expect(r.expired).toBe(0)
+  })
+
+  it("aborts a stalled export's open upload, so its parts don't stay in R2", async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    vi.mocked(exportRepo.findStale).mockResolvedValue([
+      { id: 'e9', uploadId: 'up-9', updatedAt: new Date('2026-10-05T09:00:00Z') },
+    ] as never)
+
+    await sweep(new Date('2026-10-05T10:00:00Z'))
+
+    expect(r2.MultipartUpload.abortById).toHaveBeenCalledWith('exports/u1/e9.zip', 'up-9')
+    expect(exportRepo.setUploadId).toHaveBeenCalledWith('e9', null)
   })
 })

@@ -11,7 +11,7 @@
 // Convention: every timestamp is `timestamptz`. A bare `timestamp` carries no
 // offset and means whatever the reading process assumes.
 //
-// Last updated: 2026-09-28 (migration 0013_notifications; 0012 was data-only — existing users marked email_verified)
+// Last updated: 2026-10-05 (migration 0014_export_streaming — exports.upload_id, exports.file_size → bigint)
 // =============================================================================
 
 Project maceut {
@@ -279,7 +279,8 @@ Table exports {
   frame_count integer [not null]
   frames_done integer [not null, default: 0, note: 'Written by the worker as it renders — the progress bar']
   file_path text [note: 'R2 path; null until uploaded and again once expired']
-  file_size integer
+  file_size bigint [note: 'bigint since 0014: streamed ZIPs can pass 2.1 GB']
+  upload_id text [note: 'R2 multipart upload in progress (EXP-A1); null when none — the sweeper aborts a stalled one']
   error text
   created_at timestamptz [not null, default: `now()`]
   started_at timestamptz

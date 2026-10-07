@@ -300,6 +300,19 @@ api (running) ─→ web
 
 ---
 
+## R2 bucket — aturan lifecycle (sekali, saat setup)
+
+Export di-stream ke R2 lewat multipart upload (ADR-028). Worker membatalkan upload yang
+gagal, dan sweeper membatalkan upload dari worker yang mati — tapi kalau keduanya pun
+gagal, part yang sudah terunggah tetap tersimpan (dan ditagih) tanpa objek yang
+menunjuknya. Jaring pengamannya aturan lifecycle bucket:
+
+- Cloudflare dashboard → R2 → bucket → **Settings → Object lifecycle rules → Add rule**
+- Scope: prefix `exports/` · Action: **Abort incomplete multipart uploads** after **1 day**
+
+Tanpa aturan ini semuanya tetap berjalan; yang hilang hanya pembersihan untuk kasus
+kegagalan ganda.
+
 ## CI/CD Notes (Rencana, belum diimplementasi)
 
 - Build image `api` dan `web` di CI, push ke registry (Docker Hub / GHCR)

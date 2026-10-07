@@ -150,6 +150,10 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-27** Kelas jalan berwarna (teal/biru/ungu), kolom Interval & Hours terpisah, pesan gagal export berupa aksi (Retry), subjudul zona dihapus + peta capture lebih tinggi, kartu Next collection baru | permintaan user |
 | ✅ | **FE-28** Lebar header = lebar halaman, Collection health ringkas, notifikasi warna brand & copy singkat, judul seksi sejajar ikon, "Retry" | permintaan user |
 | ✅ | **FE-29** Semua halaman & header 1600px, Profil: ganti paket di Usage (popup), Billing = info pembayaran, Notifikasi satu toggle; tandai-dibaca andal; link dashboard gaya brand | permintaan user |
+| ✅ | **EXP-A1** Export: ZIP di-stream ke R2 (multipart, ZIP64), lanjut setelah crash, satu browser per worker, log waktu per frame (fix #58, #63, #67) | rencana optimasi export |
+| 🔴 | **EXP-A2** Export: proses browser lebih ringan, data slim disimpan per capture, pakai ulang frame yang sudah dirender | rencana optimasi export |
+| 🔴 | **EXP-B** Export video lewat ffmpeg (tanpa merekam real-time) | rencana optimasi export |
+| 🔴 | **EXP-C** Batas frame × piksel per paket, antrian bergiliran, opsi WebP | rencana optimasi export |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -1922,6 +1926,30 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   - Dashboard: link seksi pakai `linkClass()` (ungu, semibold) — "See all", "Open Studio",
     "3 more".
   VERIFIKASI: 423 test API, tsc + eslint bersih, 7 halaman 200. UI belum dilihat di browser.
+
+[2026-10-05b] EXP-A1 — export di-stream, lanjut setelah crash, satu browser per worker (ADR-028).
+
+  - `lib/zip-stream.ts`: ZIP ditulis selagi frame datang (STORE, ZIP64 otomatis > 4 GB /
+    > 65.535 entri). Output kecil identik byte-per-byte dengan `buildZip` lama.
+  - `MultipartUpload` (r2-client): unggah ke R2 per part 16 MiB berukuran SAMA (syarat R2),
+    `abort()` aman di jalur gagal. Memori ≈ 1 part + 1 frame, berapa pun jumlah frame (#63).
+  - Worker: frame PNG di-stream (`bridge.png`) → ZIP → R2; bila Chromium crash, browser
+    baru melanjutkan dari frame berikutnya (`startFrame`, maks 2×). Batal / gagal → upload
+    dibatalkan. `markUploading`/`complete` kini dijaga status → export yang dibatalkan tidak
+    pernah jadi "done" (#58).
+  - `lib/browser-slot.ts`: satu Chromium per proses worker — gambar capture menunggu saat
+    export berjalan, browser idle-nya ditutup dulu (#67).
+  - Step 0: log ringkasan per export — waktu per frame (data, draw, encode, write), RSS puncak
+    Chromium & worker, jumlah restart.
+  - Migrasi 0014: `exports.upload_id`, `exports.file_size` → bigint (ZIP > 2,1 GB). Sweeper
+    membatalkan upload milik export yang macet. DBML ikut.
+  - Halaman render: `startFrame`, statistik draw/encode per frame.
+  - Tes: zip-stream (termasuk ZIP64 dibaca balik oleh Python zipfile), multipart (part sama
+    besar), browser-slot (tak pernah dua sekaligus), export.worker (stream, resume setelah
+    crash, menyerah setelah 2×, error non-crash tidak diulang, batal, #58), sweeper.
+  BELUM: export sungguhan tidak dijalankan sendiri (CLAUDE.md: Studio = dry run) — daftar uji
+    diserahkan ke user. Aturan lifecycle R2 perlu dipasang di dashboard (deployment.md).
+  VERIFIKASI: 445 test API, tsc + eslint bersih kedua paket, worker boot normal.
 
 ---
 
