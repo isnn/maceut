@@ -75,24 +75,29 @@ export const PLAN_PRICE: Record<Plan, { amount: string; period: string }> = {
 
 /** Bullet list shown on plan cards (landing, sign up, onboarding). */
 export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
-  free: ['1 zone · 10 captures / day', 'Nasional road class', '7-day frame history', 'Images only, no animation export'],
+  free: ['1 zone · 10 captures / day', 'Highways', '7-day frame history', 'Images only, no animation export'],
   standard: [
     '5 zones · 50 captures / day',
-    'Nasional + Provinsi road classes',
+    'Highways + main roads',
     '90-day history · CSV export',
     'GIF + MP4 animation export',
   ],
   premium: [
     '25 zones · 100 captures / day',
-    'Adds Kota / Lokal road classes',
+    'Adds city and local streets',
     'Unlimited history · 15-minute interval',
     'API access · SSO · SLA',
   ],
 }
 
+/**
+ * Road classes as people see them (FE-33) — described by the road, not by Indonesia's
+ * administrative tiers, so they read the same anywhere. The ids stay `nasional` /
+ * `nasional_provinsi` / `semua`: they are the DB enum and the API contract.
+ */
 export const ROAD_CLASS_LABEL: Record<string, string> = {
-  nasional: 'Nasional',
-  nasional_provinsi: 'Nasional + Provinsi',
+  nasional: 'Highways',
+  nasional_provinsi: 'Highways + main roads',
   semua: 'All roads',
 }
 

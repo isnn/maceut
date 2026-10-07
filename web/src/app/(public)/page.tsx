@@ -139,7 +139,7 @@ export default function LandingPage() {
       <footer id="docs" className="border-t border-border">
         <div className="mx-auto max-w-[1600px] px-xl py-xl flex flex-wrap items-center justify-between gap-md">
           <p className="text-caption text-text-muted">© 2026 Maceut — map-based congestion monitoring.</p>
-          <p className="text-caption text-text-muted">Used by provincial and city road agencies across Java and Sumatra.</p>
+          <p className="text-caption text-text-muted">Used by road agencies and city planners to watch traffic, zone by zone.</p>
         </div>
       </footer>
     </>

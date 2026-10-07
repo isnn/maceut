@@ -36,7 +36,7 @@ const TABS_FOR: Record<'tenant' | 'internal', readonly Tab[]> = {
   internal: ['Account', 'Notifications'],
 }
 
-const PREMIUM_UNLOCKS = ['15-minute capture', 'Kota / Lokal roads', 'Unlimited history', 'WebM export + API access']
+const PREMIUM_UNLOCKS = ['15-minute capture', 'City and local streets', 'Unlimited history', 'WebM export + API access']
 
 export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'internal' }) {
   const { user } = useCurrentUser()

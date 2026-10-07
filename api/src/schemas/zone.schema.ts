@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 const roadClass = z.enum(['nasional', 'nasional_provinsi', 'semua'], {
-  errorMap: () => ({ message: 'Kelas jalan tidak dikenal.' }),
+  errorMap: () => ({ message: 'Choose a road class: highways, highways + main roads, or all roads.' }),
 })
 
 /**

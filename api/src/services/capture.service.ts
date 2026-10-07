@@ -390,6 +390,13 @@ export async function slimFor(capture: { id: string; trafficSlim: unknown }): Pr
 /** Most rows one CSV may hold — a safety cap; a year of 15-minute captures is ~35,000. */
 export const CSV_MAX_ROWS = 50_000
 
+/** Road classes in the CSV by their English names (FE-33), not the internal ids. */
+const CSV_ROAD_CLASS: Record<string, string> = {
+  nasional: 'highways',
+  nasional_provinsi: 'highways_main_roads',
+  semua: 'all_roads',
+}
+
 const CSV_HEADER = ['captured_at_wib', 'status', 'trigger', 'window', 'road_class', 'roads', 'avg_jam_factor', 'error']
 
 /** RFC 4180: quote a field holding a comma, quote or line break; double inner quotes. */
@@ -435,7 +442,7 @@ export async function exportCsv(
         r.status,
         r.trigger,
         r.windowName,
-        r.roadClass,
+        CSV_ROAD_CLASS[r.roadClass] ?? r.roadClass,
         r.roadsCount,
         r.jamFactorAvg,
         r.error,

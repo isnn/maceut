@@ -432,3 +432,16 @@ web/
 ```
 
 Semua component di `components/ui/` wajib menggunakan token dari `tailwind.config.ts`. Tidak ada hardcode hex atau Tailwind default color di dalam komponen tersebut.
+
+## Road class names (FE-33)
+Road classes are always shown in English, describing the road rather than Indonesia's administrative
+tiers, so they read the same for users anywhere:
+
+| Internal id (DB enum, API) | Shown as | Wizard tier |
+|---|---|---|
+| `nasional` | Highways | Highways |
+| `nasional_provinsi` | Highways + main roads | Main roads |
+| `semua` | All roads | Local streets |
+
+Use `ROAD_CLASS_LABEL` (`web/src/lib/constants.ts`). Never show the ids. The CSV uses
+`highways` / `highways_main_roads` / `all_roads`.
