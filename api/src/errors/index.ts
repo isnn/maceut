@@ -24,6 +24,7 @@ export type ErrorCode =
   | 'EXPORT_LIMIT_EXCEEDED'
   | 'INTERVAL_NOT_IN_PLAN'
   | 'CAPTURE_LIMIT_EXCEEDED'
+  | 'HISTORY_LIMIT_EXCEEDED'
   | 'EXPORT_BUDGET_EXCEEDED'
   | 'TRAFFIC_UNAVAILABLE'
   | 'UPSTREAM_ERROR'
@@ -79,6 +80,13 @@ export class PlanLimitExceededError extends AppError {
 export class ScheduleLimitExceededError extends AppError {
   constructor(limit: number) {
     super('SCHEDULE_LIMIT_EXCEEDED', 422, `You're using all ${limit} capture windows on your plan.`, { limit })
+  }
+}
+
+/** FE-32 — a captures CSV reaching further back than the plan keeps history. */
+export class HistoryLimitExceededError extends AppError {
+  constructor(details: { requestedDays: number | null; historyDays: number }) {
+    super('HISTORY_LIMIT_EXCEEDED', 403, `Your plan exports the last ${details.historyDays} days.`, details)
   }
 }
 

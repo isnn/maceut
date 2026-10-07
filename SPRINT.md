@@ -157,6 +157,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **ZONE-PERF** Create zone: jalan dimuat per kelas & bertahap, cache HERE dipakai bersama hitungan, peta canvas berlapis (tanpa lag) | rencana optimasi part 2 |
 | ✅ | **FE-30** Dialog jendela capture (copy Inggris, error interaktif, mahkota upgrade, menu ⋮), next capture & export CSV di detail zona, sesi kedaluwarsa → login, login tanpa Agency SSO & link warna brand | review user |
 | ✅ | **FE-31** Review polish: strip capture terbaru menampilkan semua zona, Re-render, dialog jendela (notice ringkas, Save nonaktif bila tak bisa lanjut, tombol Delete), tombol ✕ di semua modal | review user |
+| ✅ | **FE-32** Detail zona: Export CSV jadi tombol + pemilih rentang waktu (dibatasi paket), Next collection di bawah kartu detail; Schedule tanpa tautan mahkota Unlimited | review user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -181,6 +182,16 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-07c] FE-32 — CSV dengan rentang, tata letak detail zona.
+
+  - Kartu "Capture data" dihapus; tombol header "Export CSV" membuka CsvExportDialog: 24 jam /
+    7 / 30 / 90 hari / semua. Rentang di atas paket bermahkota + "Upgrade", Download nonaktif.
+  - API `?days=1|7|30|90|all` (default = seluruh riwayat paket); melebihi paket → 403
+    HISTORY_LIMIT_EXCEEDED (BR-007, ditolak bukan dipotong diam-diam).
+  - Next collection pindah ke kolom kanan di bawah kartu detail zona (di layar sempit tetap di bawahnya).
+  - Schedule: tautan mahkota "Unlimited" di Retention dihapus.
+  VERIFIKASI: 473 test API, tsc + eslint bersih kedua paket.
 
 [2026-10-07b] FE-31 — polish hasil review.
 

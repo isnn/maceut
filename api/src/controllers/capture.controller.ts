@@ -6,6 +6,9 @@ import { ok, paginated } from '../types/api'
 
 const idParam = z.string().uuid('Id tidak valid.')
 
+/** FE-32 — the CSV's time range: the dialog's choices. Omitted = the plan's whole history. */
+const csvQuery = z.object({ days: z.enum(['1', '7', '30', '90', 'all']).optional() })
+
 const listQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   // Capped so a zone with a year of history cannot be asked for in one response.
@@ -95,7 +98,13 @@ export async function exportCsv(req: Request, res: Response, next: NextFunction)
   try {
     if (!req.userId) throw new UnauthorizedError()
     const zoneId = idParam.parse(req.params.id)
-    const { csv, zoneName, range } = await captureService.exportCsv(req.userId, req.plan ?? 'free', zoneId)
+    const { days } = csvQuery.parse(req.query)
+    const { csv, zoneName, range } = await captureService.exportCsv(
+      req.userId,
+      req.plan ?? 'free',
+      zoneId,
+      days === undefined ? undefined : days === 'all' ? null : Number(days),
+    )
     const slug = zoneName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'zone'
     const today = new Date().toISOString().slice(0, 10)
     res.setHeader('Content-Type', 'text/csv; charset=utf-8')
