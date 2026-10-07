@@ -51,6 +51,7 @@ import {
   IconDownload,
 } from '@/components/ui/icons'
 import { Dialog } from '@base-ui/react/dialog'
+import { DialogCloseX } from '@/components/ui/DialogCloseX'
 import { cn } from '@/lib/utils'
 import * as zonesApi from '@/features/zones/api'
 import * as studioApi from '@/features/studio/api'
@@ -1582,10 +1583,11 @@ function ExportDialog({
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
         <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[30rem] bg-card border border-border rounded-lg p-xl shadow-elevation-3 space-y-lg">
+          <DialogCloseX />
           {showProgress ? (
             <>
               <div>
-                <Dialog.Title className="text-section-title text-text-primary">
+                <Dialog.Title className="pr-xl text-section-title text-text-primary">
                   {job.status === 'done'
                     ? 'Your export is ready'
                     : job.status === 'failed'
@@ -1748,8 +1750,9 @@ function SizesDialog({
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
         <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[34rem] max-h-[90vh] overflow-y-auto bg-card border border-border rounded-lg p-xl shadow-elevation-3 space-y-lg">
+          <DialogCloseX />
           <div>
-            <Dialog.Title className="text-section-title text-text-primary">Output size</Dialog.Title>
+            <Dialog.Title className="pr-xl text-section-title text-text-primary">Output size</Dialog.Title>
             <Dialog.Description className="text-body text-text-secondary mt-xs">
               Pick the image size for every export.
             </Dialog.Description>

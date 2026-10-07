@@ -156,6 +156,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **EXP-C** Batas frame × piksel per paket, antrian bergiliran, opsi WebP | rencana optimasi export |
 | ✅ | **ZONE-PERF** Create zone: jalan dimuat per kelas & bertahap, cache HERE dipakai bersama hitungan, peta canvas berlapis (tanpa lag) | rencana optimasi part 2 |
 | ✅ | **FE-30** Dialog jendela capture (copy Inggris, error interaktif, mahkota upgrade, menu ⋮), next capture & export CSV di detail zona, sesi kedaluwarsa → login, login tanpa Agency SSO & link warna brand | review user |
+| ✅ | **FE-31** Review polish: strip capture terbaru menampilkan semua zona, Re-render, dialog jendela (notice ringkas, Save nonaktif bila tak bisa lanjut, tombol Delete), tombol ✕ di semua modal | review user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -180,6 +181,17 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-07b] FE-31 — polish hasil review.
+
+  - Dashboard "Latest captures": `recentForUser` bergiliran per zona (row_number per zona), jadi
+    YOG (tiap 15 menit) tak lagi menutup JKT. Dicek di DB untuk sched@maceut.test: 4 YOG · 4 JKT · 4 Sched Zone.
+  - Export kedaluwarsa: "Render again" → "Re-render".
+  - WindowDialog: notice paket satu baris ringkas (caption, mahkota 14px, chip perbaikan + link
+    Upgrade); tombol "Save" saja, nonaktif bila tak ada perubahan / field salah / di luar paket /
+    sedang menyimpan (alasan di tooltip); Delete jadi tombol destructive bergaris dengan ikon.
+  - `DialogCloseX` (✕) di semua modal (11 popup); judul diberi ruang `pr-xl`.
+  VERIFIKASI: 472 test API, tsc + eslint bersih kedua paket.
 
 [2026-10-07] FE-30 — dialog jendela capture, detail zona, sesi kedaluwarsa, login.
 

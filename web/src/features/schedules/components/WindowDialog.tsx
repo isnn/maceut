@@ -3,12 +3,13 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Dialog } from '@base-ui/react/dialog'
-import { Button } from '@/components/ui/Button'
+import { DialogCloseX } from '@/components/ui/DialogCloseX'
+import { Button, linkClass } from '@/components/ui/Button'
 import { FormLabel, Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Switch } from '@/components/ui/Switch'
 import { Alert } from '@/components/ui/Alert'
-import { IconCrown } from '@/components/ui/icons'
+import { IconCrown, IconTrash } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_LIMITS } from '@/lib/constants'
 import type { Plan } from '@/features/auth/types'
@@ -126,7 +127,11 @@ export function WindowDialog({
   if (days.length === 0) fieldErrors.days = FIELD_COPY.days
   if (serverError?.kind === 'field' && !fieldErrors[serverError.field]) fieldErrors[serverError.field] = serverError.message
 
-  const show = (f: WindowField) => (submitted || touched[f] ? fieldErrors[f] : undefined)
+  // Mistakes in something typed show at once (Save is disabled while they stand, so
+  // waiting for a click would hide why); an empty field waits until the user leaves it.
+  const typedMistake = (msg?: string) => msg === FIELD_COPY.order || msg === FIELD_COPY.labelLong
+  const show = (f: WindowField) =>
+    submitted || touched[f] || typedMistake(fieldErrors[f]) || serverError?.kind === 'field' ? fieldErrors[f] : undefined
   const touch = (f: WindowField) => () => setTouched((t) => ({ ...t, [f]: true }))
   const edit = <T,>(set: (v: T) => void) => (v: T) => {
     set(v)
@@ -143,6 +148,15 @@ export function WindowDialog({
     editing.interval === interval &&
     editing.active === active &&
     [...editing.days].sort().join() === [...days].sort().join()
+
+  /** Why Save can't go ahead yet — the button is disabled and says so on hover. */
+  const blockedReason = unchanged
+    ? 'Nothing to save yet'
+    : Object.keys(fieldErrors).length > 0
+      ? 'Fix the highlighted fields'
+      : issue
+        ? 'Not on your plan — see the note above'
+        : null
 
   function upgrade() {
     try {
@@ -201,7 +215,8 @@ export function WindowDialog({
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
         <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[32rem] max-h-[90vh] overflow-y-auto bg-card border border-border rounded-lg p-xl shadow-elevation-3">
-          <Dialog.Title className="text-section-title text-text-primary">
+          <DialogCloseX disabled={saving} />
+          <Dialog.Title className="pr-xl text-section-title text-text-primary">
             {editing ? 'Edit capture window' : 'New capture window'}
           </Dialog.Title>
           <Dialog.Description className="text-caption text-text-secondary mt-xs mb-lg">
@@ -396,9 +411,10 @@ export function WindowDialog({
 
           <div className="flex items-center justify-between gap-sm mt-xl">
             {editing ? (
-              <button onClick={() => setConfirmRemove(true)} className="text-label text-danger-text hover:underline">
-                Delete window
-              </button>
+              <Button variant="destructive" onClick={() => setConfirmRemove(true)} disabled={saving || confirmRemove}>
+                <IconTrash size={14} />
+                Delete
+              </Button>
             ) : (
               <span />
             )}
@@ -406,9 +422,11 @@ export function WindowDialog({
               <Button variant="secondary" onClick={onClose} disabled={saving}>
                 Cancel
               </Button>
-              <Button onClick={() => void save()} disabled={saving}>
-                {saving ? 'Saving…' : unchanged ? 'No changes' : editing ? 'Save changes' : 'Create window'}
-              </Button>
+              <span title={blockedReason ?? undefined}>
+                <Button onClick={() => void save()} disabled={saving || blockedReason !== null}>
+                  {saving ? 'Saving…' : 'Save'}
+                </Button>
+              </span>
             </div>
           </div>
 
@@ -506,7 +524,7 @@ function fixFor(
   return end ? { label: `Trim to ${end}`, run: () => act.setEnd(end) } : undefined
 }
 
-/** What doesn't fit the plan, the quick fix, and the way up — the crown panel. */
+/** What doesn't fit the plan, the quick fix, and the way up — one compact brand line. */
 function UpgradePanel({ issue, plan, fix, onUpgrade }: { issue: PlanIssue; plan: Plan; fix?: Fix; onUpgrade: () => void }) {
   const message =
     issue.kind === 'interval'
@@ -515,23 +533,17 @@ function UpgradePanel({ issue, plan, fix, onUpgrade }: { issue: PlanIssue; plan:
         ? `You’re using all ${issue.limit} windows on ${PLAN_LABEL[plan]}.`
         : `${dayName(issue.day)} would hit ${issue.frames} snapshots — your plan allows ${issue.limit}.`
   return (
-    <div className="rounded-md border border-primary/30 bg-primary-soft p-md flex items-start gap-sm" role="status">
-      <IconCrown size={18} className="text-primary shrink-0 mt-[1px]" />
-      <div className="min-w-0 flex-1 space-y-sm">
-        <p className="text-body font-medium text-text-primary">{message}</p>
-        <div className="flex flex-wrap gap-sm">
-          {fix && (
-            <Button size="sm" variant="secondary" onClick={fix.run}>
-              {fix.label}
-            </Button>
-          )}
-          {plan !== 'premium' && (
-            <Button size="sm" onClick={onUpgrade}>
-              Upgrade
-            </Button>
-          )}
-        </div>
-      </div>
+    <div className="rounded-md bg-primary-soft px-md py-sm flex flex-wrap items-center gap-x-sm gap-y-xs" role="status">
+      <IconCrown size={14} className="text-primary shrink-0" />
+      <p className="text-caption font-medium text-primary">{message}</p>
+      <span className="flex items-center gap-sm ml-auto">
+        {fix && <Chip onClick={fix.run}>{fix.label}</Chip>}
+        {plan !== 'premium' && (
+          <button type="button" onClick={onUpgrade} className={linkClass('caption')}>
+            Upgrade
+          </button>
+        )}
+      </span>
     </div>
   )
 }

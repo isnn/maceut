@@ -12,6 +12,7 @@
 
 import { FormEvent, useState } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
+import { DialogCloseX } from '@/components/ui/DialogCloseX'
 import { Button } from '@/components/ui/Button'
 import { FormLabel, Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -107,9 +108,10 @@ export function AddUserDialog({ open, onClose, onCreated }: { open: boolean; onC
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
         <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[32rem] max-h-[90vh] overflow-y-auto bg-card border border-border rounded-lg p-xl shadow-elevation-3">
+          <DialogCloseX />
           {handover ? (
             <>
-              <Dialog.Title className="text-section-title text-text-primary">Account created</Dialog.Title>
+              <Dialog.Title className="pr-xl text-section-title text-text-primary">Account created</Dialog.Title>
               <Dialog.Description className="text-caption text-text-secondary mt-xs mb-lg">
                 {handover.email}
               </Dialog.Description>

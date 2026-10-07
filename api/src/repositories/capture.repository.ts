@@ -317,7 +317,7 @@ export async function countAllToday(): Promise<number> {
 }
 
 /**
- * A user's most recent cycles across every zone they own.
+ * A user's most recent cycles across every zone they own, shared fairly between zones.
  *
  * Backs the dashboard strip, which used to be an empty array with a comment saying
  * captures did not exist yet. `traffic` is excluded for the same reason as the per-zone
@@ -327,7 +327,7 @@ export async function recentForUser(
   userId: string,
   limit: number,
 ): Promise<(Omit<CaptureRecord, 'traffic' | 'trafficSlim'> & { zoneName: string })[]> {
-  const rows = await db
+  const rows = db
     .select({
       id: captures.id,
       userId: captures.userId,
@@ -346,13 +346,23 @@ export async function recentForUser(
       capturedAt: captures.capturedAt,
       createdAt: captures.createdAt,
       zoneName: zones.name,
+      // Each zone's captures numbered newest-first, so the strip can take turns (FE-31).
+      zoneRank: sql<number>`row_number() over (partition by ${captures.zoneId} order by ${captures.capturedAt} desc)`.as(
+        'zone_rank',
+      ),
     })
     .from(captures)
     .innerJoin(zones, eq(zones.id, captures.zoneId))
     .where(eq(captures.userId, userId))
-    .orderBy(desc(captures.capturedAt))
-    .limit(limit)
-  return rows
+    .as('ranked')
+
+  // Every zone's newest first, then every zone's second newest, … — a zone collecting
+  // every 15 minutes no longer pushes a quieter zone out of the strip entirely. A zone
+  // with fewer captures leaves its turns to the others.
+  const picked = await db.select().from(rows).orderBy(asc(rows.zoneRank), desc(rows.capturedAt)).limit(limit)
+  return picked
+    .map(({ zoneRank: _rank, ...row }) => row)
+    .sort((a, b) => b.capturedAt.getTime() - a.capturedAt.getTime())
 }
 
 /**
