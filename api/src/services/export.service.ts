@@ -6,6 +6,7 @@ import * as r2 from '../lib/r2-client'
 import { publishExportJob } from '../lib/rabbitmq-client'
 import { config, isR2Configured } from '../config/env'
 import {
+  ExportBudgetExceededError,
   ExportInProgressError,
   ExportLimitExceededError,
   ForbiddenError,
@@ -95,9 +96,9 @@ export function wibParts(iso: string): { date: string; time: string } {
  * WIB. Must match the render page's naming exactly (web/src/app/render/export/page.tsx,
  * `wibStamp`): a reused frame has to sit in the ZIP under the name a drawn one would.
  */
-export function frameFileName(index: number, capturedAt: Date): string {
+export function frameFileName(index: number, capturedAt: Date, ext: 'png' | 'webp' = 'png'): string {
   const { date, time } = wibParts(capturedAt.toISOString())
-  return `${String(index + 1).padStart(3, '0')}-${date}-${time.slice(0, 2)}-${time.slice(2)}.png`
+  return `${String(index + 1).padStart(3, '0')}-${date}-${time.slice(0, 2)}-${time.slice(2)}.${ext}`
 }
 
 export function fileNameFor(row: Pick<ExportRecord, 'format'>, spec: Pick<StoredSpec, 'zoneName' | 'range'>): string {
@@ -160,6 +161,30 @@ async function ownedExport(userId: string, id: string): Promise<ExportRecord> {
   return row
 }
 
+/** An export's rendering work in megapixel-frames — what the plan budget counts (EXP-C). */
+export function exportWorkMpFrames(frames: number, width: number, height: number): number {
+  return Math.round((frames * width * height) / 1_000_000)
+}
+
+/**
+ * The plan's two export limits (BR-007, enforced here): a frame count, and a budget of
+ * frames × pixels so a long range at poster size can't occupy the worker for hours.
+ */
+function assertExportFits(plan: Plan, frames: number, width: number, height: number): void {
+  const limits = PLAN_LIMITS[plan]
+  if (frames > limits.exportFramesLimit) throw new ExportLimitExceededError(limits.exportFramesLimit, frames)
+  const requested = exportWorkMpFrames(frames, width, height)
+  if (requested > limits.exportBudgetMpFrames) {
+    throw new ExportBudgetExceededError({
+      budget: limits.exportBudgetMpFrames,
+      requested,
+      width,
+      height,
+      maxFrames: Math.floor((limits.exportBudgetMpFrames * 1_000_000) / (width * height)),
+    })
+  }
+}
+
 /** Queues an export (POST /zones/:id/exports). */
 export async function createExport(
   userId: string,
@@ -176,9 +201,10 @@ export async function createExport(
   const active = await exportRepo.findActiveForUser(userId)
   if (active) throw new ExportInProgressError(active.id)
 
+  // Lite: only the ids and times are needed here, not 2 × 2 MB of traffic.
   const [a, b] = await Promise.all([
-    captureRepo.findById(input.startCaptureId),
-    captureRepo.findById(input.endCaptureId),
+    captureRepo.findLiteById(input.startCaptureId),
+    captureRepo.findLiteById(input.endCaptureId),
   ])
   if (!a || !b || a.zoneId !== zoneId || b.zoneId !== zoneId) {
     throw new ValidationError('Rentang export harus berupa capture dari zona ini.')
@@ -191,8 +217,7 @@ export async function createExport(
     throw new ValidationError('Animasi butuh minimal 2 frame di rentang yang dipilih.')
   }
 
-  const limit = PLAN_LIMITS[plan].exportFramesLimit
-  if (frames.length > limit) throw new ExportLimitExceededError(limit, frames.length)
+  assertExportFits(plan, frames.length, input.spec.width, input.spec.height)
 
   const spec: StoredSpec = {
     ...input.spec,
@@ -264,7 +289,7 @@ export async function removeExport(userId: string, id: string): Promise<{ cancel
  * POST /exports/:id/retry — the same settings and the same frozen frames, as a new
  * export. A new row rather than resetting the old one, so the history keeps the failure
  * and why it happened. The same rules as a fresh request apply: one active export per
- * account, and the plan's frame limit (the plan may have changed since).
+ * account, and the plan's frame limit and budget (the plan may have changed since).
  */
 export async function retryExport(userId: string, plan: Plan, id: string): Promise<PublicExport> {
   const previous = await ownedExport(userId, id)
@@ -274,8 +299,8 @@ export async function retryExport(userId: string, plan: Plan, id: string): Promi
   const active = await exportRepo.findActiveForUser(userId)
   if (active) throw new ExportInProgressError(active.id)
 
-  const limit = PLAN_LIMITS[plan].exportFramesLimit
-  if (previous.frameCount > limit) throw new ExportLimitExceededError(limit, previous.frameCount)
+  const prevSpec = previous.spec as StoredSpec
+  assertExportFits(plan, previous.frameCount, prevSpec.width, prevSpec.height)
 
   const row = await exportRepo.create({
     userId,

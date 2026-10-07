@@ -22,6 +22,8 @@ export interface ExportSpec {
   width: number
   height: number
   holdMs: number
+  /** ZIP frame encoding (EXP-C). Videos always use PNG frames. */
+  imageFormat?: 'png' | 'webp'
 }
 
 export interface ExportJob {
@@ -93,6 +95,10 @@ export function exportErrorMessage(err: unknown): string {
       const limit = err.details?.limit
       const requested = err.details?.requested
       return `Your plan exports up to ${limit} frames at a time — this range has ${requested}. Narrow the time range and try again.`
+    }
+    case 'EXPORT_BUDGET_EXCEEDED': {
+      const d = err.details as { width?: number; height?: number; maxFrames?: number } | undefined
+      return `Too big for your plan: at ${d?.width}×${d?.height} you can export up to ${d?.maxFrames} frames. Pick a smaller output size or a shorter range.`
     }
     case 'UPSTREAM_ERROR':
       return 'The export service is unavailable right now. Please try again in a moment.'

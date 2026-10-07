@@ -22,6 +22,7 @@ export type ErrorCode =
   | 'CAPTURE_FAILED'
   | 'EXPORT_IN_PROGRESS'
   | 'EXPORT_LIMIT_EXCEEDED'
+  | 'EXPORT_BUDGET_EXCEEDED'
   | 'TRAFFIC_UNAVAILABLE'
   | 'UPSTREAM_ERROR'
   | 'INTERNAL_ERROR'
@@ -155,6 +156,18 @@ export class ExportInProgressError extends AppError {
 }
 
 /** An export asking for more frames than the plan allows in one file. */
+/** EXP-C — the export asks for more frames × pixels than the plan's budget. */
+export class ExportBudgetExceededError extends AppError {
+  constructor(details: { budget: number; requested: number; width: number; height: number; maxFrames: number }) {
+    super(
+      'EXPORT_BUDGET_EXCEEDED',
+      422,
+      `Export terlalu besar untuk paket Anda: ${details.requested} dari ${details.budget} megapiksel-frame. Pada ${details.width}×${details.height} maksimal ${details.maxFrames} frame.`,
+      details,
+    )
+  }
+}
+
 export class ExportLimitExceededError extends AppError {
   constructor(limit: number, requested: number) {
     super('EXPORT_LIMIT_EXCEEDED', 422, `Paket Anda mengizinkan maksimal ${limit} frame per export (diminta ${requested}).`, {

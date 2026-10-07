@@ -186,3 +186,33 @@ export async function fileBytesForUser(userId: string): Promise<number> {
 export async function listRecentForUser(userId: string, limit: number): Promise<ExportRecord[]> {
   return db.select().from(exports).where(eq(exports.userId, userId)).orderBy(desc(exports.createdAt)).limit(limit)
 }
+
+/**
+ * The queued export the worker should run next (EXP-C): the least work first, with
+ * aging so nothing waits forever. Score = megapixel-frames ÷ (1 + minutes waited ÷ 10):
+ * a 10-frame preview jumps ahead of a 720-frame poster job, but every 10 minutes a job
+ * waits halves its score, so a big one is never starved by a stream of small ones.
+ */
+export async function pickNextQueued(): Promise<string | undefined> {
+  const rows = await db
+    .select({ id: exports.id })
+    .from(exports)
+    .where(eq(exports.status, 'queued'))
+    .orderBy(
+      sql`(${exports.frameCount} * (${exports.spec}->>'width')::numeric * (${exports.spec}->>'height')::numeric / 1000000.0)
+          / (1 + extract(epoch from (now() - ${exports.createdAt})) / 600.0)`,
+      exports.createdAt,
+    )
+    .limit(1)
+  return rows[0]?.id
+}
+
+/** Whether an export is still waiting to be rendered. */
+export async function isQueued(id: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: exports.id })
+    .from(exports)
+    .where(and(eq(exports.id, id), eq(exports.status, 'queued')))
+    .limit(1)
+  return rows.length > 0
+}

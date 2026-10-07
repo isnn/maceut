@@ -41,6 +41,8 @@ interface ExportJob {
     width: number
     height: number
     holdMs: number
+    /** ZIP frame encoding (EXP-C): PNG is exact, WebP q90 is 4–8× smaller. */
+    imageFormat?: 'png' | 'webp'
   }
   frameCount: number
   /** Resume point after a browser crash: frames before it are already in the file. */
@@ -77,6 +79,13 @@ function toBase64(blob: Blob): Promise<string> {
     reader.onerror = () => reject(reader.error)
     reader.readAsDataURL(blob)
   })
+}
+
+/** A canvas as an image of any type the browser can encode. */
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(`Canvas could not be encoded as ${type}.`))), type, quality),
+  )
 }
 
 /** The capture thumbnail's width; 2× the dashboard tile, so it stays sharp on retina. */
@@ -123,9 +132,10 @@ async function runExport(job: ExportJob): Promise<void> {
     const t0 = performance.now()
     await renderCapture(canvas, inputFor(frame))
     const t1 = performance.now()
-    const png = await canvasToPngBlob(canvas)
+    const webp = job.spec.imageFormat === 'webp'
+    const png = webp ? await canvasToBlob(canvas, 'image/webp', 0.9) : await canvasToPngBlob(canvas)
     const t2 = performance.now()
-    const name = `${String(i + 1).padStart(3, '0')}-${wibStamp(frame.capturedAt)}.png`
+    const name = `${String(i + 1).padStart(3, '0')}-${wibStamp(frame.capturedAt)}.${webp ? 'webp' : 'png'}`
     // Awaited: the worker writes this frame out before the next one is drawn, so
     // only one frame is ever in flight.
     await bridge.__exportPng(i, name, await toBase64(png), { drawMs: Math.round(t1 - t0), encodeMs: Math.round(t2 - t1) })

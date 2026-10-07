@@ -76,6 +76,14 @@ export interface PlanLimits {
    * at poster sizes a frame takes seconds, and the queue is shared by every account.
    */
   exportFramesLimit: number
+  /**
+   * EXP-C — most work one export may ask for, in megapixel-frames (frames × width ×
+   * height ÷ 1,000,000). Frames alone didn't bound a job: 720 frames at 4000×4000 was
+   * allowed, about 2.2 hours of rendering and an 11.5 GB ZIP. Drawing costs roughly
+   * 0.7 s per megapixel, so these keep the worst case near 1.5 min / 6 min / 34 min.
+   * Users trade size against length: Premium is 720 frames at 2K, or 180 at 4000×4000.
+   */
+  exportBudgetMpFrames: number
 }
 
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
@@ -87,6 +95,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     seatsLimit: 1,
     storageGb: 1,
     exportFramesLimit: 60,
+    exportBudgetMpFrames: 120,
   },
   standard: {
     maxRoadClass: 'nasional_provinsi',
@@ -96,6 +105,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     seatsLimit: 5,
     storageGb: 10,
     exportFramesLimit: 240,
+    exportBudgetMpFrames: 500,
   },
   premium: {
     maxRoadClass: 'semua',
@@ -105,6 +115,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     seatsLimit: 25,
     storageGb: 100,
     exportFramesLimit: 720,
+    exportBudgetMpFrames: 2900,
   },
 }
 

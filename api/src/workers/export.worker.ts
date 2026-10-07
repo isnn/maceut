@@ -15,6 +15,7 @@ import { cachePath, matchesCaptureImage, specHash } from '../services/render-cac
 import * as renderCacheRepo from '../repositories/render-cache.repository'
 import * as r2 from '../lib/r2-client'
 import { MultipartUpload } from '../lib/r2-client'
+import { publishExportJob } from '../lib/rabbitmq-client'
 import { ZipStream } from '../lib/zip-stream'
 import { startVideoEncoder, type VideoEncoder, type VideoFormat } from '../lib/video-encoder'
 
@@ -199,6 +200,7 @@ type FrameSink = (i: number, name: string, png: Buffer) => Promise<void>
 interface FrameContext {
   exportId: string
   userId: string
+  /** For video, `imageFormat` is forced to PNG — ffmpeg reads PNG frames. */
   spec: StoredSpec
   frameIds: string[]
   zone: { id: string; name: string; ring: [number, number][] }
@@ -216,6 +218,7 @@ interface FrameContext {
  */
 async function produceFrames(ctx: FrameContext, sink: FrameSink): Promise<void> {
   const { exportId, spec, frameIds, timing } = ctx
+  const ext = spec.imageFormat ?? 'png'
   // Every frame's capture, without the 2 MB full traffic: drawing needs only the slim
   // version, stored at collection (EXP-A2).
   const captures = new Map((await captureRepo.findLiteByIds(frameIds)).map((c) => [c.id, c]))
@@ -266,7 +269,7 @@ async function produceFrames(ctx: FrameContext, sink: FrameSink): Promise<void> 
       const data = await r2.download(source.path!).catch(() => null)
       if (data) {
         const capture = captures.get(frameIds[written]!)
-        await append(written, frameFileName(written, capture?.capturedAt ?? new Date()), data)
+        await append(written, frameFileName(written, capture?.capturedAt ?? new Date(), ext), data)
         timing.reused++
         await ctx.progress(written)
         continue
@@ -298,9 +301,9 @@ async function produceFrames(ctx: FrameContext, sink: FrameSink): Promise<void> 
             // Keep it for a retry or a repeat export of the same style. Never fatal: a
             // frame that isn't cached is simply drawn again next time.
             const captureId = frameIds[i]!
-            const key = cachePath(ctx.userId, hash, captureId)
+            const key = cachePath(ctx.userId, hash, captureId, ext)
             await r2
-              .upload(key, data, 'image/png')
+              .upload(key, data, `image/${ext}`)
               .then(() => renderCacheRepo.insert({ specHash: hash, captureId, userId: ctx.userId, path: key, size: data.length }))
               .catch((err) => console.warn(`[export] ${exportId} frame ${i + 1} not cached:`, err instanceof Error ? err.message : err))
           },
@@ -329,7 +332,9 @@ export async function runExport(exportId: string): Promise<void> {
   // delivery, or a job for an export cancelled while it waited, finds nothing to claim.
   const row = await exportRepo.markRendering(exportId)
   if (!row) {
-    console.warn(`[export] ${exportId} is no longer queued — skipping`)
+    // Usually a message for an export that already ran ahead of its turn (chooseNext),
+    // or one cancelled while it waited.
+    console.log(`[export] ${exportId} is no longer queued — skipping`)
     return
   }
 
@@ -365,7 +370,8 @@ export async function runExport(exportId: string): Promise<void> {
     const ctx: FrameContext = {
       exportId,
       userId: row.userId,
-      spec,
+      // ffmpeg reads PNG frames, so a video always draws (and caches) PNGs.
+      spec: row.format === 'zip' ? spec : { ...spec, imageFormat: 'png' },
       frameIds,
       zone: { id: zone.id, name: zone.name, ring: zone.geometry.coordinates[0] as [number, number][] },
       timing,
@@ -459,6 +465,22 @@ export async function runExport(exportId: string): Promise<void> {
   }
 }
 
+/**
+ * Which export to run for this queue message (EXP-C). Every queued export has exactly one
+ * message; when it arrives the worker runs whichever queued export is cheapest after
+ * aging (`pickNextQueued`), not necessarily this one. If it runs another, this one gets a
+ * fresh message so it isn't lost; the other's own message later finds it no longer queued
+ * and is skipped. A running export is never interrupted — only the order of waiting
+ * ones changes.
+ */
+export async function chooseNext(messageExportId: string): Promise<string> {
+  const best = await exportRepo.pickNextQueued().catch(() => undefined)
+  if (!best || best === messageExportId) return messageExportId
+  if (await exportRepo.isQueued(messageExportId)) await publishExportJob({ exportId: messageExportId })
+  console.log(`[export] running ${best} before ${messageExportId} (less work)`)
+  return best
+}
+
 export async function registerExportConsumer(ch: Channel): Promise<void> {
   const stale = await removeStaleTempDirs()
   if (stale) console.log(`[export] removed ${stale} scratch folder(s) left by a stopped worker`)
@@ -471,7 +493,7 @@ export async function registerExportConsumer(ch: Channel): Promise<void> {
       try {
         const job = JSON.parse(msg.content.toString()) as ExportJob
         if (!job?.exportId) throw new Error('job tanpa exportId')
-        await runExport(job.exportId)
+        await runExport(await chooseNext(job.exportId))
       } catch (err) {
         console.error('[export] bad job:', err instanceof Error ? err.message : err)
         ch.nack(msg, false, false)
