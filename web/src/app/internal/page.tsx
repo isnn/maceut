@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
 import { linkClass } from '@/components/ui/Button'
-import { PausedCell } from '@/features/internal/components/PausedCell'
 import { Pagination, SortableTh, Table, TableWrap, Td } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
 import { Input } from '@/components/ui/Input'
@@ -49,12 +48,11 @@ export default function InternalOverviewPage() {
     sortOn: {
       account: (row) => row.fullName.toLowerCase(),
       zones: (row) => row.usage.zonesCount,
-      paused: (row) => row.usage.zonesPaused + row.usage.schedulesPaused,
       plan: (row) => PLAN_ORDER.indexOf(row.plan),
       role: (row) => row.role,
       joined: (row) => row.createdAt,
     },
-    defaultDirection: { zones: 'desc', paused: 'desc', joined: 'desc' },
+    defaultDirection: { zones: 'desc', joined: 'desc' },
     initialSort: { key: 'joined', direction: 'desc' },
     pageSize: 8,
   })
@@ -174,14 +172,6 @@ export default function InternalOverviewPage() {
                   Zones
                 </SortableTh>
                 <SortableTh
-                  className="text-right"
-                  active={table.sort?.key === 'paused'}
-                  direction={table.sort?.direction ?? 'asc'}
-                  onSort={() => table.toggleSort('paused')}
-                >
-                  Paused
-                </SortableTh>
-                <SortableTh
                   active={table.sort?.key === 'plan'}
                   direction={table.sort?.direction ?? 'asc'}
                   onSort={() => table.toggleSort('plan')}
@@ -220,9 +210,6 @@ export default function InternalOverviewPage() {
                   <Td className="text-right tabular-nums text-text-secondary">
                     {row.usage.zonesCount}
                     <span className="text-text-muted">/{row.usage.zonesLimit}</span>
-                  </Td>
-                  <Td className="text-right">
-                    <PausedCell zones={row.usage.zonesPaused} windows={row.usage.schedulesPaused} />
                   </Td>
                   <Td>
                     <AccountPlanPill access={row.access} plan={row.plan} />
