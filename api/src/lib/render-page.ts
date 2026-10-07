@@ -30,6 +30,8 @@ export interface RenderPageJob {
   frameCount: number
   /** First frame to render — after a browser crash, the export resumes here. */
   startFrame?: number
+  /** Stop before this frame (exclusive). Frames past it come from elsewhere (reuse). */
+  endFrame?: number
   zoneName: string
   ring: [number, number][]
 }
@@ -69,7 +71,19 @@ export async function launchBrowser(): Promise<Browser> {
     // --no-sandbox: the container runs as root and has no user namespaces for the
     // sandbox. --disable-dev-shm-usage: Docker's default /dev/shm is 64 MB, too small
     // for a 1920px canvas, and Chromium crashes rather than degrading when it runs out.
-    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    //
+    // The rest keep one renderer lean on a small host (EXP-A2): no GPU process (it
+    // renders in software anyway), a single renderer process, no extensions or audio,
+    // and `gc()` exposed so the page frees each frame's memory before drawing the next.
+    args: [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--renderer-process-limit=1',
+      '--disable-extensions',
+      '--mute-audio',
+      '--js-flags=--expose-gc',
+    ],
   })
 }
 

@@ -1,6 +1,8 @@
 import * as exportRepo from '../repositories/export.repository'
 import * as r2 from '../lib/r2-client'
 import { exportPath } from '../services/export.service'
+import * as renderCacheRepo from '../repositories/render-cache.repository'
+import { RENDER_CACHE_DAYS } from '../services/render-cache.service'
 import * as notificationService from '../services/notification.service'
 
 /**
@@ -21,6 +23,8 @@ const TICK_MS = 60 * 1000
 export interface SweepResult {
   failed: number
   expired: number
+  /** Render-cache frames past retention, deleted with their files (EXP-A2). */
+  cachePruned: number
 }
 
 export async function sweep(now: Date = new Date()): Promise<SweepResult> {
@@ -52,7 +56,18 @@ export async function sweep(now: Date = new Date()): Promise<SweepResult> {
       console.error(`[export-sweeper] could not expire ${row.id}:`, err instanceof Error ? err.message : err)
     }
   }
-  return { failed, expired }
+  let cachePruned = 0
+  const cacheBefore = new Date(now.getTime() - RENDER_CACHE_DAYS * 24 * 60 * 60 * 1000)
+  for (const entry of await renderCacheRepo.findOlderThan(cacheBefore)) {
+    try {
+      await r2.remove(entry.path)
+      await renderCacheRepo.remove(entry.specHash, entry.captureId)
+      cachePruned++
+    } catch (err) {
+      console.error(`[export-sweeper] could not prune cached frame ${entry.path}:`, err instanceof Error ? err.message : err)
+    }
+  }
+  return { failed, expired, cachePruned }
 }
 
 let timer: NodeJS.Timeout | null = null
@@ -62,7 +77,8 @@ export function startExportSweeper(): void {
   timer = setInterval(() => {
     sweep()
       .then((r) => {
-        if (r.failed || r.expired) console.log(`[export-sweeper] failed ${r.failed} stale, expired ${r.expired}`)
+        if (r.failed || r.expired || r.cachePruned)
+          console.log(`[export-sweeper] failed ${r.failed} stale, expired ${r.expired}, pruned ${r.cachePruned} cached frames`)
       })
       .catch((err) => console.error('[export-sweeper] tick failed:', err instanceof Error ? err.message : err))
   }, TICK_MS)

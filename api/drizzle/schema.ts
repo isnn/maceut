@@ -211,6 +211,14 @@ export const captures = pgTable(
 
     /** HERE's FeatureCollection for this moment. Null while pending or on failure. */
     traffic: jsonb('traffic'),
+    /**
+     * The same traffic reduced to what a map draws — each road's line (5 decimals) and
+     * colour, ≈575 KB instead of ≈2 MB. Written once when the capture is collected
+     * (EXP-A2), so exports and playback stop re-reading and re-slimming the full
+     * collection for every frame they draw. Null on rows from before it existed; those
+     * are filled in the first time they're read.
+     */
+    trafficSlim: jsonb('traffic_slim'),
     roadsCount: integer('roads_count'),
     /** Mean jam factor across the collected roads — the number a trend line plots. */
     jamFactorAvg: numeric('jam_factor_avg', { precision: 4, scale: 2 }),
@@ -481,3 +489,36 @@ export const emailLog = pgTable(
   },
   (t) => [index('email_log_to_category_created_idx').on(t.to, t.category, t.createdAt)],
 )
+
+// --- render cache (EXP-A2) -------------------------------------------------------------
+
+/**
+ * Export frames already rendered, by (style, capture). A retry, or a ZIP and a video of
+ * the same range and style, reuses them instead of drawing again. `spec_hash` covers
+ * everything that changes the picture — theme, congestion colours, overlay, view, size,
+ * zone, and the renderer's version — so a frame is only reused when it would come out
+ * identical. Files live in R2 under `render-cache/`; rows and files expire after 7 days.
+ */
+export const renderCache = pgTable(
+  'render_cache',
+  {
+    specHash: text('spec_hash').notNull(),
+    captureId: uuid('capture_id')
+      .notNull()
+      .references(() => captures.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    path: text('path').notNull(),
+    size: integer('size').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.specHash, t.captureId] }),
+    index('render_cache_created_idx').on(t.createdAt),
+    index('render_cache_user_idx').on(t.userId),
+  ],
+)
+
+export type RenderCacheRow = typeof renderCache.$inferSelect
+

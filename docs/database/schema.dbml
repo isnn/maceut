@@ -11,7 +11,7 @@
 // Convention: every timestamp is `timestamptz`. A bare `timestamp` carries no
 // offset and means whatever the reading process assumes.
 //
-// Last updated: 2026-10-05 (migration 0014_export_streaming — exports.upload_id, exports.file_size → bigint)
+// Last updated: 2026-10-05 (migration 0015_render_reuse — captures.traffic_slim, render_cache)
 // =============================================================================
 
 Project maceut {
@@ -229,6 +229,7 @@ Table captures {
   trigger capture_trigger [not null]
   road_class road_class [not null, note: 'Class actually collected, after BR-022 cap']
   traffic jsonb [note: 'HERE FeatureCollection, clipped to the zone polygon']
+  traffic_slim jsonb [note: 'Lines + colours only (≈575 KB vs ≈2 MB), written at collection (EXP-A2); null on older rows until first read']
   roads_count integer
   jam_factor_avg "numeric(4,2)"
   file_path text [note: 'BR-011 R2 path. Null until CAP-02 renders an image']
@@ -325,6 +326,30 @@ Table platform_settings {
 }
 
 Ref: platform_settings.updated_by > user.id [delete: set null]
+
+// -----------------------------------------------------------------------------
+// Render cache (EXP-A2) — migration 0015
+// -----------------------------------------------------------------------------
+
+Table render_cache {
+  spec_hash text [not null, note: 'Hash of theme, congestion, overlay, view, size, zone and renderer version']
+  capture_id uuid [not null]
+  user_id text [not null]
+  path text [not null, note: 'R2 key under render-cache/']
+  size integer [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (spec_hash, capture_id) [pk]
+    created_at [name: 'render_cache_created_idx']
+    user_id [name: 'render_cache_user_idx']
+  }
+
+  Note: 'Export frames already rendered — reused by retries and repeat exports. Expires after 7 days.'
+}
+
+Ref: render_cache.capture_id > captures.id [delete: cascade]
+Ref: render_cache.user_id > user.id [delete: cascade]
 
 // -----------------------------------------------------------------------------
 // Notifications (NOTIF) — migration 0013

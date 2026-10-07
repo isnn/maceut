@@ -4,6 +4,7 @@ import { publishRenderJob } from '../lib/rabbitmq-client'
 import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import { bboxOfGeometry } from '../services/zone.service'
+import { slimTraffic } from '../services/capture.service'
 import * as here from '../lib/here-traffic-client'
 import { functionalClassesFor } from '../lib/here-traffic-client'
 import { meteredTrafficFlow } from '../services/here-usage.service'
@@ -75,6 +76,8 @@ export async function runCapture(captureId: string): Promise<void> {
 
     await captureRepo.complete(captureId, {
       traffic: flow,
+      // Stored once here so exports and playback never slim the full collection again.
+      trafficSlim: slimTraffic(flow),
       roadsCount: flow.features.length,
       jamFactorAvg: meanJamFactor(flow),
     })

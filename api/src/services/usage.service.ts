@@ -3,6 +3,7 @@ import * as scheduleRepo from '../repositories/schedule.repository'
 import * as userRepo from '../repositories/user.repository'
 import * as captureRepo from '../repositories/capture.repository'
 import * as exportRepo from '../repositories/export.repository'
+import * as renderCacheRepo from '../repositories/render-cache.repository'
 import { wibMonthStart } from './here-usage.service'
 import { NotFoundError } from '../errors'
 import { PLAN_LIMITS, type Plan } from '../types/plan'
@@ -103,14 +104,16 @@ export async function getUsage(userId: string): Promise<UsageSummary> {
   const activeSchedules = schedules.filter((s) => s.status === 'active')
 
   const now = new Date()
-  const [capturesToday, exportsThisMonth, imageBytes, exportBytes] = await Promise.all([
+  const [capturesToday, exportsThisMonth, imageBytes, exportBytes, cacheBytes] = await Promise.all([
     // BR-006 counts per WIB calendar day, and excludes rows that record a refusal.
     captureRepo.countForWibDay(userId, now),
     exportRepo.countDoneSince(userId, new Date(`${wibMonthStart(now)}T00:00:00+07:00`)),
     captureRepo.imageBytesForUser(userId),
     exportRepo.fileBytesForUser(userId),
+    // Frames kept for reuse (EXP-A2) are files in R2 too, for up to 7 days.
+    renderCacheRepo.bytesForUser(userId),
   ])
-  const storageUsedBytes = imageBytes + exportBytes
+  const storageUsedBytes = imageBytes + exportBytes + cacheBytes
 
   // The busiest day, not the sum across the week — the daily limit is per day, and a
   // window that only runs on Sunday costs Monday nothing.

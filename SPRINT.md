@@ -151,7 +151,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-28** Lebar header = lebar halaman, Collection health ringkas, notifikasi warna brand & copy singkat, judul seksi sejajar ikon, "Retry" | permintaan user |
 | ✅ | **FE-29** Semua halaman & header 1600px, Profil: ganti paket di Usage (popup), Billing = info pembayaran, Notifikasi satu toggle; tandai-dibaca andal; link dashboard gaya brand | permintaan user |
 | ✅ | **EXP-A1** Export: ZIP di-stream ke R2 (multipart, ZIP64), lanjut setelah crash, satu browser per worker, log waktu per frame (fix #58, #63, #67) | rencana optimasi export |
-| 🔴 | **EXP-A2** Export: proses browser lebih ringan, data slim disimpan per capture, pakai ulang frame yang sudah dirender | rencana optimasi export |
+| ✅ | **EXP-A2** Export: proses browser lebih ringan, data slim disimpan per capture, pakai ulang frame yang sudah dirender | rencana optimasi export |
 | 🔴 | **EXP-B** Export video lewat ffmpeg (tanpa merekam real-time) | rencana optimasi export |
 | 🔴 | **EXP-C** Batas frame × piksel per paket, antrian bergiliran, opsi WebP | rencana optimasi export |
 
@@ -1950,6 +1950,24 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   BELUM: export sungguhan tidak dijalankan sendiri (CLAUDE.md: Studio = dry run) — daftar uji
     diserahkan ke user. Aturan lifecycle R2 perlu dipasang di dashboard (deployment.md).
   VERIFIKASI: 445 test API, tsc + eslint bersih kedua paket, worker boot normal.
+
+[2026-10-05c] EXP-A2 — proses browser ringan, data slim tersimpan, pakai ulang frame (ADR-029).
+
+  - Chromium: --disable-gpu, --renderer-process-limit=1, --disable-extensions, --mute-audio,
+    --js-flags=--expose-gc; halaman memanggil gc() setelah tiap frame dikirim.
+  - `captures.traffic_slim` (migrasi 0015): ditulis saat capture; capture lama diisi saat
+    pertama dibaca (`slimFor`). Export, playback Studio & gambar capture membaca versi slim
+    lewat `findLiteById/findLiteByIds` — kolom traffic 2 MB tidak disentuh lagi.
+  - Pakai ulang frame: rencana per frame → `image` (gambar capture, gaya & ukuran sama,
+    `renderVersion` cocok) · `cache` (frame dari export sebelumnya) · `render`. Browser hanya
+    menggambar rentang yang perlu (`endFrame`), dan tidak diluncurkan sama sekali bila semua
+    frame dipakai ulang. Frame yang digambar disimpan ke `render_cache` (R2 `render-cache/`,
+    7 hari, ikut storage akun; sweeper membersihkan). File cache hilang → frame digambar.
+  - Gambar capture kini menyimpan `renderVersion` di `style_used`.
+  - `frameFileName` = penamaan halaman render persis (diuji termasuk tengah malam WIB).
+  - Tes: worker (gambar capture dipakai, cache dibaca & ditulis, tanpa browser bila semua
+    dipakai ulang, cache hilang → render), nama frame, sweeper, usage, render worker.
+  VERIFIKASI: 450 test API, tsc + eslint bersih kedua paket.
 
 ---
 

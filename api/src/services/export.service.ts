@@ -90,6 +90,16 @@ export function wibParts(iso: string): { date: string; time: string } {
  * out of the UTC ISO string, so the name disagreed with its own pictures: after 17:00
  * WIB it even carried the previous day's date.
  */
+/**
+ * One frame's name inside a ZIP — `001-2026-09-28-14-45.png`, numbered from 1, time in
+ * WIB. Must match the render page's naming exactly (web/src/app/render/export/page.tsx,
+ * `wibStamp`): a reused frame has to sit in the ZIP under the name a drawn one would.
+ */
+export function frameFileName(index: number, capturedAt: Date): string {
+  const { date, time } = wibParts(capturedAt.toISOString())
+  return `${String(index + 1).padStart(3, '0')}-${date}-${time.slice(0, 2)}-${time.slice(2)}.png`
+}
+
 export function fileNameFor(row: Pick<ExportRecord, 'format'>, spec: Pick<StoredSpec, 'zoneName' | 'range'>): string {
   const safe = spec.zoneName.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'zone'
   const from = wibParts(spec.range.from)

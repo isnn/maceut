@@ -3,7 +3,8 @@ import type { Browser } from 'playwright-core'
 import { config, isR2Configured } from '../config/env'
 import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
-import { slimTraffic } from '../services/capture.service'
+import { slimFor } from '../services/capture.service'
+import { RENDER_VERSION } from '../services/render-cache.service'
 import { capturePath, thumbnailPath, upload } from '../lib/r2-client'
 import { launchBrowser, renderWithPage, type RenderPageJob } from '../lib/render-page'
 import { registerIdleBrowser, withBrowserSlot } from '../lib/browser-slot'
@@ -90,7 +91,7 @@ function releaseBrowser(): void {
 }
 
 export async function renderCaptureImage(captureId: string): Promise<void> {
-  const capture = await captureRepo.findById(captureId)
+  const capture = await captureRepo.findLiteById(captureId)
   if (!capture || capture.status !== 'done') return
   if (capture.filePath) return // already rendered — a duplicate delivery
   const zone = await zoneRepo.findById(capture.zoneId)
@@ -102,7 +103,7 @@ export async function renderCaptureImage(captureId: string): Promise<void> {
   const bridge = {
     frame: async () => ({
       capturedAt: capture.capturedAt.toISOString(),
-      traffic: capture.traffic ? slimTraffic(capture.traffic) : null,
+      traffic: await slimFor(capture),
     }),
   }
   // Only one Chromium per worker: this waits while an export renders (EXP-A1, #67).
@@ -117,7 +118,9 @@ export async function renderCaptureImage(captureId: string): Promise<void> {
   const thumb = pngs.find((p) => p.name === 'thumb.jpg')?.data
   if (thumb?.length) await upload(thumbnailPath(path), thumb, 'image/jpeg')
   // file_size counts both, so storage figures match what R2 actually holds.
-  await captureRepo.setImage(capture.id, path, png.length + (thumb?.length ?? 0), spec)
+  // The renderer version is recorded so an export can tell this image is exactly what
+  // it would draw today (render-cache.service), and reuse it.
+  await captureRepo.setImage(capture.id, path, png.length + (thumb?.length ?? 0), { ...spec, renderVersion: RENDER_VERSION })
   console.log(`[render] capture ${captureId} image — ${png.length} bytes, thumbnail ${thumb?.length ?? 0} bytes`)
 }
 
