@@ -20,7 +20,6 @@ import {
   IconCamera,
   IconClipboardList,
   IconClock,
-  IconCrown,
   IconDownload,
   IconFilm,
   IconMap,
@@ -39,6 +38,7 @@ import { ZoneExports } from '@/features/exports/components/ZoneExports'
 import { ActionMenu } from '@/components/ui/ActionMenu'
 import { NextCollectionCard } from '@/features/schedules/components/NextCollectionCard'
 import { WindowDialog } from '@/features/schedules/components/WindowDialog'
+import { CsvExportDialog } from './CsvExportDialog'
 import * as zonesApi from '../api'
 import * as schedulesApi from '@/features/schedules/api'
 import { DAY_LABEL, INTERVAL_LABEL, framesPerDay, type CaptureWindow } from '@/features/schedules/types'
@@ -55,8 +55,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
   const windows = useMemo(() => allWindows.filter((w) => w.zoneId === zoneId), [allWindows, zoneId])
   const [windowEditing, setWindowEditing] = useState<CaptureWindow | null>(null)
   const [windowDeleting, setWindowDeleting] = useState(false)
-  const [csvState, setCsvState] = useState<'idle' | 'working'>('idle')
-  const [csvError, setCsvError] = useState<string | null>(null)
+  const [csvOpen, setCsvOpen] = useState(false)
 
   // A zone can hold up to 50 windows on Premium, well past what anyone can scan in
   // one list — so this gets the same search, sort and paging as every other table.
@@ -149,22 +148,6 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
   // capped at whatever the current plan allows. That's invisible unless said.
   const maxRoadClass = PLAN_LIMITS[plan].maxRoadClass
   const cappedByPlan = ROAD_CLASS_ORDER.indexOf(zone.roadClass) > ROAD_CLASS_ORDER.indexOf(maxRoadClass)
-
-  /** The plan's CSV reach, in words (FE-30) — the API enforces the same range (BR-007). */
-  const historyDays = PLAN_LIMITS[plan].historyDays
-  const csvRangeText = historyDays === null ? 'Includes all history' : `Includes the last ${historyDays} days on your plan`
-
-  async function exportCsv() {
-    setCsvState('working')
-    setCsvError(null)
-    try {
-      await zonesApi.downloadCapturesCsv(zoneId)
-    } catch (err) {
-      setCsvError(err instanceof ApiError && err.code === 'NETWORK_ERROR' ? err.message : 'Couldn’t prepare the CSV. Please try again.')
-    } finally {
-      setCsvState('idle')
-    }
-  }
 
   async function setWindowActive(w: CaptureWindow, active: boolean) {
     await schedulesApi.updateWindow(w.id, { active })
@@ -262,6 +245,10 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                 <IconFilm size={18} />
                 Open in Studio
               </Link>
+              <Button variant="tint" onClick={() => setCsvOpen(true)}>
+                <IconDownload size={16} />
+                Export CSV
+              </Button>
 
               <Button variant="tint" onClick={startEdit}>
                 <IconPencil size={16} />
@@ -298,6 +285,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
           <MapCanvas polygon={zone.geometry} className="h-96 w-full" />
         </div>
 
+        <div className="space-y-lg">
         <div className="bg-card border border-border rounded-lg p-lg space-y-lg">
           {editing ? (
             <>
@@ -369,34 +357,10 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
             </>
           )}
         </div>
-      </div>
-
-      {csvError && <Alert variant="warning">{csvError}</Alert>}
-
-      {/* When this zone collects next (FE-30) — the same card as the Schedule page,
-          narrowed to this zone's windows. */}
-      <div className="grid grid-cols-1 laptop:grid-cols-2 gap-lg items-start">
-          <NextCollectionCard windows={windows} zones={[zone]} />
-          <div className="bg-card border border-border rounded-lg p-lg space-y-sm">
-            <p className="text-heading-sm text-text-primary">Capture data</p>
-            <p className="text-body text-text-secondary">
-              Download every capture of this zone as a spreadsheet — time (WIB), status, window, roads and average
-              congestion. {csvRangeText}.
-            </p>
-            <div className="flex flex-wrap items-center gap-md pt-xs">
-              <Button variant="tint" size="sm" onClick={() => void exportCsv()} disabled={csvState === 'working'}>
-                <IconDownload size={16} />
-                {csvState === 'working' ? 'Preparing…' : 'Export CSV'}
-              </Button>
-              {plan !== 'premium' && (
-                <Link href="/profile" className="inline-flex items-center gap-xs text-caption font-semibold text-primary no-underline hover:underline">
-                  <IconCrown size={14} />
-                  Upgrade for longer history
-                </Link>
-              )}
-            </div>
-          </div>
+        {/* When this zone collects next (FE-30), under its details (FE-32). */}
+        <NextCollectionCard windows={windows} zones={[zone]} />
         </div>
+      </div>
 
       {/* The windows that actually make this zone collect — without them a zone
           sits idle, which is invisible from its attributes alone. */}
@@ -570,6 +534,8 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
 
       {/* Last on the page: exports are made in Studio and collected here. */}
       <ZoneExports zoneId={zone.id} />
+
+      <CsvExportDialog open={csvOpen} zoneId={zone.id} plan={plan} onClose={() => setCsvOpen(false)} />
 
       {windowEditing && (
         <WindowDialog

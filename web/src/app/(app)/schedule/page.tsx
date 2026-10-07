@@ -12,7 +12,6 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
 import { cn } from '@/lib/utils'
-import { IconCrown } from '@/components/ui/icons'
 import { ActionMenu } from '@/components/ui/ActionMenu'
 import { NextCollectionCard } from '@/features/schedules/components/NextCollectionCard'
 import { WindowDialog, forgetWindowDraft, peekWindowDraft, type WindowDraft } from '@/features/schedules/components/WindowDialog'
@@ -276,12 +275,6 @@ export default function SchedulePage() {
             <div className="border-t border-divider pt-md">
               <p className="text-label text-text-secondary">Retention</p>
               <p className="text-body font-semibold text-text-primary">{limits.historyLabel}</p>
-              {plan !== 'premium' && (
-                <Link href="/profile" className="inline-flex items-center gap-xs text-caption font-semibold text-primary mt-xs no-underline hover:underline">
-                  <IconCrown size={14} />
-                  Unlimited
-                </Link>
-              )}
             </div>
           </Card>
 

@@ -6,7 +6,7 @@ import { publishCaptureJob } from '../lib/rabbitmq-client'
 import * as r2 from '../lib/r2-client'
 import * as notificationService from './notification.service'
 import { wibParts } from './export.service'
-import { NotFoundError, ForbiddenError } from '../errors'
+import { NotFoundError, ForbiddenError, HistoryLimitExceededError } from '../errors'
 import { isR2Configured } from '../config/env'
 import { PLAN_LIMITS, effectiveRoadClass, type Plan, type RoadClass } from '../types/plan'
 
@@ -408,13 +408,21 @@ export async function exportCsv(
   userId: string,
   plan: Plan,
   zoneId: string,
+  /** How far back, in days; null = everything. Defaults to the plan's whole history. */
+  requestedDays?: number | null,
   now: Date = new Date(),
 ): Promise<{ csv: string; zoneName: string; range: string; rows: number }> {
   const zone = await zoneRepo.findById(zoneId)
   if (!zone) throw new NotFoundError('Zone')
   if (zone.userId !== userId) throw new ForbiddenError('You don’t have access to this zone.')
 
-  const days = PLAN_LIMITS[plan].historyDays
+  const historyDays = PLAN_LIMITS[plan].historyDays
+  const days = requestedDays === undefined ? historyDays : requestedDays
+  // BR-007: a range past the plan's history is refused, not quietly shortened — the
+  // file would otherwise look complete when it isn't.
+  if (historyDays !== null && (days === null || days > historyDays)) {
+    throw new HistoryLimitExceededError({ requestedDays: days, historyDays })
+  }
   const since = days === null ? null : new Date(now.getTime() - days * 86_400_000)
   const rows = await captureRepo.listForCsv(zoneId, since, CSV_MAX_ROWS)
 

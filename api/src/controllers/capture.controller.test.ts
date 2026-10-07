@@ -207,4 +207,17 @@ describe('GET /zones/:id/captures.csv (FE-30)', () => {
     const free = await request(app).get(`/zones/${ZONE_ID}/captures.csv`)
     expect(free.headers['x-export-range']).toBe('last-7-days')
   })
+
+  it('takes a shorter range, and refuses one past the plan (FE-32)', async () => {
+    signedIn() // standard → 90 days
+    const res = await request(app).get(`/zones/${ZONE_ID}/captures.csv?days=7`)
+    expect(res.status).toBe(200)
+    expect(res.headers['x-export-range']).toBe('last-7-days')
+
+    const all = await request(app).get(`/zones/${ZONE_ID}/captures.csv?days=all`)
+    expect(all.status).toBe(403)
+    expect(all.body.error).toMatchObject({ code: 'HISTORY_LIMIT_EXCEEDED', details: { historyDays: 90 } })
+
+    expect((await request(app).get(`/zones/${ZONE_ID}/captures.csv?days=5`)).status).toBe(422)
+  })
 })

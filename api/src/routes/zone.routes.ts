@@ -447,6 +447,10 @@ router.post('/zones/:id/captures', captureController.create)
  *         name: id
  *         required: true
  *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: days
+ *         description: Jangkauan (hari terakhir) atau `all`. Default = seluruh riwayat paket. Melebihi paket → 403 HISTORY_LIMIT_EXCEEDED.
+ *         schema: { type: string, enum: ['1', '7', '30', '90', all] }
  *     responses:
  *       200:
  *         description: File CSV (UTF-8 dengan BOM)

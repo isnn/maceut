@@ -247,8 +247,10 @@ export async function runCapture(zoneId: string): Promise<EnqueuedCapture> {
  * Downloads a zone's captures as CSV (FE-30) — one row per capture, reaching back as far
  * as the plan's history. Saved by the browser under the API's file name.
  */
-export async function downloadCapturesCsv(zoneId: string): Promise<void> {
-  const { blob, filename } = await apiClient.download(`/zones/${zoneId}/captures.csv`)
+export type CsvRange = '1' | '7' | '30' | '90' | 'all'
+
+export async function downloadCapturesCsv(zoneId: string, days: CsvRange): Promise<void> {
+  const { blob, filename } = await apiClient.download(`/zones/${zoneId}/captures.csv?days=${days}`)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
