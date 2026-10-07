@@ -14,7 +14,7 @@ import { previewAccountPlanChange, type PlanImpact } from '@/features/plan/impac
 import { EmptyState } from '@/components/shared/EmptyState'
 import { AddUserDialog } from '@/features/internal/components/AddUserDialog'
 import { EditUserDialog } from '@/features/internal/components/EditUserDialog'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatNumber } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_ORDER } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import * as internalApi from '@/features/internal/api'
@@ -74,6 +74,7 @@ export default function InternalUsersPage() {
       paused: (row) => row.usage.zonesPaused + row.usage.schedulesPaused,
       windows: (row) => row.usage.schedulesActiveCount,
       captures: (row) => row.usage.capturesToday,
+      storage: (row) => row.usage.storageUsedGb,
       joined: (row) => row.createdAt,
     },
     initialSort: { key: 'joined', direction: 'desc' },
@@ -156,11 +157,6 @@ export default function InternalUsersPage() {
         <div>
           <p className="text-label text-text-secondary">Platform · {rows?.length ?? 0} accounts</p>
           <h1 className="text-page-title font-bold text-text-primary mt-xs">Users</h1>
-          <p className="text-body text-text-secondary mt-xs max-w-[70ch]">
-            {isSuperadmin
-              ? 'Create an account, change a customer’s plan, or grant staff access. You can’t change your own access, and the last superadmin can’t be demoted.'
-              : 'Look up an account, see its usage, or change a customer’s plan. Account and staff changes are made by a superadmin.'}
-          </p>
         </div>
         {isSuperadmin && (
           <Button className="ml-auto shrink-0" onClick={() => setAdding(true)}>
@@ -266,6 +262,14 @@ export default function InternalUsersPage() {
                   Captures
                 </SortableTh>
                 <SortableTh
+                  className="text-right"
+                  active={table.sort?.key === 'storage'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('storage')}
+                >
+                  Storage
+                </SortableTh>
+                <SortableTh
                   active={table.sort?.key === 'joined'}
                   direction={table.sort?.direction ?? 'asc'}
                   onSort={() => table.toggleSort('joined')}
@@ -366,6 +370,10 @@ export default function InternalUsersPage() {
                     <Td className="text-right tabular-nums text-text-secondary whitespace-nowrap">
                       {row.usage.capturesToday ?? <span className="text-text-muted">&mdash;</span>}
                       <span className="text-text-muted">/{row.usage.capturesLimit}</span>
+                    </Td>
+                    <Td className="text-right tabular-nums text-text-secondary whitespace-nowrap">
+                      {formatNumber(row.usage.storageUsedGb ?? 0, 2)}
+                      <span className="text-text-muted"> / {row.usage.storageLimitGb} GB</span>
                     </Td>
                     <Td className="text-text-secondary whitespace-nowrap">{formatDate(row.createdAt)}</Td>
                     <Td className="text-right whitespace-nowrap">

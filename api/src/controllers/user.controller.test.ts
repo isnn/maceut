@@ -46,7 +46,10 @@ vi.mock('../repositories/schedule.repository', () => ({
   countAllActive: vi.fn(async () => 0),
 }))
 vi.mock('../services/usage.service', () => ({ getUsage: vi.fn() }))
+vi.mock('../repositories/export.repository', () => ({ fileBytesByUser: vi.fn(async () => new Map()) }))
+vi.mock('../repositories/render-cache.repository', () => ({ bytesByUser: vi.fn(async () => new Map()) }))
 vi.mock('../repositories/capture.repository', () => ({
+  imageBytesByUser: vi.fn(async () => new Map()),
   countsByZoneSince: vi.fn(async () => new Map()),
   countsToday: vi.fn(async () => new Map()),
   countAllToday: vi.fn(async () => 0),

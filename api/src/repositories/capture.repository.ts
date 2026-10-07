@@ -438,3 +438,13 @@ export async function countsByZoneSince(userId: string, since: Date): Promise<Ma
     .groupBy(captures.zoneId)
   return new Map(rows.map((r) => [r.zoneId, r.count]))
 }
+
+/** Capture image bytes per account, in one grouped query (FE-35: the staff directory). */
+export async function imageBytesByUser(): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ userId: captures.userId, bytes: sql<number>`coalesce(sum(${captures.fileSize}), 0)::bigint` })
+    .from(captures)
+    .where(sql`${captures.filePath} IS NOT NULL`)
+    .groupBy(captures.userId)
+  return new Map(rows.map((r) => [r.userId, Number(r.bytes)]))
+}

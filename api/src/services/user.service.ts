@@ -16,6 +16,8 @@ import * as notificationService from './notification.service'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as captureRepo from '../repositories/capture.repository'
+import * as exportRepo from '../repositories/export.repository'
+import * as renderCacheRepo from '../repositories/render-cache.repository'
 import * as usageService from './usage.service'
 
 /**
@@ -171,9 +173,8 @@ export interface ListUsersParams {
 /**
  * What an account is actually using, for the internal directory.
  *
- * Zones and windows are measured. Captures and storage are `null` because no table
- * counts them yet (CAP-01) — an operator tool that invents numbers is worse than one
- * that admits it does not know, because the invented ones get acted on.
+ * Every figure is measured: zones and windows, today's captures, and storage (capture
+ * images + finished exports + cached frames in R2, FE-35).
  */
 export interface AccountUsage {
   zonesCount: number
@@ -181,7 +182,7 @@ export interface AccountUsage {
   schedulesActiveCount: number
   schedulesPaused: number
   capturesToday: number | null
-  storageUsedGb: number | null
+  storageUsedGb: number
 }
 
 export interface UserWithUsage extends PublicUser {
@@ -194,6 +195,29 @@ export interface ListUsersResult {
   page: number
   limit: number
   totalPages: number
+}
+
+/**
+ * Every account's R2 storage — capture images, finished exports and cached frames, the
+ * same three the account's own usage page adds up (usage.service) — as three grouped
+ * queries for the whole directory rather than three per account.
+ */
+async function storageBytesByUser(): Promise<Map<string, number>> {
+  const [images, exportFiles, cache] = await Promise.all([
+    captureRepo.imageBytesByUser(),
+    exportRepo.fileBytesByUser(),
+    renderCacheRepo.bytesByUser(),
+  ])
+  const total = new Map<string, number>()
+  for (const source of [images, exportFiles, cache]) {
+    for (const [userId, bytes] of source) total.set(userId, (total.get(userId) ?? 0) + bytes)
+  }
+  return total
+}
+
+/** Bytes as GB with two decimals — the unit the plan's storage limit is stated in. */
+function toGb(bytes: number): number {
+  return Math.round((bytes / 1024 ** 3) * 100) / 100
 }
 
 export async function listUsers(params: ListUsersParams): Promise<ListUsersResult> {
@@ -210,10 +234,11 @@ export async function listUsers(params: ListUsersParams): Promise<ListUsersResul
 
   // Two grouped queries for the whole page, not two per row — the directory lists
   // every account, so per-row counting would slow down with every signup.
-  const [zoneCounts, scheduleCounts, captureCounts] = await Promise.all([
+  const [zoneCounts, scheduleCounts, captureCounts, storage] = await Promise.all([
     zoneRepo.countsByUser(),
     scheduleRepo.countsByUser(),
     captureRepo.countsToday(),
+    storageBytesByUser(),
   ])
 
   return {
@@ -228,7 +253,7 @@ export async function listUsers(params: ListUsersParams): Promise<ListUsersResul
           schedulesActiveCount: sc?.active ?? 0,
           schedulesPaused: sc?.paused ?? 0,
           capturesToday: captureCounts.get(row.id) ?? 0,
-          storageUsedGb: null,
+          storageUsedGb: toGb(storage.get(row.id) ?? 0),
         },
       }
     }),
@@ -306,11 +331,11 @@ export async function getPlatformStats(): Promise<{
   internalByConfig: number
   planMix: Record<Plan, number>
   estimatedSeats: number
-  /** Measured platform-wide. Captures and storage stay null until CAP-01. */
+  /** Measured platform-wide (FE-35: storage too — images, exports and cached frames). */
   zonesCollecting: number
   schedulesActive: number
   capturesToday: number | null
-  storageUsedGb: number | null
+  storageUsedGb: number
 }> {
   // One page large enough to aggregate over. Fine at this scale; when it stops being
   // fine the answer is a SQL GROUP BY in the repository, not a bigger page.
@@ -337,7 +362,9 @@ export async function getPlatformStats(): Promise<{
     zoneRepo.countAllCollecting(),
     scheduleRepo.countAllActive(),
   ])
-  const capturesToday = await captureRepo.countAllToday()
+  const [capturesToday, storage] = await Promise.all([captureRepo.countAllToday(), storageBytesByUser()])
+  let storageBytes = 0
+  for (const bytes of storage.values()) storageBytes += bytes
 
   return {
     totalUsers: total,
@@ -348,8 +375,7 @@ export async function getPlatformStats(): Promise<{
     zonesCollecting,
     schedulesActive,
     capturesToday,
-    // Still unmeasured: storage is only known once images are rendered into R2.
-    storageUsedGb: null,
+    storageUsedGb: toGb(storageBytes),
   }
 }
 

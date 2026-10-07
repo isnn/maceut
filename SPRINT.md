@@ -160,6 +160,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-32** Detail zona: Export CSV jadi tombol + pemilih rentang waktu (dibatasi paket), Next collection di bawah kartu detail; Schedule tanpa tautan mahkota Unlimited | review user |
 | ✅ | **FE-33** Nama kelas jalan dalam bahasa Inggris (Highways · Highways + main roads · All roads); id internal tetap | permintaan user |
 | ✅ | **FE-34** Konsol staf: kolom Paused terpisah, spasi overview, halaman usage per akun (data nyata), tipe staf Superadmin / Admin (Admin hanya Overview & Users) | review user |
+| ✅ | **FE-35** Konsol staf: penyimpanan & capture terukur (tanpa peringatan "belum terukur"), kolom Storage di Users, subjudul Overview/Users dihapus | review user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -184,6 +185,16 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-07f] FE-35 — data nyata di konsol staf.
+
+  - API: penyimpanan per akun = gambar capture + export selesai + cache frame, lewat tiga query
+    ber-GROUP BY (bukan per baris); `storageUsedGb` di daftar user & statistik platform kini angka,
+    bukan null. Dicek di DB: sched@ 0,77 GB, total platform 0,79 GB, 16 capture hari ini.
+  - Web: peringatan "Captures and storage aren't tracked yet" dihapus; Overview menambah tile
+    Captures today & Storage used; kolom Storage (x / limit GB, bisa diurutkan) di Users;
+    subjudul Overview & Users dihapus.
+  VERIFIKASI: 485 test API, tsc + eslint bersih.
 
 [2026-10-07e] FE-34 — konsol staf: Superadmin / Admin, halaman usage, kolom Paused (ADR-032).
 

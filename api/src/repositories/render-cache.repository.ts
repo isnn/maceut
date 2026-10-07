@@ -37,3 +37,12 @@ export async function findOlderThan(before: Date, limit = 200): Promise<RenderCa
 export async function remove(specHash: string, captureId: string): Promise<void> {
   await db.delete(renderCache).where(and(eq(renderCache.specHash, specHash), eq(renderCache.captureId, captureId)))
 }
+
+/** Cached frame bytes per account, in one grouped query (FE-35). */
+export async function bytesByUser(): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ userId: renderCache.userId, bytes: sql<number>`coalesce(sum(${renderCache.size}), 0)::bigint` })
+    .from(renderCache)
+    .groupBy(renderCache.userId)
+  return new Map(rows.map((r) => [r.userId, Number(r.bytes)]))
+}

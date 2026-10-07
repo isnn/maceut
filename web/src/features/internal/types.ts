@@ -3,10 +3,8 @@ import type { Access, Plan, PlatformRole } from '@/features/auth/types'
 /**
  * Usage figures shown per account in the directory and drawer.
  *
- * Zones and capture windows are measured by the server. Captures and storage are still
- * `null` because no table counts them (CAP-01), and `null` renders as "—" rather than
- * a zero that would claim the account captured nothing. Limits always come from the
- * account's plan.
+ * Every figure is measured by the server — zones, windows, today's captures and storage
+ * (capture images + exports + cached frames, FE-35). Limits come from the account's plan.
  *
  * `zonesPaused` / `schedulesPaused` are what a downgrade left behind (ADR-020) — an
  * operator looking at a complaint needs to see that before anything else.

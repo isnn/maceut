@@ -27,7 +27,10 @@ vi.mock('../repositories/schedule.repository', () => ({
   countsByUser: vi.fn(async () => new Map()),
   countAllActive: vi.fn(async () => 0),
 }))
+vi.mock('../repositories/export.repository', () => ({ fileBytesByUser: vi.fn(async () => new Map()) }))
+vi.mock('../repositories/render-cache.repository', () => ({ bytesByUser: vi.fn(async () => new Map()) }))
 vi.mock('../repositories/capture.repository', () => ({
+  imageBytesByUser: vi.fn(async () => new Map()),
   countsToday: vi.fn(async () => new Map()),
   countAllToday: vi.fn(async () => 0),
 }))
@@ -53,6 +56,8 @@ vi.mock('../lib/internal-access', () => {
 
 import { auth } from '../lib/auth'
 import * as userRepo from '../repositories/user.repository'
+import * as exportRepo from '../repositories/export.repository'
+import * as renderCacheRepo from '../repositories/render-cache.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as captureRepo from '../repositories/capture.repository'
@@ -195,11 +200,18 @@ describe('listUsers — usage is measured, not guessed', () => {
     expect(users[0]!.usage.capturesToday).toBe(4)
   })
 
-  it('leaves storage null — nothing measures it until images exist', async () => {
+  it('adds up storage per account: images, exports and cached frames (FE-35)', async () => {
+    const GB = 1024 ** 3
+    vi.mocked(captureRepo.imageBytesByUser).mockResolvedValue(new Map([[USER, 1 * GB]]))
+    vi.mocked(exportRepo.fileBytesByUser).mockResolvedValue(new Map([[USER, 0.5 * GB]]))
+    vi.mocked(renderCacheRepo.bytesByUser).mockResolvedValue(new Map([[USER, 0.25 * GB]]))
+    vi.mocked(userRepo.listWithPlans).mockResolvedValue({ rows: [row({ id: USER }), row({ id: 'empty' })], total: 2 })
+
     const { users } = await listUsers({ page: 1, limit: 25 })
 
-    // Zero would assert the account stored nothing, which is a different claim.
-    expect(users[0]!.usage.storageUsedGb).toBeNull()
+    expect(users[0]!.usage.storageUsedGb).toBe(1.75)
+    // An account with nothing stored reads as a measured zero, not unknown.
+    expect(users[1]!.usage.storageUsedGb).toBe(0)
   })
 
   it('counts in one grouped query, not one per listed account', async () => {
@@ -233,8 +245,12 @@ describe('getPlatformStats', () => {
     expect((await getPlatformStats()).capturesToday).toBe(31)
   })
 
-  it('still reports storage as unmeasured', async () => {
-    expect((await getPlatformStats()).storageUsedGb).toBeNull()
+  it('measures platform storage across every account (FE-35)', async () => {
+    const GB = 1024 ** 3
+    vi.mocked(captureRepo.imageBytesByUser).mockResolvedValue(new Map([['a', 2 * GB], ['b', 1 * GB]]))
+    vi.mocked(exportRepo.fileBytesByUser).mockResolvedValue(new Map([['a', 0.5 * GB]]))
+    vi.mocked(renderCacheRepo.bytesByUser).mockResolvedValue(new Map())
+    expect((await getPlatformStats()).storageUsedGb).toBe(3.5)
   })
 
   it('excludes internal accounts from the customer count', async () => {
