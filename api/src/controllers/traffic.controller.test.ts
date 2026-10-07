@@ -43,6 +43,7 @@ import { app } from '../app'
 import * as userRepo from '../repositories/user.repository'
 import { auth } from '../lib/auth'
 import type { Plan } from '../types/plan'
+import { clearTrafficCache } from '../services/traffic-cache.service'
 
 const USER_ID = 'user_01'
 const BBOX = '110.33,-7.82,110.43,-7.74'
@@ -66,6 +67,7 @@ function signedInAs(plan: Plan) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  clearTrafficCache()
   signedInAs('free')
   // One call per tier, widest last, so a wrong ordering shows up as wrong numbers.
   getTrafficFlow
@@ -151,5 +153,54 @@ describe('GET /traffic/road-class-counts', () => {
     // A third party being down is not our bug, and the screens branch on the code.
     expect(res.status).toBe(502)
     expect(res.body.error.code).toBe('UPSTREAM_ERROR')
+  })
+})
+
+/** Distinct segments, numbered, so tier differences are checkable. */
+function segments(ids: number[], color = '#4CAF50') {
+  return {
+    type: 'FeatureCollection',
+    features: ids.map((i) => ({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: [[110 + i / 1000, -7], [110 + i / 1000, -7.009]] },
+      properties: { trafficState: 'normal', color, jamFactor: 1 },
+    })),
+  }
+}
+
+describe('ZONE-PERF — tiers, slim output, shared cache', () => {
+  beforeEach(() => {
+    getTrafficFlow.mockReset()
+    signedInAs('premium')
+  })
+
+  it('a tier returns only the roads that class adds over the one below', async () => {
+    // nasional = {1,2}; nasional_provinsi = {1,2,3,4}
+    getTrafficFlow.mockImplementation(async (_bbox: unknown, opts: { functionalClasses: number[] }) =>
+      opts.functionalClasses.length > 2 ? segments([1, 2, 3, 4]) : segments([1, 2]),
+    )
+    const res = await request(app).get(`/traffic/preview?bbox=${BBOX}&tier=nasional_provinsi&format=slim`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.features).toHaveLength(2) // only 3 and 4
+    expect(res.body.data.features[0]).toEqual({ c: [[110.003, -7], [110.003, -7.009]], k: '#4CAF50' })
+  })
+
+  it('a tier above the plan is empty and costs no HERE call', async () => {
+    signedInAs('free')
+    const res = await request(app).get(`/traffic/preview?bbox=${BBOX}&tier=semua`)
+    expect(res.body.data.features).toEqual([])
+    expect(getTrafficFlow).not.toHaveBeenCalled()
+  })
+
+  it('the preview after the counts asks HERE nothing new', async () => {
+    getTrafficFlow.mockImplementation(async () => segments([1, 2]))
+    await request(app).get(`/traffic/road-class-counts?bbox=${BBOX}`)
+    expect(getTrafficFlow).toHaveBeenCalledTimes(3)
+
+    await request(app).get(`/traffic/preview?bbox=${BBOX}&tier=nasional&format=slim`)
+    await request(app).get(`/traffic/preview?bbox=${BBOX}&tier=nasional_provinsi&format=slim`)
+    await request(app).get(`/traffic/preview?bbox=${BBOX}&roadClass=semua`)
+    expect(getTrafficFlow).toHaveBeenCalledTimes(3) // all served from the cache
   })
 })

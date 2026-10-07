@@ -1,10 +1,11 @@
 import type { Request, Response, NextFunction } from 'express'
 import * as here from '../lib/here-traffic-client'
-import { meteredTrafficFlow } from '../services/here-usage.service'
+import * as trafficCache from '../services/traffic-cache.service'
+import { slimTraffic } from '../services/capture.service'
 import { trafficPreviewQuerySchema } from '../schemas/zone.schema'
 import { UnauthorizedError } from '../errors'
 import { ok } from '../types/api'
-import { effectiveRoadClass, ROAD_CLASS_ORDER, type Plan, type RoadClass } from '../types/plan'
+import { effectiveRoadClass, ROAD_CLASS_ORDER, type Plan } from '../types/plan'
 import { PLAN_LIMITS } from '../types/plan'
 
 /**
@@ -19,26 +20,46 @@ export async function preview(req: Request, res: Response, next: NextFunction) {
     if (!req.userId) throw new UnauthorizedError()
     const plan: Plan = req.plan ?? 'free'
 
-    const { bbox, roadClass, ring } = trafficPreviewQuerySchema.parse(req.query)
+    const { bbox, roadClass, ring, tier, format } = trafficPreviewQuerySchema.parse(req.query)
+    const maxClass = PLAN_LIMITS[plan].maxRoadClass
 
-    // BR-022 — what the caller may actually see is MIN(requested, plan maximum).
-    // Requesting `semua` on a Free plan quietly narrows rather than erroring: this is
-    // a preview, and refusing it would block the upgrade screen that sells the
-    // difference.
-    const requested: RoadClass = roadClass ?? 'semua'
-    const effective = effectiveRoadClass(requested, plan)
+    let flow: here.TrafficCollection
+    if (tier) {
+      // BR-022 — a tier above the plan is simply empty: nothing to see, nothing fetched.
+      if (ROAD_CLASS_ORDER.indexOf(tier) > ROAD_CLASS_ORDER.indexOf(maxClass)) {
+        flow = { type: 'FeatureCollection', features: [] }
+      } else {
+        // Classes are cumulative, so a tier is its class minus the class below it.
+        const below = ROAD_CLASS_ORDER[ROAD_CLASS_ORDER.indexOf(tier) - 1]
+        const [current, lower] = await Promise.all([
+          trafficCache.getFlow('preview', bbox, tier),
+          below ? trafficCache.getFlow('preview', bbox, below) : null,
+        ])
+        const seen = new Set((lower?.features ?? []).map(segmentKey))
+        flow = { ...current, features: current.features.filter((f) => !seen.has(segmentKey(f))) }
+      }
+    } else {
+      // BR-022 — what the caller may actually see is MIN(requested, plan maximum).
+      // Requesting `semua` on a Free plan quietly narrows rather than erroring: this is
+      // a preview, and refusing it would block the upgrade screen that sells the
+      // difference.
+      flow = await trafficCache.getFlow('preview', bbox, effectiveRoadClass(roadClass ?? 'semua', plan))
+    }
 
-    const flow = await meteredTrafficFlow('preview', bbox, {
-      functionalClasses: here.functionalClassesFor(effective),
-      // Trimmed to the drawn shape when the caller sends one. The bbox is what HERE
-      // needs; the ring is what the user actually drew.
-      ...(ring ? { clipTo: ring } : {}),
-    })
+    // Trimmed to the drawn shape when the caller sends one. The bbox is what HERE needs;
+    // the ring is what the user actually drew.
+    if (ring) flow = here.clipToPolygon(flow, ring)
 
-    return res.status(200).json(ok(flow))
+    return res.status(200).json(ok(format === 'slim' ? slimTraffic(flow) : flow))
   } catch (err) {
     next(err)
   }
+}
+
+/** Identifies a road segment across tiers — HERE gives no id, so its geometry is the key. */
+function segmentKey(f: here.TrafficCollection['features'][number]): string {
+  const c = f.geometry.coordinates
+  return `${c.length}|${c[0]}|${c[c.length - 1]}`
 }
 
 /**
@@ -67,9 +88,8 @@ export async function roadClassCounts(req: Request, res: Response, next: NextFun
 
     const results = await Promise.all(
       ROAD_CLASS_ORDER.map(async (roadClass) => {
-        const flow = await meteredTrafficFlow('road_counts', bbox, {
-          functionalClasses: here.functionalClassesFor(roadClass),
-        })
+        // Cached: the preview that follows reads these same flows instead of asking HERE again.
+        const flow = await trafficCache.getFlow('road_counts', bbox, roadClass)
         return [roadClass, flow] as const
       }),
     )
