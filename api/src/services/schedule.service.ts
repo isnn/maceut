@@ -1,7 +1,14 @@
 import * as captureRepo from '../repositories/capture.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as zoneRepo from '../repositories/zone.repository'
-import { NotFoundError, ForbiddenError, ScheduleLimitExceededError, ValidationError } from '../errors'
+import {
+  CaptureLimitExceededError,
+  ForbiddenError,
+  IntervalNotInPlanError,
+  NotFoundError,
+  ScheduleLimitExceededError,
+  ValidationError,
+} from '../errors'
 import { PLAN_LIMITS, type Plan } from '../types/plan'
 import {
   framesPerDay,
@@ -67,8 +74,8 @@ export function toPublic(row: ScheduleRecord, capturedFrames = 0): PublicSchedul
 
 async function ownedSchedule(userId: string, id: string): Promise<ScheduleRecord> {
   const row = await scheduleRepo.findById(id)
-  if (!row || row.status === 'deleted') throw new NotFoundError('Jadwal')
-  if (row.userId !== userId) throw new ForbiddenError('Jadwal ini bukan milik Anda.')
+  if (!row || row.status === 'deleted') throw new NotFoundError('Window')
+  if (row.userId !== userId) throw new ForbiddenError('You can’t edit this window.')
   return row
 }
 
@@ -93,26 +100,26 @@ export function validateWindow(input: Pick<WindowInput, 'start' | 'end' | 'inter
   const end = parseTime(input.end)
 
   if (start === null || end === null) {
-    throw new ValidationError('Jam harus dalam format HH:mm (24 jam).')
+    throw new ValidationError('Use a time like 07:30.')
   }
   if (input.interval !== 'daily' && end <= start) {
-    throw new ValidationError('Jam selesai harus setelah jam mulai.')
+    throw new ValidationError('Ends before it starts.', { field: 'end' })
   }
   if (input.days.length === 0) {
-    throw new ValidationError('Pilih minimal satu hari.')
+    throw new ValidationError('Pick at least one day.', { field: 'days' })
   }
   if (input.days.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) {
-    throw new ValidationError('Hari harus berupa angka 0 (Senin) sampai 6 (Minggu).')
+    throw new ValidationError('Those days didn’t save.', { field: 'days' })
   }
   if (new Set(input.days).size !== input.days.length) {
-    throw new ValidationError('Ada hari yang terpilih lebih dari sekali.')
+    throw new ValidationError('Those days didn’t save.', { field: 'days' })
   }
 }
 
 /** BR-002/003 in schedule form: the capture interval is the tier's differentiator. */
 function requireIntervalAllowed(plan: Plan, interval: CaptureInterval): void {
   if (!PLAN_MIN_INTERVAL[plan].includes(interval)) {
-    throw new ForbiddenError(`Interval ini tidak tersedia di paket ${plan}. Naikkan paket untuk memakainya.`)
+    throw new IntervalNotInPlanError(interval, plan)
   }
 }
 
@@ -144,10 +151,7 @@ async function requireDailyBudget(
     if (candidate.days.includes(day)) frames += framesPerDay(candidate)
 
     if (frames > dailyLimit) {
-      throw new ValidationError(
-        `Jendela ini membuat total ${frames} frame/hari, melebihi batas ${dailyLimit} frame/hari paket Anda.`,
-        { frames, dailyLimit, plan },
-      )
+      throw new CaptureLimitExceededError({ day, frames, dailyLimit, plan })
     }
   }
 }
@@ -259,7 +263,7 @@ export async function updateSchedule(
     ...(patch.days !== undefined ? { days: patch.days } : {}),
     ...(status ? { status } : {}),
   })
-  if (!updated) throw new NotFoundError('Jadwal')
+  if (!updated) throw new NotFoundError('Window')
   return toPublic(updated, (await captureRepo.countDoneBySchedule(userId)).get(updated.id) ?? 0)
 }
 

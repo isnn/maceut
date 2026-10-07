@@ -430,6 +430,37 @@ router.post('/zones/:id/captures', captureController.create)
  *       403: { description: FORBIDDEN }
  *       404: { description: ZONE_NOT_FOUND }
  */
+/**
+ * @swagger
+ * /zones/{id}/captures.csv:
+ *   get:
+ *     summary: Export capture zona sebagai CSV (FE-30)
+ *     description: >
+ *       Satu baris per capture, dari kolom ringkasan tersimpan (tanpa traffic). Jangkauan
+ *       mengikuti paket (BR-007) — Free 7 hari, Standard 90 hari, Premium semua — maksimal
+ *       50.000 baris. Header `X-Export-Range` menyebut jangkauan yang dipakai.
+ *       Kolom: captured_at_wib, status, trigger, window, road_class, roads, avg_jam_factor, error.
+ *     tags: [Captures]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: File CSV (UTF-8 dengan BOM)
+ *         headers:
+ *           X-Export-Range: { schema: { type: string, example: last-7-days } }
+ *         content:
+ *           text/csv:
+ *             schema: { type: string }
+ *       401: { description: UNAUTHORIZED }
+ *       403: { description: FORBIDDEN }
+ *       404: { description: ZONE_NOT_FOUND }
+ */
+router.get('/zones/:id/captures.csv', captureController.exportCsv)
+
 router.get('/zones/:id/captures', captureController.listForZone)
 
 /**

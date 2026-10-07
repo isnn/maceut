@@ -1,5 +1,6 @@
 'use client'
 
+import { linkClass } from '@/components/ui/Button'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -15,7 +16,7 @@ function ForgotPassword() {
       footer={
         <>
           Remembered it?{' '}
-          <Link href="/login" className="text-info font-medium no-underline hover:underline">
+          <Link href="/login" className={linkClass()}>
             Log in
           </Link>
         </>

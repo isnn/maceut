@@ -1,6 +1,6 @@
 import { eq, and, asc, desc, gte, inArray, lt, lte, ne, sql } from 'drizzle-orm'
 import { db } from '../lib/drizzle-client'
-import { captures, zones } from '../../drizzle/schema'
+import { captures, schedules, zones } from '../../drizzle/schema'
 import type { RoadClass } from '../types/plan'
 import type { TrafficCollection } from '../lib/here-traffic-client'
 
@@ -385,4 +385,36 @@ export async function listDoneIdsBetween(
       ),
     )
     .orderBy(asc(captures.capturedAt))
+}
+
+/** One CSV row per capture (FE-30) — stored summary columns only, never the traffic. */
+export interface CsvCaptureRow {
+  capturedAt: Date
+  status: string
+  trigger: string
+  windowName: string | null
+  roadClass: string
+  roadsCount: number | null
+  jamFactorAvg: string | null
+  error: string | null
+}
+
+/** A zone's captures since `since` (or all), oldest first, at most `limit` rows. */
+export async function listForCsv(zoneId: string, since: Date | null, limit: number): Promise<CsvCaptureRow[]> {
+  return db
+    .select({
+      capturedAt: captures.capturedAt,
+      status: captures.status,
+      trigger: captures.trigger,
+      windowName: schedules.label,
+      roadClass: captures.roadClass,
+      roadsCount: captures.roadsCount,
+      jamFactorAvg: captures.jamFactorAvg,
+      error: captures.error,
+    })
+    .from(captures)
+    .leftJoin(schedules, eq(captures.scheduleId, schedules.id))
+    .where(since ? and(eq(captures.zoneId, zoneId), gte(captures.capturedAt, since)) : eq(captures.zoneId, zoneId))
+    .orderBy(asc(captures.capturedAt))
+    .limit(limit)
 }

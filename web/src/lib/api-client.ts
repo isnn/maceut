@@ -33,6 +33,30 @@ async function parseJson(res: Response): Promise<unknown> {
   }
 }
 
+/** Pages a signed-out visitor is meant to be on — a 401 there is expected, not an expiry. */
+const PUBLIC_AUTH_PATHS = ['/login', '/register', '/forgot-password', '/verify-email']
+let redirectingToLogin = false
+
+/**
+ * The session ended while a page was open (FE-30). The app's guard only checks on load,
+ * so without this every later call failed with a small "session ended" line and nothing
+ * else happened. Go to login once — parallel calls all land here — and never settle, so
+ * the page doesn't flash an error on its way out. `/me` is left alone: it answers "signed
+ * out" by design, and the guard redirects on that.
+ */
+function sessionEnded(): Promise<never> {
+  const here = typeof window === 'undefined' ? null : window.location.pathname
+  if (here === null || PUBLIC_AUTH_PATHS.some((p) => here.startsWith(p))) {
+    return Promise.reject(new ApiError({ code: 'UNAUTHORIZED', message: 'Your session has ended. Please log in again.' }))
+  }
+  if (!redirectingToLogin) {
+    redirectingToLogin = true
+    const back = window.location.pathname + window.location.search
+    window.location.replace(`/login?redirect=${encodeURIComponent(back)}&expired=1`)
+  }
+  return new Promise<never>(() => undefined)
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
@@ -53,7 +77,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!body || typeof body !== 'object' || !('success' in body)) {
     throw new ApiError({ code: 'BAD_RESPONSE', message: `Unexpected response from the server (HTTP ${res.status}).` })
   }
-  if (!body.success) throw new ApiError(body.error)
+  if (!body.success) {
+    if (res.status === 401 && body.error.code === 'UNAUTHORIZED' && path !== '/me') return sessionEnded()
+    throw new ApiError(body.error)
+  }
   return body.data
 }
 
@@ -73,12 +100,39 @@ async function requestWithMeta<T>(path: string): Promise<{ data: T; meta?: ApiRe
   if (!body || !('success' in body)) {
     throw new ApiError({ code: 'BAD_RESPONSE', message: `Unexpected response from the server (HTTP ${res.status}).` })
   }
-  if (!body.success) throw new ApiError(body.error)
+  if (!body.success) {
+    if (res.status === 401 && body.error.code === 'UNAUTHORIZED') return sessionEnded()
+    throw new ApiError(body.error)
+  }
   return { data: body.data, meta: body.meta as never }
+}
+
+/**
+ * A file the API sends as an attachment (FE-30: the captures CSV). Errors still arrive
+ * as `{ success: false, error }`, and an ended session still goes to login.
+ */
+async function download(path: string): Promise<{ blob: Blob; filename: string | null; headers: Headers }> {
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include' })
+  } catch {
+    throw new ApiError({ code: NETWORK_ERROR, message: 'Could not reach the server. Check your connection and try again.' })
+  }
+  if (!res.ok) {
+    const body = (await parseJson(res)) as ApiResponse<unknown> | null
+    if (body && typeof body === 'object' && 'success' in body && !body.success) {
+      if (res.status === 401 && body.error.code === 'UNAUTHORIZED') return sessionEnded()
+      throw new ApiError(body.error)
+    }
+    throw new ApiError({ code: 'BAD_RESPONSE', message: `Unexpected response from the server (HTTP ${res.status}).` })
+  }
+  const filename = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? null
+  return { blob: await res.blob(), filename, headers: res.headers }
 }
 
 export const apiClient = {
   get: <T>(path: string) => request<T>(path),
+  download,
   getWithMeta: requestWithMeta,
   post: <T>(path: string, payload?: unknown) =>
     request<T>(path, { method: 'POST', body: payload ? JSON.stringify(payload) : undefined }),

@@ -1,5 +1,6 @@
 'use client'
 
+import { linkClass } from '@/components/ui/Button'
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -35,7 +36,7 @@ export default function RegisterPage() {
 
         <p className="text-body text-text-secondary text-center mt-xl">
           Already have an account?{' '}
-          <Link href="/login" className="text-info font-medium no-underline hover:underline">
+          <Link href="/login" className={linkClass()}>
             Log in
           </Link>
         </p>

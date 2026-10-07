@@ -19,7 +19,7 @@ vi.mock('better-auth/node', () => ({
 }))
 vi.mock('../repositories/user.repository', () => ({ findById: vi.fn(), findByIdWithPlan: vi.fn() }))
 vi.mock('../repositories/zone.repository', () => ({ findById: vi.fn() }))
-vi.mock('../repositories/capture.repository', () => ({ findById: vi.fn(), recentForUser: vi.fn() }))
+vi.mock('../repositories/capture.repository', () => ({ findById: vi.fn(), recentForUser: vi.fn(), listForCsv: vi.fn() }))
 vi.mock('../lib/r2-client', () => ({
   getPresignedUrl: vi.fn(async (path: string) => `https://r2.example/${path}`),
   thumbnailPath: (p: string) => p.replace(/\.png$/, '.thumb.jpg'),
@@ -145,5 +145,66 @@ describe('GET /captures (dashboard strip)', () => {
       null,
       null,
     ])
+  })
+})
+
+describe('GET /zones/:id/captures.csv (FE-30)', () => {
+  const csvRow = (over: Record<string, unknown> = {}) => ({
+    capturedAt: new Date('2026-09-27T00:30:00Z'),
+    status: 'done',
+    trigger: 'scheduled',
+    windowName: 'Rush, "east"',
+    roadClass: 'nasional',
+    roadsCount: 1043,
+    jamFactorAvg: '3.25',
+    error: null,
+    ...over,
+  })
+
+  beforeEach(() => {
+    vi.mocked(zoneRepo.findById).mockResolvedValue({ id: ZONE_ID, userId: USER_ID, name: 'Jl. Sudirman' } as never)
+    vi.mocked(captureRepo.listForCsv).mockResolvedValue([csvRow()])
+  })
+
+  it('requires a session', async () => {
+    vi.mocked(auth.api.getSession).mockResolvedValue(null as never)
+    expect((await request(app).get(`/zones/${ZONE_ID}/captures.csv`)).status).toBe(401)
+  })
+
+  it('refuses another account’s zone', async () => {
+    signedIn()
+    vi.mocked(zoneRepo.findById).mockResolvedValue({ id: ZONE_ID, userId: 'someone-else', name: 'X' } as never)
+    const res = await request(app).get(`/zones/${ZONE_ID}/captures.csv`)
+    expect(res.status).toBe(403)
+    expect(captureRepo.listForCsv).not.toHaveBeenCalled()
+  })
+
+  it('downloads one row per capture, in WIB, with fields escaped', async () => {
+    signedIn()
+    const res = await request(app).get(`/zones/${ZONE_ID}/captures.csv`)
+
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch(/^text\/csv/)
+    expect(res.headers['content-disposition']).toMatch(/attachment; filename="maceut-jl-sudirman-captures-\d{4}-\d{2}-\d{2}\.csv"/)
+    const lines = res.text.replace(/^\uFEFF/, '').trim().split('\r\n')
+    expect(lines[0]).toBe('captured_at_wib,status,trigger,window,road_class,roads,avg_jam_factor,error')
+    expect(lines[1]).toBe('2026-09-27 07:30,done,scheduled,"Rush, ""east""",nasional,1043,3.25,')
+  })
+
+  it('reaches back as far as the plan’s history (BR-007)', async () => {
+    signedIn() // standard → 90 days
+    const res = await request(app).get(`/zones/${ZONE_ID}/captures.csv`)
+    expect(res.headers['x-export-range']).toBe('last-90-days')
+    const since = vi.mocked(captureRepo.listForCsv).mock.calls[0]![1] as Date
+    expect(Math.round((Date.now() - since.getTime()) / 86_400_000)).toBe(90)
+
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue({ plan: 'premium' } as never)
+    const all = await request(app).get(`/zones/${ZONE_ID}/captures.csv`)
+    expect(all.headers['x-export-range']).toBe('all')
+    expect(vi.mocked(captureRepo.listForCsv).mock.calls[1]![1]).toBeNull()
+
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue({ plan: 'free' } as never)
+    const free = await request(app).get(`/zones/${ZONE_ID}/captures.csv`)
+    expect(free.headers['x-export-range']).toBe('last-7-days')
   })
 })

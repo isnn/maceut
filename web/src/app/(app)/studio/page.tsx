@@ -1537,7 +1537,7 @@ function exportFit(plan: Plan, frames: number, width: number, height: number): {
     const max = Math.floor((limits.exportBudgetMpFrames * 1_000_000) / (width * height))
     return { ok: false, note: `Too big for your plan — at ${width} × ${height} up to ${max} frames` }
   }
-  return { ok: true, note: `${Math.max(1, Math.round((used / limits.exportBudgetMpFrames) * 100))}% of your export budget` }
+  return { ok: true, note: `${Math.max(1, Math.round((used / limits.exportBudgetMpFrames) * 100))}% of your plan’s export size` }
 }
 
 /**

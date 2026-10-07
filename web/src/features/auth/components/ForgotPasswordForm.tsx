@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/Button'
+import { Button, linkClass } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { FormLabel, Input, PasswordInput } from '@/components/ui/Input'
 import { OtpInput } from '@/components/ui/OtpInput'
@@ -108,7 +108,7 @@ export function ForgotPasswordForm({ initialEmail }: { initialEmail: string }) {
             setCode('')
             setError(null)
           }}
-          className="text-info font-medium hover:underline"
+          className={linkClass()}
         >
           Start again
         </button>

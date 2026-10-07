@@ -242,3 +242,19 @@ export interface EnqueuedCapture {
 export async function runCapture(zoneId: string): Promise<EnqueuedCapture> {
   return apiClient.post<EnqueuedCapture>(`/zones/${zoneId}/captures`)
 }
+
+/**
+ * Downloads a zone's captures as CSV (FE-30) — one row per capture, reaching back as far
+ * as the plan's history. Saved by the browser under the API's file name.
+ */
+export async function downloadCapturesCsv(zoneId: string): Promise<void> {
+  const { blob, filename } = await apiClient.download(`/zones/${zoneId}/captures.csv`)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename ?? 'maceut-captures.csv'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

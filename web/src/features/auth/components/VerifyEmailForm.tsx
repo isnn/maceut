@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/Button'
+import { Button, linkClass } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { FormLabel } from '@/components/ui/Input'
 import { OtpInput } from '@/components/ui/OtpInput'
@@ -91,7 +91,7 @@ export function VerifyEmailForm({ email }: { email: string }) {
         {cooldown > 0 ? (
           <span className="text-text-muted tabular-nums">send a new code in {cooldown}s</span>
         ) : (
-          <button type="button" onClick={resend} className="text-info font-medium hover:underline">
+          <button type="button" onClick={resend} className={linkClass()}>
             send a new code
           </button>
         )}

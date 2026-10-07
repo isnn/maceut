@@ -84,6 +84,11 @@ export interface PlanLimits {
    * Users trade size against length: Premium is 720 frames at 2K, or 180 at 4000×4000.
    */
   exportBudgetMpFrames: number
+  /**
+   * FE-30 — how far back the zone's captures CSV reaches, in days; null = all history.
+   * The same numbers as "History kept" on the plan cards.
+   */
+  historyDays: number | null
 }
 
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
@@ -96,6 +101,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     storageGb: 1,
     exportFramesLimit: 60,
     exportBudgetMpFrames: 120,
+    historyDays: 7,
   },
   standard: {
     maxRoadClass: 'nasional_provinsi',
@@ -106,6 +112,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     storageGb: 10,
     exportFramesLimit: 240,
     exportBudgetMpFrames: 500,
+    historyDays: 90,
   },
   premium: {
     maxRoadClass: 'semua',
@@ -116,6 +123,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     storageGb: 100,
     exportFramesLimit: 720,
     exportBudgetMpFrames: 2900,
+    historyDays: null,
   },
 }
 

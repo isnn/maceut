@@ -27,7 +27,7 @@ export const REASON_LABEL: Record<ImpactReason, string> = {
   interval_above_plan: 'its interval isn’t available on this plan',
   over_schedule_limit: 'over the plan’s active-window limit',
   over_zone_limit: 'over the plan’s zone limit',
-  over_daily_frames: 'over the plan’s daily frame budget',
+  over_daily_frames: 'over the plan’s daily snapshot limit',
 }
 
 /** The signed-in account's own downgrade. */

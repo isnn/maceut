@@ -1,5 +1,6 @@
 'use client'
 
+import { linkClass } from '@/components/ui/Button'
 import { Suspense, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -98,7 +99,7 @@ export default function LoginPage() {
 
               <p className="text-body text-text-secondary text-center mt-xl">
                 New to Maceut?{' '}
-                <Link href="/register" className="text-info font-medium no-underline hover:underline">
+                <Link href="/register" className={linkClass()}>
                   Create an account
                 </Link>
               </p>

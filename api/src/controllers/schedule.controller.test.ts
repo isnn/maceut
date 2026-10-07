@@ -123,6 +123,7 @@ describe('POST /schedules', () => {
     const res = await request(app).post('/schedules').send({ ...body, interval: '15min' })
 
     expect(res.status).toBe(403)
+    expect(res.body.error).toMatchObject({ code: 'INTERVAL_NOT_IN_PLAN', details: { interval: '15min', plan: 'free' } })
     expect(scheduleRepo.create).not.toHaveBeenCalled()
   })
 
@@ -140,7 +141,9 @@ describe('POST /schedules', () => {
       .send({ ...body, start: '07:00', end: '23:00' })
 
     expect(res.status).toBe(422)
-    expect(res.body.error.details).toMatchObject({ dailyLimit: 50 })
+    expect(res.body.error.code).toBe('CAPTURE_LIMIT_EXCEEDED')
+    expect(res.body.error.details).toMatchObject({ dailyLimit: 50, frames: 64, plan: 'standard' })
+    expect(res.body.error.message).not.toMatch(/frame\/hari|Jendela/) // English, not Bahasa (FE-30)
     expect(scheduleRepo.create).not.toHaveBeenCalled()
   })
 

@@ -89,3 +89,21 @@ export async function detail(req: Request, res: Response, next: NextFunction) {
     next(err)
   }
 }
+
+/** A zone's captures as CSV, as far back as the plan's history reaches (FE-30). */
+export async function exportCsv(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) throw new UnauthorizedError()
+    const zoneId = idParam.parse(req.params.id)
+    const { csv, zoneName, range } = await captureService.exportCsv(req.userId, req.plan ?? 'free', zoneId)
+    const slug = zoneName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'zone'
+    const today = new Date().toISOString().slice(0, 10)
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="maceut-${slug}-captures-${today}.csv"`)
+    res.setHeader('X-Export-Range', range)
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Export-Range')
+    return res.status(200).send(csv)
+  } catch (err) {
+    next(err)
+  }
+}

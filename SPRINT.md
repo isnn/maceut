@@ -155,6 +155,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **EXP-B** Export video lewat ffmpeg (tanpa merekam real-time) | rencana optimasi export |
 | ✅ | **EXP-C** Batas frame × piksel per paket, antrian bergiliran, opsi WebP | rencana optimasi export |
 | ✅ | **ZONE-PERF** Create zone: jalan dimuat per kelas & bertahap, cache HERE dipakai bersama hitungan, peta canvas berlapis (tanpa lag) | rencana optimasi part 2 |
+| ✅ | **FE-30** Dialog jendela capture (copy Inggris, error interaktif, mahkota upgrade, menu ⋮), next capture & export CSV di detail zona, sesi kedaluwarsa → login, login tanpa Agency SSO & link warna brand | review user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -179,6 +180,23 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-07] FE-30 — dialog jendela capture, detail zona, sesi kedaluwarsa, login.
+
+  - Dialog jendela (WindowDialog, kini komponen sendiri): copy Inggris; error per field saat blur
+    dengan satu tombol perbaikan (Swap times, Weekdays/Every day, ide nama); opsi di atas paket tetap
+    bisa dipilih dengan ikon mahkota + panel upgrade (Use hourly / Pause one / Collect hourly /
+    Trim to … + Upgrade, draf disimpan di sessionStorage); tanpa kata "budget".
+  - API: pesan schedule ke Inggris; kode stabil INTERVAL_NOT_IN_PLAN & CAPTURE_LIMIT_EXCEEDED
+    (detail day/frames/dailyLimit); NOT_FOUND membawa `resource`. Web memetakan per kode.
+  - Tabel jendela (Schedule & detail zona): menu ⋮ Edit / Pause·Resume / Delete.
+  - Detail zona: kartu Next collection (dipindah ke features/schedules) + kartu Capture data dengan
+    Export CSV — GET /zones/:id/captures.csv, satu baris per capture dari kolom ringkasan, jangkauan
+    per paket (historyDays 7/90/semua, BR-007), maks 50.000 baris, BOM UTF-8.
+  - Sesi berakhir: api-client mengarahkan sekali ke /login?redirect=…&expired=1 (tanpa kilasan
+    error); login menampilkan "Your session ended…". Pesan API default ke Inggris.
+  - Login tanpa Agency SSO; link auth & landing pakai linkClass (ungu brand).
+  VERIFIKASI: 472 test API (CSV + kode error baru), tsc + eslint bersih kedua paket.
 
 [2026-10-05f] ZONE-PERF — Create zone tanpa lag (part 2 rencana optimasi).
 

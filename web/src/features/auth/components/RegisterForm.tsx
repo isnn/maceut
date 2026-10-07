@@ -94,7 +94,7 @@ export function RegisterForm() {
       <label className="flex items-start gap-sm text-body text-text-secondary">
         <Checkbox checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-[2px] shrink-0" />
         <span>
-          I agree to the <span className="text-info">Terms of Service</span> and to traffic data being collected within
+          I agree to the <span className="text-primary font-medium">Terms of Service</span> and to traffic data being collected within
           the zones I define.
         </span>
       </label>
