@@ -199,6 +199,9 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
     pagination rapi, link brand); header & role pill menampilkan Superadmin / Admin; Admin hanya
     melihat Overview & Users, halaman lain "Superadmins only".
   VERIFIKASI: 485 test API (akses admin 403 di 6 rute, usage endpoint), tsc + eslint bersih.
+  REVISI (review user): role tetap Customer / Internal; untuk akun Internal kolom *Plan* berisi
+  Admin / Superadmin (pengganti Free/Standard/Premium). Header kembali "Internal". Halaman usage:
+  peringatan paused dihapus (jadi catatan kecil di tile), tile statistik besar + baris fakta.
 
 [2026-10-07d] FE-33 — nama kelas jalan dalam bahasa Inggris.
 

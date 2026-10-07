@@ -1,6 +1,6 @@
 'use client'
 
-import { PlanPill, RolePill } from '@/components/ui/Badge'
+import { AccountPlanPill, RolePill } from '@/components/ui/Badge'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
@@ -52,7 +52,7 @@ export default function InternalOverviewPage() {
       zones: (row) => row.usage.zonesCount,
       paused: (row) => row.usage.zonesPaused + row.usage.schedulesPaused,
       plan: (row) => PLAN_ORDER.indexOf(row.plan),
-      role: (row) => ['user', 'admin', 'superadmin'].indexOf(row.access),
+      role: (row) => row.role,
       joined: (row) => row.createdAt,
     },
     defaultDirection: { zones: 'desc', paused: 'desc', joined: 'desc' },
@@ -224,10 +224,10 @@ export default function InternalOverviewPage() {
                     <PausedCell zones={row.usage.zonesPaused} windows={row.usage.schedulesPaused} />
                   </Td>
                   <Td>
-                    <PlanPill plan={row.plan} />
+                    <AccountPlanPill access={row.access} plan={row.plan} />
                   </Td>
                   <Td>
-                    <RolePill access={row.access} />
+                    <RolePill role={row.role} />
                   </Td>
                   <Td className="text-text-secondary">{formatDate(row.createdAt)}</Td>
                 </tr>

@@ -177,22 +177,34 @@ export function AddUserDialog({ open, onClose, onCreated }: { open: boolean; onC
                 <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
                   <div className="space-y-xs">
                     <FormLabel htmlFor="new-plan">Plan</FormLabel>
-                    <Select
-                      value={plan}
-                      onValueChange={(v) => setPlan(v as Plan)}
-                      options={PLAN_ORDER.map((p) => ({ value: p, label: PLAN_LABEL[p] }))}
-                      aria-label="Plan for the new account"
-                    />
+                    {/* Internal staff have no customer plan; their plan is their staff type (FE-34). */}
+                    {role === 'user' ? (
+                      <Select
+                        value={plan}
+                        onValueChange={(v) => setPlan(v as Plan)}
+                        options={PLAN_ORDER.map((p) => ({ value: p, label: PLAN_LABEL[p] }))}
+                        aria-label="Plan for the new account"
+                      />
+                    ) : (
+                      <Select
+                        value={role}
+                        onValueChange={(v) => setRole(v as Access)}
+                        options={[
+                        { value: 'admin', label: 'Admin — helps customers' },
+                        { value: 'superadmin', label: 'Superadmin — runs the platform' },
+                      ]}
+                        aria-label="Staff plan for the new account"
+                      />
+                    )}
                   </div>
                   <div className="space-y-xs">
                     <FormLabel htmlFor="new-role">Role</FormLabel>
                     <Select
-                      value={role}
-                      onValueChange={(v) => setRole(v as Access)}
+                      value={role === 'user' ? 'user' : 'internal'}
+                      onValueChange={(v) => setRole(v === 'internal' ? 'admin' : 'user')}
                       options={[
                         { value: 'user', label: 'Customer' },
-                        { value: 'admin', label: 'Admin — helps customers' },
-                        { value: 'superadmin', label: 'Superadmin — runs the platform' },
+                        { value: 'internal', label: 'Internal — Maceut staff' },
                       ]}
                       aria-label="Role for the new account"
                     />

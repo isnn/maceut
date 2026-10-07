@@ -23,13 +23,13 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import { PausedCell } from '@/features/internal/components/PausedCell'
-import { ACCESS_LABEL, accessOf, type Access, type Plan } from '@/features/auth/types'
+import { accessOf, type Access, type Plan, type PlatformRole } from '@/features/auth/types'
 
 
 export default function InternalUsersPage() {
   const [rows, setRows] = useState<InternalUserRow[] | null>(null)
   const [planFilter, setPlanFilter] = useState<Plan | 'all'>('all')
-  const [roleFilter, setRoleFilter] = useState<Access | 'all'>('all')
+  const [roleFilter, setRoleFilter] = useState<PlatformRole | 'all'>('all')
   const router = useRouter()
   const { user: me } = useCurrentUser()
   /** FE-34: admins help customers (plans); superadmins also manage accounts and staff. */
@@ -57,7 +57,7 @@ export default function InternalUsersPage() {
     () =>
       rows?.filter(
         (row) =>
-          (planFilter === 'all' || row.plan === planFilter) && (roleFilter === 'all' || row.access === roleFilter),
+          (planFilter === 'all' || row.plan === planFilter) && (roleFilter === 'all' || row.role === roleFilter),
       ) ?? null,
     [rows, planFilter, roleFilter],
   )
@@ -67,8 +67,9 @@ export default function InternalUsersPage() {
     searchOn: (row) => [row.fullName, row.email],
     sortOn: {
       name: (row) => row.fullName.toLowerCase(),
-      plan: (row) => PLAN_ORDER.indexOf(row.plan),
-      role: (row) => ['user', 'admin', 'superadmin'].indexOf(row.access),
+      // Staff sort after customers, Admin before Superadmin.
+      plan: (row) => (row.access === 'user' ? PLAN_ORDER.indexOf(row.plan) : row.access === 'admin' ? 10 : 11),
+      role: (row) => row.role,
       zones: (row) => row.usage.zonesCount,
       paused: (row) => row.usage.zonesPaused + row.usage.schedulesPaused,
       windows: (row) => row.usage.schedulesActiveCount,
@@ -191,12 +192,11 @@ export default function InternalUsersPage() {
         />
         <Select
           value={roleFilter}
-          onValueChange={(v) => setRoleFilter(v as Access | 'all')}
+          onValueChange={(v) => setRoleFilter(v as PlatformRole | 'all')}
           options={[
             { value: 'all', label: 'All roles' },
             { value: 'user', label: 'Customer' },
-            { value: 'admin', label: 'Admin' },
-            { value: 'superadmin', label: 'Superadmin' },
+            { value: 'internal', label: 'Internal' },
           ]}
           className="w-44"
           aria-label="Filter by role"
@@ -280,6 +280,15 @@ export default function InternalUsersPage() {
                 const byConfig = row.roleLockedByConfig
                 const isLastSuperadmin = row.access === 'superadmin' && superadminCount <= 1
                 const roleLocked = !isSuperadmin || row.isYou || isLastSuperadmin || byConfig
+                const lockReason = !isSuperadmin
+                  ? 'Only a superadmin can change this'
+                  : byConfig
+                    ? 'Superadmin through INTERNAL_EMAILS in the server config — change it there'
+                    : row.isYou
+                      ? 'You can’t change your own access'
+                      : isLastSuperadmin
+                        ? 'The last superadmin can’t be demoted'
+                        : undefined
                 return (
                   <tr key={row.id} className="hover:bg-canvas-secondary/60 transition-colors">
                     <Td>
@@ -300,36 +309,44 @@ export default function InternalUsersPage() {
                       </div>
                     </Td>
                     <Td>
-                      <Select
-                        size="sm"
-                        value={row.plan}
-                        onValueChange={(v) => changePlan(row, v as Plan)}
-                        options={PLAN_ORDER.map((plan) => ({ value: plan, label: PLAN_LABEL[plan] }))}
-                        className="w-36"
-                        aria-label={`Plan for ${row.fullName}`}
-                      />
+                      {/* Internal staff have no customer plan: their plan is Admin or Superadmin (FE-34). */}
+                      {row.role === 'internal' ? (
+                        <Select
+                          size="sm"
+                          value={row.access}
+                          disabled={roleLocked}
+                          title={lockReason}
+                          onValueChange={(v) => changeRole(row, v as Access)}
+                          options={[
+                            { value: 'admin', label: 'Admin' },
+                            { value: 'superadmin', label: 'Superadmin' },
+                          ]}
+                          className="w-36"
+                          aria-label={`Staff plan for ${row.fullName}`}
+                        />
+                      ) : (
+                        <Select
+                          size="sm"
+                          value={row.plan}
+                          onValueChange={(v) => changePlan(row, v as Plan)}
+                          options={PLAN_ORDER.map((plan) => ({ value: plan, label: PLAN_LABEL[plan] }))}
+                          className="w-36"
+                          aria-label={`Plan for ${row.fullName}`}
+                        />
+                      )}
                     </Td>
                     <Td>
                       <Select
                         size="sm"
-                        value={row.access}
+                        value={row.role}
                         disabled={roleLocked}
-                        title={
-                          !isSuperadmin
-                            ? 'Only a superadmin can change access'
-                            : byConfig
-                              ? 'Superadmin through INTERNAL_EMAILS in the server config — change it there'
-                              : row.isYou
-                                ? 'You can’t change your own access'
-                                : isLastSuperadmin
-                                  ? 'The last superadmin can’t be demoted'
-                                  : undefined
-                        }
-                        onValueChange={(v) => changeRole(row, v as Access)}
-                        options={(['user', 'admin', 'superadmin'] as Access[]).map((access) => ({
-                          value: access,
-                          label: ACCESS_LABEL[access],
-                        }))}
+                        title={lockReason}
+                        // Customer ↔ Internal. A new internal account starts as Admin, the lesser plan.
+                        onValueChange={(v) => changeRole(row, v === 'internal' ? 'admin' : 'user')}
+                        options={[
+                          { value: 'user', label: 'Customer' },
+                          { value: 'internal', label: 'Internal' },
+                        ]}
                         className="w-32"
                         aria-label={`Role for ${row.fullName}`}
                       />

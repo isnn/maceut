@@ -136,23 +136,36 @@ function EditUserForm({
               <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
                 <div className="space-y-xs">
                   <FormLabel htmlFor="edit-plan">Plan</FormLabel>
-                  <Select
-                    value={plan}
-                    onValueChange={(v) => setPlan(v as Plan)}
-                    options={PLAN_ORDER.map((p) => ({ value: p, label: PLAN_LABEL[p] }))}
-                    aria-label="Plan"
-                  />
+                  {/* Internal staff have no customer plan; their plan is their staff type (FE-34). */}
+                  {role === 'user' ? (
+                    <Select
+                      value={plan}
+                      onValueChange={(v) => setPlan(v as Plan)}
+                      options={PLAN_ORDER.map((p) => ({ value: p, label: PLAN_LABEL[p] }))}
+                      aria-label="Plan"
+                    />
+                  ) : (
+                    <Select
+                      value={role}
+                      onValueChange={(v) => setRole(v as Access)}
+                      disabled={row.isYou || roleByConfig}
+                      options={[
+                      { value: 'admin', label: 'Admin — helps customers' },
+                      { value: 'superadmin', label: 'Superadmin — runs the platform' },
+                    ]}
+                      aria-label="Staff plan"
+                    />
+                  )}
                 </div>
                 <div className="space-y-xs">
                   <FormLabel htmlFor="edit-role">Role</FormLabel>
                   <Select
-                    value={role}
-                    onValueChange={(v) => setRole(v as Access)}
+                    value={role === 'user' ? 'user' : 'internal'}
+                    onValueChange={(v) => setRole(v === 'internal' ? (row.access === 'user' ? 'admin' : row.access) : 'user')}
                     disabled={row.isYou || roleByConfig}
                     options={[
                       { value: 'user', label: 'Customer' },
-                      { value: 'admin', label: 'Admin — helps customers' },
-                      { value: 'superadmin', label: 'Superadmin — runs the platform' },
+                      { value: 'internal', label: 'Internal — Maceut staff' },
                     ]}
                     aria-label="Role"
                   />

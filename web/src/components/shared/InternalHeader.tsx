@@ -7,7 +7,7 @@ import { Dropdown } from '@/components/ui/Dropdown'
 import { cn } from '@/lib/utils'
 import { PAGE_WIDTH } from './page-width'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
-import { ACCESS_LABEL, accessOf } from '@/features/auth/types'
+import { accessOf } from '@/features/auth/types'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 
 const NAV_ITEMS = [
@@ -38,7 +38,7 @@ export function InternalHeader() {
         <div className="flex items-center gap-sm">
           <Logo href="/internal" />
           <span className="bg-primary-soft text-primary text-micro font-semibold rounded-xs px-sm py-xs uppercase tracking-wide">
-            {user ? ACCESS_LABEL[accessOf(user)] : 'Staff'}
+            Internal
           </span>
         </div>
 

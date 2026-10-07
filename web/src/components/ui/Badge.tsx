@@ -80,11 +80,23 @@ export function PlanPill({ plan, className }: { plan: Plan; className?: string }
   )
 }
 
-/** Customer, Admin or Superadmin (FE-34). */
-export function RolePill({ access, className }: { access: 'user' | 'admin' | 'superadmin'; className?: string }) {
+export function RolePill({ role, className }: { role: 'user' | 'internal'; className?: string }) {
   return (
-    <StatusPill tone={access === 'superadmin' ? 'brand' : access === 'admin' ? 'info' : 'neutral'} className={className}>
-      {access === 'superadmin' ? 'Superadmin' : access === 'admin' ? 'Admin' : 'Customer'}
+    <StatusPill tone={role === 'internal' ? 'brand' : 'neutral'} className={className}>
+      {role === 'internal' ? 'Internal' : 'Customer'}
+    </StatusPill>
+  )
+}
+
+/**
+ * An account's plan column (FE-34): a customer's plan, or — for internal staff, who
+ * have no customer plan — their staff plan, Superadmin or Admin.
+ */
+export function AccountPlanPill({ access, plan, className }: { access: 'user' | 'admin' | 'superadmin'; plan: Plan; className?: string }) {
+  if (access === 'user') return <PlanPill plan={plan} className={className} />
+  return (
+    <StatusPill tone={access === 'superadmin' ? 'brand' : 'info'} className={className}>
+      {access === 'superadmin' ? 'Superadmin' : 'Admin'}
     </StatusPill>
   )
 }

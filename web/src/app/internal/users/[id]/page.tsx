@@ -5,13 +5,13 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
-import { PlanPill, RoadClassBadge, RolePill, StatusPill } from '@/components/ui/Badge'
-import { UsageMeter, AttributeRow } from '@/components/ui/UsageMeter'
+import { AccountPlanPill, RoadClassBadge, RolePill, StatusPill } from '@/components/ui/Badge'
+import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { IconArrowLeft } from '@/components/ui/icons'
 import { formatDate, formatNumber } from '@/lib/utils'
-import { PLAN_LABEL, PLAN_LIMITS } from '@/lib/constants'
+import { PLAN_LIMITS } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import { accessOf } from '@/features/auth/types'
 import { DAY_LABEL } from '@/features/schedules/types'
@@ -93,38 +93,30 @@ export default function InternalUserUsagePage() {
           </p>
         </div>
         <div className="ml-auto flex items-center gap-sm">
-          <PlanPill plan={user.plan} />
-          <RolePill access={accessOf(user)} />
+          <AccountPlanPill access={accessOf(user)} plan={user.plan} />
+          <RolePill role={user.role} />
         </div>
       </div>
 
-      {(paused.zones > 0 || paused.schedules > 0) && (
-        <Alert variant="warning">
-          {[
-            paused.zones > 0 && `${paused.zones} zone${paused.zones === 1 ? '' : 's'}`,
-            paused.schedules > 0 && `${paused.schedules} capture window${paused.schedules === 1 ? '' : 's'}`,
-          ]
-            .filter(Boolean)
-            .join(' and ')}{' '}
-          paused for exceeding the {PLAN_LABEL[user.plan]} plan. Nothing was deleted — moving the plan back up lets them
-          be resumed.
-        </Alert>
-      )}
-
       <section className="space-y-md">
         <h2 className="text-section-title text-text-primary">Usage</h2>
+        <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-lg">
+          <StatTile label="Zones" value={usage.zonesCount} max={usage.zonesLimit} note={paused.zones > 0 ? `${paused.zones} paused by plan` : undefined} />
+          <StatTile
+            label="Active windows"
+            value={usage.schedulesActiveCount}
+            max={usage.schedulesLimit}
+            note={paused.schedules > 0 ? `${paused.schedules} paused by plan` : undefined}
+          />
+          <StatTile label="Captures today" value={usage.capturesToday ?? 0} max={usage.capturesLimit} />
+          <StatTile label="Storage" value={usage.storageUsedGb} max={usage.storageLimitGb} unit="GB" decimals={2} />
+        </div>
         <Card className="p-lg">
-          <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-lg">
-            <UsageMeter label="Zones" value={usage.zonesCount} max={usage.zonesLimit} />
-            <UsageMeter label="Active windows" value={usage.schedulesActiveCount} max={usage.schedulesLimit} />
-            <UsageMeter label="Captures today" value={usage.capturesToday} max={usage.capturesLimit} />
-            <UsageMeter label="Storage" value={usage.storageUsedGb} max={usage.storageLimitGb} unit=" GB" />
-          </div>
-          <dl className="mt-xl border-t border-divider pt-lg grid grid-cols-1 tablet:grid-cols-2 gap-x-xl divide-y divide-divider tablet:divide-y-0">
-            <AttributeRow label="Exports this month" value={formatNumber(usage.exportsThisMonth)} />
-            <AttributeRow label="Snapshots a day (busiest day)" value={`${formatNumber(usage.framesPerDay)} / ${formatNumber(usage.capturesLimit)}`} />
-            <AttributeRow label="Capture interval" value={limits.captureInterval} />
-            <AttributeRow label="History kept" value={limits.historyLabel} />
+          <dl className="grid grid-cols-2 laptop:grid-cols-4 gap-lg">
+            <Fact label="Exports this month" value={formatNumber(usage.exportsThisMonth)} />
+            <Fact label="Snapshots a day" value={`${formatNumber(usage.framesPerDay)} / ${formatNumber(usage.capturesLimit)}`} />
+            <Fact label="Capture interval" value={limits.captureInterval} />
+            <Fact label="History kept" value={limits.historyLabel} />
           </dl>
         </Card>
       </section>
@@ -208,6 +200,55 @@ export default function InternalUserUsagePage() {
           </TableWrap>
         )}
       </section>
+    </div>
+  )
+}
+
+/**
+ * One quota as a tile: the figure large, the plan's limit beside it, a bar that turns
+ * amber near the limit, and a note for what a plan change paused.
+ */
+function StatTile({
+  label,
+  value,
+  max,
+  unit,
+  decimals = 0,
+  note,
+}: {
+  label: string
+  value: number
+  max: number
+  unit?: string
+  decimals?: number
+  note?: string
+}) {
+  const share = max > 0 ? value / max : 0
+  return (
+    <Card className="p-lg space-y-sm">
+      <div className="flex items-baseline justify-between gap-sm">
+        <p className="text-label text-text-secondary">{label}</p>
+        <p className="text-caption text-text-muted tabular-nums">{Math.round(share * 100)}%</p>
+      </div>
+      <p className="text-display text-text-primary tabular-nums leading-none">
+        {formatNumber(value, decimals)}
+        <span className="text-body text-text-muted font-normal">
+          {' '}
+          / {formatNumber(max)}
+          {unit ? ` ${unit}` : ''}
+        </span>
+      </p>
+      <ProgressBar value={value} max={max} />
+      {note && <p className="text-caption font-semibold text-warning-text">{note}</p>}
+    </Card>
+  )
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-caption text-text-muted">{label}</dt>
+      <dd className="text-body font-semibold text-text-primary mt-xs truncate">{value}</dd>
     </div>
   )
 }
