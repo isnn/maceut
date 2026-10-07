@@ -25,6 +25,8 @@ export const user = pgTable("user", {
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
   role: text("role").default("user"),
+  // FE-34: "superadmin" | "admin" when role = "internal"; null for customers.
+  staffType: text("staff_type"),
   onboardingDone: boolean("onboarding_done").default(false),
 });
 

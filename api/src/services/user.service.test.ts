@@ -13,6 +13,7 @@ vi.mock('../repositories/user.repository', () => ({
   updateUser: vi.fn(),
   listWithPlans: vi.fn(),
   countInternal: vi.fn(async () => 0),
+  countSuperadmins: vi.fn(async () => 0),
 }))
 vi.mock('../repositories/zone.repository', () => ({
   findByUserId: vi.fn(async () => []),
@@ -26,21 +27,37 @@ vi.mock('../repositories/schedule.repository', () => ({
   countsByUser: vi.fn(async () => new Map()),
   countAllActive: vi.fn(async () => 0),
 }))
+vi.mock('../repositories/export.repository', () => ({ fileBytesByUser: vi.fn(async () => new Map()) }))
+vi.mock('../repositories/render-cache.repository', () => ({ bytesByUser: vi.fn(async () => new Map()) }))
 vi.mock('../repositories/capture.repository', () => ({
+  imageBytesByUser: vi.fn(async () => new Map()),
   countsToday: vi.fn(async () => new Map()),
   countAllToday: vi.fn(async () => 0),
 }))
 vi.mock('../lib/auth', () => ({
   auth: { api: { signUpEmail: vi.fn() } },
 }))
-vi.mock('../lib/internal-access', () => ({
-  isInternalByConfig: vi.fn(() => false),
-  resolveRole: vi.fn((_email: string, stored: string) => stored),
-  configuredInternalEmails: vi.fn(() => []),
-}))
+vi.mock('../lib/internal-access', () => {
+  const isInternalByConfig = vi.fn((_email: string) => false)
+  const resolveRole = vi.fn((_email: string, stored: string) => stored)
+  // Same rules as the real module, built on the two mocks above (FE-34).
+  const resolveStaffType = (email: string, role: string, stored: string | null) =>
+    resolveRole(email, role) !== 'internal' ? null : isInternalByConfig(email) ? 'superadmin' : stored === 'superadmin' ? 'superadmin' : 'admin'
+  return {
+    isInternalByConfig,
+    resolveRole,
+    resolveStaffType,
+    accessOf: (r: { email: string; role: string | null; staffType?: string | null }) =>
+      resolveStaffType(r.email, r.role ?? 'user', r.staffType ?? null) ?? 'user',
+    columnsFor: (a: string) => (a === 'user' ? { role: 'user', staffType: null } : { role: 'internal', staffType: a }),
+    configuredInternalEmails: vi.fn(() => []),
+  }
+})
 
 import { auth } from '../lib/auth'
 import * as userRepo from '../repositories/user.repository'
+import * as exportRepo from '../repositories/export.repository'
+import * as renderCacheRepo from '../repositories/render-cache.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as captureRepo from '../repositories/capture.repository'
@@ -72,6 +89,7 @@ function row(over: Record<string, unknown> = {}) {
     name: 'Budi',
     plan: 'free' as Plan,
     role: 'user',
+    staffType: null,
     onboardingDone: false,
     createdAt: new Date('2026-01-01T00:00:00Z'),
     ...over,
@@ -182,11 +200,18 @@ describe('listUsers — usage is measured, not guessed', () => {
     expect(users[0]!.usage.capturesToday).toBe(4)
   })
 
-  it('leaves storage null — nothing measures it until images exist', async () => {
+  it('adds up storage per account: images, exports and cached frames (FE-35)', async () => {
+    const GB = 1024 ** 3
+    vi.mocked(captureRepo.imageBytesByUser).mockResolvedValue(new Map([[USER, 1 * GB]]))
+    vi.mocked(exportRepo.fileBytesByUser).mockResolvedValue(new Map([[USER, 0.5 * GB]]))
+    vi.mocked(renderCacheRepo.bytesByUser).mockResolvedValue(new Map([[USER, 0.25 * GB]]))
+    vi.mocked(userRepo.listWithPlans).mockResolvedValue({ rows: [row({ id: USER }), row({ id: 'empty' })], total: 2 })
+
     const { users } = await listUsers({ page: 1, limit: 25 })
 
-    // Zero would assert the account stored nothing, which is a different claim.
-    expect(users[0]!.usage.storageUsedGb).toBeNull()
+    expect(users[0]!.usage.storageUsedGb).toBe(1.75)
+    // An account with nothing stored reads as a measured zero, not unknown.
+    expect(users[1]!.usage.storageUsedGb).toBe(0)
   })
 
   it('counts in one grouped query, not one per listed account', async () => {
@@ -220,8 +245,12 @@ describe('getPlatformStats', () => {
     expect((await getPlatformStats()).capturesToday).toBe(31)
   })
 
-  it('still reports storage as unmeasured', async () => {
-    expect((await getPlatformStats()).storageUsedGb).toBeNull()
+  it('measures platform storage across every account (FE-35)', async () => {
+    const GB = 1024 ** 3
+    vi.mocked(captureRepo.imageBytesByUser).mockResolvedValue(new Map([['a', 2 * GB], ['b', 1 * GB]]))
+    vi.mocked(exportRepo.fileBytesByUser).mockResolvedValue(new Map([['a', 0.5 * GB]]))
+    vi.mocked(renderCacheRepo.bytesByUser).mockResolvedValue(new Map())
+    expect((await getPlatformStats()).storageUsedGb).toBe(3.5)
   })
 
   it('excludes internal accounts from the customer count', async () => {
@@ -287,9 +316,9 @@ describe('createUser — staff creating an account (F-21)', () => {
   })
 
   it('can create staff', async () => {
-    await createUser({ email: 'ops@maceut.id', fullName: 'Ops', plan: 'free', role: 'internal' })
+    await createUser({ email: 'ops@maceut.id', fullName: 'Ops', plan: 'free', role: 'admin' })
 
-    expect(userRepo.updateUser).toHaveBeenCalledWith(USER, expect.objectContaining({ role: 'internal' }))
+    expect(userRepo.updateUser).toHaveBeenCalledWith(USER, expect.objectContaining({ role: 'internal', staffType: 'admin' }))
   })
 
   it('skips onboarding — a person already set this account up', async () => {
@@ -363,7 +392,7 @@ describe('updateUserAsStaff — editing an account (F-22)', () => {
   })
 
   it('still refuses an actual self role change', async () => {
-    await expect(updateUserAsStaff(TARGET, TARGET, { role: 'internal' })).rejects.toBeInstanceOf(ForbiddenError)
+    await expect(updateUserAsStaff(TARGET, TARGET, { role: 'admin' })).rejects.toBeInstanceOf(ForbiddenError)
   })
 
   it('reports plan impact only when the plan moves', async () => {
@@ -426,17 +455,17 @@ describe('deleteUser — removing an account (F-22)', () => {
     expect(userRepo.deleteById).not.toHaveBeenCalled()
   })
 
-  it('refuses to remove the last internal account', async () => {
-    vi.mocked(userRepo.findById).mockResolvedValue(row({ id: TARGET, role: 'internal' }))
-    vi.mocked(userRepo.countInternal).mockResolvedValue(1)
+  it('refuses to remove the last superadmin', async () => {
+    vi.mocked(userRepo.findById).mockResolvedValue(row({ id: TARGET, role: 'internal', staffType: 'superadmin' }))
+    vi.mocked(userRepo.countSuperadmins).mockResolvedValue(1)
 
     await expect(deleteUser(USER, TARGET)).rejects.toBeInstanceOf(ValidationError)
     expect(userRepo.deleteById).not.toHaveBeenCalled()
   })
 
-  it('allows removing an internal account while another remains', async () => {
-    vi.mocked(userRepo.findById).mockResolvedValue(row({ id: TARGET, role: 'internal' }))
-    vi.mocked(userRepo.countInternal).mockResolvedValue(2)
+  it('allows removing a superadmin while another remains', async () => {
+    vi.mocked(userRepo.findById).mockResolvedValue(row({ id: TARGET, role: 'internal', staffType: 'superadmin' }))
+    vi.mocked(userRepo.countSuperadmins).mockResolvedValue(2)
 
     await deleteUser(USER, TARGET)
 

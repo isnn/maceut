@@ -216,3 +216,13 @@ export async function isQueued(id: string): Promise<boolean> {
     .limit(1)
   return rows.length > 0
 }
+
+/** Finished export file bytes per account, in one grouped query (FE-35). */
+export async function fileBytesByUser(): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ userId: exports.userId, bytes: sql<number>`coalesce(sum(${exports.fileSize}), 0)::bigint` })
+    .from(exports)
+    .where(eq(exports.status, 'done'))
+    .groupBy(exports.userId)
+  return new Map(rows.map((r) => [r.userId, Number(r.bytes)]))
+}

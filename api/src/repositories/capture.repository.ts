@@ -428,3 +428,23 @@ export async function listForCsv(zoneId: string, since: Date | null, limit: numb
     .orderBy(asc(captures.capturedAt))
     .limit(limit)
 }
+
+/** Collected captures per zone since `since` (FE-34: the staff usage page). */
+export async function countsByZoneSince(userId: string, since: Date): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ zoneId: captures.zoneId, count: sql<number>`count(*)::int` })
+    .from(captures)
+    .where(and(eq(captures.userId, userId), eq(captures.status, 'done'), gte(captures.capturedAt, since)))
+    .groupBy(captures.zoneId)
+  return new Map(rows.map((r) => [r.zoneId, r.count]))
+}
+
+/** Capture image bytes per account, in one grouped query (FE-35: the staff directory). */
+export async function imageBytesByUser(): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ userId: captures.userId, bytes: sql<number>`coalesce(sum(${captures.fileSize}), 0)::bigint` })
+    .from(captures)
+    .where(sql`${captures.filePath} IS NOT NULL`)
+    .groupBy(captures.userId)
+  return new Map(rows.map((r) => [r.userId, Number(r.bytes)]))
+}

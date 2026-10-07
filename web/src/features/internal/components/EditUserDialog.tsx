@@ -23,7 +23,7 @@ import { PLAN_LABEL, PLAN_ORDER } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import * as internalApi from '@/features/internal/api'
 import type { InternalUserRow } from '@/features/internal/types'
-import type { Plan, PlatformRole } from '@/features/auth/types'
+import type { Access, Plan } from '@/features/auth/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -56,7 +56,7 @@ function EditUserForm({
   const [fullName, setFullName] = useState(row.fullName)
   const [email, setEmail] = useState(row.email)
   const [plan, setPlan] = useState<Plan>(row.plan)
-  const [role, setRole] = useState<PlatformRole>(row.role)
+  const [role, setRole] = useState<Access>(row.access)
   const [password, setPassword] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -73,7 +73,7 @@ function EditUserForm({
   if (fullName.trim() !== row.fullName) changes.fullName = fullName.trim()
   if (email.trim().toLowerCase() !== row.email.toLowerCase()) changes.email = email.trim().toLowerCase()
   if (plan !== row.plan) changes.plan = plan
-  if (role !== row.role) changes.role = role
+  if (role !== row.access) changes.role = role
   if (password !== '') changes.password = password
   const nothingChanged = Object.keys(changes).length === 0
 
@@ -136,28 +136,42 @@ function EditUserForm({
               <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
                 <div className="space-y-xs">
                   <FormLabel htmlFor="edit-plan">Plan</FormLabel>
-                  <Select
-                    value={plan}
-                    onValueChange={(v) => setPlan(v as Plan)}
-                    options={PLAN_ORDER.map((p) => ({ value: p, label: PLAN_LABEL[p] }))}
-                    aria-label="Plan"
-                  />
+                  {/* Internal staff have no customer plan; their plan is their staff type (FE-34). */}
+                  {role === 'user' ? (
+                    <Select
+                      value={plan}
+                      onValueChange={(v) => setPlan(v as Plan)}
+                      options={PLAN_ORDER.map((p) => ({ value: p, label: PLAN_LABEL[p] }))}
+                      aria-label="Plan"
+                    />
+                  ) : (
+                    <Select
+                      value={role}
+                      onValueChange={(v) => setRole(v as Access)}
+                      disabled={row.isYou || roleByConfig}
+                      options={[
+                      { value: 'admin', label: 'Admin — helps customers' },
+                      { value: 'superadmin', label: 'Superadmin — runs the platform' },
+                    ]}
+                      aria-label="Staff plan"
+                    />
+                  )}
                 </div>
                 <div className="space-y-xs">
                   <FormLabel htmlFor="edit-role">Role</FormLabel>
                   <Select
-                    value={role}
-                    onValueChange={(v) => setRole(v as PlatformRole)}
+                    value={role === 'user' ? 'user' : 'internal'}
+                    onValueChange={(v) => setRole(v === 'internal' ? (row.access === 'user' ? 'admin' : row.access) : 'user')}
                     disabled={row.isYou || roleByConfig}
                     options={[
-                      { value: 'user', label: 'User — a customer' },
+                      { value: 'user', label: 'Customer' },
                       { value: 'internal', label: 'Internal — Maceut staff' },
                     ]}
                     aria-label="Role"
                   />
-                  {row.isYou && <p className="text-caption text-text-muted">You cannot change your own role.</p>}
+                  {row.isYou && <p className="text-caption text-text-muted">You can’t change your own access.</p>}
                   {!row.isYou && roleByConfig && (
-                    <p className="text-caption text-text-muted">Set by INTERNAL_EMAILS.</p>
+                    <p className="text-caption text-text-muted">Superadmin through INTERNAL_EMAILS.</p>
                   )}
                 </div>
               </div>

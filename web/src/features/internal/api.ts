@@ -15,7 +15,7 @@
 
 import { PLAN_LIMITS, PLAN_PRICE } from '@/lib/constants'
 import { apiClient } from '@/lib/api-client'
-import type { Plan, PlatformRole, User } from '@/features/auth/types'
+import { accessOf, type Access, type Plan, type User } from '@/features/auth/types'
 import type { AccountUsage, InternalUserRow, PlatformStats } from './types'
 
 /** Rupiah per month, used for the MRR estimate on the overview. */
@@ -85,6 +85,7 @@ export async function getUserDirectory(): Promise<InternalUserRow[]> {
     email: user.email,
     plan: user.plan,
     role: user.role,
+    access: accessOf(user),
     roleLockedByConfig: user.roleLockedByConfig ?? false,
     createdAt: user.createdAt,
     isYou: user.id === me.id,
@@ -134,7 +135,7 @@ export interface CreateUserInput {
   email: string
   fullName: string
   plan: Plan
-  role: PlatformRole
+  role: Access
   /** Leave out to have the server generate one and return it once. */
   password?: string
 }
@@ -157,7 +158,7 @@ export interface UpdateUserInput {
   fullName?: string
   email?: string
   plan?: Plan
-  role?: PlatformRole
+  role?: Access
   /** Changing this signs the account out everywhere. */
   password?: string
 }
@@ -189,7 +190,7 @@ export async function deleteUser(userId: string): Promise<DeletedUser> {
   return apiClient.delete<DeletedUser>(`/internal/users/${userId}`)
 }
 
-export async function setUserRole(userId: string, role: PlatformRole): Promise<void> {
+export async function setUserRole(userId: string, role: Access): Promise<void> {
   await apiClient.patch<User>(`/internal/users/${userId}/role`, { role })
 }
 
@@ -217,4 +218,47 @@ export interface ServerConfigEntry {
 
 export function getServerConfig(): Promise<ServerConfigEntry[]> {
   return apiClient.get<ServerConfigEntry[]>('/internal/config')
+}
+
+/** One account's measured usage, zones and windows — the staff usage page (FE-34). */
+export interface AccountUsageDetail {
+  user: User
+  usage: {
+    zonesCount: number
+    zonesLimit: number
+    schedulesActiveCount: number
+    schedulesLimit: number
+    framesPerDay: number
+    capturesLimit: number
+    capturesToday: number | null
+    exportsThisMonth: number
+    storageUsedGb: number
+    storageLimitGb: number
+    pausedByPlan: { zones: number; schedules: number }
+  }
+  zones: {
+    id: string
+    name: string
+    status: 'collecting' | 'paused'
+    pausedByPlan: boolean
+    roadClass: string
+    capturesLast7Days: number
+    createdAt: string
+  }[]
+  windows: {
+    id: string
+    zoneId: string
+    zoneName: string
+    label: string
+    start: string
+    end: string
+    interval: '15min' | 'hourly' | 'daily'
+    days: number[]
+    status: 'active' | 'paused'
+    pausedByPlan: boolean
+  }[]
+}
+
+export function getAccountUsage(userId: string): Promise<AccountUsageDetail> {
+  return apiClient.get<AccountUsageDetail>(`/internal/users/${encodeURIComponent(userId)}/usage`)
 }

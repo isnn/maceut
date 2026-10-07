@@ -20,7 +20,7 @@ import { Alert } from '@/components/ui/Alert'
 import { PLAN_LABEL, PLAN_ORDER } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import * as internalApi from '@/features/internal/api'
-import type { Plan, PlatformRole } from '@/features/auth/types'
+import type { Access, Plan } from '@/features/auth/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -33,7 +33,7 @@ export function AddUserDialog({ open, onClose, onCreated }: { open: boolean; onC
   const [email, setEmail] = useState('')
   const [fullName, setFullName] = useState('')
   const [plan, setPlan] = useState<Plan>('free')
-  const [role, setRole] = useState<PlatformRole>('user')
+  const [role, setRole] = useState<Access>('user')
   const [setOwnPassword, setSetOwnPassword] = useState(false)
   const [password, setPassword] = useState('')
   const [submitted, setSubmitted] = useState(false)
@@ -177,20 +177,33 @@ export function AddUserDialog({ open, onClose, onCreated }: { open: boolean; onC
                 <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
                   <div className="space-y-xs">
                     <FormLabel htmlFor="new-plan">Plan</FormLabel>
-                    <Select
-                      value={plan}
-                      onValueChange={(v) => setPlan(v as Plan)}
-                      options={PLAN_ORDER.map((p) => ({ value: p, label: PLAN_LABEL[p] }))}
-                      aria-label="Plan for the new account"
-                    />
+                    {/* Internal staff have no customer plan; their plan is their staff type (FE-34). */}
+                    {role === 'user' ? (
+                      <Select
+                        value={plan}
+                        onValueChange={(v) => setPlan(v as Plan)}
+                        options={PLAN_ORDER.map((p) => ({ value: p, label: PLAN_LABEL[p] }))}
+                        aria-label="Plan for the new account"
+                      />
+                    ) : (
+                      <Select
+                        value={role}
+                        onValueChange={(v) => setRole(v as Access)}
+                        options={[
+                        { value: 'admin', label: 'Admin — helps customers' },
+                        { value: 'superadmin', label: 'Superadmin — runs the platform' },
+                      ]}
+                        aria-label="Staff plan for the new account"
+                      />
+                    )}
                   </div>
                   <div className="space-y-xs">
                     <FormLabel htmlFor="new-role">Role</FormLabel>
                     <Select
-                      value={role}
-                      onValueChange={(v) => setRole(v as PlatformRole)}
+                      value={role === 'user' ? 'user' : 'internal'}
+                      onValueChange={(v) => setRole(v === 'internal' ? 'admin' : 'user')}
                       options={[
-                        { value: 'user', label: 'User — a customer' },
+                        { value: 'user', label: 'Customer' },
                         { value: 'internal', label: 'Internal — Maceut staff' },
                       ]}
                       aria-label="Role for the new account"
@@ -198,9 +211,12 @@ export function AddUserDialog({ open, onClose, onCreated }: { open: boolean; onC
                   </div>
                 </div>
 
-                {role === 'internal' && (
+                {role !== 'user' && (
                   <p className="text-caption text-text-muted">
-                    Internal accounts aren&rsquo;t counted as customers and don&rsquo;t appear in revenue figures.
+                    {role === 'admin'
+                      ? 'Admins see Overview and Users and can change a customer’s plan — nothing else.'
+                      : 'Superadmins can do everything, including config, the HERE budget and staff access.'}{' '}
+                    Staff aren&rsquo;t counted as customers.
                   </p>
                 )}
 

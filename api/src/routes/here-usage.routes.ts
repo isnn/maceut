@@ -1,12 +1,12 @@
 import { Router } from 'express'
 import * as hereUsageController from '../controllers/here-usage.controller'
-import { authMiddleware, internalOnly } from '../middlewares/auth.middleware'
+import { authMiddleware, internalOnly, superadminOnly } from '../middlewares/auth.middleware'
 
 const router = Router()
 
 // Staff only. user.routes.ts guards `/internal` too, but a route must never depend on
 // another file's guard (that is how `/captures/:id` once shipped unauthenticated).
-router.use('/internal/here-usage', authMiddleware, internalOnly)
+router.use('/internal/here-usage', authMiddleware, internalOnly, superadminOnly)
 
 /**
  * @swagger

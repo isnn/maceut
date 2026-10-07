@@ -9,6 +9,17 @@ const roleEnum = z.enum(['user', 'internal'], {
   errorMap: () => ({ message: 'Role tidak dikenal.' }),
 })
 
+/**
+ * FE-34 — the access an account is given: a customer, an admin or a superadmin. The old
+ * value `internal` is still accepted and means admin — the lesser staff type, so a stale
+ * client can never grant more than it meant to.
+ */
+const accessEnum = z
+  .enum(['user', 'internal', 'admin', 'superadmin'], {
+    errorMap: () => ({ message: 'Choose customer, admin or superadmin.' }),
+  })
+  .transform((v) => (v === 'internal' ? 'admin' : v) as 'user' | 'admin' | 'superadmin')
+
 export const listUsersQuerySchema = z.object({
   search: z.string().trim().max(160).optional(),
   plan: planEnum.optional(),
@@ -40,7 +51,7 @@ export const createUserSchema = z.object({
     .min(1, 'Nama wajib diisi.')
     .max(120, 'Nama terlalu panjang.'),
   plan: planEnum.default('free'),
-  role: roleEnum.default('user'),
+  role: accessEnum.default('user'),
   password: z.string().min(8, 'Password minimal 8 karakter.').max(128, 'Password terlalu panjang.').optional(),
 })
 
@@ -55,10 +66,10 @@ export const updateUserSchema = z
     fullName: z.string().trim().min(1, 'Nama wajib diisi.').max(120, 'Nama terlalu panjang.').optional(),
     email: z.string().trim().toLowerCase().email('Format email tidak valid.').optional(),
     plan: planEnum.optional(),
-    role: roleEnum.optional(),
+    role: accessEnum.optional(),
     password: z.string().min(8, 'Password minimal 8 karakter.').max(128, 'Password terlalu panjang.').optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Tidak ada perubahan yang dikirim.' })
 
 export const changePlanSchema = z.object({ plan: planEnum })
-export const changeRoleSchema = z.object({ role: roleEnum })
+export const changeRoleSchema = z.object({ role: accessEnum })

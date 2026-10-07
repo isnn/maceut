@@ -1,5 +1,5 @@
 import { config } from '../config/env'
-import type { PlatformRole } from '../types/plan'
+import type { Access, PlatformRole, StaffType } from '../types/plan'
 
 /**
  * Who gets the `internal` platform role (BR-027).
@@ -34,4 +34,26 @@ export function resolveRole(email: string, storedRole: PlatformRole): PlatformRo
 
 export function configuredInternalEmails(): readonly string[] {
   return config.internalEmails
+}
+
+/**
+ * The staff type an account has right now (FE-34). Config-granted staff are always
+ * superadmins — INTERNAL_EMAILS is the platform's root of trust. A database-granted staff
+ * account without a stored type counts as an admin, the lesser of the two: a missing
+ * value must never widen access.
+ */
+export function resolveStaffType(email: string, storedRole: PlatformRole, storedType: string | null): StaffType | null {
+  if (resolveRole(email, storedRole) !== 'internal') return null
+  if (isInternalByConfig(email)) return 'superadmin'
+  return storedType === 'superadmin' ? 'superadmin' : 'admin'
+}
+
+/** Customer, admin or superadmin, from a user row. */
+export function accessOf(row: { email: string; role: string | null; staffType?: string | null }): Access {
+  return resolveStaffType(row.email, (row.role ?? 'user') as PlatformRole, row.staffType ?? null) ?? 'user'
+}
+
+/** The stored columns for an access level. */
+export function columnsFor(access: Access): { role: PlatformRole; staffType: StaffType | null } {
+  return access === 'user' ? { role: 'user', staffType: null } : { role: 'internal', staffType: access }
 }

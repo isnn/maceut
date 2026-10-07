@@ -9,13 +9,16 @@ import {
   EmailAlreadyTakenError,
   AppError,
 } from '../errors'
-import { isInternalByConfig, resolveRole, configuredInternalEmails } from '../lib/internal-access'
-import { PLAN_LIMITS, isUpgrade, type Plan, type PlatformRole } from '../types/plan'
+import { accessOf, columnsFor, isInternalByConfig, resolveRole, resolveStaffType, configuredInternalEmails } from '../lib/internal-access'
+import { PLAN_LIMITS, isUpgrade, type Plan, type Access, type PlatformRole, type StaffType } from '../types/plan'
 import * as planService from './plan.service'
 import * as notificationService from './notification.service'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as captureRepo from '../repositories/capture.repository'
+import * as exportRepo from '../repositories/export.repository'
+import * as renderCacheRepo from '../repositories/render-cache.repository'
+import * as usageService from './usage.service'
 
 /**
  * User records and platform administration (F-21, F-22).
@@ -33,6 +36,8 @@ export interface PublicUser {
   fullName: string
   plan: Plan
   role: PlatformRole
+  /** FE-34 — `superadmin` or `admin` for staff, null for customers. */
+  staffType: StaffType | null
   /**
    * True when INTERNAL_EMAILS grants this account the internal role, so it can't be
    * demoted from the app (BR-027). Sent by the server so the web app no longer needs its
@@ -57,6 +62,7 @@ export function toPublic(row: userRepo.UserWithPlan): PublicUser {
     plan: row.plan,
     // The stored column is a cache; config is the authority (BR-027).
     role: resolveRole(row.email, (row.role ?? 'user') as PlatformRole),
+    staffType: resolveStaffType(row.email, (row.role ?? 'user') as PlatformRole, row.staffType ?? null),
     roleLockedByConfig: isInternalByConfig(row.email),
     onboardingDone: row.onboardingDone ?? false,
     createdAt: row.createdAt.toISOString(),
@@ -167,9 +173,8 @@ export interface ListUsersParams {
 /**
  * What an account is actually using, for the internal directory.
  *
- * Zones and windows are measured. Captures and storage are `null` because no table
- * counts them yet (CAP-01) — an operator tool that invents numbers is worse than one
- * that admits it does not know, because the invented ones get acted on.
+ * Every figure is measured: zones and windows, today's captures, and storage (capture
+ * images + finished exports + cached frames in R2, FE-35).
  */
 export interface AccountUsage {
   zonesCount: number
@@ -177,7 +182,7 @@ export interface AccountUsage {
   schedulesActiveCount: number
   schedulesPaused: number
   capturesToday: number | null
-  storageUsedGb: number | null
+  storageUsedGb: number
 }
 
 export interface UserWithUsage extends PublicUser {
@@ -190,6 +195,29 @@ export interface ListUsersResult {
   page: number
   limit: number
   totalPages: number
+}
+
+/**
+ * Every account's R2 storage — capture images, finished exports and cached frames, the
+ * same three the account's own usage page adds up (usage.service) — as three grouped
+ * queries for the whole directory rather than three per account.
+ */
+async function storageBytesByUser(): Promise<Map<string, number>> {
+  const [images, exportFiles, cache] = await Promise.all([
+    captureRepo.imageBytesByUser(),
+    exportRepo.fileBytesByUser(),
+    renderCacheRepo.bytesByUser(),
+  ])
+  const total = new Map<string, number>()
+  for (const source of [images, exportFiles, cache]) {
+    for (const [userId, bytes] of source) total.set(userId, (total.get(userId) ?? 0) + bytes)
+  }
+  return total
+}
+
+/** Bytes as GB with two decimals — the unit the plan's storage limit is stated in. */
+function toGb(bytes: number): number {
+  return Math.round((bytes / 1024 ** 3) * 100) / 100
 }
 
 export async function listUsers(params: ListUsersParams): Promise<ListUsersResult> {
@@ -206,10 +234,11 @@ export async function listUsers(params: ListUsersParams): Promise<ListUsersResul
 
   // Two grouped queries for the whole page, not two per row — the directory lists
   // every account, so per-row counting would slow down with every signup.
-  const [zoneCounts, scheduleCounts, captureCounts] = await Promise.all([
+  const [zoneCounts, scheduleCounts, captureCounts, storage] = await Promise.all([
     zoneRepo.countsByUser(),
     scheduleRepo.countsByUser(),
     captureRepo.countsToday(),
+    storageBytesByUser(),
   ])
 
   return {
@@ -224,7 +253,7 @@ export async function listUsers(params: ListUsersParams): Promise<ListUsersResul
           schedulesActiveCount: sc?.active ?? 0,
           schedulesPaused: sc?.paused ?? 0,
           capturesToday: captureCounts.get(row.id) ?? 0,
-          storageUsedGb: null,
+          storageUsedGb: toGb(storage.get(row.id) ?? 0),
         },
       }
     }),
@@ -262,37 +291,35 @@ export async function changePlan(userId: string, plan: Plan): Promise<PlanChange
  * Two of them exist to stop the platform locking itself out, which is unrecoverable
  * through the API — the only fix would be editing the database by hand.
  */
-export async function changeRole(actorId: string, targetUserId: string, role: PlatformRole): Promise<PublicUser> {
+export async function changeRole(actorId: string, targetUserId: string, access: Access): Promise<PublicUser> {
   const target = await userRepo.findById(targetUserId)
   if (!target) throw new NotFoundError('User')
 
-  // 1. No editing your own role. Otherwise one compromised staff session could
+  // 1. No editing your own access. Otherwise one compromised staff session could
   //    quietly demote everyone else and keep itself, or lock itself out by accident.
   if (actorId === targetUserId) {
-    throw new ForbiddenError('Anda tidak bisa mengubah role akun Anda sendiri.')
+    throw new ForbiddenError('You can’t change your own access.')
   }
 
-  // 2. Config wins (BR-027). An address in INTERNAL_EMAILS cannot be demoted here —
-  //    it would be re-promoted at the next sign-in, so the UI would be reporting a
-  //    change that does not hold.
-  if (isInternalByConfig(target.email) && role !== 'internal') {
+  // 2. Config wins (BR-027). An address in INTERNAL_EMAILS is always a superadmin — a
+  //    change here would be undone at the next sign-in, so the UI would report a change
+  //    that does not hold.
+  if (isInternalByConfig(target.email) && access !== 'superadmin') {
     throw new ValidationError(
-      'Role akun ini ditentukan oleh INTERNAL_EMAILS di konfigurasi server. Hapus emailnya dari daftar itu untuk mencabut akses.',
+      'This account is a superadmin through INTERNAL_EMAILS in the server config. Remove the address there to change it.',
       { configuredEmails: configuredInternalEmails().length },
     )
   }
 
-  // 3. Never remove the last internal account. Uses the resolved role, not the
-  //    cached column, so the count and the check agree on who counts as staff.
-  if (resolveRole(target.email, (target.role ?? 'user') as PlatformRole) === 'internal' && role !== 'internal') {
-    if ((await userRepo.countInternal(configuredInternalEmails())) <= 1) {
-      throw new ValidationError(
-        'Ini satu-satunya akun internal yang tersisa — sistem tidak boleh kehilangan semua akses staf.',
-      )
+  // 3. Never remove the last superadmin (FE-34): nobody else could manage staff, config
+  //    or the HERE budget, and the only fix would be editing the database by hand.
+  if (accessOf(target) === 'superadmin' && access !== 'superadmin') {
+    if ((await userRepo.countSuperadmins(configuredInternalEmails())) <= 1) {
+      throw new ValidationError('This is the last superadmin — the platform needs at least one.')
     }
   }
 
-  await userRepo.updateUser(targetUserId, { role })
+  await userRepo.updateUser(targetUserId, columnsFor(access))
   return getUser(targetUserId)
 }
 
@@ -304,11 +331,11 @@ export async function getPlatformStats(): Promise<{
   internalByConfig: number
   planMix: Record<Plan, number>
   estimatedSeats: number
-  /** Measured platform-wide. Captures and storage stay null until CAP-01. */
+  /** Measured platform-wide (FE-35: storage too — images, exports and cached frames). */
   zonesCollecting: number
   schedulesActive: number
   capturesToday: number | null
-  storageUsedGb: number | null
+  storageUsedGb: number
 }> {
   // One page large enough to aggregate over. Fine at this scale; when it stops being
   // fine the answer is a SQL GROUP BY in the repository, not a bigger page.
@@ -335,7 +362,9 @@ export async function getPlatformStats(): Promise<{
     zoneRepo.countAllCollecting(),
     scheduleRepo.countAllActive(),
   ])
-  const capturesToday = await captureRepo.countAllToday()
+  const [capturesToday, storage] = await Promise.all([captureRepo.countAllToday(), storageBytesByUser()])
+  let storageBytes = 0
+  for (const bytes of storage.values()) storageBytes += bytes
 
   return {
     totalUsers: total,
@@ -346,8 +375,7 @@ export async function getPlatformStats(): Promise<{
     zonesCollecting,
     schedulesActive,
     capturesToday,
-    // Still unmeasured: storage is only known once images are rendered into R2.
-    storageUsedGb: null,
+    storageUsedGb: toGb(storageBytes),
   }
 }
 
@@ -366,7 +394,7 @@ export interface CreateUserInput {
   email: string
   fullName: string
   plan: Plan
-  role: PlatformRole
+  role: Access
   /** Omit to have one generated and returned once. */
   password?: string
 }
@@ -418,7 +446,7 @@ export async function createUser(input: CreateUserInput): Promise<CreatedUser> {
 
   await userRepo.ensurePlan(userId, input.plan)
   await userRepo.setPlan(userId, input.plan)
-  await userRepo.updateUser(userId, { role: input.role, onboardingDone: true })
+  await userRepo.updateUser(userId, { ...columnsFor(input.role), onboardingDone: true })
 
   return { user: await getUser(userId), temporaryPassword: generated }
 }
@@ -456,7 +484,7 @@ export interface UpdateUserInput {
   fullName?: string
   email?: string
   plan?: Plan
-  role?: PlatformRole
+  role?: Access
   password?: string
 }
 
@@ -520,7 +548,7 @@ export async function updateUserAsStaff(
   // Only when it actually moves. A dialog submits the whole object, so an unchanged
   // role would otherwise trip changeRole's no-self-edit guard and 403 an admin who was
   // only renaming themselves.
-  if (input.role !== undefined && input.role !== resolveRole(target.email, (target.role ?? 'user') as PlatformRole)) {
+  if (input.role !== undefined && input.role !== accessOf(target)) {
     // Guards live in changeRole: no self-edit, config wins, never the last internal.
     await changeRole(actorId, targetUserId, input.role)
   } else if (input.email !== undefined) {
@@ -570,11 +598,8 @@ export async function deleteUser(actorId: string, targetUserId: string): Promise
     throw new ForbiddenError('Anda tidak bisa menghapus akun Anda sendiri.')
   }
 
-  const targetIsInternal = resolveRole(target.email, (target.role ?? 'user') as PlatformRole) === 'internal'
-  if (targetIsInternal && (await userRepo.countInternal(configuredInternalEmails())) <= 1) {
-    throw new ValidationError(
-      'Ini satu-satunya akun internal yang tersisa — sistem tidak boleh kehilangan semua akses staf.',
-    )
+  if (accessOf(target) === 'superadmin' && (await userRepo.countSuperadmins(configuredInternalEmails())) <= 1) {
+    throw new ValidationError('This is the last superadmin — the platform needs at least one.')
   }
 
   // Counted before the delete, because afterwards there is nothing left to count.
@@ -593,5 +618,70 @@ export async function deleteUser(actorId: string, targetUserId: string): Promise
       zones: (z?.collecting ?? 0) + (z?.paused ?? 0),
       schedules: (sc?.active ?? 0) + (sc?.paused ?? 0),
     },
+  }
+}
+
+/** One account's usage for the staff usage page (FE-34) — every figure measured. */
+export interface AccountUsageDetail {
+  user: PublicUser
+  usage: usageService.UsageSummary
+  zones: {
+    id: string
+    name: string
+    status: string
+    pausedByPlan: boolean
+    roadClass: string
+    capturesLast7Days: number
+    createdAt: string
+  }[]
+  windows: {
+    id: string
+    zoneId: string
+    zoneName: string
+    label: string
+    start: string
+    end: string
+    interval: string
+    days: number[]
+    status: string
+    pausedByPlan: boolean
+  }[]
+}
+
+export async function getAccountUsage(userId: string, now: Date = new Date()): Promise<AccountUsageDetail> {
+  const user = await getUser(userId)
+  const [usage, zones, schedules, captures7d] = await Promise.all([
+    usageService.getUsage(userId),
+    zoneRepo.findByUserId(userId),
+    scheduleRepo.findByUserId(userId),
+    captureRepo.countsByZoneSince(userId, new Date(now.getTime() - 7 * 86_400_000)),
+  ])
+  const zoneName = new Map(zones.map((z) => [z.id, z.name]))
+  return {
+    user,
+    usage,
+    zones: zones.map((z) => ({
+      id: z.id,
+      name: z.name,
+      status: z.status,
+      pausedByPlan: z.pausedByPlan,
+      roadClass: z.roadClass,
+      capturesLast7Days: captures7d.get(z.id) ?? 0,
+      createdAt: z.createdAt.toISOString(),
+    })),
+    windows: schedules
+      .filter((s) => s.status !== 'deleted')
+      .map((s) => ({
+        id: s.id,
+        zoneId: s.zoneId,
+        zoneName: zoneName.get(s.zoneId) ?? '—',
+        label: s.label,
+        start: s.startTime,
+        end: s.endTime,
+        interval: s.interval,
+        days: s.days,
+        status: s.status,
+        pausedByPlan: s.pausedByPlan,
+      })),
   }
 }

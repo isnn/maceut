@@ -1,14 +1,14 @@
 'use client'
 
-import { PlanPill, RolePill } from '@/components/ui/Badge'
+import { AccountPlanPill, RolePill } from '@/components/ui/Badge'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
-import { Alert } from '@/components/ui/Alert'
+import { linkClass } from '@/components/ui/Button'
 import { Pagination, SortableTh, Table, TableWrap, Td } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
 import { Input } from '@/components/ui/Input'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDate, formatNumber } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_ORDER } from '@/lib/constants'
 import * as internalApi from '@/features/internal/api'
 import { formatIdr } from '@/features/internal/api'
@@ -76,17 +76,9 @@ export default function InternalOverviewPage() {
       <div>
         <p className="text-label text-text-secondary">Platform</p>
         <h1 className="text-page-title font-bold text-text-primary mt-xs">Overview</h1>
-        <p className="text-body text-text-secondary mt-xs">
-          Every account on the platform, not just your own.
-        </p>
       </div>
 
-      <Alert variant="warning">
-        Captures and storage aren&rsquo;t tracked yet, so those read &quot;—&quot;. Accounts, plans, zones and
-        capture windows are live.
-      </Alert>
-
-      <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-lg">
+      <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-3 gap-lg">
         <StatTile label="Total accounts" value={stats.totalAccounts} note={`${stats.signupsLast7d} new in 7 days`} />
         <StatTile
           label="Internal users"
@@ -99,6 +91,16 @@ export default function InternalOverviewPage() {
           note={`${stats.schedulesActiveTotal} active capture ${stats.schedulesActiveTotal === 1 ? 'window' : 'windows'}`}
         />
         <StatTile
+          label="Captures today"
+          value={formatNumber(stats.capturesTodayTotal ?? 0)}
+          note="across every account, WIB day"
+        />
+        <StatTile
+          label="Storage used"
+          value={`${formatNumber(stats.storageUsedGbTotal ?? 0, 2)} GB`}
+          note="capture images, exports and cached frames"
+        />
+        <StatTile
           label="Estimated MRR"
           value={formatIdr(stats.mrr)}
           note="from plan mix · excludes internal"
@@ -106,7 +108,7 @@ export default function InternalOverviewPage() {
       </div>
 
       <section className="space-y-md">
-        <h2 className="text-section-title text-text-primary mb-md">Plan mix</h2>
+        <h2 className="text-section-title text-text-primary">Plan mix</h2>
         <Card className="p-lg">
           <div className="flex h-3 rounded-full overflow-hidden gap-[2px]">
             {PLAN_ORDER.map((plan) => {
@@ -134,8 +136,8 @@ export default function InternalOverviewPage() {
         </Card>
       </section>
 
-      <section>
-        <div className="flex flex-wrap items-center justify-between gap-md mb-md">
+      <section className="space-y-md">
+        <div className="flex flex-wrap items-center justify-between gap-md">
           <h2 className="text-section-title text-text-primary">Accounts</h2>
           <div className="flex items-center gap-md ml-auto">
             <Input
@@ -145,7 +147,7 @@ export default function InternalOverviewPage() {
               onChange={(e) => table.setSearch(e.target.value)}
               className="w-full tablet:w-64"
             />
-            <Link href="/internal/users" className="text-body text-info no-underline hover:underline whitespace-nowrap">
+            <Link href="/internal/users" className={cn(linkClass(), 'whitespace-nowrap')}>
               Manage users
             </Link>
           </div>
@@ -196,20 +198,21 @@ export default function InternalOverviewPage() {
               {table.visible.map((row) => (
                 <tr key={row.id} className="hover:bg-canvas-secondary/60 transition-colors">
                   <Td>
-                    <p className="font-semibold text-text-primary">
+                    <Link
+                      href={`/internal/users/${encodeURIComponent(row.id)}`}
+                      className="font-semibold text-text-primary no-underline hover:text-primary transition-colors"
+                    >
                       {row.fullName}
                       {row.isYou && <span className="ml-sm text-micro text-text-muted font-normal">You</span>}
-                    </p>
+                    </Link>
                     <p className="text-caption text-text-muted">{row.email}</p>
                   </Td>
                   <Td className="text-right tabular-nums text-text-secondary">
                     {row.usage.zonesCount}
-                    {row.usage.zonesPaused > 0 && (
-                      <span className="text-micro text-warning-text ml-sm">{row.usage.zonesPaused} paused</span>
-                    )}
+                    <span className="text-text-muted">/{row.usage.zonesLimit}</span>
                   </Td>
                   <Td>
-                    <PlanPill plan={row.plan} />
+                    <AccountPlanPill access={row.access} plan={row.plan} />
                   </Td>
                   <Td>
                     <RolePill role={row.role} />
@@ -220,16 +223,16 @@ export default function InternalOverviewPage() {
             </tbody>
           </Table>
         </TableWrap>
-          <Pagination
-            page={table.page}
-            pageCount={table.pageCount}
-            pageSize={table.pageSize}
-            onPage={table.setPage}
-            matchCount={table.matchCount}
-            totalCount={table.totalCount}
-            noun="accounts"
-            onClearSearch={table.search ? () => table.setSearch('') : undefined}
-          />
+        <Pagination
+          page={table.page}
+          pageCount={table.pageCount}
+          pageSize={table.pageSize}
+          onPage={table.setPage}
+          matchCount={table.matchCount}
+          totalCount={table.totalCount}
+          noun="accounts"
+          onClearSearch={table.search ? () => table.setSearch('') : undefined}
+        />
       </section>
     </div>
   )
