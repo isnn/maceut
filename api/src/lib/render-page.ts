@@ -11,13 +11,16 @@ import type { SlimTraffic } from '../services/capture.service'
  *
  * The page holds no data: it asks for each frame through `__exportFrame`, reports
  * progress through `__exportProgress` (whose answer can stop it), and hands its output
- * back through `__exportPng` / `__exportChunk` — Playwright's exposeFunction, in-process.
+ * back through `__exportPng` — Playwright's exposeFunction, in-process.
  */
 
 /** What the render page is handed. Mirrors web/src/app/render/export/page.tsx. */
 export interface RenderPageJob {
-  /** `png` renders frame 0 once; `zip` every frame as PNGs; `webm` an animation. */
-  format: 'png' | 'zip' | 'webm'
+  /**
+   * `png`: one capture's image (+ thumbnail). `zip`: a run of export frames as PNGs —
+   * for every export format; videos are encoded from them by ffmpeg (EXP-B).
+   */
+  format: 'png' | 'zip'
   spec: {
     themeId: string
     congestionId: string
@@ -61,7 +64,6 @@ export interface RenderBridge {
 
 export interface RenderOutput {
   pngs: { name: string; data: Buffer }[]
-  video: Buffer
 }
 
 export async function launchBrowser(): Promise<Browser> {
@@ -94,16 +96,12 @@ export async function renderWithPage(browser: Browser, job: RenderPageJob, bridg
     page.on('pageerror', (err) => console.error(`[render] ${label} page error:`, err.message))
 
     const pngs: { name: string; data: Buffer }[] = []
-    const chunks: Buffer[] = []
     await page.exposeFunction('__exportFrame', (i: number) => bridge.frame(i))
     await page.exposeFunction('__exportProgress', async (done: number) => (bridge.progress ? bridge.progress(done) : true))
     await page.exposeFunction('__exportPng', async (i: number, name: string, base64: string, stats?: FrameStats) => {
       const data = Buffer.from(base64, 'base64')
       if (bridge.png) await bridge.png(i, name, data, stats ?? null)
       else pngs[i] = { name, data }
-    })
-    await page.exposeFunction('__exportChunk', (base64: string) => {
-      chunks.push(Buffer.from(base64, 'base64'))
     })
 
     await page.goto(`${config.renderBaseUrl}/render/export`, { waitUntil: 'load', timeout: 120_000 })
@@ -116,7 +114,7 @@ export async function renderWithPage(browser: Browser, job: RenderPageJob, bridg
       (j) => (globalThis as unknown as { __maceutExport: (job: unknown) => Promise<void> }).__maceutExport(j),
       job,
     )
-    return { pngs: pngs.filter(Boolean), video: Buffer.concat(chunks) }
+    return { pngs: pngs.filter(Boolean) }
   } finally {
     await page.close().catch(() => undefined)
   }

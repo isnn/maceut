@@ -29,6 +29,21 @@ vi.mock('../services/export.service', () => ({
   frameFileName: (i: number) => `${i + 1}.png`,
 }))
 vi.mock('../services/capture.service', () => ({ slimFor: async () => ({ type: 'FeatureCollection', features: [] }) }))
+const video = vi.hoisted(() => ({ frames: [] as string[], killed: false, outPath: '' }))
+vi.mock('../lib/video-encoder', () => ({
+  startVideoEncoder: vi.fn((_format: string, _hold: number, outPath: string) => {
+    video.outPath = outPath
+    return {
+      write: async (png: Buffer) => void video.frames.push(png.toString()),
+      // A real encoder writes the file; the fake writes the frames it was given.
+      finish: async () => {
+        const fs = await import('node:fs')
+        fs.writeFileSync(outPath, `video:${video.frames.join('|')}`)
+      },
+      kill: () => void (video.killed = true),
+    }
+  }),
+}))
 vi.mock('../lib/render-page', () => ({
   launchBrowser: vi.fn(async () => ({ isConnected: () => true, close: vi.fn(async () => undefined) })),
   renderWithPage: vi.fn(),
@@ -95,9 +110,9 @@ function page(opts: { crashAt?: number[]; error?: string; cancelAt?: number } = 
       await bridge.frame(i)
       await bridge.png!(i, `${i + 1}.png`, Buffer.from(`png-${i}`), { drawMs: 10, encodeMs: 4 })
       if (opts.cancelAt === i) vi.mocked(exportRepo.reportProgress).mockResolvedValueOnce(false)
-      if (!(await bridge.progress!(i + 1))) return { pngs: [], video: Buffer.alloc(0) }
+      if (!(await bridge.progress!(i + 1))) return { pngs: [] }
     }
-    return { pngs: [], video: Buffer.alloc(0) }
+    return { pngs: [] }
   })
   return starts
 }
@@ -118,6 +133,8 @@ function zipNames(): string[] {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  video.frames = []
+  video.killed = false
   upload.chunks = []
   upload.completed = false
   upload.aborted = false
@@ -288,13 +305,45 @@ describe('runExport — reusing rendered frames (EXP-A2)', () => {
   })
 })
 
-describe('runExport — WebM', () => {
-  it('uploads the recorded video and marks it done', async () => {
+describe('runExport — video through ffmpeg (EXP-B)', () => {
+  for (const format of ['webm', 'mp4'] as const) {
+    it(`renders frames once, encodes them to ${format} and uploads the file`, async () => {
+      vi.mocked(exportRepo.markRendering).mockResolvedValue(exportRow({ format }))
+      page()
+      await runExport('e1')
+
+      // Same frame pipeline as ZIP: the page draws PNGs; nothing is recorded in real time.
+      expect(vi.mocked(renderWithPage).mock.calls[0]![1].format).toBe('zip')
+      expect(video.frames).toEqual(['png-0', 'png-1', 'png-2', 'png-3', 'png-4'])
+      const expected = `video:${video.frames.join('|')}`
+      expect(Buffer.concat(upload.chunks).toString()).toBe(expected)
+      expect(upload.completed).toBe(true)
+      expect(exportRepo.complete).toHaveBeenCalledWith('e1', 'exports/u1/e1.zip', expected.length, expect.any(Date))
+      // The scratch folder is gone afterwards.
+      const fs = await import('node:fs')
+      expect(fs.existsSync(video.outPath)).toBe(false)
+    })
+  }
+
+  it('resumes a video after a browser crash too', async () => {
     vi.mocked(exportRepo.markRendering).mockResolvedValue(exportRow({ format: 'webm' }))
-    vi.mocked(renderWithPage).mockResolvedValue({ pngs: [], video: Buffer.from('webm-bytes') })
+    const starts = page({ crashAt: [3] })
     await runExport('e1')
 
-    expect(r2.upload).toHaveBeenCalledWith('exports/u1/e1.zip', Buffer.from('webm-bytes'), 'video/webm')
-    expect(exportRepo.complete).toHaveBeenCalledWith('e1', 'exports/u1/e1.zip', 10, expect.any(Date))
+    expect(starts).toEqual([0, 3])
+    expect(video.frames).toEqual(['png-0', 'png-1', 'png-2', 'png-3', 'png-4'])
+    expect(upload.completed).toBe(true)
+  })
+
+  it('stops ffmpeg and cleans up when the user cancels', async () => {
+    vi.mocked(exportRepo.markRendering).mockResolvedValue(exportRow({ format: 'mp4' }))
+    page({ cancelAt: 1 })
+    await runExport('e1')
+
+    expect(video.killed).toBe(true)
+    expect(upload.completed).toBe(false)
+    expect(exportRepo.complete).not.toHaveBeenCalled()
+    const fs = await import('node:fs')
+    expect(fs.existsSync(video.outPath)).toBe(false)
   })
 })

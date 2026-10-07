@@ -11,7 +11,7 @@
 // Convention: every timestamp is `timestamptz`. A bare `timestamp` carries no
 // offset and means whatever the reading process assumes.
 //
-// Last updated: 2026-10-05 (migration 0015_render_reuse — captures.traffic_slim, render_cache)
+// Last updated: 2026-10-05 (migration 0016_export_mp4 — export_format gains mp4)
 // =============================================================================
 
 Project maceut {
@@ -257,7 +257,8 @@ Ref: captures.schedule_id > schedules.id [delete: set null]
 
 Enum export_format {
   zip
-  webm
+  webm [note: 'VP9, encoded by ffmpeg since EXP-B']
+  mp4 [note: 'H.264 — added in 0016 (EXP-B)']
 }
 
 Enum export_status {

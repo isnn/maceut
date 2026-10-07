@@ -34,7 +34,7 @@ export const exportSpecSchema = z.object({
 export type ExportSpec = z.infer<typeof exportSpecSchema>
 
 export const createExportSchema = z.object({
-  format: z.enum(['zip', 'webm'], { errorMap: () => ({ message: 'Format harus zip atau webm.' }) }),
+  format: z.enum(['zip', 'webm', 'mp4'], { errorMap: () => ({ message: 'Format harus zip, webm atau mp4.' }) }),
   /** The range, as the first and last capture in it — the same ids Studio's picker holds. */
   startCaptureId: z.string().uuid('Id capture awal tidak valid.'),
   endCaptureId: z.string().uuid('Id capture akhir tidak valid.'),

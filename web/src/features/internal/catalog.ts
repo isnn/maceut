@@ -74,6 +74,8 @@ export const CONFIG_VARS: ConfigVarMeta[] = [
   { key: 'PLAYWRIGHT_SCREENSHOT_WIDTH', group: 'capture_engine', label: 'Capture image width', defaultValue: '1280' },
   { key: 'PLAYWRIGHT_SCREENSHOT_HEIGHT', group: 'capture_engine', label: 'Capture image height', defaultValue: '720' },
   { key: 'PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH', group: 'capture_engine', label: 'Chromium path' },
+  { key: 'FFMPEG_PATH', group: 'capture_engine', label: 'ffmpeg binary', help: 'Encodes export videos (EXP-B).', defaultValue: 'ffmpeg' },
+  { key: 'EXPORT_TMP_DIR', group: 'capture_engine', label: 'Video scratch folder', help: 'Temporary video files while ffmpeg writes them.', defaultValue: '/tmp/maceut-exports' },
   {
     key: 'RENDER_BASE_URL',
     group: 'capture_engine',

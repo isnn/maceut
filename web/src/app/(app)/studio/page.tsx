@@ -706,7 +706,7 @@ export default function StudioPage() {
   }, [zoneId])
 
   const startServerExport = useCallback(
-    async (format: 'zip' | 'webm') => {
+    async (format: 'zip' | 'webm' | 'mp4') => {
       if (!startFrame || !endFrame) return
       setExportError(null)
       setPlaying(false)
@@ -1323,6 +1323,18 @@ export default function StudioPage() {
                     onSelect: () => void startServerExport('webm'),
                     disabled: frames.length < 2,
                   },
+                  {
+                    // Same animation as WebM, in the format that plays everywhere:
+                    // phones, slide decks, chat apps (EXP-B).
+                    label: 'Animation',
+                    format: 'MP4',
+                    detail:
+                      frames.length < 2
+                        ? 'Needs at least 2 frames in range'
+                        : `${frames.length} frames · plays on phones, slides and chat apps`,
+                    onSelect: () => void startServerExport('mp4'),
+                    disabled: frames.length < 2,
+                  },
                 ]}
               />
             </div>
@@ -1533,12 +1545,12 @@ function ExportDialog({
                     ? 'Your export is ready'
                     : job.status === 'failed'
                       ? 'This export didn’t finish'
-                      : job.format === 'webm'
+                      : job.format !== 'zip'
                         ? 'Making your animation'
                         : 'Collecting your frames'}
                 </Dialog.Title>
                 <Dialog.Description className="text-body text-text-secondary mt-xs tabular-nums">
-                  {job.frameCount} frames · {job.width} × {job.height} · {job.format === 'webm' ? 'WebM' : 'ZIP of PNGs'}
+                  {job.frameCount} frames · {job.width} × {job.height} · {job.format === 'zip' ? 'ZIP of PNGs' : job.format.toUpperCase()}
                 </Dialog.Description>
               </div>
 

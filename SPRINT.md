@@ -152,7 +152,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-29** Semua halaman & header 1600px, Profil: ganti paket di Usage (popup), Billing = info pembayaran, Notifikasi satu toggle; tandai-dibaca andal; link dashboard gaya brand | permintaan user |
 | ✅ | **EXP-A1** Export: ZIP di-stream ke R2 (multipart, ZIP64), lanjut setelah crash, satu browser per worker, log waktu per frame (fix #58, #63, #67) | rencana optimasi export |
 | ✅ | **EXP-A2** Export: proses browser lebih ringan, data slim disimpan per capture, pakai ulang frame yang sudah dirender | rencana optimasi export |
-| 🔴 | **EXP-B** Export video lewat ffmpeg (tanpa merekam real-time) | rencana optimasi export |
+| ✅ | **EXP-B** Export video lewat ffmpeg (tanpa merekam real-time) | rencana optimasi export |
 | 🔴 | **EXP-C** Batas frame × piksel per paket, antrian bergiliran, opsi WebP | rencana optimasi export |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
@@ -1968,6 +1968,26 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   - Tes: worker (gambar capture dipakai, cache dibaca & ditulis, tanpa browser bila semua
     dipakai ulang, cache hilang → render), nama frame, sweeper, usage, render worker.
   VERIFIKASI: 450 test API, tsc + eslint bersih kedua paket.
+
+[2026-10-05d] EXP-B — video lewat ffmpeg, plus MP4 (ADR-030).
+
+  - Image worker/api: `apk add ffmpeg` (layer setelah npm install). ffmpeg 8.0.1 dengan
+    libvpx-vp9 & libx264 terverifikasi di kedua container.
+  - `lib/video-encoder.ts`: PNG → stdin ffmpeg (backpressure), frame rate = 1000/holdMs,
+    pad ke dimensi genap, WebM VP9 CRF 32 / MP4 H.264 stillimage CRF 20 + faststart.
+  - Worker: satu `produceFrames` untuk semua format (pakai ulang, cache, lanjut setelah
+    crash); video → file di `EXPORT_TMP_DIR/{id}/` (cek ruang disk) → upload multipart →
+    folder dihapus. Folder sisa worker mati dibersihkan saat start. Browser ditutup begitu
+    frame terakhir selesai, sebelum upload.
+  - Format `mp4` (migrasi 0016, schema, validasi, nama file). Studio: opsi "Animation · MP4"
+    (main di HP, slide, aplikasi chat). Label format di Studio, zona, dashboard.
+  - Jalur MediaRecorder dihapus: cabang webm di halaman render, `recordAnimation`,
+    `__exportChunk`, output `video` di driver.
+  - Config: FFMPEG_PATH, EXPORT_TMP_DIR (+ .env.example, halaman config staf).
+  - Tes: encoder dengan ffmpeg SUNGGUHAN (VP9 & H.264: 3 frame, 1,5 dtk, pad genap, gagal
+    dilaporkan bukan menggantung), worker video (webm & mp4, lanjut setelah crash, batal →
+    ffmpeg dihentikan & folder dihapus).
+  VERIFIKASI: 459 test API, tsc + eslint bersih kedua paket, worker boot dengan kode baru.
 
 ---
 

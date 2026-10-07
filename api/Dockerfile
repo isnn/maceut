@@ -16,6 +16,8 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont
+# ffmpeg: export videos are encoded from rendered frames (EXP-B, ADR-030).
+RUN apk add --no-cache ffmpeg
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 ENV NODE_ENV=production

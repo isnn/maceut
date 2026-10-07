@@ -140,6 +140,10 @@ const schema = z.object({
   PLAYWRIGHT_SCREENSHOT_WIDTH: intFromEnv(1280),
   PLAYWRIGHT_SCREENSHOT_HEIGHT: intFromEnv(720),
   PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: optionalStr,
+  /** EXP-B — the ffmpeg binary that encodes export videos (installed in the worker image). */
+  FFMPEG_PATH: z.string().trim().default('ffmpeg'),
+  /** EXP-B — scratch space for a video while ffmpeg writes it; cleaned after each export. */
+  EXPORT_TMP_DIR: z.string().trim().default('/tmp/maceut-exports'),
 
   FRONTEND_URL: z.string().url('FRONTEND_URL must be a full origin, e.g. http://localhost:3000'),
   RENDER_BASE_URL: z.string().url().default('http://web:3000'),
@@ -262,6 +266,8 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
     playwrightScreenshotWidth: e.PLAYWRIGHT_SCREENSHOT_WIDTH,
     playwrightScreenshotHeight: e.PLAYWRIGHT_SCREENSHOT_HEIGHT,
     playwrightChromiumExecutablePath: e.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+    ffmpegPath: e.FFMPEG_PATH,
+    exportTmpDir: e.EXPORT_TMP_DIR,
 
     frontendUrl: e.FRONTEND_URL,
     renderBaseUrl: e.RENDER_BASE_URL,

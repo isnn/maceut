@@ -47,7 +47,7 @@ function capture(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(zoneRepo.findById).mockResolvedValue({ name: 'Sudirman', geometry: { type: 'Polygon', coordinates: [ring] } } as never)
-  vi.mocked(renderWithPage).mockResolvedValue({ pngs: [{ name: 'x.png', data: Buffer.from('png-bytes') }], video: Buffer.alloc(0) })
+  vi.mocked(renderWithPage).mockResolvedValue({ pngs: [{ name: 'x.png', data: Buffer.from('png-bytes') }] })
 })
 
 describe('renderCaptureImage', () => {
@@ -84,7 +84,7 @@ describe('renderCaptureImage', () => {
 
   it('stores nothing when the render produced no image', async () => {
     vi.mocked(captureRepo.findLiteById).mockResolvedValue(capture())
-    vi.mocked(renderWithPage).mockResolvedValue({ pngs: [], video: Buffer.alloc(0) })
+    vi.mocked(renderWithPage).mockResolvedValue({ pngs: [] })
 
     await expect(renderCaptureImage('cap')).rejects.toThrow('no image')
     expect(upload).not.toHaveBeenCalled()
