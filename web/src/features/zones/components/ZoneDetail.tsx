@@ -1,9 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Button, buttonClass } from '@/components/ui/Button'
+import { Button, buttonClass, linkClass } from '@/components/ui/Button'
 import { FormLabel, Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
 import { RoadClassBadge, StatusPill, ZoneStatusPill } from '@/components/ui/Badge'
@@ -20,6 +20,8 @@ import {
   IconCamera,
   IconClipboardList,
   IconClock,
+  IconCrown,
+  IconDownload,
   IconFilm,
   IconMap,
   IconPause,
@@ -34,6 +36,9 @@ import { MapCanvas } from './MapCanvas'
 import { RoadClassPicker, ROAD_CLASS_ORDER } from './RoadClassPicker'
 import { ZoneCaptures } from './ZoneCaptures'
 import { ZoneExports } from '@/features/exports/components/ZoneExports'
+import { ActionMenu } from '@/components/ui/ActionMenu'
+import { NextCollectionCard } from '@/features/schedules/components/NextCollectionCard'
+import { WindowDialog } from '@/features/schedules/components/WindowDialog'
 import * as zonesApi from '../api'
 import * as schedulesApi from '@/features/schedules/api'
 import { DAY_LABEL, INTERVAL_LABEL, framesPerDay, type CaptureWindow } from '@/features/schedules/types'
@@ -45,7 +50,13 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
   const searchParams = useSearchParams()
   const [zone, setZone] = useState<Zone | null>(null)
   const [siblings, setSiblings] = useState<Zone[]>([])
-  const [windows, setWindows] = useState<CaptureWindow[]>([])
+  /** Every window on the account — the dialog's plan checks count them all. */
+  const [allWindows, setAllWindows] = useState<CaptureWindow[]>([])
+  const windows = useMemo(() => allWindows.filter((w) => w.zoneId === zoneId), [allWindows, zoneId])
+  const [windowEditing, setWindowEditing] = useState<CaptureWindow | null>(null)
+  const [windowDeleting, setWindowDeleting] = useState(false)
+  const [csvState, setCsvState] = useState<'idle' | 'working'>('idle')
+  const [csvError, setCsvError] = useState<string | null>(null)
 
   // A zone can hold up to 50 windows on Premium, well past what anyone can scan in
   // one list — so this gets the same search, sort and paging as every other table.
@@ -88,7 +99,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
     return {
       found,
       siblings: all.filter((z) => z.id !== zoneId),
-      windows: allWindows.filter((w) => w.zoneId === zoneId),
+      windows: allWindows,
     }
   }, [zoneId])
 
@@ -100,7 +111,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
       }
       setZone(data.found)
       setSiblings(data.siblings)
-      setWindows(data.windows)
+      setAllWindows(data.windows)
       setName(data.found.name)
       setRoadClass(data.found.roadClass)
       // The list's Edit action deep-links straight into edit mode.
@@ -138,6 +149,32 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
   // capped at whatever the current plan allows. That's invisible unless said.
   const maxRoadClass = PLAN_LIMITS[plan].maxRoadClass
   const cappedByPlan = ROAD_CLASS_ORDER.indexOf(zone.roadClass) > ROAD_CLASS_ORDER.indexOf(maxRoadClass)
+
+  /** The plan's CSV reach, in words (FE-30) — the API enforces the same range (BR-007). */
+  const historyDays = PLAN_LIMITS[plan].historyDays
+  const csvRangeText = historyDays === null ? 'Includes all history' : `Includes the last ${historyDays} days on your plan`
+
+  async function exportCsv() {
+    setCsvState('working')
+    setCsvError(null)
+    try {
+      await zonesApi.downloadCapturesCsv(zoneId)
+    } catch (err) {
+      setCsvError(err instanceof ApiError && err.code === 'NETWORK_ERROR' ? err.message : 'Couldn’t prepare the CSV. Please try again.')
+    } finally {
+      setCsvState('idle')
+    }
+  }
+
+  async function setWindowActive(w: CaptureWindow, active: boolean) {
+    await schedulesApi.updateWindow(w.id, { active })
+    setAllWindows(await schedulesApi.getWindows())
+  }
+
+  function closeWindowDialog() {
+    setWindowEditing(null)
+    setWindowDeleting(false)
+  }
 
   function startEdit() {
     setName(zone!.name)
@@ -225,6 +262,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                 <IconFilm size={18} />
                 Open in Studio
               </Link>
+
               <Button variant="tint" onClick={startEdit}>
                 <IconPencil size={16} />
                 Edit
@@ -313,7 +351,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                   </dt>
                   <dd className="text-label font-semibold text-text-primary text-right">
                     {zone.cadence ?? (
-                      <Link href="/schedule" className="text-info no-underline hover:underline font-medium">
+                      <Link href="/schedule" className={linkClass('caption')}>
                         Not scheduled — set a window
                       </Link>
                     )}
@@ -333,9 +371,36 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
         </div>
       </div>
 
+      {csvError && <Alert variant="warning">{csvError}</Alert>}
+
+      {/* When this zone collects next (FE-30) — the same card as the Schedule page,
+          narrowed to this zone's windows. */}
+      <div className="grid grid-cols-1 laptop:grid-cols-2 gap-lg items-start">
+          <NextCollectionCard windows={windows} zones={[zone]} />
+          <div className="bg-card border border-border rounded-lg p-lg space-y-sm">
+            <p className="text-heading-sm text-text-primary">Capture data</p>
+            <p className="text-body text-text-secondary">
+              Download every capture of this zone as a spreadsheet — time (WIB), status, window, roads and average
+              congestion. {csvRangeText}.
+            </p>
+            <div className="flex flex-wrap items-center gap-md pt-xs">
+              <Button variant="tint" size="sm" onClick={() => void exportCsv()} disabled={csvState === 'working'}>
+                <IconDownload size={16} />
+                {csvState === 'working' ? 'Preparing…' : 'Export CSV'}
+              </Button>
+              {plan !== 'premium' && (
+                <Link href="/profile" className="inline-flex items-center gap-xs text-caption font-semibold text-primary no-underline hover:underline">
+                  <IconCrown size={14} />
+                  Upgrade for longer history
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+
       {/* The windows that actually make this zone collect — without them a zone
           sits idle, which is invisible from its attributes alone. */}
-      <section className="space-y-md">
+      <section id="capture-windows" className="space-y-md scroll-mt-xl">
         <SectionHeader
           icon={<IconClock size={18} />}
           title="Capture windows"
@@ -412,6 +477,9 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                     >
                       Status
                     </SortableTh>
+                    <Th className="w-12">
+                      <span className="sr-only">Actions</span>
+                    </Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -454,6 +522,25 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                           {w.active ? 'Active' : w.pausedByPlan ? 'Paused · plan limit' : 'Paused'}
                         </StatusPill>
                       </Td>
+                      <Td className="text-right">
+                        <ActionMenu
+                          label={`Actions for ${w.label}`}
+                          items={[
+                            { label: 'Edit', onSelect: () => setWindowEditing(w) },
+                            w.active
+                              ? { label: 'Pause', onSelect: () => void setWindowActive(w, false) }
+                              : { label: 'Resume', onSelect: () => void setWindowActive(w, true) },
+                            {
+                              label: 'Delete',
+                              destructive: true,
+                              onSelect: () => {
+                                setWindowDeleting(true)
+                                setWindowEditing(w)
+                              },
+                            },
+                          ]}
+                        />
+                      </Td>
                     </tr>
                   ))}
                 </tbody>
@@ -483,6 +570,26 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
 
       {/* Last on the page: exports are made in Studio and collected here. */}
       <ZoneExports zoneId={zone.id} />
+
+      {windowEditing && (
+        <WindowDialog
+          open
+          zones={[zone, ...siblings]}
+          windows={allWindows}
+          plan={plan}
+          editing={windowEditing}
+          startWithDelete={windowDeleting}
+          onClose={closeWindowDialog}
+          onSaved={() => {
+            closeWindowDialog()
+            void schedulesApi.getWindows().then(setAllWindows)
+          }}
+          onPauseOne={() => {
+            closeWindowDialog()
+            document.getElementById('capture-windows')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmDelete}

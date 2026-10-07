@@ -17,6 +17,8 @@ export const PLAN_LIMITS = {
     seatsLimit: 1,
     storageGb: 1,
     captureInterval: 'Daily',
+    /** How far back the captures CSV reaches, in days; null = all (FE-30). */
+    historyDays: 7,
     historyLabel: '7 days',
     /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
     exportFramesLimit: 60,
@@ -31,6 +33,8 @@ export const PLAN_LIMITS = {
     seatsLimit: 5,
     storageGb: 10,
     captureInterval: 'Hourly',
+    /** How far back the captures CSV reaches, in days; null = all (FE-30). */
+    historyDays: 90,
     historyLabel: '90 days',
     /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
     exportFramesLimit: 240,
@@ -45,6 +49,8 @@ export const PLAN_LIMITS = {
     seatsLimit: 25,
     storageGb: 100,
     captureInterval: '15 minutes',
+    /** How far back the captures CSV reaches, in days; null = all (FE-30). */
+    historyDays: null,
     historyLabel: 'Unlimited',
     /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
     exportFramesLimit: 720,

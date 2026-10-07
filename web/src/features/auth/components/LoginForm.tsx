@@ -3,8 +3,8 @@
 import { FormEvent, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Button, buttonClass } from '@/components/ui/Button'
-import { IconLock, IconMail } from '@/components/ui/icons'
+import { Button, buttonClass, linkClass } from '@/components/ui/Button'
+import { IconMail } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
 import { Checkbox, FormLabel, Input, PasswordInput } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
@@ -47,6 +47,9 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-lg">
+      {searchParams.get('expired') === '1' && !error && (
+        <Alert variant="info">Your session ended. Log in again to pick up where you left off.</Alert>
+      )}
       {justReset && !error && <Alert variant="success">Your password has been changed. Log in with the new one.</Alert>}
       {error && <Alert variant="warning">{error}</Alert>}
 
@@ -67,7 +70,7 @@ export function LoginForm() {
           <FormLabel htmlFor="password">Password</FormLabel>
           <Link
             href={email ? `/forgot-password?email=${encodeURIComponent(email.trim())}` : '/forgot-password'}
-            className="text-caption text-info no-underline hover:underline"
+            className={linkClass('caption')}
           >
             Forgot password?
           </Link>
@@ -99,16 +102,6 @@ export function LoginForm() {
         >
           <IconMail size={18} />
           Continue with Google Workspace
-        </button>
-        <button
-          type="button"
-          disabled
-          title="Agency SSO is available on the Premium plan"
-          className={cn(buttonClass('secondary'), 'w-full')}
-        >
-          <IconLock size={18} />
-          Agency SSO
-          <span className="text-micro text-text-muted font-normal">· Premium</span>
         </button>
       </div>
 

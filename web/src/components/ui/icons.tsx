@@ -470,3 +470,13 @@ export function IconCheckCheck(props: IconProps) {
     </Svg>
   )
 }
+
+/** A plan-locked option (FE-30): shown instead of the word "Premium". */
+export function IconCrown(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 7.5 7.5 11 12 4.5 16.5 11 21 7.5 19 18H5L3 7.5Z" />
+      <path d="M5 21h14" />
+    </Svg>
+  )
+}

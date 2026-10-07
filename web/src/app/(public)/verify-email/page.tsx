@@ -1,5 +1,6 @@
 'use client'
 
+import { linkClass } from '@/components/ui/Button'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -14,7 +15,7 @@ function VerifyEmail() {
   if (!email) {
     return (
       <AuthShell title="Verify your email" lead="Open this page from the sign-up or log-in form, so we know which address to check.">
-        <Link href="/login" className="text-info font-medium no-underline hover:underline">
+        <Link href="/login" className={linkClass()}>
           Go to log in
         </Link>
       </AuthShell>
@@ -34,13 +35,13 @@ function VerifyEmail() {
         fromSignup ? (
           <>
             Already have an account with this email? No code is sent for it —{' '}
-            <Link href={`/login?email=${encodeURIComponent(email)}`} className="text-info font-medium no-underline hover:underline">
+            <Link href={`/login?email=${encodeURIComponent(email)}`} className={linkClass()}>
               log in
             </Link>{' '}
             instead.
           </>
         ) : (
-          <Link href="/login" className="text-info font-medium no-underline hover:underline">
+          <Link href="/login" className={linkClass()}>
             Back to log in
           </Link>
         )

@@ -386,3 +386,61 @@ export async function slimFor(capture: { id: string; trafficSlim: unknown }): Pr
   await captureRepo.setTrafficSlim(capture.id, slim).catch(() => undefined)
   return slim
 }
+
+/** Most rows one CSV may hold — a safety cap; a year of 15-minute captures is ~35,000. */
+export const CSV_MAX_ROWS = 50_000
+
+const CSV_HEADER = ['captured_at_wib', 'status', 'trigger', 'window', 'road_class', 'roads', 'avg_jam_factor', 'error']
+
+/** RFC 4180: quote a field holding a comma, quote or line break; double inner quotes. */
+export function csvField(value: string | number | null): string {
+  if (value === null) return ''
+  const text = String(value)
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+/**
+ * GET /zones/:id/captures.csv (FE-30) — one row per capture, reaching back as far as the
+ * plan's history (BR-007: the limit lives here, not in the controller). Built from the
+ * stored summary columns, so it never touches the 2 MB traffic per capture.
+ */
+export async function exportCsv(
+  userId: string,
+  plan: Plan,
+  zoneId: string,
+  now: Date = new Date(),
+): Promise<{ csv: string; zoneName: string; range: string; rows: number }> {
+  const zone = await zoneRepo.findById(zoneId)
+  if (!zone) throw new NotFoundError('Zone')
+  if (zone.userId !== userId) throw new ForbiddenError('You don’t have access to this zone.')
+
+  const days = PLAN_LIMITS[plan].historyDays
+  const since = days === null ? null : new Date(now.getTime() - days * 86_400_000)
+  const rows = await captureRepo.listForCsv(zoneId, since, CSV_MAX_ROWS)
+
+  const lines = [CSV_HEADER.join(',')]
+  for (const r of rows) {
+    const { date, time } = wibParts(r.capturedAt.toISOString())
+    lines.push(
+      [
+        `${date} ${time.slice(0, 2)}:${time.slice(2)}`,
+        r.status,
+        r.trigger,
+        r.windowName,
+        r.roadClass,
+        r.roadsCount,
+        r.jamFactorAvg,
+        r.error,
+      ]
+        .map(csvField)
+        .join(','),
+    )
+  }
+  // BOM first: Excel otherwise reads UTF-8 as ANSI and mangles names like "Jl. Ahmad Yani—Timur".
+  return {
+    csv: '\uFEFF' + lines.join('\r\n') + '\r\n',
+    zoneName: zone.name,
+    range: days === null ? 'all' : `last-${days}-days`,
+    rows: rows.length,
+  }
+}

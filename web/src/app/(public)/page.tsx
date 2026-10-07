@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { PublicHeader } from '@/components/shared/PublicHeader'
 import { TrafficSchematic } from '@/components/shared/TrafficSchematic'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
-import { buttonClass } from '@/components/ui/Button'
+import { buttonClass, linkClass } from '@/components/ui/Button'
 
 const SERVICES = [
   {
@@ -109,7 +109,7 @@ export default function LandingPage() {
                   Upgrade any time — zones and windows scale with the tier.
                 </h2>
               </div>
-              <Link href="/register" className="text-info text-body no-underline hover:underline">
+              <Link href="/register" className={linkClass()}>
                 Compare all features
               </Link>
             </div>
