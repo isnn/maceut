@@ -64,7 +64,7 @@ export default function LoginPage() {
               </ul>
               <div className="space-y-xs pt-md border-t border-white/15">
                 <p className="text-caption text-white/70">
-                  Used by provincial and city road agencies across Java and Sumatra.
+                  Used by road agencies and city planners to watch traffic, zone by zone.
                 </p>
                 <p className="text-micro text-white/45">
                   Photo by{' '}

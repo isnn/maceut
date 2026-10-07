@@ -158,6 +158,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-30** Dialog jendela capture (copy Inggris, error interaktif, mahkota upgrade, menu ⋮), next capture & export CSV di detail zona, sesi kedaluwarsa → login, login tanpa Agency SSO & link warna brand | review user |
 | ✅ | **FE-31** Review polish: strip capture terbaru menampilkan semua zona, Re-render, dialog jendela (notice ringkas, Save nonaktif bila tak bisa lanjut, tombol Delete), tombol ✕ di semua modal | review user |
 | ✅ | **FE-32** Detail zona: Export CSV jadi tombol + pemilih rentang waktu (dibatasi paket), Next collection di bawah kartu detail; Schedule tanpa tautan mahkota Unlimited | review user |
+| ✅ | **FE-33** Nama kelas jalan dalam bahasa Inggris (Highways · Highways + main roads · All roads); id internal tetap | permintaan user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -182,6 +183,15 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-07d] FE-33 — nama kelas jalan dalam bahasa Inggris.
+
+  - Label: Highways · Highways + main roads · All roads; tier wizard: Highways · Main roads · Local
+    streets. Juga di bullet paket, Profile, onboarding, deskripsi RoadClassPicker.
+  - Id internal (nasional / nasional_provinsi / semua) TIDAK berubah — enum DB & kontrak API.
+  - CSV kolom road_class: highways / highways_main_roads / all_roads. Pesan zod API ke Inggris.
+  - Tagline landing & login tak lagi menyebut "Java and Sumatra".
+  VERIFIKASI: 473 test API, tsc + eslint bersih; grep tanpa istilah jalan berbahasa Indonesia di UI.
 
 [2026-10-07c] FE-32 — CSV dengan rentang, tata letak detail zona.
 

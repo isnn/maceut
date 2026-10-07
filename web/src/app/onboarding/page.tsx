@@ -95,7 +95,7 @@ export default function OnboardingPage() {
             value={`${limits.capturesLimit} per day`}
             note="Counted per day in WIB, across every zone."
           />
-          <IncludedRow label="Road data" value="Jalan Nasional" note="Arterial roads between cities and metro areas." />
+          <IncludedRow label="Road data" value="Highways" note="Motorways and main highways between cities." />
         </section>
 
         <div className="mt-xl flex items-center gap-lg">

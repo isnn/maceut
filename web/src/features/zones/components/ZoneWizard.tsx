@@ -268,9 +268,9 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
                   <p className="text-micro font-semibold uppercase tracking-wide text-text-muted">Rendering</p>
                   <ul className="space-y-xs">
                     {[
-                      { label: 'Nasional', collected: true },
-                      { label: 'Provinsi', collected: roadClass !== 'nasional' },
-                      { label: 'Kota / Lokal', collected: roadClass === 'semua' },
+                      { label: 'Highways', collected: true },
+                      { label: 'Main roads', collected: roadClass !== 'nasional' },
+                      { label: 'Local streets', collected: roadClass === 'semua' },
                     ].map((row) => (
                       <li key={row.label} className="flex items-center gap-sm text-caption">
                         <span className={cn('w-2.5 h-2.5 rounded-full', row.collected ? 'bg-success-icon' : 'bg-border')} />

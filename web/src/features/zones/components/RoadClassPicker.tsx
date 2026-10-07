@@ -11,15 +11,15 @@ import type { Plan } from '@/features/auth/types'
 export const ROAD_CLASS_ORDER: RoadClass[] = ['nasional', 'nasional_provinsi', 'semua']
 
 const ROAD_CLASS_DESCRIPTION: Record<RoadClass, string> = {
-  nasional: 'Motorways and inter-city trunk roads',
-  nasional_provinsi: 'Adds provincial arterials',
+  nasional: 'Motorways and main highways between cities',
+  nasional_provinsi: 'Adds regional main roads',
   semua: 'Adds city and local streets',
 }
 
 /** What "none of this class" means in words, for the empty-zone notice (FE-01). */
 const NONE_OF: Record<RoadClass, string> = {
-  nasional: 'motorway or trunk road',
-  nasional_provinsi: 'motorway, trunk or provincial road',
+  nasional: 'highway',
+  nasional_provinsi: 'highway or main road',
   semua: 'road with traffic data',
 }
 
