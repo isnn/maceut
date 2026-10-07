@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Dialog } from '@base-ui/react/dialog'
+import { DialogCloseX } from '@/components/ui/DialogCloseX'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -338,10 +339,11 @@ function ZoneLimitDialog({
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
         <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[28rem] bg-card border border-border rounded-lg p-xl shadow-elevation-3">
+          <DialogCloseX />
           <span className="w-10 h-10 rounded-full bg-warning-bg text-warning-text flex items-center justify-center text-heading-sm font-bold mb-md">
             !
           </span>
-          <Dialog.Title className="text-section-title text-text-primary mb-sm">Zone limit reached</Dialog.Title>
+          <Dialog.Title className="pr-xl text-section-title text-text-primary mb-sm">Zone limit reached</Dialog.Title>
           <Dialog.Description className="text-body text-text-secondary mb-lg">
             The {planLabel} plan includes <span className="font-semibold text-text-primary">{limit} zones</span> and all
             of them are in use. Upgrade to Premium for 25 zones, or free a slot by deleting one you no longer collect.

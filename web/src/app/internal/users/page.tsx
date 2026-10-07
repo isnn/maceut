@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
+import { DialogCloseX } from '@/components/ui/DialogCloseX'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -425,7 +426,8 @@ function UsageDialog({ row, onClose }: { row: InternalUserRow; onClose: () => vo
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
         <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[36rem] max-h-[90vh] overflow-y-auto bg-card border border-border rounded-lg p-xl shadow-elevation-3">
-          <Dialog.Title className="text-section-title text-text-primary">{row.fullName}</Dialog.Title>
+          <DialogCloseX />
+          <Dialog.Title className="pr-xl text-section-title text-text-primary">{row.fullName}</Dialog.Title>
           <Dialog.Description className="text-caption text-text-secondary mt-xs mb-lg">
             {row.email} · {PLAN_LABEL[row.plan]} plan
           </Dialog.Description>

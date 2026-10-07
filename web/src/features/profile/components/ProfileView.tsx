@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Dialog } from '@base-ui/react/dialog'
+import { DialogCloseX } from '@/components/ui/DialogCloseX'
 import { PlanPill } from '@/components/ui/Badge'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { UsageMeter, AttributeRow } from '@/components/ui/UsageMeter'
@@ -263,7 +264,8 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
             <Dialog.Portal>
               <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
               <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[60rem] max-h-[90vh] overflow-y-auto bg-page border border-border rounded-lg p-xl shadow-elevation-3 space-y-lg">
-                <Dialog.Title className="text-section-title text-text-primary">Change plan</Dialog.Title>
+                <DialogCloseX />
+                <Dialog.Title className="pr-xl text-section-title text-text-primary">Change plan</Dialog.Title>
                 <PlanCards
                   selected={usage.plan}
                   onSelect={(plan) => {

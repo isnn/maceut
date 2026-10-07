@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
+import { DialogCloseX } from '@/components/ui/DialogCloseX'
 import { Button } from '@/components/ui/Button'
 import { StyleSelector } from '@/components/ui/StyleSelector'
 import { StatusBadge } from '@/components/ui/Badge'
@@ -85,7 +86,8 @@ export function ManualCaptureButton({ zoneId, zoneName, variant = 'primary', cla
         <Dialog.Portal>
           <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
           <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[28rem] bg-card border border-border rounded-lg p-xl shadow-elevation-3">
-            <Dialog.Title className="text-section-title text-text-primary mb-lg">
+            <DialogCloseX />
+            <Dialog.Title className="pr-xl text-section-title text-text-primary mb-lg">
               Capture — {zoneName}
             </Dialog.Title>
 
