@@ -93,6 +93,17 @@ export async function detail(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+/** Studio's frames: every playable capture inside the plan's history (BR-007). */
+export async function frames(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) throw new UnauthorizedError()
+    const zoneId = idParam.parse(req.params.id)
+    return res.status(200).json(ok(await captureService.framesForZone(req.userId, req.plan ?? 'free', zoneId)))
+  } catch (err) {
+    next(err)
+  }
+}
+
 /** A zone's captures as CSV, as far back as the plan's history reaches (FE-30). */
 export async function exportCsv(req: Request, res: Response, next: NextFunction) {
   try {

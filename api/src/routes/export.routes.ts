@@ -94,7 +94,7 @@ router.use(['/zones/:id/exports', '/exports', '/exports/:id', '/exports/:id/retr
  *                 success: { type: boolean, example: true }
  *                 data: { $ref: '#/components/schemas/Export' }
  *       401: { description: UNAUTHORIZED }
- *       403: { description: FORBIDDEN — zona milik akun lain }
+ *       403: { description: "FORBIDDEN — zona milik akun lain · HISTORY_LIMIT_EXCEEDED — rentang lebih tua dari riwayat paket (BR-007)" }
  *       404: { description: NOT_FOUND — zona tidak ada }
  *       409: { description: EXPORT_IN_PROGRESS — masih ada export aktif }
  *       422: { description: VALIDATION_ERROR atau EXPORT_LIMIT_EXCEEDED }

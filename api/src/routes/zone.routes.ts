@@ -469,6 +469,50 @@ router.get('/zones/:id/captures', captureController.listForZone)
 
 /**
  * @swagger
+ * /zones/{id}/frames:
+ *   get:
+ *     summary: Frame Studio di dalam riwayat paket (BR-007)
+ *     description: >
+ *       Semua capture `done` milik zona, terlama dulu, tanpa traffic — untuk pemilih
+ *       timeframe Studio. Dibatasi riwayat paket — Free 7 hari, Standard 90 hari, Premium
+ *       semua — maksimal 5.000 frame terbaru. `historyDays` null = tanpa batas.
+ *     tags: [Captures]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     historyDays: { type: integer, nullable: true, example: 7 }
+ *                     frames:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id: { type: string, format: uuid }
+ *                           capturedAt: { type: string, format: date-time }
+ *                           jamFactorAvg: { type: number, nullable: true }
+ *                           roadsCount: { type: integer, nullable: true }
+ *       401: { description: UNAUTHORIZED }
+ *       403: { description: FORBIDDEN }
+ *       404: { description: ZONE_NOT_FOUND }
+ */
+router.get('/zones/:id/frames', captureController.frames)
+
+/**
+ * @swagger
  * /captures/{id}:
  *   get:
  *     summary: Satu siklus beserta traffic yang dikumpulkannya
