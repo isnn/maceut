@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { Channel, ConsumeMessage } from 'amqplib'
 import type { Browser } from 'playwright-core'
-import { launchBrowser, renderWithPage, type RenderPageJob } from '../lib/render-page'
+import { launchBrowser, renderWithPage, RenderStalledError, type RenderPageJob } from '../lib/render-page'
 import { withBrowserSlot } from '../lib/browser-slot'
 import { config } from '../config/env'
 import * as exportRepo from '../repositories/export.repository'
@@ -15,7 +15,7 @@ import { cachePath, matchesCaptureImage, specHash } from '../services/render-cac
 import * as renderCacheRepo from '../repositories/render-cache.repository'
 import * as r2 from '../lib/r2-client'
 import { MultipartUpload } from '../lib/r2-client'
-import { publishExportJob } from '../lib/rabbitmq-client'
+import { publishExportJob, safeAck, safeNack } from '../lib/rabbitmq-client'
 import { ZipStream } from '../lib/zip-stream'
 import { startVideoEncoder, type VideoEncoder, type VideoFormat } from '../lib/video-encoder'
 
@@ -71,8 +71,13 @@ const CONTENT_TYPE: Record<'zip' | VideoFormat, string> = {
   mp4: 'video/mp4',
 }
 
-/** Errors that mean "the browser went away", not "this export can't be rendered". */
+/**
+ * Errors that mean "the browser went away", not "this export can't be rendered". A page
+ * that stopped answering counts: the browser is restarted and the export resumes from
+ * the frame it stalled on, within the same restart budget as a crash.
+ */
 export function isBrowserCrash(err: unknown): boolean {
+  if (err instanceof RenderStalledError) return true
   const message = err instanceof Error ? err.message : String(err)
   return /target crashed|page crashed|has been closed|target closed|browser closed|browser has disconnected/i.test(message)
 }
@@ -481,28 +486,39 @@ export async function chooseNext(messageExportId: string): Promise<string> {
   return best
 }
 
+/**
+ * How long RabbitMQ lets one export message stay unacknowledged. Its default of 30
+ * minutes is shorter than a large video export, and passing it closes the channel. A
+ * stuck export cannot hold the message this long: the render stall limit and the
+ * sweeper end it first.
+ */
+export const EXPORT_CONSUMER_TIMEOUT_MS = 4 * 60 * 60_000
+
 export async function registerExportConsumer(ch: Channel): Promise<void> {
   const stale = await removeStaleTempDirs()
   if (stale) console.log(`[export] removed ${stale} scratch folder(s) left by a stopped worker`)
-  // prefetch applies to consumers started after it, so this leaves the capture
-  // consumer's own prefetch untouched.
+  // This consumer has its own channel (workers/index.ts), so the prefetch is its own.
   await ch.prefetch(1)
-  await ch.consume(config.rabbitmqQueueExport, (msg: ConsumeMessage | null) => {
-    if (!msg) return
-    void (async () => {
-      try {
-        const job = JSON.parse(msg.content.toString()) as ExportJob
-        if (!job?.exportId) throw new Error('job tanpa exportId')
-        await runExport(await chooseNext(job.exportId))
-      } catch (err) {
-        console.error('[export] bad job:', err instanceof Error ? err.message : err)
-        ch.nack(msg, false, false)
-        return
-      }
-      // Acked once the outcome is on the row, success or failure. A failed export is
-      // retried by the user, from the history, not by redelivery.
-      ch.ack(msg)
-    })()
-  })
+  await ch.consume(
+    config.rabbitmqQueueExport,
+    (msg: ConsumeMessage | null) => {
+      if (!msg) return
+      void (async () => {
+        try {
+          const job = JSON.parse(msg.content.toString()) as ExportJob
+          if (!job?.exportId) throw new Error('job tanpa exportId')
+          await runExport(await chooseNext(job.exportId))
+        } catch (err) {
+          console.error('[export] bad job:', err instanceof Error ? err.message : err)
+          safeNack(ch, msg)
+          return
+        }
+        // Acked once the outcome is on the row, success or failure. A failed export is
+        // retried by the user, from the history, not by redelivery.
+        safeAck(ch, msg)
+      })()
+    },
+    { arguments: { 'x-consumer-timeout': EXPORT_CONSUMER_TIMEOUT_MS } },
+  )
   console.log(`[worker] consuming ${config.rabbitmqQueueExport} (prefetch 1, streamed, ffmpeg video, one browser per worker)`)
 }

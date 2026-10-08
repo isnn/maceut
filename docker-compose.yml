@@ -70,7 +70,19 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    # Not `tsx watch`: a watcher outlives a crashed worker and keeps the container "Up",
+    # so the restart policy never fires (2026-10-08). After changing worker code, run
+    # `docker compose restart worker`.
     command: npm run worker
+    # The worker touches this file every 30 s while all its consumers have a channel.
+    # Older than 2 minutes means it is running but not consuming. Status only: Compose
+    # does not restart an unhealthy container, so a long export is never killed by it.
+    healthcheck:
+      test: ["CMD-SHELL", "[ $$(( $$(date +%s) - $$(stat -c %Y /tmp/worker-heartbeat) )) -lt 120 ]"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
+      start_period: 60s
 
   web:
     build:

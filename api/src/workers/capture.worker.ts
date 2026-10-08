@@ -1,8 +1,10 @@
 import type { Channel, ConsumeMessage } from 'amqplib'
 import { config, isR2Configured } from '../config/env'
-import { publishRenderJob } from '../lib/rabbitmq-client'
+import { publishRenderJob, safeAck, safeNack } from '../lib/rabbitmq-client'
 import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
+import * as scheduleRepo from '../repositories/schedule.repository'
+import type { CaptureRecord } from '../repositories/capture.repository'
 import { bboxOfGeometry } from '../services/zone.service'
 import { slimTraffic } from '../services/capture.service'
 import * as here from '../lib/here-traffic-client'
@@ -10,6 +12,7 @@ import { functionalClassesFor } from '../lib/here-traffic-client'
 import { meteredTrafficFlow } from '../services/here-usage.service'
 import * as notificationService from '../services/notification.service'
 import type { RoadClass } from '../types/plan'
+import type { CaptureInterval } from '../types/schedule'
 
 /**
  * Consumes capture jobs and collects one cycle each (BR-009, BR-010).
@@ -42,6 +45,40 @@ function meanJamFactor(collection: here.TrafficCollection): number | null {
   return Math.round((total / collection.features.length) * 100) / 100
 }
 
+/**
+ * How late a queued scheduled cycle may start and still be collected: one interval of
+ * its window, at most an hour. Later than that, the next cycle is due or close to it.
+ */
+export function lateToleranceMs(interval: CaptureInterval | null | undefined): number {
+  return interval === '15min' ? 15 * 60_000 : 60 * 60_000
+}
+
+/**
+ * Why a queued scheduled cycle should not be collected, or null to collect it.
+ *
+ * Normally every job starts within seconds of being queued. After a worker outage the
+ * queue holds every cycle the scheduler fired meanwhile, and running them all at once
+ * would store several near-identical frames taken in the same minute, each spending a
+ * traffic request and the account's daily quota. So, per zone, only the newest waiting
+ * cycle is collected, and only while it is within one interval of its due time. The
+ * rest become `missed`, which counts against nothing (BR-006), the same as firings the
+ * scheduler itself could not make.
+ *
+ * Manual captures are always collected: they were asked for now.
+ */
+export async function staleReason(capture: CaptureRecord, now: Date = new Date()): Promise<string | null> {
+  if (capture.trigger !== 'scheduled' || !capture.scheduledFor) return null
+  if (await captureRepo.hasNewerPending(capture.zoneId, capture.scheduledFor)) {
+    return 'Not collected: the worker was offline when this was due, and a later capture of this zone was collected instead.'
+  }
+  const schedule = capture.scheduleId ? await scheduleRepo.findById(capture.scheduleId) : undefined
+  const lateMs = now.getTime() - capture.scheduledFor.getTime()
+  if (lateMs > lateToleranceMs(schedule?.interval)) {
+    return `Not collected: the worker was offline and only reached this ${Math.round(lateMs / 60_000)} minutes after it was due.`
+  }
+  return null
+}
+
 export async function runCapture(captureId: string): Promise<void> {
   const capture = await captureRepo.findById(captureId)
   if (!capture) {
@@ -52,6 +89,13 @@ export async function runCapture(captureId: string): Promise<void> {
     // Already handled. A duplicate delivery must not collect a second time and charge
     // the account twice for one cycle.
     console.warn(`[worker] capture ${captureId} is ${capture.status}, not pending — skipping`)
+    return
+  }
+
+  const stale = await staleReason(capture)
+  if (stale) {
+    await captureRepo.markStatus(captureId, 'missed', stale)
+    console.warn(`[worker] capture ${captureId} skipped as missed (due ${capture.scheduledFor?.toISOString()})`)
     return
   }
 
@@ -123,10 +167,10 @@ export async function registerCaptureConsumer(ch: Channel): Promise<void> {
         // A malformed message can never succeed, so it goes to the dead-letter queue
         // rather than round-tripping forever.
         console.error('[worker] bad job:', err instanceof Error ? err.message : err)
-        ch.nack(msg, false, false)
+        safeNack(ch, msg)
         return
       }
-      ch.ack(msg)
+      safeAck(ch, msg)
     })()
   })
 
