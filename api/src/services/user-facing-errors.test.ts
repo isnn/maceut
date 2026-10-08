@@ -32,13 +32,9 @@ describe('captureErrorForUser', () => {
     )
   })
 
-  it('explains a missed firing, with or without a count', () => {
-    expect(captureErrorForUser('missed', '12 jadwal terlewat — sistem tidak aktif selama 180 menit.')).toBe(
-      '12 scheduled captures were missed while Maceut was unavailable for 180 min.',
-    )
-    expect(captureErrorForUser('missed', 'Jadwal terlewat — sistem tidak aktif selama 20 menit.')).toBe(
-      'This scheduled capture was missed while Maceut was unavailable for 20 min.',
-    )
+  it('says nothing beyond "Missed" for a missed firing', () => {
+    expect(captureErrorForUser('missed', '12 jadwal terlewat — sistem tidak aktif selama 180 menit.')).toBeNull()
+    expect(captureErrorForUser('missed', 'Not collected: a later capture of this zone was collected instead.')).toBeNull()
   })
 
   it('turns a HERE outage into what it means', () => {

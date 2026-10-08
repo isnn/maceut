@@ -27,15 +27,9 @@ export function captureErrorForUser(status: string, raw: string | null): string 
     const limit = /(\d+)/.exec(raw)?.[1]
     return limit ? `Skipped — the daily limit of ${limit} captures was reached.` : 'Skipped — the daily capture limit was reached.'
   }
-  if (status === 'missed') {
-    // Recorded as "N jadwal terlewat — sistem tidak aktif selama X menit." (or without N).
-    const firings = /^(\d+) jadwal/i.exec(raw)?.[1]
-    const minutes = /selama (\d+) menit/i.exec(raw)?.[1]
-    const outage = minutes ? ` for ${minutes} min` : ''
-    return firings
-      ? `${firings} scheduled captures were missed while Maceut was unavailable${outage}.`
-      : `This scheduled capture was missed while Maceut was unavailable${outage}.`
-  }
+  // A missed cycle is shown as just that: "Missed", with its due time. Why it was
+  // missed (the system was down, the queue was stale) is kept on the row for us.
+  if (status === 'missed') return null
   if (/lalu lintas|traffic|here|503|502|504|429/i.test(raw)) {
     return 'Traffic data wasn’t available at this moment. The next scheduled time tries again.'
   }

@@ -94,8 +94,9 @@ export async function runCapture(captureId: string): Promise<void> {
 
   const stale = await staleReason(capture)
   if (stale) {
+    // Kept on the row for us; users see only "Missed" (captureErrorForUser).
     await captureRepo.markStatus(captureId, 'missed', stale)
-    console.warn(`[worker] capture ${captureId} skipped as missed (due ${capture.scheduledFor?.toISOString()})`)
+    console.warn(`[worker] capture ${captureId} marked missed (due ${capture.scheduledFor?.toISOString()}): ${stale}`)
     return
   }
 

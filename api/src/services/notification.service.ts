@@ -181,7 +181,7 @@ export async function onCapturesMissed(userId: string, missed: MissedSummary, de
       type: 'captures_missed',
       tone: 'info',
       title: `${missed.occurrences} ${missed.occurrences === 1 ? 'capture' : 'captures'} missed`,
-      body: `Maceut was offline ${wibTime(missed.from)}–${wibTime(detectedAt)} (${zones}). Collection has resumed — no action needed.`,
+      body: `${zones}, from ${wibTime(missed.from)}.`,
       actionLabel: 'View zones',
       actionHref: '/zones',
       data: { zoneIds: missed.zoneIds, occurrences: missed.occurrences, from: missed.from.toISOString() },

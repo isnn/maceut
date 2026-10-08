@@ -39,7 +39,7 @@ const STATUS_LABEL: Record<zonesApi.CaptureStatus, string> = {
   done: 'Collected',
   failed: 'Failed',
   skipped_limit: 'Skipped — daily limit',
-  missed: 'Missed — system was down',
+  missed: 'Missed',
 }
 
 const STATUS_TONE: Record<zonesApi.CaptureStatus, PillTone> = {
@@ -362,15 +362,18 @@ export function ZoneCaptures({ zone, refreshKey = 0 }: { zone: Zone; refreshKey?
               ) : (
                 <div className="h-[26rem] laptop:h-[32rem] rounded-md bg-canvas-secondary flex items-center justify-center text-center px-xl">
                   <p className="text-body text-text-secondary max-w-[48ch]">
-                    {selected.error ??
+                    {selected.status === 'missed' ? (
+                      <>
+                        Missed
+                        {selected.scheduledFor && (
+                          <span className="block text-caption text-text-muted mt-md">Due {formatWib(selected.scheduledFor)}.</span>
+                        )}
+                      </>
+                    ) : (
+                      (selected.error ??
                       (selected.status === 'pending' || selected.status === 'processing'
                         ? 'This cycle is still collecting. It appears here once the worker finishes.'
-                        : 'No traffic was recorded for this cycle.')}
-                    {selected.status === 'missed' && selected.scheduledFor && (
-                      <span className="block text-caption text-text-muted mt-md">
-                        Due {formatWib(selected.scheduledFor)}. Nothing was collected — a frame taken hours late
-                        describes a different moment, so it is recorded rather than faked.
-                      </span>
+                        : 'No traffic was recorded for this cycle.'))
                     )}
                   </p>
                 </div>
