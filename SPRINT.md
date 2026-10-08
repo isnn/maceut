@@ -163,6 +163,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-35** Konsol staf: penyimpanan & capture terukur (tanpa peringatan "belum terukur"), kolom Storage di Users, subjudul Overview/Users dihapus | review user |
 | ✅ | **FE-36** Landing page sesuai konsep user (layout tetap; copy & gaya diperbaiki, antislop DURING) | konsep user |
 | ✅ | **FE-37** Landing untuk konversi: harga di hero, FAQ, CTA per paket + niat paket, halaman /pricing & /terms, metadata, kontras text-muted | review user |
+| ✅ | **FE-38** Landing: capture & replay asli (Yogyakarta) di hero/Product, FAQ accordion, tanpa How it works, Export disederhanakan, harga dihapus dari hero | review user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -187,6 +188,18 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-08c] FE-38 — landing memakai keluaran asli.
+
+  - Hero: tiga capture asli Yogyakarta (08:15 violet, 17:15 gelap & terang) disusun seperti kipas
+    cetakan; keterangan jujur di bawahnya. Juga jadi gambar Open Graph (metadataBase dari
+    NEXT_PUBLIC_APP_URL).
+  - Product › Traffic replay: video replay asli (25 Sep 2026), muted/loop/inline; prefers-reduced-
+    motion → poster + kontrol, tanpa autoplay. MP4 cadangan dibuat dengan ffmpeg.
+  - Permintaan user: baris harga di hero dihapus; FAQ jadi accordion (Base UI); bagian "How it works"
+    & tautannya dihapus; kartu Export hanya CSV / ZIP / MP4.
+  VERIFIKASI: headless 1440 & 390: 0 overflow, gambar & video termuat (webm diputar), accordion
+  dibuka lewat keyboard, reduced-motion → video berhenti + kontrol, 0 respons gagal, 0 error konsol.
 
 [2026-10-08b] FE-37 — landing untuk konversi.
 

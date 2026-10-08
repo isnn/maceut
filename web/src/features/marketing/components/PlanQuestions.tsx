@@ -1,4 +1,8 @@
+'use client'
+
 import Link from 'next/link'
+import { Accordion } from '@base-ui/react/accordion'
+import { IconChevronDown } from '@/components/ui/icons'
 import { linkClass } from '@/components/ui/Button'
 
 /**
@@ -45,21 +49,36 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
   },
 ]
 
+/**
+ * The FAQ as an accordion (FE-38): one question per row, answers on demand, so seven
+ * answers take the space of seven lines. Base UI handles keyboard and ARIA; the first
+ * question starts open so the pattern is obvious.
+ */
 export function PlanQuestions({ id }: { id?: string }) {
   return (
-    <section id={id} aria-labelledby="questions-title" className="scroll-mt-16">
-      <p className="text-label font-semibold text-primary">Questions</p>
-      <h2 id="questions-title" className="mt-sm text-[28px] leading-[1.2] font-bold tracking-tight text-text-primary">
-        Before you sign up
-      </h2>
-      <dl className="mt-xl grid grid-cols-1 laptop:grid-cols-2 gap-x-xxl border-t border-border">
+    <section id={id} aria-labelledby="faq-title" className="scroll-mt-16 grid grid-cols-1 laptop:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] gap-xxl">
+      <div>
+        <p className="text-label font-semibold text-primary">FAQ</p>
+        <h2 id="faq-title" className="mt-sm text-[28px] leading-[1.2] font-bold tracking-tight text-text-primary text-balance">
+          Questions before you start
+        </h2>
+      </div>
+      <Accordion.Root defaultValue={[QUESTIONS[0]!.q]} className="border-t border-border">
         {QUESTIONS.map(({ q, a }) => (
-          <div key={q} className="py-lg border-b border-border">
-            <dt className="text-heading-sm text-text-primary">{q}</dt>
-            <dd className="mt-xs text-body text-text-secondary">{a}</dd>
-          </div>
+          <Accordion.Item key={q} value={q} className="border-b border-border">
+            <Accordion.Header>
+              <Accordion.Trigger className="group w-full min-h-[56px] py-md flex items-center justify-between gap-lg text-left text-heading-sm text-text-primary cursor-pointer hover:text-primary transition-colors focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary rounded-xs">
+                {q}
+                <IconChevronDown
+                  size={18}
+                  className="shrink-0 text-text-secondary transition-transform group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
+                />
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Panel className="pb-lg pr-xxl text-body text-text-secondary">{a}</Accordion.Panel>
+          </Accordion.Item>
         ))}
-      </dl>
+      </Accordion.Root>
     </section>
   )
 }

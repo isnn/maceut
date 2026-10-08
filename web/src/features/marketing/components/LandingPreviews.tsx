@@ -1,6 +1,8 @@
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
+import { ReplayVideo } from './ReplayVideo'
 import { TRAFFIC_COLORS } from '@/lib/constants'
-import { IconCalendar, IconCheck, IconDownload, IconLayers, IconMap, IconPlay } from '@/components/ui/icons'
+import { IconCalendar, IconDownload, IconLayers, IconMap } from '@/components/ui/icons'
 
 /**
  * Static miniatures of the real app screens for the landing page (FE-36). They are
@@ -60,100 +62,51 @@ function ZonePolygon({ points }: { points: [number, number][] }) {
   )
 }
 
-const HERO_ZONE: [number, number][] = [
-  [118, 46],
-  [282, 56],
-  [300, 196],
-  [132, 206],
-]
+/**
+ * Hero (FE-38): three real captures Maceut rendered of Yogyakarta on 7 and 8 October
+ * 2026, fanned like prints on a desk. Same city, morning against evening, in three of
+ * the export styles: the proof that this is a working product, not a mock-up.
+ */
+const CAPTURES = [
+  { src: '/landing/capture-yogyakarta-0815-violet.webp', alt: 'Yogyakarta at 08:15 WIB on 8 October 2026, violet style: mostly free-flowing roads.' },
+  { src: '/landing/capture-yogyakarta-1715-blush.webp', alt: 'Yogyakarta at 17:15 WIB on 7 October 2026, light style: congestion on the ring road.' },
+  { src: '/landing/capture-yogyakarta-1715-dark.webp', alt: 'Yogyakarta at 17:15 WIB on 7 October 2026, dark style: red and orange on the main corridors.' },
+] as const
 
-function Legend() {
+export function HeroCaptures({ className }: { className?: string }) {
+  const [violet, blush, dark] = CAPTURES
   return (
-    <div className="flex items-center gap-sm">
-      <span className="text-micro text-text-muted">Free flow</span>
-      <span
-        aria-hidden
-        className="h-1.5 flex-1 rounded-full"
-        style={{
-          background: `linear-gradient(90deg, ${TRAFFIC_COLORS.normal}, ${TRAFFIC_COLORS.slow}, ${TRAFFIC_COLORS.heavy}, ${TRAFFIC_COLORS.congested})`,
-        }}
-      />
-      <span className="text-micro text-text-muted">Jammed</span>
-    </div>
-  )
-}
-
-/** Hero: the whole zone screen, with the sidebar, map with the zone, and its settings. */
-export function HeroAppPreview({ className }: { className?: string }) {
-  return (
-    <figure className={cn('bg-card border border-border rounded-lg shadow-elevation-3 overflow-hidden', className)}>
-      <figcaption className="sr-only">
-        The Maceut zone screen: a zone drawn on a map with traffic colours on its roads, its road classes, a capture
-        window, and its capturing status.
-      </figcaption>
-      <div aria-hidden className="grid grid-cols-1 tablet:grid-cols-[120px_1fr_168px] min-w-0">
-        {/* Phones show the map alone: the sidebar and panel text would be too small to read. */}
-        <div className="hidden tablet:block border-r border-divider p-sm space-y-xs">
-          <p className="font-brand font-bold text-text-primary text-label px-xs pb-sm">maceut</p>
-          {['Dashboard', 'Zones', 'Schedule', 'Studio'].map((item) => (
-            <p
-              key={item}
-              className={cn(
-                'text-micro rounded-xs px-xs py-[5px]',
-                item === 'Zones' ? 'bg-primary-soft text-primary font-semibold' : 'text-text-muted',
-              )}
-            >
-              {item}
-            </p>
-          ))}
-        </div>
-        <div className="p-sm min-w-0">
-          <div className="rounded-md overflow-hidden border border-divider">
-            <svg viewBox="0 0 400 240" className="block w-full h-auto">
-              <MapBase />
-              <ZonePolygon points={HERO_ZONE} />
-            </svg>
-          </div>
-          <div className="mt-sm px-xs">
-            <Legend />
-          </div>
-        </div>
-        <div className="hidden tablet:block border-l border-divider p-sm space-y-md">
-          <div>
-            <p className="text-micro text-text-muted">Zone</p>
-            <p className="text-label font-semibold text-text-primary">Example zone</p>
-          </div>
-          <div className="space-y-xs">
-            <p className="text-micro text-text-muted">Road classes</p>
-            {[
-              ['Highways', true],
-              ['Main roads', true],
-              ['Local streets', false],
-            ].map(([label, on]) => (
-              <p key={label as string} className="flex items-center gap-xs text-micro text-text-secondary">
-                <span
-                  className={cn(
-                    'w-3 h-3 rounded-[3px] border flex items-center justify-center',
-                    on ? 'bg-primary border-primary text-on-primary' : 'border-border',
-                  )}
-                >
-                  {on && <IconCheck size={9} />}
-                </span>
-                {label}
-              </p>
-            ))}
-          </div>
-          <div className="space-y-xs">
-            <p className="text-micro text-text-muted">Capture window</p>
-            <p className="text-micro text-text-primary border border-border rounded-xs px-xs py-[4px]">07:00 to 09:00 · hourly</p>
-            <p className="text-micro text-text-primary border border-border rounded-xs px-xs py-[4px]">Mon to Fri</p>
-          </div>
-          <p className="flex items-center gap-xs text-micro font-semibold text-success-text">
-            <span className="w-2 h-2 rounded-full bg-success-icon" />
-            Capturing
-          </p>
-        </div>
+    <figure className={cn('min-w-0', className)}>
+      <div className="relative mx-auto aspect-[5/4] w-full max-w-[40rem]">
+        <Image
+          src={violet.src}
+          alt={violet.alt}
+          width={1080}
+          height={1080}
+          sizes="(min-width: 1024px) 30vw, 60vw"
+          className="absolute left-0 top-[8%] w-[56%] h-auto rounded-md border border-border -rotate-6"
+        />
+        <Image
+          src={blush.src}
+          alt={blush.alt}
+          width={1080}
+          height={1080}
+          sizes="(min-width: 1024px) 30vw, 60vw"
+          className="absolute right-0 top-[8%] w-[56%] h-auto rounded-md border border-border rotate-6"
+        />
+        <Image
+          src={dark.src}
+          alt={dark.alt}
+          width={1080}
+          height={1080}
+          priority
+          sizes="(min-width: 1024px) 34vw, 70vw"
+          className="absolute left-1/2 top-0 w-[64%] h-auto -translate-x-1/2 rounded-md shadow-elevation-3"
+        />
       </div>
+      <figcaption className="mt-lg text-center text-caption text-text-secondary">
+        Real captures from Maceut: Yogyakarta at 08:15 and 17:15, in three of its map styles.
+      </figcaption>
     </figure>
   )
 }
@@ -244,36 +197,16 @@ export function SchedulePreview() {
   )
 }
 
+/**
+ * A real Studio replay (FE-38): Yogyakarta, 25 September 2026, exported by the app as
+ * video. Muted, looping and inline because it is a picture of the product, not a
+ * soundtrack; visitors who ask for reduced motion get the still poster with controls.
+ */
 export function ReplayPreview() {
   return (
-    <Frame label="Studio replay: a map with traffic colours and a timeline to scrub through saved snapshots.">
-      <svg viewBox="0 0 400 200" className="block w-full h-auto">
-        <rect width="400" height="200" className="fill-canvas-secondary" />
-        <g className="stroke-border" strokeWidth="10" strokeLinecap="round" fill="none">
-          <path d="M0 40 L400 170" />
-          <path d="M60 200 L340 0" />
-          <path d="M0 120 L400 110" />
-        </g>
-        <g strokeWidth="5" strokeLinecap="round" fill="none">
-          <path d="M0 40 L180 98" stroke={TRAFFIC_COLORS.congested} />
-          <path d="M180 98 L400 170" stroke={TRAFFIC_COLORS.slow} />
-          <path d="M60 200 L200 100" stroke={TRAFFIC_COLORS.heavy} />
-          <path d="M200 100 L340 0" stroke={TRAFFIC_COLORS.normal} />
-          <path d="M0 120 L400 110" stroke={TRAFFIC_COLORS.normal} />
-        </g>
-      </svg>
-      <div className="flex items-center gap-sm px-sm py-sm border-t border-divider">
-        <span className="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center">
-          <IconPlay size={11} />
-        </span>
-        <span className="text-micro tabular-nums text-text-primary">07:30</span>
-        <span className="relative flex-1 h-1 rounded-full bg-page">
-          <span className="absolute inset-y-0 left-0 w-[42%] rounded-full bg-primary" />
-          <span className="absolute top-1/2 left-[42%] -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-canvas border-2 border-primary" />
-        </span>
-        <span className="text-micro tabular-nums text-text-muted">09:00</span>
-      </div>
-    </Frame>
+    <div className="rounded-md border border-divider overflow-hidden bg-text-primary">
+      <ReplayVideo />
+    </div>
   )
 }
 
@@ -295,11 +228,6 @@ export function ExportPreview() {
             <span className="text-micro font-semibold text-primary">{fmt}</span>
           </div>
         ))}
-        <p className="text-[10px] font-mono text-text-muted leading-relaxed">
-          captured_at_wib,status,roads,avg_jam_factor
-          <br />
-          2026-10-07 07:00,done,…,…
-        </p>
       </div>
     </Frame>
   )

@@ -4,7 +4,7 @@ import { PlanCards } from '@/features/marketing/components/PlanCards'
 import {
   BandMap,
   ExportPreview,
-  HeroAppPreview,
+  HeroCaptures,
   ReplayPreview,
   SchedulePreview,
   ZonePreview,
@@ -12,24 +12,22 @@ import {
 import { buttonClass, linkClass } from '@/components/ui/Button'
 import {
   IconArrowRight,
-  IconCalendar,
   IconClipboardList,
   IconClock,
   IconDownload,
   IconGauge,
   IconGlobe,
-  IconMap,
   IconRoute,
 } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
-import { PLAN_LIMITS, PLAN_PRICE } from '@/lib/constants'
+import { PLAN_PRICE } from '@/lib/constants'
 import { PlanQuestions } from '@/features/marketing/components/PlanQuestions'
 import { PublicFooter } from '@/components/shared/PublicFooter'
 import type { Metadata } from 'next'
 
 /**
- * The public landing page (FE-36), laid out after the owner's concept: hero with the
- * app, how it works, the four product areas, use cases, plans, a closing band.
+ * The public landing page (FE-36), laid out after the owner's concept: hero with real
+ * captures, the four product areas, use cases, plans, FAQ, a closing band.
  *
  * Content rule (antislop R-17/R-36/R-38): everything here describes what the product
  * does today. No customer logos, counts or testimonials: there are none to show yet,
@@ -40,26 +38,6 @@ export const metadata: Metadata = {
   title: { absolute: 'Maceut: scheduled traffic capture for road agencies' },
   description: `Draw a zone, set the hours, and Maceut collects traffic flow on schedule so you can replay or export it. Free for one zone, paid plans from ${PLAN_PRICE.standard.amount} a month.`,
 }
-
-const FREE = PLAN_LIMITS.free
-
-const STEPS = [
-  {
-    icon: IconMap,
-    title: 'Draw a zone',
-    body: 'Outline the area on the map and choose which roads count: highways, main roads, or every street.',
-  },
-  {
-    icon: IconCalendar,
-    title: 'Set capture windows',
-    body: 'Pick the days and hours that matter to you, then how often to collect: every 15 minutes, hourly, or daily.',
-  },
-  {
-    icon: IconDownload,
-    title: 'Replay and export',
-    body: 'Scrub through every snapshot in Studio, then take the data with you as CSV, image frames, or video.',
-  },
-]
 
 const PRODUCT = [
   {
@@ -150,36 +128,9 @@ export default function LandingPage() {
                 See pricing
               </Link>
             </div>
-            {/* The price anchor (FE-37): affordability is the pitch, so it sits here, not at the bottom. */}
-            <p className="mt-lg text-body text-text-primary">
-              Free for {FREE.zonesLimit} zone. Paid plans from {PLAN_PRICE.standard.amount} a month.
-            </p>
-            <p className="mt-xs text-caption text-text-secondary">No card needed to start.</p>
+            <p className="mt-lg text-caption text-text-secondary">No card needed to start.</p>
           </div>
-          <HeroAppPreview className="min-w-0" />
-        </section>
-
-        {/* How it works */}
-        <section id="how-it-works" className="scroll-mt-16 border-t border-border bg-canvas-secondary">
-          <div className={cn(WRAP, 'py-section grid grid-cols-1 laptop:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] gap-xxl')}>
-            <SectionHead label="How it works" title="From a shape on a map to data you can use.">
-              Three steps, done once. After that the capture windows run on their own.
-            </SectionHead>
-            <ol className="grid grid-cols-1 tablet:grid-cols-3 gap-xl">
-              {STEPS.map((step, i) => (
-                <li key={step.title}>
-                  <div className="flex items-center gap-md">
-                    <span className="w-10 h-10 rounded-md bg-primary-soft text-primary flex items-center justify-center">
-                      <step.icon size={20} />
-                    </span>
-                    <span className="text-label font-semibold text-text-secondary tabular-nums">Step {i + 1}</span>
-                  </div>
-                  <h3 className="mt-md text-heading-sm text-text-primary">{step.title}</h3>
-                  <p className="mt-xs text-body text-text-secondary">{step.body}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
+          <HeroCaptures />
         </section>
 
         {/* Product */}
