@@ -9,8 +9,7 @@ import {
   SchedulePreview,
   ZonePreview,
 } from '@/features/marketing/components/LandingPreviews'
-import { Logo } from '@/components/ui/Logo'
-import { buttonClass } from '@/components/ui/Button'
+import { buttonClass, linkClass } from '@/components/ui/Button'
 import {
   IconArrowRight,
   IconCalendar,
@@ -23,7 +22,10 @@ import {
   IconRoute,
 } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
-import { PLAN_LIMITS } from '@/lib/constants'
+import { PLAN_LIMITS, PLAN_PRICE } from '@/lib/constants'
+import { PlanQuestions } from '@/features/marketing/components/PlanQuestions'
+import { PublicFooter } from '@/components/shared/PublicFooter'
+import type { Metadata } from 'next'
 
 /**
  * The public landing page (FE-36), laid out after the owner's concept: hero with the
@@ -33,6 +35,11 @@ import { PLAN_LIMITS } from '@/lib/constants'
  * does today. No customer logos, counts or testimonials: there are none to show yet,
  * and no links to pages that do not exist.
  */
+
+export const metadata: Metadata = {
+  title: { absolute: 'Maceut: scheduled traffic capture for road agencies' },
+  description: `Draw a zone, set the hours, and Maceut collects traffic flow on schedule so you can replay or export it. Free for one zone, paid plans from ${PLAN_PRICE.standard.amount} a month.`,
+}
 
 const FREE = PLAN_LIMITS.free
 
@@ -81,27 +88,27 @@ const USE_CASES = [
   {
     icon: IconGauge,
     title: 'Traffic monitoring',
-    body: 'Watch the corridors you manage at the hours they matter, without staff counting cars.',
+    body: 'Set a window on the corridors you manage, then check each morning’s capture instead of sending staff out to count.',
   },
   {
     icon: IconRoute,
     title: 'Planning and operations',
-    body: 'Check how a road behaves before and after a closure, a new signal, or a diversion.',
+    body: 'Before and after a closure or a new signal: compare the same 07:00 window two weeks apart in Studio.',
   },
   {
     icon: IconClock,
     title: 'Historical analysis',
-    body: 'Line up the same window across weeks to see which hours are getting worse.',
+    body: 'Replay the same hour across weeks to see when a road starts to jam, and whether it is getting earlier.',
   },
   {
     icon: IconClipboardList,
     title: 'Research and engineering',
-    body: 'Export consistent, timestamped samples for studies and models.',
+    body: 'Export every capture as a timestamped CSV row, collected at the same times each day, ready for a study or a model.',
   },
   {
     icon: IconDownload,
     title: 'Reporting',
-    body: 'Put a replay or a chart from real captures in front of the people who decide.',
+    body: 'Export the morning as an MP4 and put the replay in front of the people who decide.',
   },
 ]
 
@@ -136,16 +143,18 @@ export default function LandingPage() {
             </p>
             <div className="mt-xl flex flex-wrap gap-md">
               <Link href="/register" className={buttonClass()}>
-                Create free account
+                Draw your first zone, free
                 <IconArrowRight size={16} />
               </Link>
-              <a href="#how-it-works" className={buttonClass('secondary')}>
-                See how it works
-              </a>
+              <Link href="/pricing" className={buttonClass('secondary')}>
+                See pricing
+              </Link>
             </div>
-            <p className="mt-lg text-caption text-text-secondary">
-              Free plan: {FREE.zonesLimit} zone, {FREE.capturesLimit} captures a day. No card needed.
+            {/* The price anchor (FE-37): affordability is the pitch, so it sits here, not at the bottom. */}
+            <p className="mt-lg text-body text-text-primary">
+              Free for {FREE.zonesLimit} zone. Paid plans from {PLAN_PRICE.standard.amount} a month.
             </p>
+            <p className="mt-xs text-caption text-text-secondary">No card needed to start.</p>
           </div>
           <HeroAppPreview className="min-w-0" />
         </section>
@@ -177,7 +186,7 @@ export default function LandingPage() {
         <section id="product" className="scroll-mt-16 border-t border-border">
           <div className={cn(WRAP, 'py-section grid grid-cols-1 laptop:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] gap-xxl')}>
             <div>
-              <SectionHead label="Product" title="Everything between drawing a zone and handing over the data.">
+              <SectionHead label="Product" title="From a zone on the map to data in your report.">
                 One workspace for the whole job: define the area, collect on a schedule, look back, and export.
               </SectionHead>
               <Link href="/register" className={cn(buttonClass(), 'mt-xl')}>
@@ -219,13 +228,25 @@ export default function LandingPage() {
         {/* Pricing */}
         <section id="pricing" className="scroll-mt-16 border-t border-border">
           <div className={cn(WRAP, 'py-section')}>
-            <SectionHead label="Pricing" title="Plans priced for public budgets.">
-              Start free with one zone. Move up when you need more zones, more captures, or a finer interval. Every plan
-              exports CSV, image frames and video.
-            </SectionHead>
-            <PlanCards className="mt-xl" />
+            <div className="flex flex-wrap items-end justify-between gap-lg">
+              <SectionHead label="Pricing" title="Plans priced for public budgets.">
+                Start free with one zone. Move up when you need more zones, more captures, or a finer interval. Every
+                plan exports CSV, image frames and video.
+              </SectionHead>
+              <Link href="/pricing" className={linkClass()}>
+                Compare plans in detail
+              </Link>
+            </div>
+            <PlanCards className="mt-xl" publicLinks />
+            <p className="mt-lg text-caption text-text-secondary">
+              A capture is one fetch of your zone&rsquo;s traffic, kept as a frame you can replay or export.
+            </p>
           </div>
         </section>
+
+        <div className={cn(WRAP, 'pb-section')}>
+          <PlanQuestions id="questions" />
+        </div>
 
         {/* Closing band */}
         <section className={cn(WRAP, 'pb-section')}>
@@ -243,34 +264,22 @@ export default function LandingPage() {
               <div className="flex items-start gap-md">
                 <IconGlobe size={28} className="text-primary shrink-0" />
                 <p className="text-body text-text-secondary">
-                  Works anywhere HERE has live traffic data. Times are shown in Western Indonesia Time (WIB).
+                  One zone free, for as long as you like. Paid plans from {PLAN_PRICE.standard.amount} a month when you
+                  need more.
                 </p>
               </div>
               <div className="flex flex-col items-start laptop:items-end gap-xs">
                 <Link href="/register" className={buttonClass()}>
-                  Create free account
+                  Draw your first zone, free
                 </Link>
-                <span className="text-caption text-text-secondary">Free plan, no card needed.</span>
+                <span className="text-caption text-text-secondary">No card needed.</span>
               </div>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="border-t border-border">
-        <div className={cn(WRAP, 'py-xl flex flex-wrap items-center justify-between gap-lg')}>
-          <Logo />
-          <nav aria-label="Footer" className="flex items-center gap-xl">
-            <a href="#product" className="text-body text-text-secondary no-underline hover:text-text-primary transition-colors">
-              Product
-            </a>
-            <a href="#pricing" className="text-body text-text-secondary no-underline hover:text-text-primary transition-colors">
-              Pricing
-            </a>
-          </nav>
-          <p className="w-full text-caption text-text-secondary">© 2026 Maceut</p>
-        </div>
-      </footer>
+      <PublicFooter />
     </>
   )
 }

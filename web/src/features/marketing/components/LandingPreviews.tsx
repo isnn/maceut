@@ -91,8 +91,9 @@ export function HeroAppPreview({ className }: { className?: string }) {
         The Maceut zone screen: a zone drawn on a map with traffic colours on its roads, its road classes, a capture
         window, and its capturing status.
       </figcaption>
-      <div aria-hidden className="grid grid-cols-[96px_1fr] tablet:grid-cols-[120px_1fr_168px] min-w-0">
-        <div className="border-r border-divider p-sm space-y-xs">
+      <div aria-hidden className="grid grid-cols-1 tablet:grid-cols-[120px_1fr_168px] min-w-0">
+        {/* Phones show the map alone: the sidebar and panel text would be too small to read. */}
+        <div className="hidden tablet:block border-r border-divider p-sm space-y-xs">
           <p className="font-brand font-bold text-text-primary text-label px-xs pb-sm">maceut</p>
           {['Dashboard', 'Zones', 'Schedule', 'Studio'].map((item) => (
             <p

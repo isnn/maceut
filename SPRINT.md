@@ -162,6 +162,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-34** Konsol staf: kolom Paused terpisah, spasi overview, halaman usage per akun (data nyata), tipe staf Superadmin / Admin (Admin hanya Overview & Users) | review user |
 | ✅ | **FE-35** Konsol staf: penyimpanan & capture terukur (tanpa peringatan "belum terukur"), kolom Storage di Users, subjudul Overview/Users dihapus | review user |
 | ✅ | **FE-36** Landing page sesuai konsep user (layout tetap; copy & gaya diperbaiki, antislop DURING) | konsep user |
+| ✅ | **FE-37** Landing untuk konversi: harga di hero, FAQ, CTA per paket + niat paket, halaman /pricing & /terms, metadata, kontras text-muted | review user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -186,6 +187,24 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-08b] FE-37 — landing untuk konversi.
+
+  - Hero: CTA "Draw your first zone, free" + "See pricing"; jangkar harga dari PLAN_PRICE. Pratinjau
+    hero di ponsel hanya peta. Use cases menyebut artefak nyata (Studio, MP4, CSV).
+  - Pricing: kartu paket ber-CTA (Free → /register; Standard/Premium → /register?plan=…), definisi
+    "capture"; halaman baru /pricing (kartu, tabel perbandingan dari PLAN_LIMITS, istilah, FAQ, CTA).
+  - Niat paket: ?plan= disimpan di sessionStorage, akun tetap Free (BR-001, API tidak berubah);
+    setelah onboarding → /profile?plan=… membuka pemilih paket dengan catatan "Payment is coming soon".
+  - FAQ (PlanQuestions) dengan jawaban nyata; sumber data tidak disebut di landing (keputusan
+    pemilik) → halaman /terms (DRAF, perlu review hukum) menyebut HERE & OpenStreetMap;
+    [CONTACT EMAIL] masih placeholder.
+  - Metadata: template judul "%s · Maceut", deskripsi, Open Graph (gambar menunggu sampel asli).
+  - Kontras: text-muted #9A9AA5 → #6A6A74 (≥4,5:1 di canvas, page, primary-soft); text-secondary
+    #6B6B76 → #575762 agar tetap ada jenjang. design.md diperbarui.
+  VERIFIKASI: klik-tembus headless 1440 & 390 di /, /pricing, /terms: 0 overflow, 0 tautan rusak,
+  0 error konsol, "HERE" tidak tampil di / dan /pricing; tabel pricing menggulir di kotaknya di
+  ponsel; "Start with Standard" → /register?plan=standard dan niat tersimpan. tsc + eslint bersih.
 
 [2026-10-08] FE-36 — landing page sesuai konsep user (antislop DURING).
 

@@ -23,8 +23,18 @@ const posterSerif = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Maceut",
-  description: "Scheduled traffic capture and replay for road networks",
+  // FE-37: pages set their own title; this frames it. The default is the landing page's.
+  title: { default: "Maceut: scheduled traffic capture for road agencies", template: "%s · Maceut" },
+  description:
+    "Draw a zone, set the hours, and Maceut collects traffic flow on schedule so you can replay or export it.",
+  applicationName: "Maceut",
+  // Open Graph image waits for the owner's real capture sample; no stand-in image.
+  openGraph: {
+    type: "website",
+    siteName: "Maceut",
+    title: "Maceut: scheduled traffic capture for road agencies",
+    description: "Draw a zone, set the hours, and Maceut collects traffic flow on schedule so you can replay or export it.",
+  },
 };
 
 export default function RootLayout({
