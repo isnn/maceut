@@ -4,6 +4,8 @@ import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
+import { cn } from '@/lib/utils'
+import { PAGE_WIDTH } from '@/components/shared/page-width'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useCurrentUser()
@@ -23,7 +25,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-page">
       <AppHeader />
-      <main className="mx-auto max-w-[1180px] px-xl py-xl">{children}</main>
+      {/* Same width as the header (page-width.ts), so they always line up. */}
+      <main className={cn('mx-auto px-xl py-xl', PAGE_WIDTH)}>
+        {children}
+      </main>
     </div>
   )
 }

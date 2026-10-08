@@ -19,3 +19,14 @@ npm-debug.log*
 
 # Claude Code local session config (personal, not shared)
 .claude/settings.local.json
+
+# editor swap/backup files — a swap file of .env can contain the buffer, i.e. the
+# secrets. One (nano's, header only, no contents) was swept in by `git add -A` on
+# 2026-09-19; checked and clean, but the guard belongs here rather than in vigilance.
+*.swp
+*.swo
+*.swn
+.*.swp
+*~
+.#*
+\#*#

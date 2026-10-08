@@ -38,6 +38,11 @@ const config: Config = {
         info: '#3178F6',
         'info-bg': '#EAF1FE',
 
+        // Category — a third label colour beside info (blue) and primary (purple), for
+        // categories that must never read as a status (road class). Not a state colour.
+        'teal-bg': '#E0F4F1',
+        'teal-text': '#0F6E64',
+
         // Semantic — Danger (destructive actions & failed states)
         'danger-bg': '#FCEAE9',
         'danger-text': '#B3261E',

@@ -4,24 +4,31 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { Dialog } from '@base-ui/react/dialog'
+import { DialogCloseX } from '@/components/ui/DialogCloseX'
+import { PlanPill } from '@/components/ui/Badge'
+import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { UsageMeter, AttributeRow } from '@/components/ui/UsageMeter'
-import { Checkbox } from '@/components/ui/Input'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { cn } from '@/lib/utils'
 import { IconCheck } from '@/components/ui/icons'
-import { PLAN_LABEL, PLAN_LIMITS, PLAN_PRICE, ROAD_CLASS_LABEL } from '@/lib/constants'
+import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER, PLAN_PRICE, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import * as authApi from '@/features/auth/api'
 import * as dashboardApi from '@/features/dashboard/api'
 import type { UsageSummary } from '@/features/dashboard/api'
 import type { Plan } from '@/features/auth/types'
+import { ApiError } from '@/types/api'
+import { PlanChangeDialog } from '@/features/plan/PlanChangeDialog'
+import { previewOwnPlanChange, type PlanImpact } from '@/features/plan/impact'
+import { NotificationSettings } from '@/features/notifications/NotificationSettings'
 
 const ALL_TABS = ['Usage', 'Account', 'Billing', 'Notifications'] as const
 type Tab = (typeof ALL_TABS)[number]
 
 /**
  * Staff see only Account and Notifications. Usage and Billing are customer
- * concerns — an internal account has no workspace quota to report, and its
+ * concerns — an internal account has no plan quota to report, and its
  * seeded figures would be noise to someone with no Zones page to open.
  */
 const TABS_FOR: Record<'tenant' | 'internal', readonly Tab[]> = {
@@ -29,7 +36,7 @@ const TABS_FOR: Record<'tenant' | 'internal', readonly Tab[]> = {
   internal: ['Account', 'Notifications'],
 }
 
-const PREMIUM_UNLOCKS = ['15-minute capture', 'Kota / Lokal roads', 'Unlimited history', 'WebM export + API access']
+const PREMIUM_UNLOCKS = ['15-minute capture', 'City and local streets', 'Unlimited history', 'WebM export + API access']
 
 export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'internal' }) {
   const { user } = useCurrentUser()
@@ -37,17 +44,48 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
   const tabs = TABS_FOR[variant]
   const [tab, setTab] = useState<Tab>(variant === 'internal' ? 'Account' : 'Usage')
   const [pendingPlan, setPendingPlan] = useState<Plan | null>(null)
+  const [planError, setPlanError] = useState<string | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   useEffect(() => {
     if (variant === 'internal') return
     dashboardApi.getUsage().then(setUsage)
   }, [variant])
 
-  async function changePlan(plan: Plan) {
+  /**
+   * Downgrades only. The server refuses an upgrade with UPGRADE_NOT_SELF_SERVE until
+   * billing exists, so the refusal is surfaced rather than left as a button stuck on
+   * "Saving…" — which is what happened before, because nothing caught the throw.
+   *
+   * A downgrade first shows exactly what it will pause (ADR-020), from the server's own
+   * preview. It used to apply straight away behind a generic warning.
+   */
+  const [confirming, setConfirming] = useState<{ plan: Plan; impact: PlanImpact | null } | null>(null)
+
+  function changePlan(plan: Plan) {
+    setPlanError(null)
+    setConfirming({ plan, impact: null })
+    previewOwnPlanChange(plan)
+      .then((impact) => setConfirming((c) => (c && c.plan === plan ? { plan, impact } : c)))
+      .catch((err) => {
+        setConfirming(null)
+        setPlanError(err instanceof ApiError ? err.message : 'Could not check what this change would pause.')
+      })
+  }
+
+  async function confirmPlanChange() {
+    if (!confirming) return
+    const { plan } = confirming
     setPendingPlan(plan)
-    await authApi.updatePlan(plan)
-    // Reload so the header, limits and quota readouts all pick up the new plan.
-    window.location.reload()
+    setPlanError(null)
+    try {
+      await authApi.updatePlan(plan)
+      // Reload so the header, limits and quota readouts all pick up the new plan.
+      window.location.reload()
+    } catch (err) {
+      setPlanError(err instanceof ApiError ? err.message : 'Could not change the plan. Please try again.')
+      setPendingPlan(null)
+    }
   }
 
   if (!user || (variant === 'tenant' && !usage)) return <div className="h-96 bg-canvas-secondary rounded-lg animate-pulse" />
@@ -63,7 +101,7 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
         <div>
           <h1 className="text-page-title font-bold text-text-primary">{user.fullName || user.email}</h1>
           <p className="text-body text-text-secondary mt-xs">
-            {user.email} · Owner{user.organisation && ` · ${user.organisation}`}
+            {user.email}
           </p>
         </div>
         <Button variant="secondary" className="ml-auto">
@@ -99,7 +137,6 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                 <UsageMeter label="Scheduled frames / day" value={usage.framesPerDay} max={usage.capturesLimit} />
                 <UsageMeter label="Active windows" value={usage.schedulesActiveCount} max={usage.schedulesLimit} />
                 <UsageMeter label="Storage" value={usage.storageUsedGb} max={usage.storageLimitGb} unit=" GB" />
-                <UsageMeter label="Team seats" value={usage.seatsUsed} max={usage.seatsLimit} />
               </div>
             </Card>
 
@@ -119,16 +156,12 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
               <p className="text-micro font-semibold uppercase tracking-wide text-text-muted">Current plan</p>
               <p className="text-page-title font-bold text-text-primary mt-xs">{PLAN_LABEL[usage.plan]}</p>
               <p className="text-caption text-text-muted mt-xs">
-                {PLAN_PRICE[usage.plan].amount} {PLAN_PRICE[usage.plan].period} · renews 1 Oct
+                {PLAN_PRICE[usage.plan].amount} {PLAN_PRICE[usage.plan].period}
               </p>
-              {usage.plan !== 'premium' && (
-                <Button className="w-full mt-lg" onClick={() => changePlan(usage.plan === 'free' ? 'standard' : 'premium')}>
-                  {pendingPlan ? 'Saving…' : `Upgrade to ${usage.plan === 'free' ? 'Standard' : 'Premium'}`}
-                </Button>
-              )}
-              <button className="w-full text-label text-text-secondary hover:text-text-primary mt-md transition-colors">
-                Manage billing
-              </button>
+              <Button variant="tint" className="w-full mt-lg" onClick={() => setPickerOpen(true)}>
+                Change plan
+              </Button>
+              {planError && !confirming && <p className="text-caption text-danger-text mt-sm">{planError}</p>}
             </Card>
 
             {usage.plan !== 'premium' && (
@@ -149,16 +182,56 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
       )}
 
       {tab === 'Billing' && usage && (
-        <div className="space-y-lg">
-          <p className="text-body text-text-secondary">
-            Payments are not wired up in the MVP — pick a plan below to simulate a plan change.
-          </p>
-          <PlanCards
-            selected={usage.plan}
-            onSelect={changePlan}
-            pendingPlan={pendingPlan}
-            actionLabel={(plan) => (plan === usage.plan ? 'Current plan' : `Switch to ${PLAN_LABEL[plan]}`)}
-          />
+        <div className="grid grid-cols-1 laptop:grid-cols-[1fr_320px] gap-xl items-start">
+          <Card className="p-lg space-y-md">
+            <h2 className="text-heading-sm text-text-primary">Billing history</h2>
+            {/* No invoices are invented: until payments exist this is honestly empty. */}
+            <TableWrap>
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Date</Th>
+                    <Th>Description</Th>
+                    <Th className="text-right">Amount</Th>
+                    <Th>Status</Th>
+                    <Th className="text-right">Invoice</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <Td colSpan={5} className="text-center text-text-muted py-xl">
+                      No invoices yet
+                    </Td>
+                  </tr>
+                </tbody>
+              </Table>
+            </TableWrap>
+          </Card>
+
+          <div className="space-y-lg">
+            <Card className="p-lg space-y-md">
+              <h2 className="text-heading-sm text-text-primary">Plan</h2>
+              <dl className="divide-y divide-divider">
+                <div className="flex items-center justify-between gap-md pb-md">
+                  <dt className="text-body text-text-secondary">Plan</dt>
+                  <dd>
+                    <PlanPill plan={usage.plan} />
+                  </dd>
+                </div>
+                <AttributeRow label="Price" value={`${PLAN_PRICE[usage.plan].amount} ${PLAN_PRICE[usage.plan].period}`} />
+              </dl>
+            </Card>
+
+            <Card className="p-lg space-y-md">
+              <h2 className="text-heading-sm text-text-primary">Payment method</h2>
+              <p className="text-body text-text-muted">No card on file</p>
+            </Card>
+
+            <Card className="p-lg space-y-md">
+              <h2 className="text-heading-sm text-text-primary">Billing contact</h2>
+              <p className="text-body font-semibold text-text-primary break-all">{user.email}</p>
+            </Card>
+          </div>
         </div>
       )}
 
@@ -168,42 +241,67 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
             <dl className="divide-y divide-divider">
               <AttributeRow label="Full name" value={user.fullName || '—'} />
               <AttributeRow label="Email" value={user.email} />
-              <AttributeRow label="Organisation" value={user.organisation || '—'} />
-              <AttributeRow label="Workspace role" value="Owner" />
-              <AttributeRow label="Platform role" value={user.role === 'internal' ? 'Internal (Maceut staff)' : 'Customer'} />
             </dl>
           </Card>
 
           {user.role === 'internal' && (
             <Card className="p-lg">
-              <h2 className="text-heading-sm text-text-primary">Internal access</h2>
-              <p className="text-body text-text-secondary mt-xs">
-                This account is configured for the staff area.
-              </p>
-              <Link href="/internal" className={cn(buttonClass('secondary'), 'mt-lg')}>
-                Open internal tools
+              <h2 className="text-heading-sm text-text-primary">Staff tools</h2>
+              <Link href="/internal" className={cn(buttonClass('tint'), 'mt-md')}>
+                Open staff tools
               </Link>
             </Card>
           )}
         </div>
       )}
 
-      {tab === 'Notifications' && (
-        <Card className="p-lg space-y-md">
-          {[
-            'Email when a scheduled capture fails',
-            'Email when an animation finishes rendering',
-            'Weekly summary of zone usage',
-          ].map((label, i) => (
-            <label key={label} className="flex items-center gap-sm text-body text-text-secondary">
-              <Checkbox defaultChecked={i < 2} />
-              {label}
-            </label>
-          ))}
-          <p className="text-caption text-text-muted pt-sm border-t border-divider">
-            Email notifications do not send in the MVP — these preferences are stored for later.
-          </p>
-        </Card>
+      {tab === 'Notifications' && <NotificationSettings variant={variant} />}
+
+      {usage && (
+        <>
+          {/* Step 1: pick a plan. Moving down goes on to step 2, the warning. */}
+          <Dialog.Root open={pickerOpen} onOpenChange={setPickerOpen}>
+            <Dialog.Portal>
+              <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
+              <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[60rem] max-h-[90vh] overflow-y-auto bg-page border border-border rounded-lg p-xl shadow-elevation-3 space-y-lg">
+                <DialogCloseX />
+                <Dialog.Title className="pr-xl text-section-title text-text-primary">Change plan</Dialog.Title>
+                <PlanCards
+                  selected={usage.plan}
+                  onSelect={(plan) => {
+                    setPickerOpen(false)
+                    changePlan(plan)
+                  }}
+                  pendingPlan={pendingPlan}
+                  // Upgrades are arranged with the team until payments exist.
+                  disabledPlan={(plan) => PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(usage.plan)}
+                  actionLabel={(plan) =>
+                    plan === usage.plan
+                      ? 'Current plan'
+                      : PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(usage.plan)
+                        ? 'Contact us to upgrade'
+                        : `Move to ${PLAN_LABEL[plan]}`
+                  }
+                />
+                <div className="flex justify-end">
+                  <Dialog.Close className={buttonClass('secondary')}>Close</Dialog.Close>
+                </div>
+              </Dialog.Popup>
+            </Dialog.Portal>
+          </Dialog.Root>
+
+          <PlanChangeDialog
+            open={confirming !== null}
+            title={confirming ? `Move to ${PLAN_LABEL[confirming.plan]}?` : ''}
+            planLabel={confirming ? PLAN_LABEL[confirming.plan] : ''}
+            impact={confirming?.impact ?? null}
+            loading={confirming !== null && confirming.impact === null}
+            pending={pendingPlan !== null}
+            error={planError}
+            onConfirm={confirmPlanChange}
+            onCancel={() => setConfirming(null)}
+          />
+        </>
       )}
     </div>
   )

@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   postgres:
     image: postgis/postgis:16-3.4
@@ -21,6 +19,11 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     restart: unless-stopped
+    # The queue declares durable queues and persistent messages, which is only true
+    # for as long as the data directory survives. Without this, a container recreate
+    # discards every queued capture and the code's promise is silently untrue.
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -50,7 +53,7 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    command: pnpm dev
+    command: npm run dev
 
   worker:
     build:
@@ -67,7 +70,19 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    command: pnpm worker
+    # Not `tsx watch`: a watcher outlives a crashed worker and keeps the container "Up",
+    # so the restart policy never fires (2026-10-08). After changing worker code, run
+    # `docker compose restart worker`.
+    command: npm run worker
+    # The worker touches this file every 30 s while all its consumers have a channel.
+    # Older than 2 minutes means it is running but not consuming. Status only: Compose
+    # does not restart an unhealthy container, so a long export is never killed by it.
+    healthcheck:
+      test: ["CMD-SHELL", "[ $$(( $$(date +%s) - $$(stat -c %Y /tmp/worker-heartbeat) )) -lt 120 ]"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
+      start_period: 60s
 
   web:
     build:
@@ -88,3 +103,4 @@ services:
 
 volumes:
   postgres_data:
+  rabbitmq_data:

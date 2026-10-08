@@ -5,13 +5,20 @@ import { usePathname } from 'next/navigation'
 import { Logo } from '@/components/ui/Logo'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { cn } from '@/lib/utils'
+import { PAGE_WIDTH } from './page-width'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
+import { accessOf } from '@/features/auth/types'
+import { NotificationBell } from '@/features/notifications/NotificationBell'
 
 const NAV_ITEMS = [
-  { href: '/internal', label: 'Overview' },
-  { href: '/internal/users', label: 'Users' },
-  { href: '/internal/config', label: 'Configuration' },
+  { href: '/internal', label: 'Overview', superadmin: false },
+  { href: '/internal/users', label: 'Users', superadmin: false },
+  { href: '/internal/here', label: 'HERE usage', superadmin: true },
+  { href: '/internal/config', label: 'Configuration', superadmin: true },
 ]
+
+/** Staff pages only a superadmin may open (FE-34) — the layout and the API enforce it too. */
+export const SUPERADMIN_PATHS = NAV_ITEMS.filter((i) => i.superadmin).map((i) => i.href)
 
 function initials(name: string, email: string): string {
   const source = name.trim() || email
@@ -27,16 +34,16 @@ export function InternalHeader() {
 
   return (
     <header className="sticky top-0 z-20 bg-canvas border-b border-border">
-      <div className="mx-auto max-w-[1180px] px-xl h-16 flex items-center gap-xxl">
+      <div className={cn('mx-auto px-xl h-16 flex items-center gap-xxl', PAGE_WIDTH)}>
         <div className="flex items-center gap-sm">
           <Logo href="/internal" />
-          <span className="bg-primary-soft text-[#5A35F3] text-micro font-semibold rounded-xs px-sm py-xs uppercase tracking-wide">
+          <span className="bg-primary-soft text-primary text-micro font-semibold rounded-xs px-sm py-xs uppercase tracking-wide">
             Internal
           </span>
         </div>
 
-        <nav className="flex items-center gap-lg overflow-x-auto">
-          {NAV_ITEMS.map((item) => {
+        <nav className="flex items-center gap-xl overflow-x-auto">
+          {NAV_ITEMS.filter((item) => !item.superadmin || (user && accessOf(user) === 'superadmin')).map((item) => {
             const active = item.href === '/internal' ? pathname === item.href : pathname.startsWith(item.href)
             return (
               <Link
@@ -57,6 +64,8 @@ export function InternalHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-md">
+          {/* Staff get HERE budget alerts here (NOTIF). */}
+          <NotificationBell />
           {user && (
             <Dropdown
               triggerLabel="Account menu"

@@ -36,13 +36,69 @@ export function formatTimestampWIB(date: Date | string): string {
 }
 
 /** Short date for table rows, e.g. "22 Jul". */
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * "23 Sep 2026" in WIB — the one date format for the app. It used to be id-ID without
+ * a year ("23 Sep", but "5 Agu", "12 Mei"): Indonesian month names in an English UI,
+ * and no way to tell last year's zone from this year's.
+ */
 export function formatDate(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' }).format(d)
+  const parts = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    timeZone: 'Asia/Jakarta',
+  }).formatToParts(typeof date === 'string' ? new Date(date) : date)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${get('day')} ${SHORT_MONTHS[Number(get('month')) - 1]} ${get('year')}`
 }
 
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  if (bytes < 1024 ** 3) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`
+}
+
+/**
+ * Numbers for display, in one convention across the whole app.
+ *
+ * The dashboard was showing `11652 roads` in one panel, `11.623 roads` in the next and
+ * `501.69 km` beside them — so a dot meant "thousands" and "decimal point" on the same
+ * screen, and `9.645 roads` read as nine-point-six. The interface is in English, and km
+ * already uses a decimal point, so the thousands separator follows that: 9,645.
+ *
+ * One helper rather than a locale string at each call site, because four call sites is
+ * four chances to pick a different one — which is how this happened.
+ */
+export function formatNumber(value: number, fractionDigits = 0): string {
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })
+}
+
+/** Distances, always to two decimals so a column of them lines up. */
+export function formatKm(value: number): string {
+  return `${formatNumber(value, 2)} km`
+}
+
+/**
+ * "23 Sep 10:27" in WIB — the one time format for table cells. The column header says
+ * "(WIB)", so the cell doesn't repeat it. Built from parts because the locales disagree
+ * with each other ("Sept", "10.27", a stray comma).
+ */
+export function formatWibShort(date: Date | string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: 'Asia/Jakarta',
+  }).formatToParts(new Date(date))
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${get('day').padStart(2, '0')} ${SHORT_MONTHS[Number(get('month')) - 1]} ${get('hour')}:${get('minute')}`
 }

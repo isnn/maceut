@@ -1,69 +1,63 @@
-// TODO: replace with real fetch through @/lib/api-client once api/ exists.
-// Feeds the header bell dropdown (3i).
+/**
+ * The bell (NOTIF), against the real API. Notifications are written by the server where
+ * things happen — a capture worker, the scheduler, an export, a plan change — so this
+ * only reads them and marks them read.
+ */
+import { apiClient } from '@/lib/api-client'
 
 export type NotificationTone = 'warning' | 'success' | 'info'
 
+export type NotificationType =
+  | 'capture_failing'
+  | 'capture_recovered'
+  | 'captures_missed'
+  | 'capture_limit_reached'
+  | 'capture_limit_near'
+  | 'export_ready'
+  | 'export_failed'
+  | 'plan_changed'
+  | 'here_budget_warning'
+  | 'here_budget_reached'
+
 export interface AppNotification {
   id: string
+  type: NotificationType
   tone: NotificationTone
   title: string
   body: string
-  time: string
+  actionLabel: string | null
+  actionHref: string | null
+  zoneName: string | null
   read: boolean
-  /** Optional inline action rendered as a link inside the row. */
-  actionLabel?: string
-  actionHref?: string
+  createdAt: string
 }
 
-const READ_KEY = 'maceut_mock_notifications_read'
-const MOCK_LATENCY_MS = 250
-
-function delay<T>(value: T): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), MOCK_LATENCY_MS))
+export interface NotificationFeed {
+  items: AppNotification[]
+  unreadCount: number
 }
 
-function readReadIds(): string[] {
-  if (typeof window === 'undefined') return []
-  const raw = window.localStorage.getItem(READ_KEY)
-  return raw ? (JSON.parse(raw) as string[]) : []
+export async function getNotifications(limit = 20): Promise<NotificationFeed> {
+  return apiClient.get<NotificationFeed>(`/notifications?limit=${limit}`)
 }
 
-const FEED: Omit<AppNotification, 'read'>[] = [
-  {
-    id: 'zone-paused',
-    tone: 'warning',
-    title: 'One zone is paused',
-    body: 'Tol Cawang–Grogol stopped collecting on 3 Sep.',
-    time: 'Yesterday',
-    actionLabel: 'Resume zone',
-    actionHref: '/zones',
-  },
-  {
-    id: 'render-done',
-    tone: 'success',
-    title: 'Animation finished rendering',
-    body: 'Sudirman corridor · 5 Sep finished rendering.',
-    time: '2 hours ago',
-    actionLabel: 'Open Studio',
-    actionHref: '/studio',
-  },
-  {
-    id: 'member-joined',
-    tone: 'info',
-    title: 'New member joined',
-    body: 'Dewi Anggraini joined the workspace as Editor.',
-    time: 'Yesterday',
-    actionLabel: 'View team',
-    actionHref: '/team',
-  },
-]
-
-export async function getNotifications(): Promise<AppNotification[]> {
-  const readIds = readReadIds()
-  return delay(FEED.map((n) => ({ ...n, read: readIds.includes(n.id) })))
+export async function markRead(id: string): Promise<void> {
+  await apiClient.post(`/notifications/${id}/read`)
 }
 
 export async function markAllRead(): Promise<void> {
-  window.localStorage.setItem(READ_KEY, JSON.stringify(FEED.map((n) => n.id)))
-  await delay(null)
+  await apiClient.post('/notifications/read-all')
+}
+
+export interface NotificationPreferences {
+  /** Email me if scheduled captures keep failing (at most one a day, after 2 hours). */
+  emailCaptureProblems: boolean
+}
+
+export async function getPreferences(): Promise<NotificationPreferences> {
+  return apiClient.get<NotificationPreferences>('/me/notification-preferences')
+}
+
+export async function updatePreferences(prefs: NotificationPreferences): Promise<NotificationPreferences> {
+  return apiClient.patch<NotificationPreferences>('/me/notification-preferences', prefs)
 }

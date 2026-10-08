@@ -1,9 +1,10 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Button, buttonClass } from '@/components/ui/Button'
-import { IconLock, IconMail } from '@/components/ui/icons'
+import { Button, buttonClass, linkClass } from '@/components/ui/Button'
+import { IconMail } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
 import { Checkbox, FormLabel, Input, PasswordInput } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
@@ -14,7 +15,9 @@ import { homePathFor } from '../home-path'
 export function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(searchParams.get('email') ?? '')
+  // Arrived from a finished password reset.
+  const justReset = searchParams.get('reset') === '1'
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -31,6 +34,12 @@ export function LoginForm() {
       const redirect = searchParams.get('redirect')
       router.push(home === '/dashboard' && redirect ? redirect : home)
     } catch (err) {
+      // Right password, unverified address: Better Auth has already sent a new code,
+      // so go straight to where it's entered rather than showing a dead-end error.
+      if (err instanceof ApiError && err.code === authApi.EMAIL_NOT_VERIFIED) {
+        router.push(`/verify-email?email=${encodeURIComponent(email.trim())}&from=login`)
+        return
+      }
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
       setLoading(false)
     }
@@ -38,6 +47,10 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-lg">
+      {searchParams.get('expired') === '1' && !error && (
+        <Alert variant="info">Your session ended. Log in again to pick up where you left off.</Alert>
+      )}
+      {justReset && !error && <Alert variant="success">Your password has been changed. Log in with the new one.</Alert>}
       {error && <Alert variant="warning">{error}</Alert>}
 
       <div className="space-y-xs">
@@ -55,9 +68,12 @@ export function LoginForm() {
       <div className="space-y-xs">
         <div className="flex items-center justify-between">
           <FormLabel htmlFor="password">Password</FormLabel>
-          <a href="#lupa-password" className="text-caption text-info no-underline hover:underline">
+          <Link
+            href={email ? `/forgot-password?email=${encodeURIComponent(email.trim())}` : '/forgot-password'}
+            className={linkClass('caption')}
+          >
             Forgot password?
-          </a>
+          </Link>
         </div>
         <PasswordInput id="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
@@ -86,16 +102,6 @@ export function LoginForm() {
         >
           <IconMail size={18} />
           Continue with Google Workspace
-        </button>
-        <button
-          type="button"
-          disabled
-          title="Agency SSO is available on the Premium plan"
-          className={cn(buttonClass('secondary'), 'w-full')}
-        >
-          <IconLock size={18} />
-          Agency SSO
-          <span className="text-micro text-text-muted font-normal">· Premium</span>
         </button>
       </div>
 

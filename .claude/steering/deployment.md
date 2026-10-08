@@ -80,7 +80,7 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    command: pnpm dev
+    command: npm run dev
 
   worker:
     build:
@@ -97,7 +97,7 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    command: pnpm worker
+    command: npm run worker   # tanpa tsx watch: worker yang mati harus memicu restart (BE-18)
 
   web:
     build:
@@ -114,7 +114,7 @@ services:
       - /app/.next
     depends_on:
       - api
-    command: pnpm dev
+    command: npm run dev
 
 volumes:
   postgres_data:
@@ -143,13 +143,13 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install
+COPY package.json package-lock.json* ./
+RUN npm install
 
 COPY . .
 
 EXPOSE 8080
-CMD ["pnpm", "dev"]
+CMD ["npm", "run", "dev"]
 ```
 
 ## Dockerfile (Backend — Production, Multi-stage)
@@ -158,10 +158,10 @@ CMD ["pnpm", "dev"]
 # api/Dockerfile
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
+COPY package.json package-lock.json* ./
+RUN npm ci
 COPY . .
-RUN pnpm build
+RUN npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -186,10 +186,10 @@ CMD ["node", "dist/server.js"]
 # web/Dockerfile
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
+COPY package.json package-lock.json* ./
+RUN npm ci
 COPY . .
-RUN pnpm build
+RUN npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -218,7 +218,7 @@ services:
       context: ./api
       dockerfile: Dockerfile
     volumes: []          # tidak mount source code di production
-    command: node dist/server.js
+    command: node dist/src/server.js
     restart: always
 
   worker:
@@ -226,7 +226,7 @@ services:
       context: ./api
       dockerfile: Dockerfile
     volumes: []
-    command: node dist/workers/index.js
+    command: node dist/src/workers/index.js
     restart: always
 
   web:
@@ -266,7 +266,7 @@ cp web/.env.example web/.env.local
 docker compose up
 
 # Jalankan migration Drizzle (di dalam container api)
-docker compose exec api pnpm drizzle-kit migrate
+docker compose exec api npx drizzle-kit migrate
 
 # Lihat log service tertentu
 docker compose logs -f api
@@ -300,11 +300,27 @@ api (running) ─→ web
 
 ---
 
+## R2 bucket — aturan lifecycle (sekali, saat setup)
+
+Export di-stream ke R2 lewat multipart upload (ADR-028). Worker membatalkan upload yang
+gagal, dan sweeper membatalkan upload dari worker yang mati — tapi kalau keduanya pun
+gagal, part yang sudah terunggah tetap tersimpan (dan ditagih) tanpa objek yang
+menunjuknya. Jaring pengamannya aturan lifecycle bucket:
+
+- Cloudflare dashboard → R2 → bucket → **Settings → Object lifecycle rules → Add rule**
+- Scope: prefix `exports/` · Action: **Abort incomplete multipart uploads** after **1 day**
+- Scope: prefix `render-cache/` · Action: **Delete objects** after **8 days** — frame
+  cache (EXP-A2). Sweeper sudah menghapusnya setelah 7 hari; aturan ini menangkap file
+  yang barisnya ikut terhapus saat capture/zona dihapus (cascade).
+
+Tanpa aturan ini semuanya tetap berjalan; yang hilang hanya pembersihan untuk kasus
+kegagalan ganda.
+
 ## CI/CD Notes (Rencana, belum diimplementasi)
 
 - Build image `api` dan `web` di CI, push ke registry (Docker Hub / GHCR)
 - Deploy target kandidat: VPS dengan Docker Compose, Railway, atau Fly.io
-- Migration Drizzle dijalankan sebagai step terpisah sebelum deploy service baru (`pnpm drizzle-kit migrate`), bukan otomatis saat container start
+- Migration Drizzle dijalankan sebagai step terpisah sebelum deploy service baru (`npx drizzle-kit migrate`), bukan otomatis saat container start
 - Detail CI/CD pipeline akan didetailkan saat mendekati waktu deploy pertama
 
 ---

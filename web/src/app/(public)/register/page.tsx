@@ -1,5 +1,6 @@
 'use client'
 
+import { linkClass } from '@/components/ui/Button'
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -26,7 +27,7 @@ export default function RegisterPage() {
 
         <h1 className="mt-xxl text-display text-text-primary">Create your account</h1>
         <p className="mt-xs text-body text-text-secondary mb-xl">
-          One account per agency workspace — invite your team afterwards. You&rsquo;ll pick a plan next.
+          We&rsquo;ll email you a code to verify your address, then you&rsquo;re in.
         </p>
 
         <div className="bg-card border border-border rounded-lg p-xl">
@@ -35,7 +36,7 @@ export default function RegisterPage() {
 
         <p className="text-body text-text-secondary text-center mt-xl">
           Already have an account?{' '}
-          <Link href="/login" className="text-info font-medium no-underline hover:underline">
+          <Link href="/login" className={linkClass()}>
             Log in
           </Link>
         </p>

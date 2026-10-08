@@ -1,0 +1,36 @@
+# api/Dockerfile.dev — development, hot reload via tsx watch
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Chromium for Playwright. Installed now even though Playwright itself arrives with
+# the capture pipeline (Phase 3): these are the slow layers, and putting them in
+# up front means adding Playwright later costs an npm install, not an image rebuild.
+#
+# The Alpine package installs /usr/bin/chromium. deployment.md used to say
+# /usr/bin/chromium-browser, which was the old Alpine name and no longer exists.
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+
+# package*.json only, so `npm install` is cached until dependencies actually change.
+COPY package.json package-lock.json* ./
+RUN npm install
+
+# ffmpeg encodes export videos from rendered frames (EXP-B, ADR-030) — VP9 for WebM,
+# H.264 for MP4. Its own layer AFTER npm install, so adding it didn't throw away the
+# dependency cache.
+RUN apk add --no-cache ffmpeg
+
+COPY . .
+
+EXPOSE 8080
+CMD ["npm", "run", "dev"]

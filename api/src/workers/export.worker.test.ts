@@ -1,0 +1,413 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+vi.mock('../lib/drizzle-client', () => ({ db: {}, pool: {} }))
+vi.mock('../repositories/export.repository', () => ({
+  markRendering: vi.fn(),
+  reportProgress: vi.fn(async () => true),
+  touch: vi.fn(async () => undefined),
+  setUploadId: vi.fn(async () => undefined),
+  markUploading: vi.fn(async () => true),
+  complete: vi.fn(async () => true),
+  fail: vi.fn(async () => true),
+  pickNextQueued: vi.fn(async () => undefined),
+  isQueued: vi.fn(async () => false),
+}))
+vi.mock('../lib/rabbitmq-client', () => ({ publishExportJob: vi.fn(async () => undefined) }))
+vi.mock('../repositories/capture.repository', () => ({
+  findLiteByIds: vi.fn(async (ids: string[]) =>
+    ids.map((id) => ({ id, capturedAt: new Date('2026-10-05T00:00:00Z'), trafficSlim: null, filePath: null, styleUsed: null })),
+  ),
+}))
+vi.mock('../repositories/render-cache.repository', () => ({
+  findMany: vi.fn(async () => new Map()),
+  insert: vi.fn(async () => undefined),
+}))
+vi.mock('../repositories/zone.repository', () => ({
+  findById: vi.fn(async () => ({ geometry: { coordinates: [[[110, -7], [110.1, -7], [110.1, -7.1], [110, -7]]] } })),
+}))
+vi.mock('../services/notification.service', () => ({ onExportFinished: vi.fn(async () => undefined) }))
+vi.mock('../services/export.service', () => ({
+  exportPath: () => 'exports/u1/e1.zip',
+  expiryFrom: () => new Date('2026-10-12T00:00:00Z'),
+  frameFileName: (i: number) => `${i + 1}.png`,
+}))
+vi.mock('../services/capture.service', () => ({ slimFor: async () => ({ type: 'FeatureCollection', features: [] }) }))
+const video = vi.hoisted(() => ({ frames: [] as string[], killed: false, outPath: '' }))
+vi.mock('../lib/video-encoder', () => ({
+  startVideoEncoder: vi.fn((_format: string, _hold: number, outPath: string) => {
+    video.outPath = outPath
+    return {
+      write: async (png: Buffer) => void video.frames.push(png.toString()),
+      // A real encoder writes the file; the fake writes the frames it was given.
+      finish: async () => {
+        const fs = await import('node:fs')
+        fs.writeFileSync(outPath, `video:${video.frames.join('|')}`)
+      },
+      kill: () => void (video.killed = true),
+    }
+  }),
+}))
+vi.mock('../lib/render-page', () => ({
+  launchBrowser: vi.fn(async () => ({ isConnected: () => true, close: vi.fn(async () => undefined) })),
+  renderWithPage: vi.fn(),
+  RenderStalledError: class RenderStalledError extends Error {},
+}))
+
+const upload = vi.hoisted(() => ({
+  chunks: [] as Buffer[],
+  completed: false,
+  aborted: false,
+}))
+vi.mock('../lib/r2-client', () => ({
+  remove: vi.fn(async () => undefined),
+  upload: vi.fn(async () => undefined),
+  download: vi.fn(async (path: string) => Buffer.from(`stored:${path}`)),
+  MultipartUpload: {
+    start: vi.fn(async () => ({
+      uploadId: 'up-1',
+      get bytes() {
+        return upload.chunks.reduce((n, c) => n + c.length, 0)
+      },
+      write: async (c: Buffer) => void upload.chunks.push(c),
+      complete: async () => void (upload.completed = true),
+      abort: async () => void (upload.aborted = true),
+    })),
+    abortById: vi.fn(),
+  },
+}))
+
+import { runExport, MAX_BROWSER_RESTARTS } from './export.worker'
+import * as exportRepo from '../repositories/export.repository'
+import * as captureRepo from '../repositories/capture.repository'
+import * as renderCacheRepo from '../repositories/render-cache.repository'
+import { RENDER_VERSION } from '../services/render-cache.service'
+import * as notificationService from '../services/notification.service'
+import * as r2 from '../lib/r2-client'
+import { launchBrowser, renderWithPage, type RenderBridge, type RenderPageJob } from '../lib/render-page'
+
+const FRAMES = 5
+
+function exportRow(over: Record<string, unknown> = {}) {
+  return {
+    id: 'e1',
+    userId: 'u1',
+    zoneId: 'z1',
+    format: 'zip',
+    spec: { zoneName: 'YOG', width: 1600, height: 1000, themeId: 'dark', congestionId: 'standard', overlay: {}, view: {}, holdMs: 1000 },
+    frameIds: Array.from({ length: FRAMES }, (_, i) => `c${i}`),
+    ...over,
+  } as never
+}
+
+/** A fake render page: draws frames from job.startFrame, optionally crashing at one. */
+function page(opts: { crashAt?: number[]; error?: string; cancelAt?: number } = {}) {
+  const crashes = [...(opts.crashAt ?? [])]
+  const starts: number[] = []
+  vi.mocked(renderWithPage).mockImplementation(async (_b, job: RenderPageJob, bridge: RenderBridge) => {
+    const start = job.startFrame ?? 0
+    starts.push(start)
+    for (let i = start; i < (job.endFrame ?? job.frameCount); i++) {
+      if (crashes[0] === i) {
+        crashes.shift()
+        throw new Error(opts.error ?? 'page.evaluate: Target crashed')
+      }
+      await bridge.frame(i)
+      await bridge.png!(i, `${i + 1}.png`, Buffer.from(`png-${i}`), { drawMs: 10, encodeMs: 4 })
+      if (opts.cancelAt === i) vi.mocked(exportRepo.reportProgress).mockResolvedValueOnce(false)
+      if (!(await bridge.progress!(i + 1))) return { pngs: [] }
+    }
+    return { pngs: [] }
+  })
+  return starts
+}
+
+/** File names inside the uploaded ZIP, read from its local headers. */
+function zipNames(): string[] {
+  const zip = Buffer.concat(upload.chunks)
+  const names: string[] = []
+  let at = 0
+  while (zip.readUInt32LE(at) === 0x04034b50) {
+    const size = zip.readUInt32LE(at + 18)
+    const nameLen = zip.readUInt16LE(at + 26)
+    names.push(zip.subarray(at + 30, at + 30 + nameLen).toString())
+    at += 30 + nameLen + size
+  }
+  return names
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  video.frames = []
+  video.killed = false
+  upload.chunks = []
+  upload.completed = false
+  upload.aborted = false
+  vi.mocked(exportRepo.markRendering).mockResolvedValue(exportRow())
+  // clearAllMocks keeps implementations, so tests that change these must not leak.
+  vi.mocked(captureRepo.findLiteByIds).mockImplementation(async (ids: string[]) =>
+    ids.map((id) => ({ id, capturedAt: new Date('2026-10-05T00:00:00Z'), trafficSlim: null, filePath: null, styleUsed: null })) as never,
+  )
+  vi.mocked(renderCacheRepo.findMany).mockImplementation(async () => new Map())
+  vi.mocked(r2.download).mockImplementation(async (path: string) => Buffer.from(`stored:${path}`))
+  vi.mocked(exportRepo.reportProgress).mockResolvedValue(true)
+  vi.mocked(exportRepo.markUploading).mockResolvedValue(true)
+  vi.mocked(exportRepo.complete).mockResolvedValue(true)
+  vi.spyOn(console, 'log').mockImplementation(() => undefined)
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  vi.spyOn(console, 'error').mockImplementation(() => undefined)
+})
+
+describe('runExport — ZIP', () => {
+  it('streams every frame into the upload and marks the export done', async () => {
+    page()
+    await runExport('e1')
+
+    expect(zipNames()).toEqual(['1.png', '2.png', '3.png', '4.png', '5.png'])
+    expect(upload.completed).toBe(true)
+    expect(exportRepo.setUploadId).toHaveBeenCalledWith('e1', 'up-1')
+    const bytes = upload.chunks.reduce((n, c) => n + c.length, 0)
+    expect(exportRepo.complete).toHaveBeenCalledWith('e1', 'exports/u1/e1.zip', bytes, expect.any(Date))
+    expect(notificationService.onExportFinished).toHaveBeenCalledWith('e1')
+  })
+
+  it('resumes after a browser crash from the next frame, without repeating frames', async () => {
+    const starts = page({ crashAt: [2] })
+    await runExport('e1')
+
+    expect(starts).toEqual([0, 2]) // the second browser starts where the first stopped
+    expect(launchBrowser).toHaveBeenCalledTimes(2)
+    expect(zipNames()).toEqual(['1.png', '2.png', '3.png', '4.png', '5.png'])
+    expect(upload.completed).toBe(true)
+    expect(exportRepo.fail).not.toHaveBeenCalled()
+  })
+
+  it(`gives up after ${MAX_BROWSER_RESTARTS} restarts, and discards the partial upload`, async () => {
+    page({ crashAt: [1, 2, 3] })
+    await runExport('e1')
+
+    expect(exportRepo.fail).toHaveBeenCalledWith('e1', expect.stringContaining('Target crashed'))
+    expect(upload.aborted).toBe(true)
+    expect(upload.completed).toBe(false)
+    expect(exportRepo.setUploadId).toHaveBeenLastCalledWith('e1', null)
+  })
+
+  it('does not retry an error that is not a browser crash', async () => {
+    page({ crashAt: [1], error: 'page.goto: net::ERR_CONNECTION_REFUSED' })
+    await runExport('e1')
+
+    expect(launchBrowser).toHaveBeenCalledTimes(1)
+    expect(exportRepo.fail).toHaveBeenCalled()
+    expect(upload.aborted).toBe(true)
+  })
+
+  it('stops and discards the upload when the user cancels mid-render', async () => {
+    page({ cancelAt: 1 })
+    await runExport('e1')
+
+    expect(upload.aborted).toBe(true)
+    expect(exportRepo.markUploading).not.toHaveBeenCalled()
+    expect(exportRepo.complete).not.toHaveBeenCalled()
+    expect(notificationService.onExportFinished).not.toHaveBeenCalled()
+  })
+
+  it('never marks a cancelled export done, even when cancelled after the last frame (#58)', async () => {
+    page()
+    vi.mocked(exportRepo.markUploading).mockResolvedValue(false)
+    await runExport('e1')
+
+    expect(upload.completed).toBe(false)
+    expect(upload.aborted).toBe(true)
+    expect(exportRepo.complete).not.toHaveBeenCalled()
+    expect(notificationService.onExportFinished).not.toHaveBeenCalled()
+  })
+
+  it('deletes the file when the export is cancelled during the final upload (#58)', async () => {
+    page()
+    vi.mocked(exportRepo.complete).mockResolvedValue(false)
+    await runExport('e1')
+
+    expect(r2.remove).toHaveBeenCalledWith('exports/u1/e1.zip')
+    expect(notificationService.onExportFinished).not.toHaveBeenCalled()
+  })
+
+  it('skips an export that is no longer queued', async () => {
+    vi.mocked(exportRepo.markRendering).mockResolvedValue(undefined)
+    await runExport('e1')
+    expect(renderWithPage).not.toHaveBeenCalled()
+  })
+})
+
+/** File contents inside the uploaded ZIP, in order. */
+function zipContents(): string[] {
+  const zip = Buffer.concat(upload.chunks)
+  const out: string[] = []
+  let at = 0
+  while (zip.readUInt32LE(at) === 0x04034b50) {
+    const size = zip.readUInt32LE(at + 18)
+    const nameLen = zip.readUInt16LE(at + 26)
+    out.push(zip.subarray(at + 30 + nameLen, at + 30 + nameLen + size).toString())
+    at += 30 + nameLen + size
+  }
+  return out
+}
+
+describe('runExport — reusing rendered frames (EXP-A2)', () => {
+  const spec = { themeId: 'dark', congestionId: 'standard', overlay: {}, view: {}, width: 1600, height: 1000 }
+
+  it("uses a capture's own image when the export asks for exactly its style", async () => {
+    page()
+    vi.mocked(captureRepo.findLiteByIds).mockImplementation(async (ids: string[]) =>
+      ids.map((id, i) => ({
+        id,
+        capturedAt: new Date('2026-10-05T00:00:00Z'),
+        trafficSlim: null,
+        // Frame 1 was rendered in this exact style by the current renderer; frame 3 by an older one.
+        filePath: i === 1 || i === 3 ? `captures/u1/${id}.png` : null,
+        styleUsed: i === 1 ? { ...spec, holdMs: 1000, renderVersion: RENDER_VERSION } : i === 3 ? { ...spec } : null,
+      })) as never,
+    )
+    await runExport('e1')
+
+    expect(zipContents()).toEqual(['png-0', 'stored:captures/u1/c1.png', 'png-2', 'png-3', 'png-4'])
+    // Drawn around it: frame 0, then frames 2–4 — never frame 1.
+    const ranges = vi.mocked(renderWithPage).mock.calls.map(([, job]) => [job.startFrame, job.endFrame])
+    expect(ranges).toEqual([[0, 1], [2, 5]])
+  })
+
+  it('reads frames an earlier export already drew, and caches the ones it draws', async () => {
+    page()
+    vi.mocked(renderCacheRepo.findMany).mockResolvedValue(
+      new Map([['c2', { path: 'render-cache/u1/h/c2.png' }]]) as never,
+    )
+    await runExport('e1')
+
+    expect(zipContents()).toEqual(['png-0', 'png-1', 'stored:render-cache/u1/h/c2.png', 'png-3', 'png-4'])
+    // The four drawn frames are cached; the reused one is not written again.
+    expect(renderCacheRepo.insert).toHaveBeenCalledTimes(4)
+    expect(r2.upload).toHaveBeenCalledWith(expect.stringMatching(/^render-cache\/u1\/[0-9a-f]{32}\/c0\.png$/), Buffer.from('png-0'), 'image/png')
+  })
+
+  it('never starts a browser when every frame is reused', async () => {
+    page()
+    vi.mocked(renderCacheRepo.findMany).mockImplementation(
+      async (_h: string, ids: string[]) => new Map(ids.map((id) => [id, { path: `render-cache/x/${id}.png` }])) as never,
+    )
+    await runExport('e1')
+
+    expect(launchBrowser).not.toHaveBeenCalled()
+    expect(zipContents()).toHaveLength(FRAMES)
+    expect(upload.completed).toBe(true)
+  })
+
+  it('draws a frame whose stored file has gone missing', async () => {
+    page()
+    vi.mocked(renderCacheRepo.findMany).mockResolvedValue(new Map([['c0', { path: 'render-cache/gone.png' }]]) as never)
+    vi.mocked(r2.download).mockRejectedValueOnce(new Error('NoSuchKey'))
+    await runExport('e1')
+
+    expect(zipContents()).toEqual(['png-0', 'png-1', 'png-2', 'png-3', 'png-4'])
+  })
+})
+
+describe('runExport — video through ffmpeg (EXP-B)', () => {
+  for (const format of ['webm', 'mp4'] as const) {
+    it(`renders frames once, encodes them to ${format} and uploads the file`, async () => {
+      vi.mocked(exportRepo.markRendering).mockResolvedValue(exportRow({ format }))
+      page()
+      await runExport('e1')
+
+      // Same frame pipeline as ZIP: the page draws PNGs; nothing is recorded in real time.
+      expect(vi.mocked(renderWithPage).mock.calls[0]![1].format).toBe('zip')
+      expect(video.frames).toEqual(['png-0', 'png-1', 'png-2', 'png-3', 'png-4'])
+      const expected = `video:${video.frames.join('|')}`
+      expect(Buffer.concat(upload.chunks).toString()).toBe(expected)
+      expect(upload.completed).toBe(true)
+      expect(exportRepo.complete).toHaveBeenCalledWith('e1', 'exports/u1/e1.zip', expected.length, expect.any(Date))
+      // The scratch folder is gone afterwards.
+      const fs = await import('node:fs')
+      expect(fs.existsSync(video.outPath)).toBe(false)
+    })
+  }
+
+  it('resumes a video after a browser crash too', async () => {
+    vi.mocked(exportRepo.markRendering).mockResolvedValue(exportRow({ format: 'webm' }))
+    const starts = page({ crashAt: [3] })
+    await runExport('e1')
+
+    expect(starts).toEqual([0, 3])
+    expect(video.frames).toEqual(['png-0', 'png-1', 'png-2', 'png-3', 'png-4'])
+    expect(upload.completed).toBe(true)
+  })
+
+  it('stops ffmpeg and cleans up when the user cancels', async () => {
+    vi.mocked(exportRepo.markRendering).mockResolvedValue(exportRow({ format: 'mp4' }))
+    page({ cancelAt: 1 })
+    await runExport('e1')
+
+    expect(video.killed).toBe(true)
+    expect(upload.completed).toBe(false)
+    expect(exportRepo.complete).not.toHaveBeenCalled()
+    const fs = await import('node:fs')
+    expect(fs.existsSync(video.outPath)).toBe(false)
+  })
+})
+
+describe('chooseNext — least work first (EXP-C)', () => {
+  it('runs a cheaper queued export first and re-queues the message it received', async () => {
+    const { chooseNext } = await import('./export.worker')
+    const { publishExportJob } = await import('../lib/rabbitmq-client')
+    vi.mocked(exportRepo.pickNextQueued).mockResolvedValue('small')
+    vi.mocked(exportRepo.isQueued).mockResolvedValue(true)
+
+    expect(await chooseNext('big')).toBe('small')
+    expect(publishExportJob).toHaveBeenCalledWith({ exportId: 'big' })
+  })
+
+  it('runs the message’s own export when it is the cheapest', async () => {
+    const { chooseNext } = await import('./export.worker')
+    const { publishExportJob } = await import('../lib/rabbitmq-client')
+    vi.mocked(exportRepo.pickNextQueued).mockResolvedValue('e1')
+    expect(await chooseNext('e1')).toBe('e1')
+    expect(publishExportJob).not.toHaveBeenCalled()
+  })
+
+  it('does not re-queue a message whose export was cancelled', async () => {
+    const { chooseNext } = await import('./export.worker')
+    const { publishExportJob } = await import('../lib/rabbitmq-client')
+    vi.mocked(exportRepo.pickNextQueued).mockResolvedValue('other')
+    vi.mocked(exportRepo.isQueued).mockResolvedValue(false)
+    expect(await chooseNext('gone')).toBe('other')
+    expect(publishExportJob).not.toHaveBeenCalled()
+  })
+})
+
+describe('WebP frames (EXP-C)', () => {
+  it('names and caches ZIP frames as .webp, and never reuses PNG capture images for them', async () => {
+    vi.mocked(exportRepo.markRendering).mockResolvedValue(
+      exportRow({ spec: { zoneName: 'YOG', width: 1600, height: 1000, themeId: 'dark', congestionId: 'standard', overlay: {}, view: {}, holdMs: 1000, imageFormat: 'webp' } }),
+    )
+    page()
+    await runExport('e1')
+    expect(vi.mocked(renderWithPage).mock.calls[0]![1].spec.imageFormat).toBe('webp')
+    expect(r2.upload).toHaveBeenCalledWith(expect.stringMatching(/\.webp$/), expect.any(Buffer), 'image/webp')
+  })
+
+  it('draws PNG frames for a video even when the spec says WebP', async () => {
+    vi.mocked(exportRepo.markRendering).mockResolvedValue(
+      exportRow({ format: 'mp4', spec: { zoneName: 'YOG', width: 1600, height: 1000, themeId: 'dark', congestionId: 'standard', overlay: {}, view: {}, holdMs: 1000, imageFormat: 'webp' } }),
+    )
+    page()
+    await runExport('e1')
+    expect(vi.mocked(renderWithPage).mock.calls[0]![1].spec.imageFormat).toBe('png')
+  })
+})
+
+describe('isBrowserCrash', () => {
+  it('treats a page that stopped answering like a crash, so the export resumes', async () => {
+    const { isBrowserCrash } = await import('./export.worker')
+    const { RenderStalledError } = await import('../lib/render-page')
+    expect(isBrowserCrash(new RenderStalledError('export e1', 180_000))).toBe(true)
+    expect(isBrowserCrash(new Error('Target crashed'))).toBe(true)
+    expect(isBrowserCrash(new Error('zone has no captures'))).toBe(false)
+  })
+})

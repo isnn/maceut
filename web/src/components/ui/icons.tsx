@@ -4,6 +4,9 @@ import { cn } from '@/lib/utils'
  * One icon family for the whole app: 24×24 grid, stroked in `currentColor` at
  * 1.75px, round caps and joins. Sized 16px by default so icons sit on the
  * 14px body baseline; pass `size` for the few larger cases.
+ *
+ * Icons marked "Lucide" use path data from Lucide (https://lucide.dev), ISC licence,
+ * © Lucide contributors — the same 24×24 stroked grid, so they sit with the rest.
  */
 interface IconProps {
   size?: number
@@ -80,6 +83,76 @@ export function IconPause(props: IconProps) {
     <Svg {...props}>
       <path d="M10 4v16" />
       <path d="M14 4v16" />
+    </Svg>
+  )
+}
+
+// Text alignment — horizontal: which edge the lines share.
+export function IconAlignLeft(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 6h16M4 10h10M4 14h16M4 18h10" />
+    </Svg>
+  )
+}
+
+export function IconAlignCenter(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 6h16M7 10h10M4 14h16M7 18h10" />
+    </Svg>
+  )
+}
+
+export function IconAlignRight(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 6h16M10 10h10M4 14h16M10 18h10" />
+    </Svg>
+  )
+}
+
+// Text alignment — vertical: where the block sits in its frame.
+export function IconAlignTop(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 4h16" />
+      <path d="M8 8h8M9 12h6" />
+    </Svg>
+  )
+}
+
+export function IconAlignMiddle(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 10h8M9 14h6" />
+    </Svg>
+  )
+}
+
+export function IconAlignBottom(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 12h8M9 16h6" />
+      <path d="M4 20h16" />
+    </Svg>
+  )
+}
+
+export function IconDownload(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 4v11M7 10l5 5 5-5" />
+      <path d="M4 20h16" />
+    </Svg>
+  )
+}
+
+export function IconMove(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 2v20M2 12h20" />
+      <path d="m9 5 3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3" />
     </Svg>
   )
 }
@@ -255,6 +328,155 @@ export function IconArrowDown(props: IconProps) {
     <Svg {...props}>
       <path d="M12 5v14" />
       <path d="m19 12-7 7-7-7" />
+    </Svg>
+  )
+}
+
+export function IconX(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </Svg>
+  )
+}
+
+export function IconCamera(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M14.5 4h-5L7.5 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3.5z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </Svg>
+  )
+}
+
+export function IconFilm(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4M3 12h18" />
+    </Svg>
+  )
+}
+
+export function IconRuler(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M21.3 15.3 8.7 2.7a1 1 0 0 0-1.4 0L2.7 7.3a1 1 0 0 0 0 1.4l12.6 12.6a1 1 0 0 0 1.4 0l4.6-4.6a1 1 0 0 0 0-1.4z" />
+      <path d="m7.5 10.5 2-2M10.5 13.5l2-2M13.5 16.5l2-2" />
+    </Svg>
+  )
+}
+
+export function IconRoad(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 21 8 3M20 21 16 3M12 5v2M12 11v2M12 17v2" />
+    </Svg>
+  )
+}
+
+export function IconCalendar(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </Svg>
+  )
+}
+
+export function IconGauge(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 14 16 10" />
+      <path d="M3.3 17a10 10 0 1 1 17.4 0" />
+    </Svg>
+  )
+}
+
+export function IconLayers(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m12 2 10 5-10 5L2 7z" />
+      <path d="m2 17 10 5 10-5M2 12l10 5 10-5" />
+    </Svg>
+  )
+}
+
+/** Lucide "map" — a zone's boundary on the map. */
+export function IconMap(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z" />
+      <path d="M15 5.764v15" />
+      <path d="M9 3.236v15" />
+    </Svg>
+  )
+}
+
+/** Lucide "clipboard-list" — a zone's details. */
+export function IconClipboardList(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="M12 11h4" />
+      <path d="M12 16h4" />
+      <path d="M8 11h.01" />
+      <path d="M8 16h.01" />
+    </Svg>
+  )
+}
+
+/** Lucide "route" — which roads a zone collects. */
+export function IconRoute(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="6" cy="19" r="3" />
+      <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+      <circle cx="18" cy="5" r="3" />
+    </Svg>
+  )
+}
+
+/** Lucide "car-front" — congestion (the jam factor). */
+export function IconCarFront(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m21 8-2 2-1.5-3.7A2 2 0 0 0 15.646 5H8.4a2 2 0 0 0-1.903 1.257L5 10 3 8" />
+      <path d="M7 14h.01" />
+      <path d="M17 14h.01" />
+      <rect width="18" height="8" x="3" y="10" rx="2" />
+      <path d="M5 18v2" />
+      <path d="M19 18v2" />
+    </Svg>
+  )
+}
+
+/** Lucide "zap" — what triggered a capture. */
+export function IconZap(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" />
+    </Svg>
+  )
+}
+
+/** Lucide "check-check" — mark as read. */
+export function IconCheckCheck(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M18 6 7 17l-5-5" />
+      <path d="m22 10-7.5 7.5L13 16" />
+    </Svg>
+  )
+}
+
+/** A plan-locked option (FE-30): shown instead of the word "Premium". */
+export function IconCrown(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 7.5 7.5 11 12 4.5 16.5 11 21 7.5 19 18H5L3 7.5Z" />
+      <path d="M5 21h14" />
     </Svg>
   )
 }

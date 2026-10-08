@@ -35,7 +35,6 @@ MVP menggunakan **single workspace** — tidak ada multi-tenant atau team role. 
 | Max Active Schedules | 10 | 20 | 50 |
 | Daily Capture Limit | 10 | 50 | 100 |
 | Export PNG/JPG | ✅ | ✅ | ✅ |
-| Custom Branding (logo + nama) | ✅ | ✅ | ✅ |
 
 *Semua user bisa membuat zona polygon di area mana saja. Tier membatasi kedalaman data jalan yang bisa dipilih (road class) DAN volume penggunaan (active schedule & daily capture limit) — lihat BR-005, BR-006.*
 
@@ -43,7 +42,7 @@ MVP menggunakan **single workspace** — tidak ada multi-tenant atau team role. 
 
 Ada field **platform-level** `role: 'user' | 'internal'` di record user — `internal` = staf Maceut,
 dipakai untuk gate area `/internal` (manajemen user + konfigurasi sistem). Siapa yang mendapatkannya
-ditentukan env `NEXT_PUBLIC_INTERNAL_EMAILS` (daftar email dipisah koma), bukan lewat pendaftaran.
+ditentukan env server `INTERNAL_EMAILS` di `api/.env` (daftar email dipisah koma), bukan lewat pendaftaran. Web tidak lagi menyimpan salinan daftar ini; ia membaca flag `roleLockedByConfig` per user dari API.
 Ini **berbeda** dari
 workspace/team role (`owner`/`editor`/`viewer`) yang tetap out of scope MVP: yang satu operator
 platform, yang satu kolaborasi di dalam satu workspace.
@@ -103,7 +102,7 @@ Lihat `.claude/specs/internal/requirements.md`.
 **Map Visualization**
 - BR-016: Layer peta hanya menampilkan road network dan traffic state. POI, toko, restoran, dan hotel tidak ditampilkan.
 - BR-017: Color mapping traffic: `normal=green`, `slow=yellow`, `heavy=orange`, `congested=red`. Mengikuti data HERE Traffic Flow.
-- BR-018: Setiap gambar capture wajib menyertakan: company logo, zone name, dan timestamp (format: `DD MMM YYYY HH:mm WIB`).
+- BR-018: Setiap gambar capture wajib menyertakan: zone name dan timestamp (format: `DD MMM YYYY HH:mm WIB`). (Company logo dihapus dari scope — lihat SPRINT.md 2026-09-28d.)
 - BR-019: Legend traffic wajib tampil di setiap gambar capture.
 
 ---
@@ -144,11 +143,6 @@ Lihat `.claude/specs/internal/requirements.md`.
 - Pause & resume schedule `📋`
 - Schedule dengan kondisi (cuaca, jam tertentu) `❌`
 
-**Branding**
-- Upload company logo `📋`
-- Konfigurasi nama perusahaan untuk watermark `📋`
-- Custom color watermark `❌`
-
 **Subscription**
 - Free / Standard / Premium plan `📋`
 - Upgrade plan (Stripe atau payment gateway lokal) `📋`
@@ -165,8 +159,7 @@ Lihat `.claude/specs/internal/requirements.md`.
 - Team member & role management
 - Import zone dari file eksternal (GeoJSON, KML)
 - Schedule dengan kondisi dinamis
-- Custom color watermark
-- Multiple branding profile per user
+- Company branding (logo / nama perusahaan di gambar) — dihapus dari scope 2026-09-28
 - Mobile native app
 - Public API / webhook
 - Invoice & billing history

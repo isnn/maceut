@@ -1,0 +1,224 @@
+/**
+ * Typed application errors.
+ *
+ * Services throw these; `error-handler.middleware.ts` is the only place that turns
+ * them into an HTTP response, so a service never needs to know about `res`. Codes and
+ * statuses come from tech.md's error contract — keep them in sync with that table and
+ * with `web/src/types/api.ts` on the frontend.
+ */
+
+export type ErrorCode =
+  | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
+  | 'NOT_FOUND'
+  | 'VALIDATION_ERROR'
+  | 'PLAN_LIMIT_EXCEEDED'
+  | 'SCHEDULE_LIMIT_EXCEEDED'
+  | 'ZONE_NAME_TAKEN'
+  | 'ROAD_CLASS_NOT_ALLOWED'
+  | 'EMAIL_ALREADY_TAKEN'
+  | 'INVALID_CREDENTIALS'
+  | 'UPGRADE_NOT_SELF_SERVE'
+  | 'CAPTURE_FAILED'
+  | 'EXPORT_IN_PROGRESS'
+  | 'EXPORT_LIMIT_EXCEEDED'
+  | 'INTERVAL_NOT_IN_PLAN'
+  | 'CAPTURE_LIMIT_EXCEEDED'
+  | 'HISTORY_LIMIT_EXCEEDED'
+  | 'EXPORT_BUDGET_EXCEEDED'
+  | 'TRAFFIC_UNAVAILABLE'
+  | 'UPSTREAM_ERROR'
+  | 'INTERNAL_ERROR'
+
+export class AppError extends Error {
+  readonly statusCode: number
+  readonly code: ErrorCode
+  readonly details?: Record<string, unknown>
+
+  constructor(code: ErrorCode, statusCode: number, message: string, details?: Record<string, unknown>) {
+    super(message)
+    this.name = new.target.name
+    this.code = code
+    this.statusCode = statusCode
+    this.details = details
+    Error.captureStackTrace?.(this, new.target)
+  }
+}
+
+export class UnauthorizedError extends AppError {
+  constructor(message = 'Your session has ended. Please log in again.') {
+    super('UNAUTHORIZED', 401, message)
+  }
+}
+
+export class ForbiddenError extends AppError {
+  constructor(message = 'Anda tidak punya akses ke resource ini.') {
+    super('FORBIDDEN', 403, message)
+  }
+}
+
+export class NotFoundError extends AppError {
+  constructor(resource = 'Resource') {
+    super('NOT_FOUND', 404, `${resource} tidak ditemukan.`, { resource })
+  }
+}
+
+export class ValidationError extends AppError {
+  constructor(message = 'Input tidak valid.', details?: Record<string, unknown>) {
+    super('VALIDATION_ERROR', 422, message, details)
+  }
+}
+
+/** BR-006 — daily capture limit. 429, per tech.md's table. */
+export class PlanLimitExceededError extends AppError {
+  constructor(limit: number) {
+    super('PLAN_LIMIT_EXCEEDED', 429, `Anda telah mencapai batas ${limit} captures hari ini.`, { limit })
+  }
+}
+
+/** BR-005 — max active schedules. */
+export class ScheduleLimitExceededError extends AppError {
+  constructor(limit: number) {
+    super('SCHEDULE_LIMIT_EXCEEDED', 422, `You're using all ${limit} capture windows on your plan.`, { limit })
+  }
+}
+
+/** FE-32 — a captures CSV reaching further back than the plan keeps history. */
+export class HistoryLimitExceededError extends AppError {
+  constructor(details: { requestedDays: number | null; historyDays: number }) {
+    super('HISTORY_LIMIT_EXCEEDED', 403, `Your plan exports the last ${details.historyDays} days.`, details)
+  }
+}
+
+/** BR-002/003 — the interval is above the plan (e.g. every 15 min below Premium). */
+export class IntervalNotInPlanError extends AppError {
+  constructor(interval: string, plan: string) {
+    super('INTERVAL_NOT_IN_PLAN', 403, 'This interval isn’t on your plan.', { interval, plan })
+  }
+}
+
+/** BR-006 — a window would take a day past the plan's daily capture allowance. */
+export class CaptureLimitExceededError extends AppError {
+  constructor(details: { day: number; frames: number; dailyLimit: number; plan: string }) {
+    super(
+      'CAPTURE_LIMIT_EXCEEDED',
+      422,
+      `That day would reach ${details.frames} snapshots — your plan allows ${details.dailyLimit}.`,
+      details,
+    )
+  }
+}
+
+/** BR-015 — zone names are unique per user. */
+export class ZoneNameTakenError extends AppError {
+  constructor(name: string) {
+    super('ZONE_NAME_TAKEN', 422, `Nama zona "${name}" sudah dipakai.`, { name })
+  }
+}
+
+/** BR-021 — requested road class exceeds the plan's maximum. */
+export class RoadClassNotAllowedError extends AppError {
+  constructor(requested: string, maxAllowed: string) {
+    super('ROAD_CLASS_NOT_ALLOWED', 403, `Kelas jalan "${requested}" tidak tersedia di paket Anda.`, {
+      requested,
+      maxAllowed,
+    })
+  }
+}
+
+export class EmailAlreadyTakenError extends AppError {
+  constructor() {
+    super('EMAIL_ALREADY_TAKEN', 422, 'Email ini sudah terdaftar.')
+  }
+}
+
+/**
+ * Deliberately says nothing about *which* half was wrong — F-09 requires that an
+ * unknown email and a wrong password be indistinguishable, so the response cannot
+ * be used to discover which emails have accounts.
+ */
+export class InvalidCredentialsError extends AppError {
+  constructor() {
+    super('INVALID_CREDENTIALS', 401, 'Email atau password salah.')
+  }
+}
+
+/**
+ * A paid plan cannot be granted to yourself while billing does not exist.
+ *
+ * Until there is a payment step, any self-serve upgrade path hands out Premium limits
+ * for nothing — and a deployment reachable by anyone is reachable by anyone who reads
+ * the pricing page. Staff grant paid plans from `/internal/users`, which leaves a
+ * record of who granted what.
+ *
+ * Downgrades are deliberately NOT blocked: giving up capacity costs the business
+ * nothing, and forcing someone to open a support ticket to spend less is hostile.
+ *
+ * 403 rather than 402: 402 announces "pay and this succeeds", which is not true yet —
+ * there is nothing to pay with. This is "not through this door".
+ */
+export class UpgradeNotSelfServeError extends AppError {
+  constructor(requested: string) {
+    super(
+      'UPGRADE_NOT_SELF_SERVE',
+      403,
+      `Paket ${requested} belum bisa dipilih sendiri. Hubungi tim Maceut untuk mengaktifkannya.`,
+      { requested },
+    )
+  }
+}
+
+export class CaptureFailedError extends AppError {
+  constructor(message = 'Capture gagal diproses.') {
+    super('CAPTURE_FAILED', 500, message)
+  }
+}
+
+/** A third party (HERE, R2) failed or is unreachable — not our bug, and not a 500. */
+/** One export renders at a time per account — the worker is shared and slow. */
+export class ExportInProgressError extends AppError {
+  constructor(exportId: string) {
+    super('EXPORT_IN_PROGRESS', 409, 'Masih ada export yang sedang dibuat. Tunggu sampai selesai, atau batalkan dulu.', {
+      exportId,
+    })
+  }
+}
+
+/** An export asking for more frames than the plan allows in one file. */
+/** EXP-C — the export asks for more frames × pixels than the plan's budget. */
+export class ExportBudgetExceededError extends AppError {
+  constructor(details: { budget: number; requested: number; width: number; height: number; maxFrames: number }) {
+    super(
+      'EXPORT_BUDGET_EXCEEDED',
+      422,
+      `Export terlalu besar untuk paket Anda: ${details.requested} dari ${details.budget} megapiksel-frame. Pada ${details.width}×${details.height} maksimal ${details.maxFrames} frame.`,
+      details,
+    )
+  }
+}
+
+export class ExportLimitExceededError extends AppError {
+  constructor(limit: number, requested: number) {
+    super('EXPORT_LIMIT_EXCEEDED', 422, `Paket Anda mengizinkan maksimal ${limit} frame per export (diminta ${requested}).`, {
+      limit,
+      requested,
+    })
+  }
+}
+
+/**
+ * The platform's HERE budget cap is reached. Deliberately says nothing about HERE or
+ * budgets: that is an operator concern, and customers see only that traffic data is
+ * briefly unavailable. Staff see the real reason on /internal/here.
+ */
+export class TrafficUnavailableError extends AppError {
+  constructor() {
+    super('TRAFFIC_UNAVAILABLE', 503, 'Data lalu lintas sedang tidak tersedia. Coba lagi nanti.')
+  }
+}
+
+export class UpstreamError extends AppError {
+  constructor(service: string, message: string) {
+    super('UPSTREAM_ERROR', 502, `${service}: ${message}`, { service })
+  }
+}

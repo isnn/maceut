@@ -43,9 +43,6 @@
     ```
   - [ ] UNIQUE constraint (userId, name) — via Drizzle `unique()` di schema
 
-- [ ] **Schema: `branding_configs`** — `drizzle/schema.ts`
-  - [ ] id, userId (FK unique), companyName, logoPath, createdAt, updatedAt
-
 - [ ] Generate migration: `pnpm drizzle-kit generate`
 - [ ] Jalankan migration: `pnpm drizzle-kit migrate` (di dalam container: `docker compose exec api pnpm drizzle-kit migrate`)
 
@@ -148,7 +145,7 @@
 
 - [ ] **Lib: playwright-client.ts** — `src/lib/playwright-client.ts`
   - [ ] Launch Chromium headless (`playwright.chromium.launch()`)
-  - [ ] `screenshotCapture(zone, brandingConfig, effectiveRoadClass, style): Promise<Buffer>`
+  - [ ] `screenshotCapture(zone, effectiveRoadClass, style): Promise<Buffer>`
   - [ ] Navigate ke internal render page (`{FRONTEND_URL}/internal/render/capture?...`) dengan query params di atas
   - [ ] Tunggu network idle (basemap OSM tile + traffic overlay selesai load) sebelum screenshot
   - [ ] Screenshot sebagai PNG buffer
@@ -292,7 +289,7 @@
 - [ ] Test Playwright: internal render page menghasilkan gambar identik komposisinya dengan preview browser (basemap OSM + traffic overlay + style)
 - [ ] Test duplikat nama zone (case-insensitive)
 - [ ] Test polygon tidak menutup → frontend validasi sebelum submit
-- [ ] Verify branding overlay: logo, zone name, timestamp, legend muncul di gambar
+- [ ] Verify overlay: zone name, timestamp, legend muncul di gambar (BR-018/BR-019)
 - [ ] Verify: semua service tetap jalan setelah `docker compose restart api`
 
 ---

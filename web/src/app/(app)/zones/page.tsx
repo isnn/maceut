@@ -4,11 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Dialog } from '@base-ui/react/dialog'
+import { DialogCloseX } from '@/components/ui/DialogCloseX'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { RoadClassBadge, ZoneStatusPill } from '@/components/ui/Badge'
-import { SortableTh, Table, TableWrap, Td, Th, type SortDirection } from '@/components/ui/Table'
+import { Pagination, SortableTh, Table, TableWrap, Td, Th, type SortDirection } from '@/components/ui/Table'
+import { useTableControls } from '@/components/ui/useTableControls'
+import { PlanPausedNotice } from '@/features/plan/PlanPausedNotice'
 import { ActionMenu } from '@/components/ui/ActionMenu'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -20,27 +23,21 @@ import { ROAD_CLASS_ORDER } from '@/features/zones/components/RoadClassPicker'
 import type { RoadClass, Zone } from '@/features/zones/types'
 
 type Filter = 'all' | 'collecting' | 'paused'
-type SortKey = 'name' | 'area' | 'roads' | 'cadence' | 'status' | 'created'
-type Sort = { key: SortKey; direction: SortDirection } | null
-
-const SORT_LABEL: Record<SortKey, string> = {
-  name: 'name',
-  area: 'area',
-  roads: 'roads',
-  cadence: 'capture',
-  status: 'status',
-  created: 'date created',
-}
+type SortKey = 'name' | 'area' | 'roads' | 'interval' | 'hours' | 'status' | 'created'
 
 /** Text sorts read best ascending; quantities read best largest-first. */
 const DEFAULT_DIRECTION: Record<SortKey, SortDirection> = {
   name: 'asc',
   area: 'desc',
   roads: 'desc',
-  cadence: 'asc',
+  interval: 'asc',
+  hours: 'asc',
   status: 'asc',
   created: 'desc',
 }
+
+const INTERVAL_WORD = { '15min': 'Every 15 min', hourly: 'Hourly', daily: 'Daily' } as const
+const INTERVAL_RANK = { '15min': 0, hourly: 1, daily: 2 } as const
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -53,9 +50,8 @@ export default function ZonesPage() {
   const { user } = useCurrentUser()
   const [zones, setZones] = useState<Zone[] | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
-  const [search, setSearch] = useState('')
+
   const [roadClassFilter, setRoadClassFilter] = useState<RoadClass | 'all'>('all')
-  const [sort, setSort] = useState<Sort>(null)
   const [pendingDelete, setPendingDelete] = useState<Zone | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [limitOpen, setLimitOpen] = useState(false)
@@ -63,56 +59,50 @@ export default function ZonesPage() {
   const plan = user?.plan ?? 'free'
   const zonesLimit = PLAN_LIMITS[plan].zonesLimit
 
-  const load = useCallback(() => zonesApi.getZones(plan), [plan])
+  // No dependency: the server scopes the list to the session, so a plan change
+  // does not change which zones come back.
+  const load = useCallback(() => zonesApi.getZones(), [])
   const refetch = useCallback(() => load().then(setZones), [load])
 
   useEffect(() => {
     if (user) load().then(setZones)
   }, [user, load])
 
-  const visible = useMemo(() => {
-    if (!zones) return []
-    const matched = zones.filter((zone) => {
-      const matchesStatus = filter === 'all' || zone.status === filter
-      const matchesClass = roadClassFilter === 'all' || zone.roadClass === roadClassFilter
-      const matchesSearch = zone.name.toLowerCase().includes(search.trim().toLowerCase())
-      return matchesStatus && matchesClass && matchesSearch
-    })
+  // Status and road class narrow the set before search, sort and paging, so the count
+  // under the table reads within the filter rather than across every zone.
+  const filtered = useMemo(
+    () =>
+      zones?.filter(
+        (zone) =>
+          (filter === 'all' || zone.status === filter) &&
+          (roadClassFilter === 'all' || zone.roadClass === roadClassFilter),
+      ) ?? null,
+    [zones, filter, roadClassFilter],
+  )
 
-    // Unsorted means newest first, so the list has a sensible order before
-    // anyone touches a header.
-    if (!sort) return [...matched].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+  const table = useTableControls<Zone>({
+    rows: filtered,
+    searchOn: (zone) => [zone.name],
+    sortOn: {
+      name: (zone) => zone.name.toLowerCase(),
+      area: (zone) => zone.areaKm2,
+      // Null rather than 0: a zone whose roads HERE has not reported is not a zone
+      // with no roads, and the hook sorts unknowns last either way.
+      roads: (zone) => zone.roadsCount,
+      // Finest first: every 15 min before hourly before daily.
+      interval: (zone) => (zone.schedule ? INTERVAL_RANK[zone.schedule.interval] : null),
+      hours: (zone) => zone.schedule?.start ?? null,
+      status: (zone) => zone.status,
+      created: (zone) => zone.createdAt,
+    },
+    defaultDirection: DEFAULT_DIRECTION,
+    // Newest first before anyone touches a header.
+    initialSort: { key: 'created', direction: 'desc' },
+  })
 
-    // Sorted copy — `zones` is the fetched list and shouldn't be mutated.
-    const factor = sort.direction === 'asc' ? 1 : -1
-    return [...matched].sort((a, b) => {
-      switch (sort.key) {
-        case 'area':
-          return (a.areaKm2 - b.areaKm2) * factor
-        case 'roads':
-          return (a.roadsCount - b.roadsCount) * factor
-        case 'cadence':
-          return a.cadence.localeCompare(b.cadence) * factor
-        case 'status':
-          return a.status.localeCompare(b.status) * factor
-        case 'created':
-          return (a.createdAt < b.createdAt ? -1 : 1) * factor
-        default:
-          return a.name.localeCompare(b.name) * factor
-      }
-    })
-  }, [zones, filter, roadClassFilter, search, sort])
-
-  function toggleSort(key: SortKey) {
-    setSort((current) => {
-      if (current?.key !== key) return { key, direction: DEFAULT_DIRECTION[key] }
-      // Cycle: default direction → reversed → unsorted.
-      if (current.direction === DEFAULT_DIRECTION[key]) {
-        return { key, direction: DEFAULT_DIRECTION[key] === 'asc' ? 'desc' : 'asc' }
-      }
-      return null
-    })
-  }
+  const visible = table.visible
+  const sort = table.sort
+  const toggleSort = (key: SortKey) => table.toggleSort(key)
 
   const atLimit = (zones?.length ?? 0) >= zonesLimit
 
@@ -146,6 +136,8 @@ export default function ZonesPage() {
         )}
       </div>
 
+      <PlanPausedNotice zones={(zones ?? []).filter((z) => z.status === 'paused' && z.pausedByPlan)} windows={[]} />
+
       <div className="flex flex-wrap items-center gap-md">
         <div className="flex bg-canvas-secondary border border-border rounded-md p-[3px]">
           {FILTERS.map((item) => (
@@ -164,8 +156,8 @@ export default function ZonesPage() {
         <Input
           type="search"
           placeholder="Search zones…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={table.search}
+          onChange={(e) => table.setSearch(e.target.value)}
           className="h-11 w-full tablet:w-56"
         />
         <Select
@@ -210,7 +202,7 @@ export default function ZonesPage() {
                   <SortableTh active={sort?.key === 'name'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('name')}>
                     Zone
                   </SortableTh>
-                  <Th>Road classes</Th>
+                  <Th>Road class</Th>
                   <SortableTh
                     className="text-right"
                     active={sort?.key === 'area'}
@@ -227,8 +219,11 @@ export default function ZonesPage() {
                   >
                     Roads
                   </SortableTh>
-                  <SortableTh active={sort?.key === 'cadence'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('cadence')}>
-                    Capture
+                  <SortableTh active={sort?.key === 'interval'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('interval')}>
+                    Interval
+                  </SortableTh>
+                  <SortableTh active={sort?.key === 'hours'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('hours')}>
+                    Hours (WIB)
                   </SortableTh>
                   <SortableTh active={sort?.key === 'status'} direction={sort?.direction ?? 'asc'} onSort={() => toggleSort('status')}>
                     Status
@@ -254,10 +249,25 @@ export default function ZonesPage() {
                       <RoadClassBadge roadClass={zone.roadClass} />
                     </Td>
                     <Td className="text-right tabular-nums">{zone.areaKm2} km²</Td>
-                    <Td className="text-right tabular-nums">{zone.roadsCount}</Td>
-                    <Td className="text-text-secondary">{zone.cadence}</Td>
+                    <Td className="text-right tabular-nums">{zone.roadsCount ?? '—'}</Td>
+                    <Td className="text-text-secondary whitespace-nowrap">
+                      {zone.schedule ? INTERVAL_WORD[zone.schedule.interval] : <span className="text-text-muted">Not scheduled</span>}
+                    </Td>
+                    <Td className="text-text-secondary tabular-nums whitespace-nowrap">
+                      {!zone.schedule ? (
+                        <span className="text-text-muted">&mdash;</span>
+                      ) : zone.schedule.windows === 1 ? (
+                        `${zone.schedule.start}–${zone.schedule.end}`
+                      ) : (
+                        // One span across several windows would suggest continuous collection
+                        // it doesn't do; the count says there are gaps.
+                        <span title={`Earliest ${zone.schedule.start}, latest ${zone.schedule.end}`}>
+                          {zone.schedule.windows} windows
+                        </span>
+                      )}
+                    </Td>
                     <Td>
-                      <ZoneStatusPill status={zone.status} />
+                      <ZoneStatusPill status={zone.status} pausedByPlan={zone.pausedByPlan} />
                     </Td>
                     <Td className="text-text-secondary whitespace-nowrap">{formatDate(zone.createdAt)}</Td>
                     <Td className="text-right whitespace-nowrap">
@@ -281,30 +291,23 @@ export default function ZonesPage() {
               </tbody>
             </Table>
           </TableWrap>
-          <div className="flex items-center justify-between text-caption text-text-muted">
-            <span className="flex items-center gap-sm">
-              Showing {visible.length} of {zones.length} zones
-              {sort && (
-                <>
-                  <span aria-hidden>·</span>
-                  <span>sorted by {SORT_LABEL[sort.key]}</span>
-                  <button onClick={() => setSort(null)} className="text-info hover:underline">
-                    Clear
-                  </button>
-                </>
-              )}
-            </span>
-            <span>
-              Deleting a zone keeps its captures and animations for 30 days, then removes them.
-            </span>
-          </div>
+          <Pagination
+            page={table.page}
+            pageCount={table.pageCount}
+            pageSize={table.pageSize}
+            onPage={table.setPage}
+            matchCount={table.matchCount}
+            totalCount={table.totalCount}
+            noun="zones"
+            onClearSearch={table.search ? () => table.setSearch('') : undefined}
+          />
         </>
       )}
 
       <ConfirmDialog
         open={pendingDelete !== null}
         title={`Delete “${pendingDelete?.name ?? ''}”?`}
-        description="Captures and animations for this zone are kept for 30 days, then removed. Its capture windows stop too."
+        description="Its capture windows stop immediately. Captures and animations already collected are kept for 30 days, then removed. This cannot be undone."
         confirmLabel="Delete zone"
         destructive
         pending={deleting}
@@ -336,10 +339,11 @@ function ZoneLimitDialog({
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
         <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[28rem] bg-card border border-border rounded-lg p-xl shadow-elevation-3">
+          <DialogCloseX />
           <span className="w-10 h-10 rounded-full bg-warning-bg text-warning-text flex items-center justify-center text-heading-sm font-bold mb-md">
             !
           </span>
-          <Dialog.Title className="text-section-title text-text-primary mb-sm">Zone limit reached</Dialog.Title>
+          <Dialog.Title className="pr-xl text-section-title text-text-primary mb-sm">Zone limit reached</Dialog.Title>
           <Dialog.Description className="text-body text-text-secondary mb-lg">
             The {planLabel} plan includes <span className="font-semibold text-text-primary">{limit} zones</span> and all
             of them are in use. Upgrade to Premium for 25 zones, or free a slot by deleting one you no longer collect.
