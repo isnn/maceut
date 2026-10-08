@@ -97,7 +97,7 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    command: npm run worker
+    command: npm run worker   # tanpa tsx watch: worker yang mati harus memicu restart (BE-18)
 
   web:
     build:

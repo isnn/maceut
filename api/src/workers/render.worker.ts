@@ -6,8 +6,9 @@ import * as zoneRepo from '../repositories/zone.repository'
 import { slimFor } from '../services/capture.service'
 import { RENDER_VERSION } from '../services/render-cache.service'
 import { capturePath, thumbnailPath, upload } from '../lib/r2-client'
-import { launchBrowser, renderWithPage, type RenderPageJob } from '../lib/render-page'
+import { launchBrowser, renderWithPage, RenderStalledError, type RenderPageJob } from '../lib/render-page'
 import { registerIdleBrowser, withBrowserSlot } from '../lib/browser-slot'
+import { safeAck } from '../lib/rabbitmq-client'
 
 /**
  * Renders one PNG per collected capture and stores it in R2 (CAP-02, BR-009, BR-011).
@@ -141,9 +142,12 @@ export async function registerRenderConsumer(ch: Channel): Promise<void> {
         // Logged and dropped: the capture itself is already complete and displayable
         // from its traffic. Retrying a render forever would only hold the queue.
         console.error('[render] failed:', err instanceof Error ? err.message : err)
+        // A page that stopped answering may mean a Chromium that has: start the next
+        // image on a fresh one rather than reuse it.
+        if (err instanceof RenderStalledError) await closeIdleBrowser()
       }
       releaseBrowser()
-      ch.ack(msg)
+      safeAck(ch, msg)
     })()
   })
   console.log(`[worker] consuming ${config.rabbitmqQueueRender} (prefetch 1, one shared browser)`)

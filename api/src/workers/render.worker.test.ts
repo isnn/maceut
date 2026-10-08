@@ -15,6 +15,7 @@ vi.mock('../lib/r2-client', () => ({
 vi.mock('../lib/render-page', () => ({
   launchBrowser: vi.fn(async () => ({ isConnected: () => true, on: vi.fn(), close: vi.fn(async () => undefined) })),
   renderWithPage: vi.fn(),
+  RenderStalledError: class RenderStalledError extends Error {},
 }))
 
 import { renderCaptureImage, captureImageSpec } from './render.worker'

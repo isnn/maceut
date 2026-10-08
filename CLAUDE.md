@@ -33,7 +33,7 @@ cd web && npm run lint                  # ESLint
 cd api && npm run dev                   # Express dev server dengan hot reload (tsx watch)
 cd api && npm run build                 # Compile TypeScript
 cd api && npm run start                 # Run compiled server
-cd api && npm run worker                # Jalankan capture worker
+cd api && npm run worker                # Jalankan worker (tanpa hot reload — setelah ubah kode: docker compose restart worker)
 cd api && npm run test                  # Run semua unit test (vitest/jest)
 cd api && npm run test:coverage         # Test dengan coverage report
 cd api && npm run lint                  # ESLint

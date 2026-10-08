@@ -91,16 +91,64 @@ export async function launchBrowser(): Promise<Browser> {
   })
 }
 
-/** Renders one job in a fresh page of `browser`, and closes the page. */
-export async function renderWithPage(browser: Browser, job: RenderPageJob, bridge: RenderBridge, label: string): Promise<RenderOutput> {
-  const page = await browser.newPage()
+/**
+ * How long a render may go without any sign of life before it is abandoned. Every
+ * frame request, progress report and finished image resets it, so a long export that
+ * keeps drawing is never cut off; only a page that has stopped answering is.
+ *
+ * The case it exists for (2026-10-08): the web app restarted while a capture image was
+ * being drawn, the page never reported back, and `page.evaluate` waited forever. The
+ * job never acked, RabbitMQ closed the worker's channel at its 30-minute limit, and
+ * every queue stopped with it. A normal frame takes seconds; a cold Next compile of the
+ * render page is covered by the 120 s limits on loading it.
+ */
+export const RENDER_STALL_MS = 3 * 60_000
+
+export class RenderStalledError extends Error {
+  constructor(label: string, ms: number) {
+    super(`Render ${label} stalled: no progress for ${Math.round(ms / 1000)} s.`)
+    this.name = 'RenderStalledError'
+  }
+}
+
+/**
+ * Renders one job in a fresh page of `browser`, and closes the page. Rejects with
+ * `RenderStalledError` if the page goes `stallMs` without progress; the caller should
+ * then treat the browser as suspect and close it.
+ */
+export async function renderWithPage(
+  browser: Browser,
+  job: RenderPageJob,
+  bridge: RenderBridge,
+  label: string,
+  stallMs: number = RENDER_STALL_MS,
+): Promise<RenderOutput> {
+  let timer: NodeJS.Timeout | undefined
+  let rejectStall!: (err: Error) => void
+  const stalled = new Promise<never>((_, reject) => (rejectStall = reject))
+  // Never left unhandled: the race below is its only reader, and it may already be over.
+  stalled.catch(() => undefined)
+  const alive = () => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => rejectStall(new RenderStalledError(label, stallMs)), stallMs)
+  }
+  alive()
+
+  const page = await Promise.race([browser.newPage(), stalled])
   try {
     page.on('pageerror', (err) => console.error(`[render] ${label} page error:`, err.message))
 
     const pngs: { name: string; data: Buffer }[] = []
-    await page.exposeFunction('__exportFrame', (i: number) => bridge.frame(i))
-    await page.exposeFunction('__exportProgress', async (done: number) => (bridge.progress ? bridge.progress(done) : true))
+    await page.exposeFunction('__exportFrame', (i: number) => {
+      alive()
+      return bridge.frame(i)
+    })
+    await page.exposeFunction('__exportProgress', async (done: number) => {
+      alive()
+      return bridge.progress ? bridge.progress(done) : true
+    })
     await page.exposeFunction('__exportPng', async (i: number, name: string, base64: string, stats?: FrameStats) => {
+      alive()
       const data = Buffer.from(base64, 'base64')
       if (bridge.png) await bridge.png(i, name, data, stats ?? null)
       else pngs[i] = { name, data }
@@ -112,12 +160,20 @@ export async function renderWithPage(browser: Browser, job: RenderPageJob, bridg
     await page.waitForFunction(() => typeof (globalThis as { __maceutExport?: unknown }).__maceutExport === 'function', null, {
       timeout: 120_000,
     })
-    await page.evaluate(
-      (j) => (globalThis as unknown as { __maceutExport: (job: unknown) => Promise<void> }).__maceutExport(j),
-      job,
-    )
+    alive()
+    // `evaluate` has no timeout of its own: without the race, a page that stops
+    // answering holds this job, and the browser slot, forever.
+    await Promise.race([
+      page.evaluate(
+        (j) => (globalThis as unknown as { __maceutExport: (job: unknown) => Promise<void> }).__maceutExport(j),
+        job,
+      ),
+      stalled,
+    ])
     return { pngs: pngs.filter(Boolean) }
   } finally {
-    await page.close().catch(() => undefined)
+    clearTimeout(timer)
+    // A frozen renderer can hang `close` too; the caller closes the browser after a stall.
+    await Promise.race([page.close().catch(() => undefined), new Promise((r) => setTimeout(r, 5_000).unref())])
   }
 }
