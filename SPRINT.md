@@ -200,6 +200,7 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
     batasnya; zona terakhir di `localStorage` `maceut.studio.zone` (urutan: ?zone=, terakhir, pertama).
   VERIFIKASI: 490 test API (baru: endpoint frames per paket, export di luar riwayat), tsc +
   eslint api & web bersih. Studio: DRY RUN, daftar uji diserahkan ke user.
+
 [2026-10-08b] BE-18 — worker tahan macet (insiden 13:47–16:1x WIB).
 
   - Penyebab: render gambar capture hang (`page.evaluate` tanpa batas) saat web container
