@@ -193,6 +193,52 @@ export async function listForZone(
   }
 }
 
+/**
+ * Where a plan's history starts (BR-007): Free 7 days, Standard 90, Premium all (null).
+ * Older captures are kept, not deleted; they are out of reach until the plan allows them.
+ */
+export function historySince(plan: Plan, now: Date = new Date()): Date | null {
+  const days = PLAN_LIMITS[plan].historyDays
+  return days === null ? null : new Date(now.getTime() - days * 86_400_000)
+}
+
+/** Most frames Studio receives at once. A year of 15-minute captures is ~35,000. */
+export const FRAMES_MAX = 5000
+
+export interface StudioFrame {
+  id: string
+  capturedAt: string
+  jamFactorAvg: number | null
+  roadsCount: number | null
+}
+
+/**
+ * GET /zones/:id/frames — every playable frame inside the plan's history, oldest first,
+ * for Studio's timeframe (BR-007: limited here, so the page cannot offer what the plan
+ * does not cover). `historyDays` lets the page say where the limit is.
+ */
+export async function framesForZone(
+  userId: string,
+  plan: Plan,
+  zoneId: string,
+  now: Date = new Date(),
+): Promise<{ frames: StudioFrame[]; historyDays: number | null }> {
+  const zone = await zoneRepo.findById(zoneId)
+  if (!zone) throw new NotFoundError('Zone')
+  if (zone.userId !== userId) throw new ForbiddenError('You don’t have access to this zone.')
+
+  const rows = await captureRepo.listFramesSince(zoneId, historySince(plan, now), FRAMES_MAX)
+  return {
+    frames: rows.map((r) => ({
+      id: r.id,
+      capturedAt: r.capturedAt.toISOString(),
+      jamFactorAvg: r.jamFactorAvg === null ? null : Number(r.jamFactorAvg),
+      roadsCount: r.roadsCount,
+    })),
+    historyDays: PLAN_LIMITS[plan].historyDays,
+  }
+}
+
 export interface CaptureDetail extends PublicCapture {
   /** The GeoJSON collected for this moment — what the map redraws. */
   traffic: unknown | null

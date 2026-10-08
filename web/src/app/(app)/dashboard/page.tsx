@@ -273,7 +273,7 @@ export default function DashboardPage() {
                 label="Problems today"
                 tone={health.problemsToday.failed + health.problemsToday.missed > 0 ? 'warning' : 'ok'}
               >
-                <span title={`${health.problemsToday.failed} failed · ${health.problemsToday.missed} missed while offline`}>
+                <span title={`${health.problemsToday.failed} failed · ${health.problemsToday.missed} missed`}>
                   {health.problemsToday.failed + health.problemsToday.missed}
                 </span>
               </HealthRow>

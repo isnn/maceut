@@ -55,6 +55,10 @@ export async function complete(id: string, result: CompleteCaptureRow): Promise<
     .update(captures)
     .set({
       status: 'done',
+      // The moment the traffic was sampled (the schema's definition), not when the row
+      // was queued. Until 2026-10-08 this kept the queue time, so a cycle collected
+      // late after an outage carried its due time and `lateBySeconds` was always ~0.
+      capturedAt: sql`now()`,
       traffic: result.traffic,
       trafficSlim: result.trafficSlim,
       roadsCount: result.roadsCount,
@@ -72,6 +76,40 @@ export async function markStatus(id: string, status: CaptureStatus, error?: stri
     .update(captures)
     .set({ status, error: error ?? null })
     .where(eq(captures.id, id))
+}
+
+/**
+ * A zone's playable frames since `since` (all of them when null), oldest first, without
+ * traffic. The newest `cap` are kept when there are more.
+ */
+export async function listFramesSince(
+  zoneId: string,
+  since: Date | null,
+  cap: number,
+): Promise<{ id: string; capturedAt: Date; jamFactorAvg: string | null; roadsCount: number | null }[]> {
+  const conditions = [eq(captures.zoneId, zoneId), eq(captures.status, 'done')]
+  if (since) conditions.push(gte(captures.capturedAt, since))
+  const rows = await db
+    .select({ id: captures.id, capturedAt: captures.capturedAt, jamFactorAvg: captures.jamFactorAvg, roadsCount: captures.roadsCount })
+    .from(captures)
+    .where(and(...conditions))
+    .orderBy(desc(captures.capturedAt))
+    .limit(cap)
+  return rows.reverse()
+}
+
+/**
+ * Whether a later scheduled cycle for the same zone is still waiting in the queue. After
+ * a worker outage the queue holds several cycles per zone; only the newest is worth
+ * collecting (capture.worker, `staleReason`).
+ */
+export async function hasNewerPending(zoneId: string, scheduledFor: Date): Promise<boolean> {
+  const rows = await db
+    .select({ id: captures.id })
+    .from(captures)
+    .where(and(eq(captures.zoneId, zoneId), eq(captures.status, 'pending'), sql`${captures.scheduledFor} > ${scheduledFor.toISOString()}`))
+    .limit(1)
+  return rows.length > 0
 }
 
 export async function findById(id: string): Promise<CaptureRecord | undefined> {

@@ -139,7 +139,7 @@ const CAPTURE_LABEL: Record<string, string> = {
   done: 'Collected',
   failed: 'Failed',
   skipped_limit: 'Skipped — daily limit',
-  missed: 'Missed — system was down',
+  missed: 'Missed',
 }
 
 /** A capture's status — the same words and colours as the zone page. */
