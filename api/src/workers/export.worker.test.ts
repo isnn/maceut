@@ -50,6 +50,7 @@ vi.mock('../lib/video-encoder', () => ({
 vi.mock('../lib/render-page', () => ({
   launchBrowser: vi.fn(async () => ({ isConnected: () => true, close: vi.fn(async () => undefined) })),
   renderWithPage: vi.fn(),
+  RenderStalledError: class RenderStalledError extends Error {},
 }))
 
 const upload = vi.hoisted(() => ({
@@ -398,5 +399,15 @@ describe('WebP frames (EXP-C)', () => {
     page()
     await runExport('e1')
     expect(vi.mocked(renderWithPage).mock.calls[0]![1].spec.imageFormat).toBe('png')
+  })
+})
+
+describe('isBrowserCrash', () => {
+  it('treats a page that stopped answering like a crash, so the export resumes', async () => {
+    const { isBrowserCrash } = await import('./export.worker')
+    const { RenderStalledError } = await import('../lib/render-page')
+    expect(isBrowserCrash(new RenderStalledError('export e1', 180_000))).toBe(true)
+    expect(isBrowserCrash(new Error('Target crashed'))).toBe(true)
+    expect(isBrowserCrash(new Error('zone has no captures'))).toBe(false)
   })
 })

@@ -163,6 +163,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-35** Konsol staf: penyimpanan & capture terukur (tanpa peringatan "belum terukur"), kolom Storage di Users, subjudul Overview/Users dihapus | review user |
 | ✅ | **BE-19** `GET /zones/:id/frames` — frame Studio dibatasi riwayat paket (Free 7 hari, Standard 90, Premium semua), maks 5.000; export menolak rentang di luar riwayat (403 HISTORY_LIMIT_EXCEEDED, BR-007) | review user |
 | ✅ | **FE-39** Studio: timeframe hanya menawarkan riwayat paket ("All 7 days" / "All 90 days" / "All", baris "Your plan keeps N days of history · Upgrade"); zona terakhir diingat saat kembali ke Studio | review user |
+| ✅ | **BE-18** Worker tahan macet: batas render 3 menit tanpa progres, channel RabbitMQ per consumer + reconnect, restart beneran (tanpa `tsx watch`), healthcheck heartbeat, capture terlambat → `missed` (opsi C), `captured_at` = waktu sampel | insiden 2026-10-08 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -199,6 +200,26 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
     batasnya; zona terakhir di `localStorage` `maceut.studio.zone` (urutan: ?zone=, terakhir, pertama).
   VERIFIKASI: 490 test API (baru: endpoint frames per paket, export di luar riwayat), tsc +
   eslint api & web bersih. Studio: DRY RUN, daftar uji diserahkan ke user.
+[2026-10-08b] BE-18 — worker tahan macet (insiden 13:47–16:1x WIB).
+
+  - Penyebab: render gambar capture hang (`page.evaluate` tanpa batas) saat web container
+    di-restart; ack tak pernah terkirim, RabbitMQ menutup channel bersama di batas 30 menit
+    (406 PRECONDITION_FAILED), semua queue berhenti, dan `tsx watch` menahan container "Up"
+    sehingga restart policy tak jalan.
+  - Render: batas 3 menit TANPA PROGRES (`RENDER_STALL_MS`), di-reset tiap frame/progres/PNG,
+    jadi export panjang tak terpotong. Capture: browser ditutup; export: dianggap crash →
+    lanjut dari frame terakhir (jatah restart sama).
+  - RabbitMQ: satu channel per consumer, reopen hingga 5x (jeda naik), lalu exit. Export
+    memakai `x-consumer-timeout` 4 jam. Ack/nack di channel mati tak lagi melempar.
+  - Restart: `npm run worker` tanpa watch (`worker:watch` untuk yang mau); healthcheck
+    heartbeat `/tmp/worker-heartbeat` (status saja, tidak me-restart).
+  - Opsi C (keputusan user): per zona hanya cycle terjadwal TERBARU yang diambil, dan hanya
+    bila telat <= 1 interval (15 menit / maks 1 jam); sisanya `missed` (tak memakan kuota).
+  - Bug ditemukan: `captured_at` selama ini = waktu antre, bukan waktu sampel; kini di-set
+    saat selesai, jadi "X min late" di UI akhirnya benar.
+  VERIFIKASI: 497 test API, tsc + eslint bersih. Live: koneksi worker ditutup paksa
+  (`rabbitmqctl close_connection`) → 3 channel reopen sendiri; proses dibunuh → container
+  restart (RestartCount 0→1), health `healthy`.
 
 [2026-10-07f] FE-35 — data nyata di konsol staf.
 

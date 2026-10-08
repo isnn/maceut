@@ -48,6 +48,40 @@ export async function getChannel(): Promise<amqp.Channel> {
   return ch
 }
 
+/**
+ * A fresh channel on the shared connection, for one worker consumer. Each consumer
+ * gets its own, because RabbitMQ closes a whole channel when one of its deliveries
+ * breaks a rule (an ack timeout, say): on a shared channel one stuck render stopped
+ * captures and exports with it (2026-10-08).
+ */
+export async function openChannel(): Promise<amqp.Channel> {
+  await getChannel() // connects and declares the queues, if nothing has yet
+  if (!connection) throw new Error('RabbitMQ connection closed while opening a channel')
+  return connection.createChannel()
+}
+
+/**
+ * Ack, unless the channel the message came on has closed meanwhile. A job that finishes
+ * after its channel died must not throw: RabbitMQ has already put the message back,
+ * and the duplicate is skipped by the job's own status check.
+ */
+export function safeAck(ch: amqp.Channel, msg: amqp.Message): void {
+  try {
+    ch.ack(msg)
+  } catch (err) {
+    console.warn('[rabbitmq] ack dropped, channel closed:', err instanceof Error ? err.message : err)
+  }
+}
+
+/** Nack without requeue (to the dead-letter queue), with the same closed-channel guard. */
+export function safeNack(ch: amqp.Channel, msg: amqp.Message): void {
+  try {
+    ch.nack(msg, false, false)
+  } catch (err) {
+    console.warn('[rabbitmq] nack dropped, channel closed:', err instanceof Error ? err.message : err)
+  }
+}
+
 export async function assertTopology(ch: amqp.Channel): Promise<void> {
   await ch.assertExchange(DEAD_LETTER_EXCHANGE, 'fanout', { durable: true })
   await ch.assertQueue(config.rabbitmqQueueDeadLetter, { durable: true })
