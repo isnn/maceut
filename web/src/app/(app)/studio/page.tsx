@@ -179,12 +179,31 @@ function formatDay(day: string): string {
   }).format(new Date(`${day}T00:00:00+07:00`))
 }
 
+/** The zone last opened in Studio, per browser. A convenience: unavailable storage just means the first zone. */
+const LAST_ZONE_KEY = 'maceut.studio.zone'
+
+function readLastZone(): string | null {
+  try {
+    return window.localStorage.getItem(LAST_ZONE_KEY)
+  } catch {
+    return null
+  }
+}
+
+function rememberZone(id: string) {
+  try {
+    window.localStorage.setItem(LAST_ZONE_KEY, id)
+  } catch {
+    // Private mode or blocked storage: Studio opens on the first zone next time.
+  }
+}
+
 export default function StudioPage() {
   const [zones, setZones] = useState<Zone[] | null>(null)
   const [zoneId, setZoneId] = useState<string>('')
   // Keyed by the zone it belongs to, so switching zones needs no reset: a result whose
   // key no longer matches is simply not this zone's, and the page falls back to loading.
-  const [loadedFrames, setLoadedFrames] = useState<{ zoneId: string; frames: Frame[] } | null>(null)
+  const [loadedFrames, setLoadedFrames] = useState<{ zoneId: string; frames: Frame[]; historyDays: number | null } | null>(null)
 
   const [rawCurrent, setCurrent] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -220,8 +239,9 @@ export default function StudioPage() {
       setZones(next)
       // "Open in Studio" on a zone page arrives with ?zone=<id>. Read here rather than
       // with useSearchParams, which would need a Suspense boundary around the page.
+      // Otherwise the zone last picked here, so leaving Studio and coming back returns to it.
       const wanted = new URLSearchParams(window.location.search).get('zone')
-      const pick = next.find((z) => z.id === wanted) ?? next[0]
+      const pick = next.find((z) => z.id === wanted) ?? next.find((z) => z.id === readLastZone()) ?? next[0]
       if (pick) setZoneId((z) => z || pick.id)
     })
   }, [])
@@ -229,11 +249,12 @@ export default function StudioPage() {
   useEffect(() => {
     if (!zoneId) return
     let cancelled = false
-    studioApi.getFrames(zoneId).then((frames) => {
+    rememberZone(zoneId)
+    studioApi.getFrames(zoneId).then(({ frames, historyDays }) => {
       if (cancelled) return
       setTraffics({})
       inFlight.current.clear()
-      setLoadedFrames({ zoneId, frames })
+      setLoadedFrames({ zoneId, frames, historyDays })
       setCurrent(0)
       setPlaying(false)
     })
@@ -243,6 +264,8 @@ export default function StudioPage() {
   }, [zoneId])
 
   const allFrames = loadedFrames?.zoneId === zoneId ? loadedFrames.frames : null
+  /** How many days of history the plan keeps (null = all), as the server applied it. */
+  const historyDays = loadedFrames?.zoneId === zoneId ? loadedFrames.historyDays : null
 
   const days = useMemo(() => (allFrames ? studioApi.daysWithFrames(allFrames) : []), [allFrames])
   const ordered = useMemo(() => allFrames ?? [], [allFrames])
@@ -947,8 +970,11 @@ export default function StudioPage() {
                 {(
                   [
                     ['Newest day', defaultRange.startId, defaultRange.endId],
-                    ['Last 7 days', framesOn(days[Math.min(6, days.length - 1)] ?? '')[0]?.id, ordered[ordered.length - 1]?.id],
-                    ['All', ordered[0]?.id, ordered[ordered.length - 1]?.id],
+                    // On a 7-day plan this is the same as everything, so only "All" shows.
+                    ...(historyDays === null || historyDays > 7
+                      ? ([['Last 7 days', framesOn(days[Math.min(6, days.length - 1)] ?? '')[0]?.id, ordered[ordered.length - 1]?.id]] as const)
+                      : []),
+                    [historyDays === null ? 'All' : `All ${historyDays} days`, ordered[0]?.id, ordered[ordered.length - 1]?.id],
                   ] as const
                 ).map(([label, startId, endId]) => {
                   const active = startId === startFrame?.id && endId === endFrame?.id
@@ -994,6 +1020,14 @@ export default function StudioPage() {
                   </div>
                 </div>
               ))}
+              {historyDays !== null && (
+                <p className="text-caption text-text-muted">
+                  Your plan keeps {historyDays} days of history.{' '}
+                  <Link href="/profile" className="font-semibold text-primary no-underline hover:underline">
+                    Upgrade
+                  </Link>
+                </p>
+              )}
             </section>
 
             {/* 1. Map theme — the basemap's colour identity: a literal Standard rendering,

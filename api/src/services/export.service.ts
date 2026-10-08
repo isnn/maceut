@@ -10,11 +10,13 @@ import {
   ExportInProgressError,
   ExportLimitExceededError,
   ForbiddenError,
+  HistoryLimitExceededError,
   NotFoundError,
   UpstreamError,
   ValidationError,
 } from '../errors'
 import { PLAN_LIMITS, type Plan } from '../types/plan'
+import { historySince } from './capture.service'
 import type { CreateExportInput, ExportSpec } from '../schemas/export.schema'
 import type { ExportRecord } from '../repositories/export.repository'
 
@@ -210,6 +212,14 @@ export async function createExport(
     throw new ValidationError('Rentang export harus berupa capture dari zona ini.')
   }
   const [from, to] = a.capturedAt <= b.capturedAt ? [a.capturedAt, b.capturedAt] : [b.capturedAt, a.capturedAt]
+
+  // BR-007: the same history window Studio's timeframe offers. A range reaching past it
+  // is refused, not trimmed, so the export never looks complete when it isn't.
+  const since = historySince(plan)
+  const historyDays = PLAN_LIMITS[plan].historyDays
+  if (since && historyDays !== null && from < since) {
+    throw new HistoryLimitExceededError({ requestedDays: null, historyDays })
+  }
 
   const frames = await captureRepo.listDoneIdsBetween(zoneId, from, to)
   if (frames.length === 0) throw new ValidationError('Tidak ada capture yang selesai di rentang ini.')

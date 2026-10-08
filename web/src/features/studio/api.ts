@@ -12,6 +12,7 @@
  */
 
 import * as zonesApi from '@/features/zones/api'
+import { apiClient } from '@/lib/api-client'
 
 /** The zone-detail page's Captures stepper fetches the same shape (`?slim=1`). */
 export type { SlimTraffic } from '@/features/zones/api'
@@ -72,33 +73,25 @@ export function wibDate(iso: string): string {
 }
 
 /**
- * Every playable frame a zone has, oldest first.
+ * Every playable frame inside the plan's history, oldest first, and how many days that
+ * history covers (null = all). The server applies the limit (BR-007), so the timeframe
+ * can only offer what the plan keeps.
  *
  * Only `done` cycles: a frame that failed or was missed has no traffic to draw, and
  * silently including it would make the player stall on a blank map with no explanation.
  * The Captures table on the zone page is where those are accounted for.
- *
- * Oldest first because playback runs forward through time, unlike every other list in
- * the app, which shows newest first.
  */
-export async function getFrames(zoneId: string): Promise<Frame[]> {
-  // 100 is the endpoint's ceiling, and it is the right ceiling: a day of 15-minute
-  // captures inside a working window is well under that, and asking for more was a 422
-  // the player surfaced as "Input tidak valid" with no clue where it came from.
-  const captures = await zonesApi.getZoneCaptures(zoneId, 100)
-
-  return captures
-    .filter((c) => c.status === 'done')
-    .map((c) => ({
-      id: c.id,
-      zoneId: c.zoneId,
-      time: wibClock(c.capturedAt),
-      capturedAt: c.capturedAt,
-      jamFactorAvg: c.jamFactorAvg,
-      roadsCount: c.roadsCount,
-    }))
-    .sort((a, b) => (a.capturedAt < b.capturedAt ? -1 : 1))
+export async function getFrames(zoneId: string): Promise<{ frames: Frame[]; historyDays: number | null }> {
+  const res = await apiClient.get<{
+    frames: { id: string; capturedAt: string; jamFactorAvg: number | null; roadsCount: number | null }[]
+    historyDays: number | null
+  }>(`/zones/${zoneId}/frames`)
+  return {
+    historyDays: res.historyDays,
+    frames: res.frames.map((f) => ({ ...f, zoneId, time: wibClock(f.capturedAt) })),
+  }
 }
+
 
 /** The days this zone has frames for, newest day first. */
 export function daysWithFrames(frames: Frame[]): string[] {

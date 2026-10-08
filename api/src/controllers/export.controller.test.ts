@@ -114,7 +114,8 @@ beforeEach(() => {
   vi.mocked(captureRepo.findLiteById).mockImplementation(async (id: string) => ({
     id,
     zoneId: ZONE_ID,
-    capturedAt: id === CAP_A ? new Date('2026-09-27T00:00:00Z') : new Date('2026-09-27T10:00:00Z'),
+    // Recent, so every plan's history window (BR-007) covers the range.
+    capturedAt: id === CAP_A ? new Date(Date.now() - 10 * 3_600_000) : new Date(Date.now() - 3_600_000),
   }) as never)
   vi.mocked(captureRepo.listDoneIdsBetween).mockResolvedValue(frames(2))
   vi.mocked(exportRepo.create).mockResolvedValue(exportRow())
@@ -160,6 +161,21 @@ describe('POST /zones/:id/exports', () => {
 
     expect(res.status).toBe(409)
     expect(res.body.error.code).toBe('EXPORT_IN_PROGRESS')
+    expect(exportRepo.create).not.toHaveBeenCalled()
+  })
+
+  it('refuses a range older than the plan keeps — 403 HISTORY_LIMIT_EXCEEDED (BR-007)', async () => {
+    signedIn('free') // 7 days of history
+    vi.mocked(captureRepo.findLiteById).mockImplementation(async (id: string) => ({
+      id,
+      zoneId: ZONE_ID,
+      capturedAt: new Date(Date.now() - (id === CAP_A ? 8 : 1) * 86_400_000),
+    }) as never)
+
+    const res = await request(app).post(`/zones/${ZONE_ID}/exports`).send(body('zip'))
+
+    expect(res.status).toBe(403)
+    expect(res.body.error.code).toBe('HISTORY_LIMIT_EXCEEDED')
     expect(exportRepo.create).not.toHaveBeenCalled()
   })
 

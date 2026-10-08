@@ -19,7 +19,12 @@ vi.mock('better-auth/node', () => ({
 }))
 vi.mock('../repositories/user.repository', () => ({ findById: vi.fn(), findByIdWithPlan: vi.fn() }))
 vi.mock('../repositories/zone.repository', () => ({ findById: vi.fn() }))
-vi.mock('../repositories/capture.repository', () => ({ findById: vi.fn(), recentForUser: vi.fn(), listForCsv: vi.fn() }))
+vi.mock('../repositories/capture.repository', () => ({
+  findById: vi.fn(),
+  recentForUser: vi.fn(),
+  listForCsv: vi.fn(),
+  listFramesSince: vi.fn(),
+}))
 vi.mock('../lib/r2-client', () => ({
   getPresignedUrl: vi.fn(async (path: string) => `https://r2.example/${path}`),
   thumbnailPath: (p: string) => p.replace(/\.png$/, '.thumb.jpg'),
@@ -41,9 +46,9 @@ const USER_ID = 'user_01'
 const ZONE_ID = '3f8a1c2e-1111-4111-8111-111111111111'
 const CAPTURE_ID = 'aaaaaaaa-3333-4333-8333-333333333333'
 
-function signedIn() {
+function signedIn(plan = 'standard') {
   vi.mocked(auth.api.getSession).mockResolvedValue({ user: { id: USER_ID }, session: { id: 's' } } as never)
-  vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue({ plan: 'standard' } as never)
+  vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue({ plan } as never)
 }
 
 function captureRow(over: Record<string, unknown> = {}) {
@@ -219,5 +224,54 @@ describe('GET /zones/:id/captures.csv (FE-30)', () => {
     expect(all.body.error).toMatchObject({ code: 'HISTORY_LIMIT_EXCEEDED', details: { historyDays: 90 } })
 
     expect((await request(app).get(`/zones/${ZONE_ID}/captures.csv?days=5`)).status).toBe(422)
+  })
+})
+
+describe('GET /zones/:id/frames (BR-007)', () => {
+  const DAY = 86_400_000
+
+  beforeEach(() => {
+    vi.mocked(zoneRepo.findById).mockResolvedValue({ id: ZONE_ID, userId: USER_ID, name: 'Jl. Sudirman' } as never)
+    vi.mocked(captureRepo.listFramesSince).mockResolvedValue([
+      { id: CAPTURE_ID, capturedAt: new Date('2026-09-27T00:30:00Z'), jamFactorAvg: '3.25', roadsCount: 1043 },
+    ])
+  })
+
+  it('requires a session', async () => {
+    vi.mocked(auth.api.getSession).mockResolvedValue(null as never)
+    expect((await request(app).get(`/zones/${ZONE_ID}/frames`)).status).toBe(401)
+  })
+
+  it('refuses another account’s zone', async () => {
+    signedIn()
+    vi.mocked(zoneRepo.findById).mockResolvedValue({ id: ZONE_ID, userId: 'someone-else', name: 'X' } as never)
+    expect((await request(app).get(`/zones/${ZONE_ID}/frames`)).status).toBe(403)
+    expect(captureRepo.listFramesSince).not.toHaveBeenCalled()
+  })
+
+  it('reaches back only as far as a Free plan keeps history: 7 days', async () => {
+    signedIn('free')
+    const before = Date.now()
+    const res = await request(app).get(`/zones/${ZONE_ID}/frames`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.historyDays).toBe(7)
+    expect(res.body.data.frames).toEqual([
+      { id: CAPTURE_ID, capturedAt: '2026-09-27T00:30:00.000Z', jamFactorAvg: 3.25, roadsCount: 1043 },
+    ])
+    const since = vi.mocked(captureRepo.listFramesSince).mock.calls[0]![1] as Date
+    expect(Math.abs(before - 7 * DAY - since.getTime())).toBeLessThan(5_000)
+  })
+
+  it('gives Standard 90 days and Premium everything', async () => {
+    signedIn('standard')
+    await request(app).get(`/zones/${ZONE_ID}/frames`)
+    const since = vi.mocked(captureRepo.listFramesSince).mock.calls[0]![1] as Date
+    expect(Math.round((Date.now() - since.getTime()) / DAY)).toBe(90)
+
+    signedIn('premium')
+    const res = await request(app).get(`/zones/${ZONE_ID}/frames`)
+    expect(res.body.data.historyDays).toBeNull()
+    expect(vi.mocked(captureRepo.listFramesSince).mock.calls[1]![1]).toBeNull()
   })
 })

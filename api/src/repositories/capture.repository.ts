@@ -79,6 +79,26 @@ export async function markStatus(id: string, status: CaptureStatus, error?: stri
 }
 
 /**
+ * A zone's playable frames since `since` (all of them when null), oldest first, without
+ * traffic. The newest `cap` are kept when there are more.
+ */
+export async function listFramesSince(
+  zoneId: string,
+  since: Date | null,
+  cap: number,
+): Promise<{ id: string; capturedAt: Date; jamFactorAvg: string | null; roadsCount: number | null }[]> {
+  const conditions = [eq(captures.zoneId, zoneId), eq(captures.status, 'done')]
+  if (since) conditions.push(gte(captures.capturedAt, since))
+  const rows = await db
+    .select({ id: captures.id, capturedAt: captures.capturedAt, jamFactorAvg: captures.jamFactorAvg, roadsCount: captures.roadsCount })
+    .from(captures)
+    .where(and(...conditions))
+    .orderBy(desc(captures.capturedAt))
+    .limit(cap)
+  return rows.reverse()
+}
+
+/**
  * Whether a later scheduled cycle for the same zone is still waiting in the queue. After
  * a worker outage the queue holds several cycles per zone; only the newest is worth
  * collecting (capture.worker, `staleReason`).

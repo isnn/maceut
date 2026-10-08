@@ -161,6 +161,8 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-33** Nama kelas jalan dalam bahasa Inggris (Highways · Highways + main roads · All roads); id internal tetap | permintaan user |
 | ✅ | **FE-34** Konsol staf: kolom Paused terpisah, spasi overview, halaman usage per akun (data nyata), tipe staf Superadmin / Admin (Admin hanya Overview & Users) | review user |
 | ✅ | **FE-35** Konsol staf: penyimpanan & capture terukur (tanpa peringatan "belum terukur"), kolom Storage di Users, subjudul Overview/Users dihapus | review user |
+| ✅ | **BE-19** `GET /zones/:id/frames` — frame Studio dibatasi riwayat paket (Free 7 hari, Standard 90, Premium semua), maks 5.000; export menolak rentang di luar riwayat (403 HISTORY_LIMIT_EXCEEDED, BR-007) | review user |
+| ✅ | **FE-39** Studio: timeframe hanya menawarkan riwayat paket ("All 7 days" / "All 90 days" / "All", baris "Your plan keeps N days of history · Upgrade"); zona terakhir diingat saat kembali ke Studio | review user |
 | ✅ | **BE-18** Worker tahan macet: batas render 3 menit tanpa progres, channel RabbitMQ per consumer + reconnect, restart beneran (tanpa `tsx watch`), healthcheck heartbeat, capture terlambat → `missed` (opsi C), `captured_at` = waktu sampel | insiden 2026-10-08 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
@@ -186,6 +188,18 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-08c] BE-19 + FE-39 — riwayat paket di Studio, zona Studio diingat.
+
+  - API: `GET /zones/:id/frames` (service `framesForZone`, repo `listFramesSince`) mengirim
+    capture `done` tanpa traffic, terlama dulu, sejak `historySince(plan)`; plus `historyDays`.
+    Menggantikan `/captures?limit=100` di Studio, yang memotong zona 15-menit di ~1 hari.
+  - Export: start capture lebih tua dari riwayat paket → 403 HISTORY_LIMIT_EXCEEDED.
+    Capture lama TIDAK dihapus; upgrade langsung membukanya lagi.
+  - Web: quick pick "Last 7 days" disembunyikan di Free (sama dengan All); label All menyebut
+    batasnya; zona terakhir di `localStorage` `maceut.studio.zone` (urutan: ?zone=, terakhir, pertama).
+  VERIFIKASI: 490 test API (baru: endpoint frames per paket, export di luar riwayat), tsc +
+  eslint api & web bersih. Studio: DRY RUN, daftar uji diserahkan ke user.
 
 [2026-10-08b] BE-18 — worker tahan macet (insiden 13:47–16:1x WIB).
 
