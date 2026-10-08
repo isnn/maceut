@@ -26,7 +26,7 @@ export function Switch({ checked, onCheckedChange, disabled, id, className, ...r
       aria-label={rest['aria-label']}
       className={cn(
         'relative inline-flex h-6 w-10 shrink-0 items-center rounded-full bg-border transition-colors',
-        'data-[checked]:bg-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+        'data-[checked]:bg-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         'data-[disabled]:opacity-40',
         className,
       )}

@@ -1,27 +1,122 @@
 import Link from 'next/link'
 import { PublicHeader } from '@/components/shared/PublicHeader'
-import { TrafficSchematic } from '@/components/shared/TrafficSchematic'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
-import { buttonClass, linkClass } from '@/components/ui/Button'
+import {
+  BandMap,
+  ExportPreview,
+  HeroAppPreview,
+  ReplayPreview,
+  SchedulePreview,
+  ZonePreview,
+} from '@/features/marketing/components/LandingPreviews'
+import { Logo } from '@/components/ui/Logo'
+import { buttonClass } from '@/components/ui/Button'
+import {
+  IconArrowRight,
+  IconCalendar,
+  IconClipboardList,
+  IconClock,
+  IconDownload,
+  IconGauge,
+  IconGlobe,
+  IconMap,
+  IconRoute,
+} from '@/components/ui/icons'
+import { cn } from '@/lib/utils'
+import { PLAN_LIMITS } from '@/lib/constants'
 
-const SERVICES = [
+/**
+ * The public landing page (FE-36), laid out after the owner's concept: hero with the
+ * app, how it works, the four product areas, use cases, plans, a closing band.
+ *
+ * Content rule (antislop R-17/R-36/R-38): everything here describes what the product
+ * does today. No customer logos, counts or testimonials: there are none to show yet,
+ * and no links to pages that do not exist.
+ */
+
+const FREE = PLAN_LIMITS.free
+
+const STEPS = [
   {
-    title: 'Zone collection',
-    body: 'Draw a boundary on the map, then pick the road classes you want collected.',
+    icon: IconMap,
+    title: 'Draw a zone',
+    body: 'Outline the area on the map and choose which roads count: highways, main roads, or every street.',
   },
   {
-    title: 'Capture windows',
-    body: 'Recurring schedules per zone — peak hours, weekdays, or one-offs.',
+    icon: IconCalendar,
+    title: 'Set capture windows',
+    body: 'Pick the days and hours that matter to you, then how often to collect: every 15 minutes, hourly, or daily.',
   },
   {
-    title: 'Studio replay',
-    body: 'Animate saved frames and compare any two moments side by side.',
-  },
-  {
-    title: 'Export & API',
-    body: 'CSV per window, or pull frames straight into your own systems.',
+    icon: IconDownload,
+    title: 'Replay and export',
+    body: 'Scrub through every snapshot in Studio, then take the data with you as CSV, image frames, or video.',
   },
 ]
+
+const PRODUCT = [
+  {
+    title: 'Zone management',
+    body: 'Draw corridors, junctions and districts on the map. Each zone keeps its own road classes and history.',
+    preview: <ZonePreview />,
+  },
+  {
+    title: 'Scheduled capture',
+    body: 'Capture windows run on their own, on the days and hours you set, with the next collection always shown.',
+    preview: <SchedulePreview />,
+  },
+  {
+    title: 'Traffic replay',
+    body: 'Play a morning back frame by frame and compare how the same roads looked at different times.',
+    preview: <ReplayPreview />,
+  },
+  {
+    title: 'Export data',
+    body: 'Download captures as a spreadsheet, frames as a ZIP, or the whole window as an MP4 for a report.',
+    preview: <ExportPreview />,
+  },
+]
+
+const USE_CASES = [
+  {
+    icon: IconGauge,
+    title: 'Traffic monitoring',
+    body: 'Watch the corridors you manage at the hours they matter, without staff counting cars.',
+  },
+  {
+    icon: IconRoute,
+    title: 'Planning and operations',
+    body: 'Check how a road behaves before and after a closure, a new signal, or a diversion.',
+  },
+  {
+    icon: IconClock,
+    title: 'Historical analysis',
+    body: 'Line up the same window across weeks to see which hours are getting worse.',
+  },
+  {
+    icon: IconClipboardList,
+    title: 'Research and engineering',
+    body: 'Export consistent, timestamped samples for studies and models.',
+  },
+  {
+    icon: IconDownload,
+    title: 'Reporting',
+    body: 'Put a replay or a chart from real captures in front of the people who decide.',
+  },
+]
+
+/** Section heading: a small sentence-case label in the brand colour, then the title. */
+function SectionHead({ label, title, children, className }: { label: string; title: string; children?: React.ReactNode; className?: string }) {
+  return (
+    <div className={className}>
+      <p className="text-label font-semibold text-primary">{label}</p>
+      <h2 className="mt-sm text-[28px] leading-[1.2] font-bold tracking-tight text-text-primary text-balance">{title}</h2>
+      {children && <p className="mt-md text-body text-text-secondary max-w-[52ch]">{children}</p>}
+    </div>
+  )
+}
+
+const WRAP = 'mx-auto max-w-[1600px] px-lg tablet:px-xl'
 
 export default function LandingPage() {
   return (
@@ -29,117 +124,151 @@ export default function LandingPage() {
       <PublicHeader />
 
       <main className="flex-1">
-        {/* Hero */}
-        <section className="mx-auto max-w-[1600px] px-xl py-section grid grid-cols-1 laptop:grid-cols-2 gap-xxl items-center">
+        {/* Hero: the one focal point is the app itself. */}
+        <section className={cn(WRAP, 'py-section grid grid-cols-1 laptop:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-xxl items-center')}>
           <div>
-            <span className="inline-block bg-primary-soft text-[#5A35F3] text-micro font-semibold uppercase tracking-wide rounded-xs px-sm py-xs">
-              For Indonesian road agencies
-            </span>
-            <h1 className="mt-lg text-[40px] leading-[1.1] font-extrabold tracking-tight text-text-primary text-balance">
-              Turn any road network into traffic data you can schedule.
+            <h1 className="text-[36px] tablet:text-[44px] leading-[1.08] font-extrabold tracking-tight text-text-primary text-balance">
+              Traffic data for the roads you choose, collected on your schedule.
             </h1>
-            <p className="mt-lg text-body text-text-secondary max-w-[46ch]">
-              Draw a zone, pick the road classes you care about, and set the windows you want captured. Maceut
-              collects, stores and replays every frame.
+            <p className="mt-lg text-[16px] leading-relaxed text-text-secondary max-w-[46ch]">
+              Draw a zone on the map, pick the road classes, set the hours. Maceut captures traffic flow at those times,
+              keeps every snapshot, and lets you replay or export it.
             </p>
             <div className="mt-xl flex flex-wrap gap-md">
-              <Link
-                href="/register"
-                className={buttonClass()}
-              >
-                Create a free account
+              <Link href="/register" className={buttonClass()}>
+                Create free account
+                <IconArrowRight size={16} />
               </Link>
-              <a
-                href="#support"
-                className={buttonClass('secondary')}
-              >
-                Book a walkthrough
+              <a href="#how-it-works" className={buttonClass('secondary')}>
+                See how it works
               </a>
             </div>
-            <p className="mt-lg flex flex-wrap gap-lg text-caption text-text-muted">
-              <span>Free tier — 1 zone, 10 captures / day</span>
-              <span>No card required</span>
+            <p className="mt-lg text-caption text-text-secondary">
+              Free plan: {FREE.zonesLimit} zone, {FREE.capturesLimit} captures a day. No card needed.
             </p>
           </div>
+          <HeroAppPreview className="min-w-0" />
+        </section>
 
-          <div className="bg-card border border-border rounded-lg p-lg shadow-elevation-2">
-            <div className="flex items-center gap-sm mb-md">
-              <span className="bg-primary-soft text-[#5A35F3] text-micro font-semibold rounded-xs px-sm py-xs">PLACEHOLDER</span>
-              <span className="text-caption text-text-secondary">Product screenshot goes here in build</span>
-            </div>
-            <div className="rounded-md overflow-hidden border border-divider">
-              <TrafficSchematic showBoundary />
-            </div>
-            <div className="mt-md flex items-end justify-between">
-              <div>
-                <p className="text-label text-text-secondary">Sudirman corridor</p>
-                <p className="text-page-title font-bold text-text-primary">18.4 km/h</p>
-              </div>
-              <span className="bg-danger-bg text-danger-text text-micro font-semibold rounded-xs px-sm py-xs">
-                Congested · 07:30 window
-              </span>
-            </div>
+        {/* How it works */}
+        <section id="how-it-works" className="scroll-mt-16 border-t border-border bg-canvas-secondary">
+          <div className={cn(WRAP, 'py-section grid grid-cols-1 laptop:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] gap-xxl')}>
+            <SectionHead label="How it works" title="From a shape on a map to data you can use.">
+              Three steps, done once. After that the capture windows run on their own.
+            </SectionHead>
+            <ol className="grid grid-cols-1 tablet:grid-cols-3 gap-xl">
+              {STEPS.map((step, i) => (
+                <li key={step.title}>
+                  <div className="flex items-center gap-md">
+                    <span className="w-10 h-10 rounded-md bg-primary-soft text-primary flex items-center justify-center">
+                      <step.icon size={20} />
+                    </span>
+                    <span className="text-label font-semibold text-text-secondary tabular-nums">Step {i + 1}</span>
+                  </div>
+                  <h3 className="mt-md text-heading-sm text-text-primary">{step.title}</h3>
+                  <p className="mt-xs text-body text-text-secondary">{step.body}</p>
+                </li>
+              ))}
+            </ol>
           </div>
         </section>
 
-        {/* Services */}
-        <section id="product" className="border-t border-border bg-canvas-secondary">
-          <div className="mx-auto max-w-[1600px] px-xl py-section">
-            <p className="text-label text-text-secondary">What Maceut does</p>
-            <h2 className="mt-xs text-page-title font-bold text-text-primary">Four services, one workspace.</h2>
-            <div className="mt-xl grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-lg">
-              {SERVICES.map((service, i) => (
-                <div key={service.title} className="bg-card border border-border rounded-lg p-xl">
-                  <span className="text-micro font-semibold text-text-muted tabular-nums">0{i + 1}</span>
-                  <h3 className="mt-sm text-heading-sm text-text-primary">{service.title}</h3>
-                  <p className="mt-sm text-body text-text-secondary">{service.body}</p>
-                </div>
+        {/* Product */}
+        <section id="product" className="scroll-mt-16 border-t border-border">
+          <div className={cn(WRAP, 'py-section grid grid-cols-1 laptop:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] gap-xxl')}>
+            <div>
+              <SectionHead label="Product" title="Everything between drawing a zone and handing over the data.">
+                One workspace for the whole job: define the area, collect on a schedule, look back, and export.
+              </SectionHead>
+              <Link href="/register" className={cn(buttonClass(), 'mt-xl')}>
+                Create free account
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
+              {PRODUCT.map((item) => (
+                <article key={item.title} className="bg-card border border-border rounded-lg p-md">
+                  {item.preview}
+                  <h3 className="mt-md px-xs text-heading-sm text-text-primary">{item.title}</h3>
+                  <p className="mt-xs px-xs pb-xs text-body text-text-secondary">{item.body}</p>
+                </article>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Plans */}
-        <section id="pricing" className="border-t border-border">
-          <div className="mx-auto max-w-[1600px] px-xl py-section">
-            <div className="flex flex-wrap items-end justify-between gap-md mb-xl">
-              <div>
-                <p className="text-label text-text-secondary">Plans</p>
-                <h2 className="mt-xs text-page-title font-bold text-text-primary">
-                  Upgrade any time — zones and windows scale with the tier.
-                </h2>
-              </div>
-              <Link href="/register" className={linkClass()}>
-                Compare all features
-              </Link>
+        {/* Use cases */}
+        <section className="border-t border-border bg-canvas-secondary">
+          <div className={cn(WRAP, 'py-section')}>
+            <SectionHead label="Use cases" title="Built for how road agencies work.">
+              The same zones and windows serve the control room, the planning desk, and the people writing the report.
+            </SectionHead>
+            <div className="mt-xl grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-5 gap-lg">
+              {USE_CASES.map((u) => (
+                <article key={u.title} className="bg-card border border-border rounded-lg p-lg">
+                  <span className="w-9 h-9 rounded-md bg-primary-soft text-primary flex items-center justify-center">
+                    <u.icon size={18} />
+                  </span>
+                  <h3 className="mt-md text-heading-sm text-text-primary">{u.title}</h3>
+                  <p className="mt-xs text-body text-text-secondary">{u.body}</p>
+                </article>
+              ))}
             </div>
-            <PlanCards />
           </div>
         </section>
 
-        {/* Closing */}
-        <section id="support" className="border-t border-border bg-primary">
-          <div className="mx-auto max-w-[1600px] px-xl py-section flex flex-wrap items-center justify-between gap-xl">
-            <div>
-              <h2 className="text-page-title font-bold text-on-primary">Start with one zone today.</h2>
-              <p className="mt-sm text-body text-on-primary/80">
-                The Free plan needs no card. Upgrade when you need more zones or more captures.
-              </p>
+        {/* Pricing */}
+        <section id="pricing" className="scroll-mt-16 border-t border-border">
+          <div className={cn(WRAP, 'py-section')}>
+            <SectionHead label="Pricing" title="Plans priced for public budgets.">
+              Start free with one zone. Move up when you need more zones, more captures, or a finer interval. Every plan
+              exports CSV, image frames and video.
+            </SectionHead>
+            <PlanCards className="mt-xl" />
+          </div>
+        </section>
+
+        {/* Closing band */}
+        <section className={cn(WRAP, 'pb-section')}>
+          <div className="relative overflow-hidden rounded-lg border border-border bg-primary-soft px-xl py-xxl">
+            <BandMap />
+            <div className="relative grid grid-cols-1 laptop:grid-cols-[minmax(0,6fr)_minmax(0,4fr)_auto] gap-xl items-center">
+              <div>
+                <h2 className="text-[28px] leading-[1.2] font-bold tracking-tight text-text-primary text-balance">
+                  Start with one zone today.
+                </h2>
+                <p className="mt-sm text-body text-text-secondary max-w-[48ch]">
+                  Draw it, set a window, and the first capture runs at the time you chose.
+                </p>
+              </div>
+              <div className="flex items-start gap-md">
+                <IconGlobe size={28} className="text-primary shrink-0" />
+                <p className="text-body text-text-secondary">
+                  Works anywhere HERE has live traffic data. Times are shown in Western Indonesia Time (WIB).
+                </p>
+              </div>
+              <div className="flex flex-col items-start laptop:items-end gap-xs">
+                <Link href="/register" className={buttonClass()}>
+                  Create free account
+                </Link>
+                <span className="text-caption text-text-secondary">Free plan, no card needed.</span>
+              </div>
             </div>
-            <Link
-              href="/register"
-              className={buttonClass('secondary')}
-            >
-              Create a free account
-            </Link>
           </div>
         </section>
       </main>
 
-      <footer id="docs" className="border-t border-border">
-        <div className="mx-auto max-w-[1600px] px-xl py-xl flex flex-wrap items-center justify-between gap-md">
-          <p className="text-caption text-text-muted">© 2026 Maceut — map-based congestion monitoring.</p>
-          <p className="text-caption text-text-muted">Used by road agencies and city planners to watch traffic, zone by zone.</p>
+      <footer className="border-t border-border">
+        <div className={cn(WRAP, 'py-xl flex flex-wrap items-center justify-between gap-lg')}>
+          <Logo />
+          <nav aria-label="Footer" className="flex items-center gap-xl">
+            <a href="#product" className="text-body text-text-secondary no-underline hover:text-text-primary transition-colors">
+              Product
+            </a>
+            <a href="#pricing" className="text-body text-text-secondary no-underline hover:text-text-primary transition-colors">
+              Pricing
+            </a>
+          </nav>
+          <p className="w-full text-caption text-text-secondary">© 2026 Maceut</p>
         </div>
       </footer>
     </>

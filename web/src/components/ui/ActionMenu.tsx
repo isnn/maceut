@@ -23,7 +23,7 @@ export function ActionMenu({ label, items }: { label: string; items: ActionItem[
     <Menu.Root modal={false}>
       <Menu.Trigger
         aria-label={label}
-        className="inline-flex items-center justify-center w-9 h-9 rounded-sm text-text-muted hover:bg-canvas-secondary hover:text-text-primary focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors"
+        className="inline-flex items-center justify-center w-9 h-9 rounded-sm text-text-muted hover:bg-canvas-secondary hover:text-text-primary focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors"
       >
         <IconDotsVertical size={18} />
       </Menu.Trigger>

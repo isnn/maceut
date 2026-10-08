@@ -37,15 +37,17 @@ export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabl
             )}
           >
             {recommended && (
-              <span className="absolute -top-2.5 left-xl bg-primary text-on-primary text-micro font-semibold rounded-xs px-sm py-[3px] uppercase tracking-wide">
-                Most popular
+              // A reason, not a popularity claim (FE-36): nothing measures popularity, but
+              // Standard's 5 zones and main roads are sized for one city.
+              <span className="absolute -top-2.5 left-xl bg-primary text-on-primary text-micro font-semibold rounded-xs px-sm py-[3px]">
+                Best for one city
               </span>
             )}
             <div>
               <p className="text-heading-sm text-text-primary">{PLAN_LABEL[plan]}</p>
               <p className="mt-sm flex items-baseline gap-xs">
                 <span className="text-page-title font-bold text-text-primary">{PLAN_PRICE[plan].amount}</span>
-                <span className="text-caption text-text-muted">{PLAN_PRICE[plan].period}</span>
+                <span className="text-caption text-text-secondary">{PLAN_PRICE[plan].period}</span>
               </p>
             </div>
             <ul className="space-y-sm flex-1">

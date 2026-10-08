@@ -161,6 +161,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-33** Nama kelas jalan dalam bahasa Inggris (Highways · Highways + main roads · All roads); id internal tetap | permintaan user |
 | ✅ | **FE-34** Konsol staf: kolom Paused terpisah, spasi overview, halaman usage per akun (data nyata), tipe staf Superadmin / Admin (Admin hanya Overview & Users) | review user |
 | ✅ | **FE-35** Konsol staf: penyimpanan & capture terukur (tanpa peringatan "belum terukur"), kolom Storage di Users, subjudul Overview/Users dihapus | review user |
+| ✅ | **FE-36** Landing page sesuai konsep user (layout tetap; copy & gaya diperbaiki, antislop DURING) | konsep user |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -185,6 +186,19 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-08] FE-36 — landing page sesuai konsep user (antislop DURING).
+
+  - Layout konsep dipertahankan: hero + pratinjau aplikasi, How it works, Product (4 pratinjau),
+    Use cases (5), Pricing, band penutup, footer. Copy ditulis ulang tanpa klaim palsu.
+  - Keputusan pemilik (R-37): band penutup jujur (tanpa "trusted worldwide"); hanya tautan yang
+    berfungsi (tanpa Docs/Support/bahasa/demo/kontak/toggle tahunan); 3 paket nyata, Standard
+    "Best for one city"; pratinjau produk berbasis kode (LandingPreviews.tsx).
+  - PLAN_HIGHLIGHTS diperbaiki ke fakta (bukan "Images only", "GIF", "API · SSO · SLA").
+  - Menu mobile berfungsi (Esc, keyboard). Perbaikan global: ring fokus keyboard tak terlihat di
+    Tailwind v4 (focus:outline-none menimpa) — tambah focus-visible:outline-solid di 13 file.
+  VERIFIKASI: klik-tembus headless desktop 1440 & mobile 390 — 0 overflow, 0 error konsol, semua
+  anchor punya target, menu buka/tutup (klik, Enter, Esc); tsc + eslint bersih.
 
 [2026-10-07f] FE-35 — data nyata di konsol staf.
 
