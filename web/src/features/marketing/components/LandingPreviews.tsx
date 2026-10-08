@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import { cn } from '@/lib/utils'
 import { ReplayVideo } from './ReplayVideo'
 import { TRAFFIC_COLORS } from '@/lib/constants'
@@ -63,60 +62,18 @@ function ZonePolygon({ points }: { points: [number, number][] }) {
 }
 
 /**
- * Hero (FE-38): three real captures Maceut rendered of Yogyakarta on 7 and 8 October
- * 2026, fanned like prints on a desk. Same city, morning against evening, in three of
- * the export styles: the proof that this is a working product, not a mock-up.
+ * A preview card's picture box. One ratio for all four (16:10, the replay video's), so
+ * the cards and the text under them line up whatever each preview draws (FE-40).
  */
-const CAPTURES = [
-  { src: '/landing/capture-yogyakarta-0815-violet.webp', alt: 'Yogyakarta at 08:15 WIB on 8 October 2026, violet style: mostly free-flowing roads.' },
-  { src: '/landing/capture-yogyakarta-1715-blush.webp', alt: 'Yogyakarta at 17:15 WIB on 7 October 2026, light style: congestion on the ring road.' },
-  { src: '/landing/capture-yogyakarta-1715-dark.webp', alt: 'Yogyakarta at 17:15 WIB on 7 October 2026, dark style: red and orange on the main corridors.' },
-] as const
+const FRAME = 'aspect-[16/10] rounded-md border border-divider overflow-hidden'
 
-export function HeroCaptures({ className }: { className?: string }) {
-  const [violet, blush, dark] = CAPTURES
-  return (
-    <figure className={cn('min-w-0', className)}>
-      <div className="relative mx-auto aspect-[5/4] w-full max-w-[40rem]">
-        <Image
-          src={violet.src}
-          alt={violet.alt}
-          width={1080}
-          height={1080}
-          sizes="(min-width: 1024px) 30vw, 60vw"
-          className="absolute left-0 top-[8%] w-[56%] h-auto rounded-md border border-border -rotate-6"
-        />
-        <Image
-          src={blush.src}
-          alt={blush.alt}
-          width={1080}
-          height={1080}
-          sizes="(min-width: 1024px) 30vw, 60vw"
-          className="absolute right-0 top-[8%] w-[56%] h-auto rounded-md border border-border rotate-6"
-        />
-        <Image
-          src={dark.src}
-          alt={dark.alt}
-          width={1080}
-          height={1080}
-          priority
-          sizes="(min-width: 1024px) 34vw, 70vw"
-          className="absolute left-1/2 top-0 w-[64%] h-auto -translate-x-1/2 rounded-md shadow-elevation-3"
-        />
-      </div>
-      <figcaption className="mt-lg text-center text-caption text-text-secondary">
-        Real captures from Maceut: Yogyakarta at 08:15 and 17:15, in three of its map styles.
-      </figcaption>
-    </figure>
-  )
-}
-
-/** A preview card's drawing area: same frame for all four, so the text below lines up. */
 function Frame({ children, label }: { children: React.ReactNode; label: string }) {
   return (
-    <div className="rounded-md border border-divider bg-canvas overflow-hidden">
+    <div className={cn(FRAME, 'bg-canvas')}>
       <p className="sr-only">{label}</p>
-      <div aria-hidden>{children}</div>
+      <div aria-hidden className="h-full">
+        {children}
+      </div>
     </div>
   )
 }
@@ -124,7 +81,7 @@ function Frame({ children, label }: { children: React.ReactNode; label: string }
 export function ZonePreview() {
   return (
     <Frame label="A list of zones next to a map with one zone drawn.">
-      <div className="grid grid-cols-[110px_1fr]">
+      <div className="grid h-full grid-cols-[110px_1fr]">
         <div className="p-sm space-y-xs border-r border-divider">
           <p className="flex items-center gap-xs text-micro font-semibold text-text-primary">
             <IconMap size={12} /> Zones
@@ -138,7 +95,7 @@ export function ZonePreview() {
             </p>
           ))}
         </div>
-        <svg viewBox="0 0 400 240" className="block w-full h-auto">
+        <svg viewBox="0 0 400 240" preserveAspectRatio="xMidYMid slice" className="block w-full h-full">
           <MapBase traffic={false} />
           <ZonePolygon points={[[150, 40], [300, 70], [282, 200], [128, 178]]} />
         </svg>
@@ -150,7 +107,7 @@ export function ZonePreview() {
 export function SchedulePreview() {
   return (
     <Frame label="A capture window form: zone, time, days, and how often to collect.">
-      <div className="p-md space-y-sm">
+      <div className="h-full p-md flex flex-col justify-center gap-sm">
         <p className="flex items-center gap-xs text-label font-semibold text-text-primary">
           <IconCalendar size={14} /> New capture window
         </p>
@@ -204,7 +161,7 @@ export function SchedulePreview() {
  */
 export function ReplayPreview() {
   return (
-    <div className="rounded-md border border-divider overflow-hidden bg-text-primary">
+    <div className={cn(FRAME, 'bg-text-primary')}>
       <ReplayVideo />
     </div>
   )
@@ -213,7 +170,7 @@ export function ReplayPreview() {
 export function ExportPreview() {
   return (
     <Frame label="Export options: a CSV of captures, a ZIP of frames, or an MP4 animation.">
-      <div className="p-md space-y-sm">
+      <div className="h-full p-md flex flex-col justify-center gap-sm">
         <p className="flex items-center gap-xs text-label font-semibold text-text-primary">
           <IconDownload size={14} /> Export
         </p>

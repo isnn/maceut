@@ -1,24 +1,10 @@
 import Link from 'next/link'
 import { PublicHeader } from '@/components/shared/PublicHeader'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
-import {
-  BandMap,
-  ExportPreview,
-  HeroCaptures,
-  ReplayPreview,
-  SchedulePreview,
-  ZonePreview,
-} from '@/features/marketing/components/LandingPreviews'
+import { BandMap, ExportPreview, ReplayPreview, SchedulePreview, ZonePreview } from '@/features/marketing/components/LandingPreviews'
+import { HeroStack } from '@/features/marketing/components/HeroStack'
 import { buttonClass, linkClass } from '@/components/ui/Button'
-import {
-  IconArrowRight,
-  IconClipboardList,
-  IconClock,
-  IconDownload,
-  IconGauge,
-  IconGlobe,
-  IconRoute,
-} from '@/components/ui/icons'
+import { IconArrowRight, IconGlobe } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
 import { PLAN_PRICE } from '@/lib/constants'
 import { PlanQuestions } from '@/features/marketing/components/PlanQuestions'
@@ -27,7 +13,11 @@ import type { Metadata } from 'next'
 
 /**
  * The public landing page (FE-36), laid out after the owner's concept: hero with real
- * captures, the four product areas, use cases, plans, FAQ, a closing band.
+ * captures, the four product areas, how it works, the problems it solves, plans, FAQ,
+ * a closing band.
+ *
+ * Backgrounds alternate (FE-40) so each section reads as its own band: white, grey,
+ * one purple band for How it works, then white and grey again, closing in pale purple.
  *
  * Content rule (antislop R-17/R-36/R-38): everything here describes what the product
  * does today. No customer logos, counts or testimonials: there are none to show yet,
@@ -62,31 +52,39 @@ const PRODUCT = [
   },
 ]
 
+/** A real sequence, so the numbers carry information (FE-40). */
+const STEPS = [
+  { title: 'Draw your zone.', body: 'Outline the corridor or district on the map and pick the road classes to collect.' },
+  { title: 'Set the hours.', body: 'Choose the days, the times and how often. Collection starts at the next time you set.' },
+  { title: 'Replay and export.', body: 'Play the window back in Studio, or download the CSV, the frames or an MP4.' },
+]
+
+/** Problem first, in the reader's words; then only what the product does today (FE-40). */
 const USE_CASES = [
   {
-    icon: IconGauge,
-    title: 'Traffic monitoring',
-    body: 'Set a window on the corridors you manage, then check each morning’s capture instead of sending staff out to count.',
+    title: 'Daily monitoring',
+    problem: 'Staff count traffic by hand at the same junctions every morning.',
+    solution: 'A capture window collects those corridors at 07:00 every weekday, on its own.',
   },
   {
-    icon: IconRoute,
-    title: 'Planning and operations',
-    body: 'Before and after a closure or a new signal: compare the same 07:00 window two weeks apart in Studio.',
+    title: 'Before and after a change',
+    problem: 'Nobody can show what the road was like before the closure or the new signal.',
+    solution: 'Compare the same 07:00 window from two weeks apart in Studio.',
   },
   {
-    icon: IconClock,
-    title: 'Historical analysis',
-    body: 'Replay the same hour across weeks to see when a road starts to jam, and whether it is getting earlier.',
+    title: 'When it starts to jam',
+    problem: '“It gets busy in the evening” is a guess, not a time.',
+    solution: 'Replay the same hour across weeks and see when the red starts, and whether it comes earlier.',
   },
   {
-    icon: IconClipboardList,
-    title: 'Research and engineering',
-    body: 'Export every capture as a timestamped CSV row, collected at the same times each day, ready for a study or a model.',
+    title: 'Data for a study',
+    problem: 'Surveys are one-off and taken at different hours.',
+    solution: 'Every capture is a timestamped CSV row, collected at the same times each day.',
   },
   {
-    icon: IconDownload,
-    title: 'Reporting',
-    body: 'Export the morning as an MP4 and put the replay in front of the people who decide.',
+    title: 'Reporting to decision-makers',
+    problem: 'A table of numbers doesn’t convince the people who decide.',
+    solution: 'Export the morning as an MP4 and play it in the meeting.',
   },
 ]
 
@@ -110,7 +108,8 @@ export default function LandingPage() {
 
       <main className="flex-1">
         {/* Hero: the one focal point is the app itself. */}
-        <section className={cn(WRAP, 'py-section grid grid-cols-1 laptop:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-xxl items-center')}>
+        <section className="bg-canvas">
+          <div className={cn(WRAP, 'py-section grid grid-cols-1 laptop:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-xxl items-center')}>
           <div>
             <h1 className="text-[36px] tablet:text-[44px] leading-[1.08] font-extrabold tracking-tight text-text-primary text-balance">
               Traffic data for the roads you choose, collected on your schedule.
@@ -130,11 +129,12 @@ export default function LandingPage() {
             </div>
             <p className="mt-lg text-caption text-text-secondary">No card needed to start.</p>
           </div>
-          <HeroCaptures />
+          <HeroStack />
+          </div>
         </section>
 
         {/* Product */}
-        <section id="product" className="scroll-mt-16 border-t border-border">
+        <section id="product" className="scroll-mt-16 bg-page">
           <div className={cn(WRAP, 'py-section grid grid-cols-1 laptop:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] gap-xxl')}>
             <div>
               <SectionHead label="Product" title="From a zone on the map to data in your report.">
@@ -146,30 +146,58 @@ export default function LandingPage() {
             </div>
             <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
               {PRODUCT.map((item) => (
-                <article key={item.title} className="bg-card border border-border rounded-lg p-md">
+                <article key={item.title} className="h-full flex flex-col bg-card border border-border rounded-lg p-md">
                   {item.preview}
-                  <h3 className="mt-md px-xs text-heading-sm text-text-primary">{item.title}</h3>
-                  <p className="mt-xs px-xs pb-xs text-body text-text-secondary">{item.body}</p>
+                  <h3 className="mt-md px-xs text-heading-sm text-text-primary truncate">{item.title}</h3>
+                  {/* Same height on every card: three lines, reserved even when the text is shorter. */}
+                  <p className="mt-xs px-xs pb-xs text-body text-text-secondary line-clamp-3 min-h-[calc(3*1.5em)] leading-[1.5]">
+                    {item.body}
+                  </p>
                 </article>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Use cases */}
-        <section className="border-t border-border bg-canvas-secondary">
+        {/* How it works: the one bold band. */}
+        <section id="how-it-works" className="scroll-mt-16 bg-primary text-on-primary">
           <div className={cn(WRAP, 'py-section')}>
-            <SectionHead label="Use cases" title="Built for how road agencies work.">
-              The same zones and windows serve the control room, the planning desk, and the people writing the report.
+            <p className="text-label font-semibold text-on-primary/80">How it works</p>
+            <h2 className="mt-sm text-[28px] leading-[1.2] font-bold tracking-tight text-balance">
+              Three steps, then it runs on its own.
+            </h2>
+            <ol className="mt-xl grid grid-cols-1 laptop:grid-cols-3 gap-xl">
+              {STEPS.map((step, i) => (
+                <li key={step.title} className="flex gap-md">
+                  <span className="w-9 h-9 shrink-0 rounded-full border-2 border-on-primary flex items-center justify-center text-label font-bold tabular-nums">
+                    {i + 1}
+                  </span>
+                  <div>
+                    <h3 className="text-heading-sm">{step.title}</h3>
+                    <p className="mt-xs text-body text-on-primary/90 max-w-[40ch]">{step.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        {/* Problems it solves */}
+        <section className="bg-canvas">
+          <div className={cn(WRAP, 'py-section')}>
+            <SectionHead label="Use cases" title="Problems it solves.">
+              What road agencies do today, and what changes once the capture runs on a schedule.
             </SectionHead>
             <div className="mt-xl grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-5 gap-lg">
               {USE_CASES.map((u) => (
-                <article key={u.title} className="bg-card border border-border rounded-lg p-lg">
-                  <span className="w-9 h-9 rounded-md bg-primary-soft text-primary flex items-center justify-center">
-                    <u.icon size={18} />
-                  </span>
-                  <h3 className="mt-md text-heading-sm text-text-primary">{u.title}</h3>
-                  <p className="mt-xs text-body text-text-secondary">{u.body}</p>
+                <article key={u.title} className="flex flex-col bg-canvas-secondary border border-border rounded-lg p-lg">
+                  <h3 className="text-heading-sm text-text-primary">{u.title}</h3>
+                  <p className="mt-md text-micro font-semibold uppercase tracking-wider text-text-muted">The problem</p>
+                  <p className="mt-xs text-body text-text-secondary">{u.problem}</p>
+                  <p className="mt-md pt-md border-t border-divider text-micro font-semibold uppercase tracking-wider text-primary">
+                    With Maceut
+                  </p>
+                  <p className="mt-xs text-body text-text-primary">{u.solution}</p>
                 </article>
               ))}
             </div>
@@ -177,7 +205,7 @@ export default function LandingPage() {
         </section>
 
         {/* Pricing */}
-        <section id="pricing" className="scroll-mt-16 border-t border-border">
+        <section id="pricing" className="scroll-mt-16 bg-page">
           <div className={cn(WRAP, 'py-section')}>
             <div className="flex flex-wrap items-end justify-between gap-lg">
               <SectionHead label="Pricing" title="Plans priced for public budgets.">
@@ -195,35 +223,39 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <div className={cn(WRAP, 'pb-section')}>
-          <PlanQuestions id="questions" />
-        </div>
+        <section className="bg-canvas">
+          <div className={cn(WRAP, 'py-section')}>
+            <PlanQuestions id="questions" />
+          </div>
+        </section>
 
         {/* Closing band */}
-        <section className={cn(WRAP, 'pb-section')}>
-          <div className="relative overflow-hidden rounded-lg border border-border bg-primary-soft px-xl py-xxl">
-            <BandMap />
-            <div className="relative grid grid-cols-1 laptop:grid-cols-[minmax(0,6fr)_minmax(0,4fr)_auto] gap-xl items-center">
-              <div>
-                <h2 className="text-[28px] leading-[1.2] font-bold tracking-tight text-text-primary text-balance">
-                  Start with one zone today.
-                </h2>
-                <p className="mt-sm text-body text-text-secondary max-w-[48ch]">
-                  Draw it, set a window, and the first capture runs at the time you chose.
-                </p>
-              </div>
-              <div className="flex items-start gap-md">
-                <IconGlobe size={28} className="text-primary shrink-0" />
-                <p className="text-body text-text-secondary">
-                  One zone free, for as long as you like. Paid plans from {PLAN_PRICE.standard.amount} a month when you
-                  need more.
-                </p>
-              </div>
-              <div className="flex flex-col items-start laptop:items-end gap-xs">
-                <Link href="/register" className={buttonClass()}>
-                  Draw your first zone, free
-                </Link>
-                <span className="text-caption text-text-secondary">No card needed.</span>
+        <section className="bg-canvas">
+          <div className={cn(WRAP, 'pb-section')}>
+            <div className="relative overflow-hidden rounded-lg border border-border bg-primary-soft px-xl py-xxl">
+              <BandMap />
+              <div className="relative grid grid-cols-1 laptop:grid-cols-[minmax(0,6fr)_minmax(0,4fr)_auto] gap-xl items-center">
+                <div>
+                  <h2 className="text-[28px] leading-[1.2] font-bold tracking-tight text-text-primary text-balance">
+                    Start with one zone today.
+                  </h2>
+                  <p className="mt-sm text-body text-text-secondary max-w-[48ch]">
+                    Draw it, set a window, and the first capture runs at the time you chose.
+                  </p>
+                </div>
+                <div className="flex items-start gap-md">
+                  <IconGlobe size={28} className="text-primary shrink-0" />
+                  <p className="text-body text-text-secondary">
+                    One zone free, for as long as you like. Paid plans from {PLAN_PRICE.standard.amount} a month when you
+                    need more.
+                  </p>
+                </div>
+                <div className="flex flex-col items-start laptop:items-end gap-xs">
+                  <Link href="/register" className={buttonClass()}>
+                    Draw your first zone, free
+                  </Link>
+                  <span className="text-caption text-text-secondary">No card needed.</span>
+                </div>
               </div>
             </div>
           </div>
