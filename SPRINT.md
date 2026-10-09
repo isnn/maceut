@@ -196,10 +196,6 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
 [2026-10-08f] FE-40 — landing: hero interaktif, kartu seragam, masalah → solusi.
 
-[2026-10-09] FE-41 — landing & pricing: restack hero, ikon langkah, label & copy dirapikan.
-  Hover/fokus/tap: kartu meluncur keluar ~220 ms dengan z-index lama, lalu naik ke atas dan tegak; hover lain diabaikan selama animasi; reduced motion → langsung. Hero `overflow-x-clip` supaya kartu yang keluar tak bikin scroll.
-  Cek headless 1440/390: overflow 0, 0 console error, urutan awal gelap di atas & video di bawah, tengah animasi violet geser keluar di z 2 → akhir z 4; pricing tanpa subjudul/caption/"What these mean", 5 poin per kartu.
-
   - Hero: caption dihapus; `HeroStack` (client) — 3 capture + video replay, kartu yang di-hover,
     difokus, atau di-tap naik ke atas & lurus; video di pojok kanan bawah, sedikit menumpuk.
   - Product: semua pratinjau di bingkai 16:10, judul 1 baris, isi 3 baris (tinggi sama).
@@ -208,6 +204,10 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   - Latar: putih → abu (`page`) → ungu → putih → abu → putih → band `primary-soft`.
   VERIFIKASI: headless 1440 & 390 — 0 overflow, 0 error konsol, 4 bingkai & 4 blok teks sama
   tinggi, hover/fokus menaikkan kartu, video termuat; tsc + eslint bersih.
+
+[2026-10-09] FE-41 — landing & pricing: restack hero, ikon langkah, label & copy dirapikan.
+  Hover/fokus/tap: kartu meluncur keluar ~220 ms dengan z-index lama, lalu naik ke atas dan tegak; hover lain diabaikan selama animasi; reduced motion → langsung. Hero `overflow-x-clip` supaya kartu yang keluar tak bikin scroll.
+  Cek headless 1440/390: overflow 0, 0 console error, urutan awal gelap di atas & video di bawah, tengah animasi violet geser keluar di z 2 → akhir z 4; pricing tanpa subjudul/caption/"What these mean", 5 poin per kartu.
 
 [2026-10-08c] FE-38 — landing memakai keluaran asli.
 
