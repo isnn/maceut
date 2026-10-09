@@ -2,7 +2,9 @@
 
 import { cn } from '@/lib/utils'
 import { IconCheck } from '@/components/ui/icons'
-import { Button } from '@/components/ui/Button'
+import Link from 'next/link'
+import { publicPlanLink } from '../plan-links'
+import { Button, buttonClass } from '@/components/ui/Button'
 import { PLAN_HIGHLIGHTS, PLAN_LABEL, PLAN_ORDER, PLAN_PRICE } from '@/lib/constants'
 import type { Plan } from '@/features/auth/types'
 
@@ -19,10 +21,15 @@ interface PlanCardsProps {
    * someone is deciding whether to ask for.
    */
   disabledPlan?: (plan: Plan) => boolean
+  /**
+   * Public pages (FE-37): each card links to sign-up (paid plans carry `?plan=`). A flag,
+   * not a function, so server pages can pass it to this client component.
+   */
+  publicLinks?: boolean
   className?: string
 }
 
-export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabledPlan, className }: PlanCardsProps) {
+export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabledPlan, publicLinks, className }: PlanCardsProps) {
   return (
     <div className={cn('grid grid-cols-1 tablet:grid-cols-3 gap-lg items-start', className)}>
       {PLAN_ORDER.map((plan) => {
@@ -37,15 +44,17 @@ export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabl
             )}
           >
             {recommended && (
-              <span className="absolute -top-2.5 left-xl bg-primary text-on-primary text-micro font-semibold rounded-xs px-sm py-[3px] uppercase tracking-wide">
-                Most popular
+              // A reason, not a popularity claim (FE-36): nothing measures popularity, but
+              // Standard's 5 zones and main roads are sized for one city.
+              <span className="absolute -top-2.5 left-xl bg-primary text-on-primary text-micro font-semibold rounded-xs px-sm py-[3px]">
+                Best for one city
               </span>
             )}
             <div>
               <p className="text-heading-sm text-text-primary">{PLAN_LABEL[plan]}</p>
               <p className="mt-sm flex items-baseline gap-xs">
                 <span className="text-page-title font-bold text-text-primary">{PLAN_PRICE[plan].amount}</span>
-                <span className="text-caption text-text-muted">{PLAN_PRICE[plan].period}</span>
+                <span className="text-caption text-text-secondary">{PLAN_PRICE[plan].period}</span>
               </p>
             </div>
             <ul className="space-y-sm flex-1">
@@ -56,6 +65,11 @@ export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabl
                 </li>
               ))}
             </ul>
+            {publicLinks && (
+              <Link href={publicPlanLink(plan).href} className={buttonClass(recommended ? 'primary' : 'secondary')}>
+                {publicPlanLink(plan).label}
+              </Link>
+            )}
             {actionLabel && onSelect && (
               <Button
                 variant={recommended || isSelected ? 'primary' : 'secondary'}

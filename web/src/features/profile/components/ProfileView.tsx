@@ -9,7 +9,9 @@ import { DialogCloseX } from '@/components/ui/DialogCloseX'
 import { PlanPill } from '@/components/ui/Badge'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { UsageMeter, AttributeRow } from '@/components/ui/UsageMeter'
+import { Alert } from '@/components/ui/Alert'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
+import { forgetIntendedPlan, planFromUrl } from '@/features/marketing/intended-plan'
 import { cn } from '@/lib/utils'
 import { IconCheck } from '@/components/ui/icons'
 import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER, PLAN_PRICE, ROAD_CLASS_LABEL } from '@/lib/constants'
@@ -45,7 +47,13 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
   const [tab, setTab] = useState<Tab>(variant === 'internal' ? 'Account' : 'Usage')
   const [pendingPlan, setPendingPlan] = useState<Plan | null>(null)
   const [planError, setPlanError] = useState<string | null>(null)
-  const [pickerOpen, setPickerOpen] = useState(false)
+  /** `?plan=` from the pricing page after sign-up (FE-37): open the picker on that plan. */
+  const [intendedPlan] = useState(() => (variant === 'internal' ? null : planFromUrl()))
+  const [pickerOpen, setPickerOpen] = useState(intendedPlan !== null)
+  // Shown once: the intent has done its job when the picker opens on it.
+  useEffect(() => {
+    if (intendedPlan) forgetIntendedPlan()
+  }, [intendedPlan])
 
   useEffect(() => {
     if (variant === 'internal') return
@@ -266,6 +274,12 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
               <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[60rem] max-h-[90vh] overflow-y-auto bg-page border border-border rounded-lg p-xl shadow-elevation-3 space-y-lg">
                 <DialogCloseX />
                 <Dialog.Title className="pr-xl text-section-title text-text-primary">Change plan</Dialog.Title>
+                {intendedPlan && usage.plan !== intendedPlan && (
+                  <Alert variant="info">
+                    You picked {PLAN_LABEL[intendedPlan]}. Payment is coming soon, and your account stays on{' '}
+                    {PLAN_LABEL[usage.plan]} until then.
+                  </Alert>
+                )}
                 <PlanCards
                   selected={usage.plan}
                   onSelect={(plan) => {

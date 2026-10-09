@@ -46,7 +46,7 @@ export function Dropdown({ trigger, triggerClassName, triggerLabel, align = 'rig
         aria-expanded={open}
         aria-label={triggerLabel}
         onClick={() => setOpen((v) => !v)}
-        className={cn('transition-colors focus-visible:outline-2 focus-visible:outline-primary', triggerClassName)}
+        className={cn('transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-primary', triggerClassName)}
       >
         {trigger}
       </button>

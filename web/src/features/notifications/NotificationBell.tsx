@@ -284,7 +284,7 @@ export function NotificationBell() {
                           onClick={() => markRowRead(row)}
                           aria-label={`Mark “${row.title}” as read`}
                           title="Mark as read"
-                          className="absolute bottom-sm right-md w-8 h-8 rounded-md flex items-center justify-center text-primary bg-primary-soft/60 hover:bg-primary hover:text-on-primary transition-colors focus:outline-none focus-visible:outline-2 focus-visible:outline-primary"
+                          className="absolute bottom-sm right-md w-8 h-8 rounded-md flex items-center justify-center text-primary bg-primary-soft/60 hover:bg-primary hover:text-on-primary transition-colors focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-primary"
                         >
                           <IconCheckCheck size={16} />
                         </button>

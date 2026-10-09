@@ -1704,7 +1704,7 @@ function ExportDialog({
                       onClick={item.onSelect}
                       className={cn(
                         'flex items-center justify-between gap-md w-full text-left rounded-lg border border-border px-lg py-md transition-colors',
-                        'hover:border-primary hover:bg-primary-soft/40 focus:outline-none focus-visible:outline-2 focus-visible:outline-primary',
+                        'hover:border-primary hover:bg-primary-soft/40 focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-primary',
                         'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-transparent',
                       )}
                     >

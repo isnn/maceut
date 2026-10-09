@@ -161,6 +161,11 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-33** Nama kelas jalan dalam bahasa Inggris (Highways · Highways + main roads · All roads); id internal tetap | permintaan user |
 | ✅ | **FE-34** Konsol staf: kolom Paused terpisah, spasi overview, halaman usage per akun (data nyata), tipe staf Superadmin / Admin (Admin hanya Overview & Users) | review user |
 | ✅ | **FE-35** Konsol staf: penyimpanan & capture terukur (tanpa peringatan "belum terukur"), kolom Storage di Users, subjudul Overview/Users dihapus | review user |
+| ✅ | **FE-36** Landing page sesuai konsep user (layout tetap; copy & gaya diperbaiki, antislop DURING) | konsep user |
+| ✅ | **FE-37** Landing untuk konversi: harga di hero, FAQ, CTA per paket + niat paket, halaman /pricing & /terms, metadata, kontras text-muted | review user |
+| ✅ | **FE-38** Landing: capture & replay asli (Yogyakarta) di hero/Product, FAQ accordion, tanpa How it works, Export disederhanakan, harga dihapus dari hero | review user |
+| ✅ | **FE-40** Landing: How it works kembali (band ungu), kartu Product seragam 16:10 + teks 3 baris, Use cases jadi masalah → solusi, hero tumpuk interaktif (hover/fokus/tap → ke depan) dengan video di pojok kanan bawah, latar section berselang | review user |
+| ✅ | **FE-41** Landing & pricing: hero tumpuk ditarik keluar lalu ditaruh di atas (default kartu gelap di atas, video paling bawah), ikon tiap langkah How it works, label section dihapus, FAQ jadi "Common questions", pricing tanpa subjudul / catatan paid plans / "What these mean", "Rp 490k" tak disebut di luar kartu harga, poin zona & capture dipisah | review user |
 | ✅ | **BE-19** `GET /zones/:id/frames` — frame Studio dibatasi riwayat paket (Free 7 hari, Standard 90, Premium semua), maks 5.000; export menolak rentang di luar riwayat (403 HISTORY_LIMIT_EXCEEDED, BR-007) | review user |
 | ✅ | **FE-39** Studio: timeframe hanya menawarkan riwayat paket ("All 7 days" / "All 90 days" / "All", baris "Your plan keeps N days of history · Upgrade"); zona terakhir diingat saat kembali ke Studio | review user |
 | ✅ | **BE-18** Worker tahan macet: batas render 3 menit tanpa progres, channel RabbitMQ per consumer + reconnect, restart beneran (tanpa `tsx watch`), healthcheck heartbeat, capture terlambat → `missed` (opsi C), `captured_at` = waktu sampel | insiden 2026-10-08 |
@@ -189,7 +194,65 @@ Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
-[2026-10-08c] BE-19 + FE-39 — riwayat paket di Studio, zona Studio diingat.
+[2026-10-08f] FE-40 — landing: hero interaktif, kartu seragam, masalah → solusi.
+
+  - Hero: caption dihapus; `HeroStack` (client) — 3 capture + video replay, kartu yang di-hover,
+    difokus, atau di-tap naik ke atas & lurus; video di pojok kanan bawah, sedikit menumpuk.
+  - Product: semua pratinjau di bingkai 16:10, judul 1 baris, isi 3 baris (tinggi sama).
+  - How it works kembali (3 langkah berurutan, band `primary`, teks putih ≥4,7:1); link nav kembali.
+  - Use cases: 5 kasus "The problem / With Maceut", hanya fitur yang ada hari ini.
+  - Latar: putih → abu (`page`) → ungu → putih → abu → putih → band `primary-soft`.
+  VERIFIKASI: headless 1440 & 390 — 0 overflow, 0 error konsol, 4 bingkai & 4 blok teks sama
+  tinggi, hover/fokus menaikkan kartu, video termuat; tsc + eslint bersih.
+
+[2026-10-09] FE-41 — landing & pricing: restack hero, ikon langkah, label & copy dirapikan.
+  Hover/fokus/tap: kartu meluncur keluar ~220 ms dengan z-index lama, lalu naik ke atas dan tegak; hover lain diabaikan selama animasi; reduced motion → langsung. Hero `overflow-x-clip` supaya kartu yang keluar tak bikin scroll.
+  Cek headless 1440/390: overflow 0, 0 console error, urutan awal gelap di atas & video di bawah, tengah animasi violet geser keluar di z 2 → akhir z 4; pricing tanpa subjudul/caption/"What these mean", 5 poin per kartu.
+
+[2026-10-08c] FE-38 — landing memakai keluaran asli.
+
+  - Hero: tiga capture asli Yogyakarta (08:15 violet, 17:15 gelap & terang) disusun seperti kipas
+    cetakan; keterangan jujur di bawahnya. Juga jadi gambar Open Graph (metadataBase dari
+    NEXT_PUBLIC_APP_URL).
+  - Product › Traffic replay: video replay asli (25 Sep 2026), muted/loop/inline; prefers-reduced-
+    motion → poster + kontrol, tanpa autoplay. MP4 cadangan dibuat dengan ffmpeg.
+  - Permintaan user: baris harga di hero dihapus; FAQ jadi accordion (Base UI); bagian "How it works"
+    & tautannya dihapus; kartu Export hanya CSV / ZIP / MP4.
+  VERIFIKASI: headless 1440 & 390: 0 overflow, gambar & video termuat (webm diputar), accordion
+  dibuka lewat keyboard, reduced-motion → video berhenti + kontrol, 0 respons gagal, 0 error konsol.
+
+[2026-10-08b] FE-37 — landing untuk konversi.
+
+  - Hero: CTA "Draw your first zone, free" + "See pricing"; jangkar harga dari PLAN_PRICE. Pratinjau
+    hero di ponsel hanya peta. Use cases menyebut artefak nyata (Studio, MP4, CSV).
+  - Pricing: kartu paket ber-CTA (Free → /register; Standard/Premium → /register?plan=…), definisi
+    "capture"; halaman baru /pricing (kartu, tabel perbandingan dari PLAN_LIMITS, istilah, FAQ, CTA).
+  - Niat paket: ?plan= disimpan di sessionStorage, akun tetap Free (BR-001, API tidak berubah);
+    setelah onboarding → /profile?plan=… membuka pemilih paket dengan catatan "Payment is coming soon".
+  - FAQ (PlanQuestions) dengan jawaban nyata; sumber data tidak disebut di landing (keputusan
+    pemilik) → halaman /terms (DRAF, perlu review hukum) menyebut HERE & OpenStreetMap;
+    [CONTACT EMAIL] masih placeholder.
+  - Metadata: template judul "%s · Maceut", deskripsi, Open Graph (gambar menunggu sampel asli).
+  - Kontras: text-muted #9A9AA5 → #6A6A74 (≥4,5:1 di canvas, page, primary-soft); text-secondary
+    #6B6B76 → #575762 agar tetap ada jenjang. design.md diperbarui.
+  VERIFIKASI: klik-tembus headless 1440 & 390 di /, /pricing, /terms: 0 overflow, 0 tautan rusak,
+  0 error konsol, "HERE" tidak tampil di / dan /pricing; tabel pricing menggulir di kotaknya di
+  ponsel; "Start with Standard" → /register?plan=standard dan niat tersimpan. tsc + eslint bersih.
+
+[2026-10-08] FE-36 — landing page sesuai konsep user (antislop DURING).
+
+  - Layout konsep dipertahankan: hero + pratinjau aplikasi, How it works, Product (4 pratinjau),
+    Use cases (5), Pricing, band penutup, footer. Copy ditulis ulang tanpa klaim palsu.
+  - Keputusan pemilik (R-37): band penutup jujur (tanpa "trusted worldwide"); hanya tautan yang
+    berfungsi (tanpa Docs/Support/bahasa/demo/kontak/toggle tahunan); 3 paket nyata, Standard
+    "Best for one city"; pratinjau produk berbasis kode (LandingPreviews.tsx).
+  - PLAN_HIGHLIGHTS diperbaiki ke fakta (bukan "Images only", "GIF", "API · SSO · SLA").
+  - Menu mobile berfungsi (Esc, keyboard). Perbaikan global: ring fokus keyboard tak terlihat di
+    Tailwind v4 (focus:outline-none menimpa) — tambah focus-visible:outline-solid di 13 file.
+  VERIFIKASI: klik-tembus headless desktop 1440 & mobile 390 — 0 overflow, 0 error konsol, semua
+  anchor punya target, menu buka/tutup (klik, Enter, Esc); tsc + eslint bersih.
+
+[2026-10-08e] BE-19 + FE-39 — riwayat paket di Studio, zona Studio diingat.
 
   - API: `GET /zones/:id/frames` (service `framesForZone`, repo `listFramesSince`) mengirim
     capture `done` tanpa traffic, terlama dulu, sejak `historySince(plan)`; plus `historyDays`.
@@ -201,7 +264,7 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   VERIFIKASI: 490 test API (baru: endpoint frames per paket, export di luar riwayat), tsc +
   eslint api & web bersih. Studio: DRY RUN, daftar uji diserahkan ke user.
 
-[2026-10-08b] BE-18 — worker tahan macet (insiden 13:47–16:1x WIB).
+[2026-10-08d] BE-18 — worker tahan macet (insiden 13:47–16:1x WIB).
 
   - Penyebab: render gambar capture hang (`page.evaluate` tanpa batas) saat web container
     di-restart; ack tak pernah terkirim, RabbitMQ menutup channel bersama di batas 30 menit

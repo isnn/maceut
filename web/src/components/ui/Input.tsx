@@ -28,7 +28,7 @@ export function PasswordInput({ className, ...props }: Omit<InputHTMLAttributes<
         onClick={() => setVisible((v) => !v)}
         aria-label={visible ? 'Hide password' : 'Show password'}
         aria-pressed={visible}
-        className="absolute right-md top-1/2 -translate-y-1/2 p-xs rounded-xs text-text-muted hover:text-text-primary focus:outline-none focus-visible:outline-2 focus-visible:outline-primary transition-colors"
+        className="absolute right-md top-1/2 -translate-y-1/2 p-xs rounded-xs text-text-muted hover:text-text-primary focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-primary transition-colors"
       >
         {visible ? <IconEyeOff size={18} /> : <IconEye size={18} />}
       </button>
@@ -40,7 +40,7 @@ export function Checkbox({ className, ...props }: InputHTMLAttributes<HTMLInputE
   return (
     <input
       type="checkbox"
-      className={cn('w-5 h-5 rounded-xs border-border text-primary focus:outline-none focus-visible:outline-2 focus-visible:outline-primary', className)}
+      className={cn('w-5 h-5 rounded-xs border-border text-primary focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-primary', className)}
       {...props}
     />
   )

@@ -45,8 +45,8 @@ const config: Config = {
 
         // Text
         'text-primary':   '#1F1F24',
-        'text-secondary': '#6B6B76',
-        'text-muted':     '#9A9AA5',
+        'text-secondary': '#575762',
+        'text-muted':     '#6A6A74',
         'on-primary':     '#FFFFFF',
 
         // Semantic — Success
@@ -145,8 +145,8 @@ export default config
 | Token Tailwind | Hex | Penggunaan |
 |---------------|-----|-----------|
 | `text-text-primary` | `#1F1F24` | Heading, body utama |
-| `text-text-secondary` | `#6B6B76` | Label, info pendukung |
-| `text-text-muted` | `#9A9AA5` | Metadata, helper text |
+| `text-text-secondary` | `#575762` | Label, info pendukung |
+| `text-text-muted` | `#6A6A74` | Metadata, helper text |
 | `text-on-primary` | `#FFFFFF` | Teks di atas permukaan ungu |
 
 ### Semantic

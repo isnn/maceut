@@ -61,7 +61,7 @@ export function SortableTh({ active, direction, onSort, className, children, ...
         className={cn(
           'w-full inline-flex items-center gap-xs uppercase tracking-wide',
           TH_PADDING,
-          'hover:text-text-primary focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary transition-colors',
+          'hover:text-text-primary focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary transition-colors',
           active ? 'text-text-primary' : 'text-text-muted',
           alignEnd && 'justify-end'
         )}
@@ -206,7 +206,7 @@ function PageButton({
       aria-current={active ? 'page' : undefined}
       className={cn(
         'inline-grid place-items-center h-8 min-w-8 px-sm rounded-md border text-caption font-semibold tabular-nums transition-colors',
-        'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+        'focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         active
           ? 'bg-primary border-primary text-on-primary'
           : 'bg-canvas border-border text-text-secondary hover:border-primary hover:text-text-primary',

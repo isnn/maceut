@@ -75,19 +75,11 @@ export const PLAN_PRICE: Record<Plan, { amount: string; period: string }> = {
 
 /** Bullet list shown on plan cards (landing, sign up, onboarding). */
 export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
-  free: ['1 zone · 10 captures / day', 'Highways', '7-day frame history', 'Images only, no animation export'],
-  standard: [
-    '5 zones · 50 captures / day',
-    'Highways + main roads',
-    '90-day history · CSV export',
-    'GIF + MP4 animation export',
-  ],
-  premium: [
-    '25 zones · 100 captures / day',
-    'Adds city and local streets',
-    'Unlimited history · 15-minute interval',
-    'API access · SSO · SLA',
-  ],
+  // Facts only (FE-36): every line comes from PLAN_LIMITS / the API's plan rules. Every
+  // plan exports ZIP, WebM and MP4, so export formats are not listed as a tier difference.
+  free: ['1 zone', '10 captures a day', 'Highways', 'One capture a day per window', '7 days of history in CSV'],
+  standard: ['5 zones', '50 captures a day', 'Highways + main roads', 'Hourly captures', '90 days of history in CSV'],
+  premium: ['25 zones', '100 captures a day', 'All roads, down to local streets', 'Captures every 15 minutes', 'Full history in CSV'],
 }
 
 /**
