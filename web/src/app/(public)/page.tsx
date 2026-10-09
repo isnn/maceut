@@ -4,9 +4,8 @@ import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { BandMap, ExportPreview, ReplayPreview, SchedulePreview, ZonePreview } from '@/features/marketing/components/LandingPreviews'
 import { HeroStack } from '@/features/marketing/components/HeroStack'
 import { buttonClass, linkClass } from '@/components/ui/Button'
-import { IconArrowRight, IconGlobe } from '@/components/ui/icons'
+import { IconArrowRight, IconCalendar, IconFilm, IconGlobe, IconPencil } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
-import { PLAN_PRICE } from '@/lib/constants'
 import { PlanQuestions } from '@/features/marketing/components/PlanQuestions'
 import { PublicFooter } from '@/components/shared/PublicFooter'
 import type { Metadata } from 'next'
@@ -26,7 +25,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: { absolute: 'Maceut: scheduled traffic capture for road agencies' },
-  description: `Draw a zone, set the hours, and Maceut collects traffic flow on schedule so you can replay or export it. Free for one zone, paid plans from ${PLAN_PRICE.standard.amount} a month.`,
+  description: `Draw a zone, set the hours, and Maceut collects traffic flow on schedule so you can replay or export it. Free for one zone.`,
 }
 
 const PRODUCT = [
@@ -54,9 +53,9 @@ const PRODUCT = [
 
 /** A real sequence, so the numbers carry information (FE-40). */
 const STEPS = [
-  { title: 'Draw your zone.', body: 'Outline the corridor or district on the map and pick the road classes to collect.' },
-  { title: 'Set the hours.', body: 'Choose the days, the times and how often. Collection starts at the next time you set.' },
-  { title: 'Replay and export.', body: 'Play the window back in Studio, or download the CSV, the frames or an MP4.' },
+  { icon: IconPencil, title: 'Draw your zone.', body: 'Outline the corridor or district on the map and pick the road classes to collect.' },
+  { icon: IconCalendar, title: 'Set the hours.', body: 'Choose the days, the times and how often. Collection starts at the next time you set.' },
+  { icon: IconFilm, title: 'Replay and export.', body: 'Play the window back in Studio, or download the CSV, the frames or an MP4.' },
 ]
 
 /** Problem first, in the reader's words; then only what the product does today (FE-40). */
@@ -88,12 +87,12 @@ const USE_CASES = [
   },
 ]
 
-/** Section heading: a small sentence-case label in the brand colour, then the title. */
-function SectionHead({ label, title, children, className }: { label: string; title: string; children?: React.ReactNode; className?: string }) {
+/** Section heading: the title, with an optional small label above it in the brand colour. */
+function SectionHead({ label, title, children, className }: { label?: string; title: string; children?: React.ReactNode; className?: string }) {
   return (
     <div className={className}>
-      <p className="text-label font-semibold text-primary">{label}</p>
-      <h2 className="mt-sm text-[28px] leading-[1.2] font-bold tracking-tight text-text-primary text-balance">{title}</h2>
+      {label && <p className="mb-sm text-label font-semibold text-primary">{label}</p>}
+      <h2 className="text-[28px] leading-[1.2] font-bold tracking-tight text-text-primary text-balance">{title}</h2>
       {children && <p className="mt-md text-body text-text-secondary max-w-[52ch]">{children}</p>}
     </div>
   )
@@ -107,8 +106,9 @@ export default function LandingPage() {
       <PublicHeader />
 
       <main className="flex-1">
-        {/* Hero: the one focal point is the app itself. */}
-        <section className="bg-canvas">
+        {/* Hero: the one focal point is the app itself. Clipped sideways so a card pulled
+            out of the stack never makes the page scroll. */}
+        <section className="bg-canvas overflow-x-clip">
           <div className={cn(WRAP, 'py-section grid grid-cols-1 laptop:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-xxl items-center')}>
           <div>
             <h1 className="text-[36px] tablet:text-[44px] leading-[1.08] font-extrabold tracking-tight text-text-primary text-balance">
@@ -137,7 +137,7 @@ export default function LandingPage() {
         <section id="product" className="scroll-mt-16 bg-page">
           <div className={cn(WRAP, 'py-section grid grid-cols-1 laptop:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] gap-xxl')}>
             <div>
-              <SectionHead label="Product" title="From a zone on the map to data in your report.">
+              <SectionHead title="From a zone on the map to data in your report.">
                 One workspace for the whole job: define the area, collect on a schedule, look back, and export.
               </SectionHead>
               <Link href="/register" className={cn(buttonClass(), 'mt-xl')}>
@@ -162,18 +162,18 @@ export default function LandingPage() {
         {/* How it works: the one bold band. */}
         <section id="how-it-works" className="scroll-mt-16 bg-primary text-on-primary">
           <div className={cn(WRAP, 'py-section')}>
-            <p className="text-label font-semibold text-on-primary/80">How it works</p>
-            <h2 className="mt-sm text-[28px] leading-[1.2] font-bold tracking-tight text-balance">
+            <h2 className="text-[28px] leading-[1.2] font-bold tracking-tight text-balance">
               Three steps, then it runs on its own.
             </h2>
             <ol className="mt-xl grid grid-cols-1 laptop:grid-cols-3 gap-xl">
               {STEPS.map((step, i) => (
                 <li key={step.title} className="flex gap-md">
-                  <span className="w-9 h-9 shrink-0 rounded-full border-2 border-on-primary flex items-center justify-center text-label font-bold tabular-nums">
-                    {i + 1}
+                  <span className="w-11 h-11 shrink-0 rounded-full border-2 border-on-primary flex items-center justify-center" aria-hidden>
+                    <step.icon size={20} />
                   </span>
                   <div>
-                    <h3 className="text-heading-sm">{step.title}</h3>
+                    <p className="text-caption font-semibold text-on-primary/80 tabular-nums">Step {i + 1}</p>
+                    <h3 className="mt-xs text-heading-sm">{step.title}</h3>
                     <p className="mt-xs text-body text-on-primary/90 max-w-[40ch]">{step.body}</p>
                   </div>
                 </li>
@@ -208,7 +208,7 @@ export default function LandingPage() {
         <section id="pricing" className="scroll-mt-16 bg-page">
           <div className={cn(WRAP, 'py-section')}>
             <div className="flex flex-wrap items-end justify-between gap-lg">
-              <SectionHead label="Pricing" title="Plans priced for public budgets.">
+              <SectionHead title="Plans priced for public budgets.">
                 Start free with one zone. Move up when you need more zones, more captures, or a finer interval. Every
                 plan exports CSV, image frames and video.
               </SectionHead>
@@ -246,8 +246,7 @@ export default function LandingPage() {
                 <div className="flex items-start gap-md">
                   <IconGlobe size={28} className="text-primary shrink-0" />
                   <p className="text-body text-text-secondary">
-                    One zone free, for as long as you like. Paid plans from {PLAN_PRICE.standard.amount} a month when you
-                    need more.
+                    One zone free, for as long as you like.
                   </p>
                 </div>
                 <div className="flex flex-col items-start laptop:items-end gap-xs">

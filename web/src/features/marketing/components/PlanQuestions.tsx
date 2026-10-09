@@ -58,9 +58,8 @@ export function PlanQuestions({ id }: { id?: string }) {
   return (
     <section id={id} aria-labelledby="faq-title" className="scroll-mt-16 grid grid-cols-1 laptop:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] gap-xxl">
       <div>
-        <p className="text-label font-semibold text-primary">FAQ</p>
-        <h2 id="faq-title" className="mt-sm text-[28px] leading-[1.2] font-bold tracking-tight text-text-primary text-balance">
-          Questions before you start
+        <h2 id="faq-title" className="text-[28px] leading-[1.2] font-bold tracking-tight text-text-primary text-balance">
+          Common questions
         </h2>
       </div>
       <Accordion.Root defaultValue={[QUESTIONS[0]!.q]} className="border-t border-border">

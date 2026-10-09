@@ -165,6 +165,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-37** Landing untuk konversi: harga di hero, FAQ, CTA per paket + niat paket, halaman /pricing & /terms, metadata, kontras text-muted | review user |
 | ✅ | **FE-38** Landing: capture & replay asli (Yogyakarta) di hero/Product, FAQ accordion, tanpa How it works, Export disederhanakan, harga dihapus dari hero | review user |
 | ✅ | **FE-40** Landing: How it works kembali (band ungu), kartu Product seragam 16:10 + teks 3 baris, Use cases jadi masalah → solusi, hero tumpuk interaktif (hover/fokus/tap → ke depan) dengan video di pojok kanan bawah, latar section berselang | review user |
+| ✅ | **FE-41** Landing & pricing: hero tumpuk ditarik keluar lalu ditaruh di atas (default kartu gelap di atas, video paling bawah), ikon tiap langkah How it works, label section dihapus, FAQ jadi "Common questions", pricing tanpa subjudul / catatan paid plans / "What these mean", "Rp 490k" tak disebut di luar kartu harga, poin zona & capture dipisah | review user |
 | ✅ | **BE-19** `GET /zones/:id/frames` — frame Studio dibatasi riwayat paket (Free 7 hari, Standard 90, Premium semua), maks 5.000; export menolak rentang di luar riwayat (403 HISTORY_LIMIT_EXCEEDED, BR-007) | review user |
 | ✅ | **FE-39** Studio: timeframe hanya menawarkan riwayat paket ("All 7 days" / "All 90 days" / "All", baris "Your plan keeps N days of history · Upgrade"); zona terakhir diingat saat kembali ke Studio | review user |
 | ✅ | **BE-18** Worker tahan macet: batas render 3 menit tanpa progres, channel RabbitMQ per consumer + reconnect, restart beneran (tanpa `tsx watch`), healthcheck heartbeat, capture terlambat → `missed` (opsi C), `captured_at` = waktu sampel | insiden 2026-10-08 |
@@ -194,6 +195,10 @@ Catat setiap task yang selesai.
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
 [2026-10-08f] FE-40 — landing: hero interaktif, kartu seragam, masalah → solusi.
+
+[2026-10-09] FE-41 — landing & pricing: restack hero, ikon langkah, label & copy dirapikan.
+  Hover/fokus/tap: kartu meluncur keluar ~220 ms dengan z-index lama, lalu naik ke atas dan tegak; hover lain diabaikan selama animasi; reduced motion → langsung. Hero `overflow-x-clip` supaya kartu yang keluar tak bikin scroll.
+  Cek headless 1440/390: overflow 0, 0 console error, urutan awal gelap di atas & video di bawah, tengah animasi violet geser keluar di z 2 → akhir z 4; pricing tanpa subjudul/caption/"What these mean", 5 poin per kartu.
 
   - Hero: caption dihapus; `HeroStack` (client) — 3 capture + video replay, kartu yang di-hover,
     difokus, atau di-tap naik ke atas & lurus; video di pojok kanan bawah, sedikit menumpuk.
