@@ -1,7 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { IconCheck } from '@/components/ui/icons'
+import { IconArrowRight, IconCheck } from '@/components/ui/icons'
 import Link from 'next/link'
 import { publicPlanLink } from '../plan-links'
 import { Button, buttonClass } from '@/components/ui/Button'
@@ -29,6 +29,8 @@ interface PlanCardsProps {
   className?: string
 }
 
+const PUBLIC_VARIANT = { free: 'tint', standard: 'primary', premium: 'ink' } as const satisfies Record<Plan, Parameters<typeof buttonClass>[0]>
+
 export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabledPlan, publicLinks, className }: PlanCardsProps) {
   return (
     <div className={cn('grid grid-cols-1 tablet:grid-cols-3 gap-lg items-start', className)}>
@@ -44,10 +46,10 @@ export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabl
             )}
           >
             {recommended && (
-              // A reason, not a popularity claim (FE-36): nothing measures popularity, but
-              // Standard's 5 zones and main roads are sized for one city.
+              // A reason, not a popularity claim (FE-36, FE-42): nothing measures popularity,
+              // but Standard's 5 zones, main roads and hourly captures cover one city.
               <span className="absolute -top-2.5 left-xl bg-primary text-on-primary text-micro font-semibold rounded-xs px-sm py-[3px]">
-                Best for one city
+                Room for a whole city
               </span>
             )}
             <div>
@@ -66,8 +68,11 @@ export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabl
               ))}
             </ul>
             {publicLinks && (
-              <Link href={publicPlanLink(plan).href} className={buttonClass(recommended ? 'primary' : 'secondary')}>
+              // One weight per plan (FE-42): soft for Free, the brand colour for the
+              // recommended plan, ink for the top one. Never two of the same.
+              <Link href={publicPlanLink(plan).href} className={cn(buttonClass(PUBLIC_VARIANT[plan]), 'group w-full')}>
                 {publicPlanLink(plan).label}
+                <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
               </Link>
             )}
             {actionLabel && onSelect && (

@@ -7,6 +7,6 @@ import type { Plan } from '@/features/auth/types'
  */
 export function publicPlanLink(plan: Plan): { href: string; label: string } {
   return plan === 'free'
-    ? { href: '/register', label: 'Start free' }
-    : { href: `/register?plan=${plan}`, label: `Start with ${PLAN_LABEL[plan]}` }
+    ? { href: '/register', label: 'Start free, no card' }
+    : { href: `/register?plan=${plan}`, label: `Choose ${PLAN_LABEL[plan]}` }
 }

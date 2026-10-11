@@ -3,6 +3,7 @@ import { PublicHeader } from '@/components/shared/PublicHeader'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { BandMap, ExportPreview, ReplayPreview, SchedulePreview, ZonePreview } from '@/features/marketing/components/LandingPreviews'
 import { HeroStack } from '@/features/marketing/components/HeroStack'
+import { UseCaseTabs, type UseCase } from '@/features/marketing/components/UseCaseTabs'
 import { buttonClass, linkClass } from '@/components/ui/Button'
 import { IconArrowRight, IconCalendar, IconFilm, IconGlobe, IconPencil } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
@@ -12,7 +13,7 @@ import type { Metadata } from 'next'
 
 /**
  * The public landing page (FE-36), laid out after the owner's concept: hero with real
- * captures, the four product areas, how it works, the problems it solves, plans, FAQ,
+ * captures, the four product areas, how it works, the problems it solves (tabs), plans, FAQ,
  * a closing band.
  *
  * Backgrounds alternate (FE-40) so each section reads as its own band: white, grey,
@@ -30,23 +31,23 @@ export const metadata: Metadata = {
 
 const PRODUCT = [
   {
-    title: 'Zone management',
-    body: 'Draw corridors, junctions and districts on the map. Each zone keeps its own road classes and history.',
+    title: 'Pick your roads',
+    body: 'Draw around the streets you care about. That area is your zone, and it keeps its own history.',
     preview: <ZonePreview />,
   },
   {
-    title: 'Scheduled capture',
-    body: 'Capture windows run on their own, on the days and hours you set, with the next collection always shown.',
+    title: 'Set it once',
+    body: 'Choose the days and hours. Maceut checks the traffic for you, every time, with no reminders.',
     preview: <SchedulePreview />,
   },
   {
-    title: 'Traffic replay',
-    body: 'Play a morning back frame by frame and compare how the same roads looked at different times.',
+    title: 'Watch it back',
+    body: 'Play any morning like a video and see the moment the jam began.',
     preview: <ReplayPreview />,
   },
   {
-    title: 'Export data',
-    body: 'Download captures as a spreadsheet, frames as a ZIP, or the whole window as an MP4 for a report.',
+    title: 'Share the proof',
+    body: 'Download a video, images or a spreadsheet, ready to drop into your report.',
     preview: <ExportPreview />,
   },
 ]
@@ -58,32 +59,28 @@ const STEPS = [
   { icon: IconFilm, title: 'Replay and export.', body: 'Play the window back in Studio, or download the CSV, the frames or an MP4.' },
 ]
 
-/** Problem first, in the reader's words; then only what the product does today (FE-40). */
-const USE_CASES = [
+/**
+ * The three problems it solves most directly (FE-42), named by the outcome. Each panel
+ * shows the part of the product that does it, and only what it does today.
+ */
+const USE_CASES: UseCase[] = [
   {
-    title: 'Daily monitoring',
-    problem: 'Staff count traffic by hand at the same junctions every morning.',
-    solution: 'A capture window collects those corridors at 07:00 every weekday, on its own.',
+    tab: 'No more counting by hand',
+    problem: 'Staff stand at the same junctions every morning, counting traffic by hand.',
+    solution: 'Set the hours once. Those roads are collected every weekday at 07:00, on their own.',
+    preview: <SchedulePreview />,
   },
   {
-    title: 'Before and after a change',
-    problem: 'Nobody can show what the road was like before the closure or the new signal.',
-    solution: 'Compare the same 07:00 window from two weeks apart in Studio.',
+    tab: 'Proof of what changed',
+    problem: 'Nobody can show what the road looked like before the closure or the new signal.',
+    solution: 'Replay the same morning from before and after, and see the difference.',
+    preview: <ReplayPreview />,
   },
   {
-    title: 'When it starts to jam',
-    problem: '“It gets busy in the evening” is a guess, not a time.',
-    solution: 'Replay the same hour across weeks and see when the red starts, and whether it comes earlier.',
-  },
-  {
-    title: 'Data for a study',
-    problem: 'Surveys are one-off and taken at different hours.',
-    solution: 'Every capture is a timestamped CSV row, collected at the same times each day.',
-  },
-  {
-    title: 'Reporting to decision-makers',
-    problem: 'A table of numbers doesn’t convince the people who decide.',
-    solution: 'Export the morning as an MP4 and play it in the meeting.',
+    tab: 'Reports that convince',
+    problem: 'A table of numbers doesn’t move the people who decide.',
+    solution: 'Export the morning as a video and play it in the meeting.',
+    preview: <ExportPreview />,
   },
 ]
 
@@ -137,12 +134,9 @@ export default function LandingPage() {
         <section id="product" className="scroll-mt-16 bg-page">
           <div className={cn(WRAP, 'py-section grid grid-cols-1 laptop:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] gap-xxl')}>
             <div>
-              <SectionHead title="From a zone on the map to data in your report.">
-                One workspace for the whole job: define the area, collect on a schedule, look back, and export.
+              <SectionHead title="See how your roads really move.">
+                Pick the roads, set the hours, and Maceut does the watching. Look back any time, and share what you find.
               </SectionHead>
-              <Link href="/register" className={cn(buttonClass(), 'mt-xl')}>
-                Create free account
-              </Link>
             </div>
             <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
               {PRODUCT.map((item) => (
@@ -182,25 +176,11 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Problems it solves */}
+        {/* What it solves */}
         <section className="bg-canvas">
           <div className={cn(WRAP, 'py-section')}>
-            <SectionHead label="Use cases" title="Problems it solves.">
-              What road agencies do today, and what changes once the capture runs on a schedule.
-            </SectionHead>
-            <div className="mt-xl grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-5 gap-lg">
-              {USE_CASES.map((u) => (
-                <article key={u.title} className="flex flex-col bg-canvas-secondary border border-border rounded-lg p-lg">
-                  <h3 className="text-heading-sm text-text-primary">{u.title}</h3>
-                  <p className="mt-md text-micro font-semibold uppercase tracking-wider text-text-muted">The problem</p>
-                  <p className="mt-xs text-body text-text-secondary">{u.problem}</p>
-                  <p className="mt-md pt-md border-t border-divider text-micro font-semibold uppercase tracking-wider text-primary">
-                    With Maceut
-                  </p>
-                  <p className="mt-xs text-body text-text-primary">{u.solution}</p>
-                </article>
-              ))}
-            </div>
+            <SectionHead title="Stop guessing what your roads are doing." />
+            <UseCaseTabs cases={USE_CASES} className="mt-xl" />
           </div>
         </section>
 
@@ -208,18 +188,12 @@ export default function LandingPage() {
         <section id="pricing" className="scroll-mt-16 bg-page">
           <div className={cn(WRAP, 'py-section')}>
             <div className="flex flex-wrap items-end justify-between gap-lg">
-              <SectionHead title="Plans priced for public budgets.">
-                Start free with one zone. Move up when you need more zones, more captures, or a finer interval. Every
-                plan exports CSV, image frames and video.
-              </SectionHead>
+              <SectionHead title="Plans priced for public budgets." />
               <Link href="/pricing" className={linkClass()}>
                 Compare plans in detail
               </Link>
             </div>
             <PlanCards className="mt-xl" publicLinks />
-            <p className="mt-lg text-caption text-text-secondary">
-              A capture is one fetch of your zone&rsquo;s traffic, kept as a frame you can replay or export.
-            </p>
           </div>
         </section>
 
