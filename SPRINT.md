@@ -168,6 +168,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-41** Landing & pricing: hero tumpuk ditarik keluar lalu ditaruh di atas (default kartu gelap di atas, video paling bawah), ikon tiap langkah How it works, label section dihapus, FAQ jadi "Common questions", pricing tanpa subjudul / catatan paid plans / "What these mean", "Rp 490k" tak disebut di luar kartu harga, poin zona & capture dipisah | review user |
 | ✅ | **FE-42** Landing: Use cases jadi tab (3 masalah paling kena, label = hasilnya), Product tanpa tombol & copy lebih sederhana, Pricing tanpa teks penjelas, badge "Room for a whole city", CTA paket bertingkat (tint / primary / ink + panah) | review user |
 | ✅ | **FE-43** Landing: kasus nyata Yogyakarta (run kita sendiri) di tab masalah, cerita gaya testimoni + 2 angka + visual asli (capture, grafik per jam, replay), tab pill, tinggi section tetap saat ganti tab | review user |
+| ✅ | **FE-44** (eksperimen, branch `feat/landing-seamless`) Landing gaya "seamless": latar tiap section memudar dari warna akhir section sebelumnya, How it works jadi panel ungu membulat di dalam alur, kartu tanpa border (ring + bayangan halus, sudut xl), glow lilac di belakang hero; konten & komponen bersama tidak berubah | review user |
 | ✅ | **BE-19** `GET /zones/:id/frames` — frame Studio dibatasi riwayat paket (Free 7 hari, Standard 90, Premium semua), maks 5.000; export menolak rentang di luar riwayat (403 HISTORY_LIMIT_EXCEEDED, BR-007) | review user |
 | ✅ | **FE-39** Studio: timeframe hanya menawarkan riwayat paket ("All 7 days" / "All 90 days" / "All", baris "Your plan keeps N days of history · Upgrade"); zona terakhir diingat saat kembali ke Studio | review user |
 | ✅ | **BE-18** Worker tahan macet: batas render 3 menit tanpa progres, channel RabbitMQ per consumer + reconnect, restart beneran (tanpa `tsx watch`), healthcheck heartbeat, capture terlambat → `missed` (opsi C), `captured_at` = waktu sampel | insiden 2026-10-08 |
@@ -223,6 +224,10 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   - Replay 25 Sep: 36 detik.
   Atribusi "Maceut team, monitoring Yogyakarta ourselves": bukan kutipan pelanggan (belum ada).
   Panel: keepMounted + `inert`/`invisible` (bukan `hidden`: base Tailwind `[hidden]` !important) supaya tinggi = kasus tertinggi. Cek headless: tinggi sama di 3 tab (1440 & 390), 0 overflow, 0 error konsol.
+
+[2026-10-11c] FE-44 — landing "seamless" (eksperimen untuk dibandingkan dengan FE-43).
+  Hanya gaya di page.tsx + CasePreviews; header, PlanCards, PlanQuestions, halaman pricing tidak disentuh.
+  Cek headless 1440/390: warna awal tiap section = warna akhir section sebelumnya (putih → abu → putih …), 0 overflow, 0 error konsol.
 
 [2026-10-08c] FE-38 — landing memakai keluaran asli.
 

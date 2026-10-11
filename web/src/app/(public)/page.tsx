@@ -17,8 +17,9 @@ import type { Metadata } from 'next'
  * captures, the four product areas, how it works, the problems it solves (tabs), plans, FAQ,
  * a closing band.
  *
- * Backgrounds alternate (FE-40) so each section reads as its own band: white, grey,
- * one purple band for How it works, then white and grey again, closing in pale purple.
+ * One continuous ground (FE-44): each section's background fades from the colour the
+ * previous one ended on, so the page reads as one surface instead of stacked bands.
+ * How it works is a rounded purple panel sitting in that flow, not a full-width band.
  *
  * Content rule (antislop R-17/R-36/R-38): everything here describes what the product
  * does today. No customer logos, counts or testimonials: there are none to show yet,
@@ -144,12 +145,16 @@ export default function LandingPage() {
             </div>
             <p className="mt-lg text-caption text-text-secondary">No card needed to start.</p>
           </div>
-          <HeroStack />
+          {/* A soft lilac glow behind the stack: it anchors the focal point without a frame. */}
+          <div className="relative min-w-0">
+            <div aria-hidden className="absolute inset-[8%] rounded-full bg-primary-soft blur-3xl" />
+            <HeroStack className="relative" />
+          </div>
           </div>
         </section>
 
         {/* Product */}
-        <section id="product" className="scroll-mt-16 bg-page">
+        <section id="product" className="scroll-mt-16 bg-linear-to-b from-canvas to-page">
           <div className={cn(WRAP, 'py-section grid grid-cols-1 laptop:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] gap-xxl')}>
             <div>
               <SectionHead title="See how your roads really move.">
@@ -158,7 +163,7 @@ export default function LandingPage() {
             </div>
             <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
               {PRODUCT.map((item) => (
-                <article key={item.title} className="h-full flex flex-col bg-card border border-border rounded-lg p-md">
+                <article key={item.title} className="h-full flex flex-col bg-canvas rounded-xl ring-1 ring-border/70 shadow-elevation-2 p-md">
                   {item.preview}
                   <h3 className="mt-md px-xs text-heading-sm text-text-primary truncate">{item.title}</h3>
                   {/* Same height on every card: three lines, reserved even when the text is shorter. */}
@@ -171,16 +176,17 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* How it works: the one bold band. */}
-        <section id="how-it-works" className="scroll-mt-16 bg-primary text-on-primary">
-          <div className={cn(WRAP, 'py-section')}>
+        {/* How it works: the one bold panel, inside the flow. */}
+        <section id="how-it-works" className="scroll-mt-16 bg-page">
+          <div className={cn(WRAP, 'pb-section')}>
+          <div className="rounded-xl bg-primary text-on-primary px-lg py-xxl tablet:px-xxl">
             <h2 className="text-[28px] leading-[1.2] font-bold tracking-tight text-balance">
               Three steps, then it runs on its own.
             </h2>
             <ol className="mt-xl grid grid-cols-1 laptop:grid-cols-3 gap-xl">
               {STEPS.map((step, i) => (
                 <li key={step.title} className="flex gap-md">
-                  <span className="w-11 h-11 shrink-0 rounded-full border-2 border-on-primary flex items-center justify-center" aria-hidden>
+                  <span className="w-11 h-11 shrink-0 rounded-full bg-on-primary/15 ring-1 ring-on-primary/40 flex items-center justify-center" aria-hidden>
                     <step.icon size={20} />
                   </span>
                   <div>
@@ -192,10 +198,11 @@ export default function LandingPage() {
               ))}
             </ol>
           </div>
+          </div>
         </section>
 
         {/* What it solves */}
-        <section className="bg-canvas">
+        <section className="bg-linear-to-b from-page to-canvas">
           <div className={cn(WRAP, 'py-section')}>
             <SectionHead title="Stop guessing what your roads are doing." />
             <UseCaseTabs cases={USE_CASES} source={CASE_SOURCE} className="mt-lg" />
@@ -203,7 +210,7 @@ export default function LandingPage() {
         </section>
 
         {/* Pricing */}
-        <section id="pricing" className="scroll-mt-16 bg-page">
+        <section id="pricing" className="scroll-mt-16 bg-linear-to-b from-canvas to-page">
           <div className={cn(WRAP, 'py-section')}>
             <div className="flex flex-wrap items-end justify-between gap-lg">
               <SectionHead title="Plans priced for public budgets." />
@@ -215,7 +222,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="bg-canvas">
+        <section className="bg-linear-to-b from-page to-canvas">
           <div className={cn(WRAP, 'py-section')}>
             <PlanQuestions id="questions" />
           </div>
@@ -224,7 +231,7 @@ export default function LandingPage() {
         {/* Closing band */}
         <section className="bg-canvas">
           <div className={cn(WRAP, 'pb-section')}>
-            <div className="relative overflow-hidden rounded-lg border border-border bg-primary-soft px-xl py-xxl">
+            <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-primary-soft to-canvas ring-1 ring-primary-soft px-xl py-xxl">
               <BandMap />
               <div className="relative grid grid-cols-1 laptop:grid-cols-[minmax(0,6fr)_minmax(0,4fr)_auto] gap-xl items-center">
                 <div>

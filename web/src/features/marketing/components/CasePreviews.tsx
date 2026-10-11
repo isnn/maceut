@@ -15,7 +15,7 @@ export function CaseCapture() {
       width={1080}
       height={1080}
       sizes="(min-width: 1024px) 36rem, 100vw"
-      className="block w-full max-w-[22rem] h-auto ml-auto rounded-lg border border-border shadow-elevation-2"
+      className="block w-full max-w-[22rem] h-auto ml-auto rounded-xl ring-1 ring-border/70 shadow-elevation-2"
     />
   )
 }
@@ -32,7 +32,7 @@ const HEAVY = 2
 /** The average day in Yogyakarta, hour by hour: heavy from 14:00 until 21:00. */
 export function DayCurve() {
   return (
-    <div className="rounded-lg border border-border bg-canvas p-lg shadow-elevation-2">
+    <div className="rounded-xl ring-1 ring-border/70 bg-canvas p-lg shadow-elevation-2">
       <p className="text-label font-semibold text-text-primary">Average jam level by hour, Yogyakarta</p>
       <p className="mt-xs text-caption text-text-secondary">0 is free-flowing, 10 is standstill. Heavy (2 and over) in purple.</p>
       <div className="mt-md relative h-32" role="img" aria-label="Jam level is lowest around 03:00, rises from 07:00, stays at 2 or above from 14:00 to 20:00, and peaks at 16:00.">
