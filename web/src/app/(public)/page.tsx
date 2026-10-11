@@ -4,8 +4,9 @@ import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { BandMap, ExportPreview, ReplayPreview, SchedulePreview, ZonePreview } from '@/features/marketing/components/LandingPreviews'
 import { HeroStack } from '@/features/marketing/components/HeroStack'
 import { UseCaseTabs, type UseCase } from '@/features/marketing/components/UseCaseTabs'
+import { CaseCapture, DayCurve } from '@/features/marketing/components/CasePreviews'
 import { buttonClass, linkClass } from '@/components/ui/Button'
-import { IconArrowRight, IconCalendar, IconFilm, IconGlobe, IconPencil } from '@/components/ui/icons'
+import { IconArrowRight, IconCalendar, IconCamera, IconClock, IconFilm, IconGlobe, IconPencil } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
 import { PlanQuestions } from '@/features/marketing/components/PlanQuestions'
 import { PublicFooter } from '@/components/shared/PublicFooter'
@@ -60,27 +61,44 @@ const STEPS = [
 ]
 
 /**
- * The three problems it solves most directly (FE-42), named by the outcome. Each panel
- * shows the part of the product that does it, and only what it does today.
+ * The three problems it solves most directly (FE-42), told as one real case (FE-43):
+ * our own run on Yogyakarta, every road, 23 September to 11 October 2026. Every figure
+ * comes from those captures (query in SPRINT.md, FE-43); the source line says it was
+ * our run, not a customer's.
  */
+const CASE_SOURCE = 'Maceut team, monitoring Yogyakarta ourselves · 23 Sep to 11 Oct 2026, every road'
 const USE_CASES: UseCase[] = [
   {
     tab: 'No more counting by hand',
-    problem: 'Staff stand at the same junctions every morning, counting traffic by hand.',
-    solution: 'Set the hours once. Those roads are collected every weekday at 07:00, on their own.',
-    preview: <SchedulePreview />,
+    icon: <IconCamera size={18} />,
+    story:
+      'Counting Yogyakarta by hand would mean someone at a junction around the clock. We drew one zone over the city instead, and in under three weeks it collected 1,236 captures on its own, as often as every 15 minutes.',
+    stats: [
+      { value: '1,236', label: 'captures, nobody at a junction' },
+      { value: '17 days', label: 'of traffic on record' },
+    ],
+    preview: <CaseCapture />,
   },
   {
-    tab: 'Proof of what changed',
-    problem: 'Nobody can show what the road looked like before the closure or the new signal.',
-    solution: 'Replay the same morning from before and after, and see the difference.',
-    preview: <ReplayPreview />,
+    tab: 'Know when it jams',
+    icon: <IconClock size={18} />,
+    story: 'We expected one rush hour. Yogyakarta has a long one: on an average day, it stays heavy from 14:00 until 21:00.',
+    stats: [
+      { value: '7 hours', label: 'of heavy traffic on an average day' },
+      { value: '16:00', label: 'the busiest hour on average' },
+    ],
+    preview: <DayCurve />,
   },
   {
     tab: 'Reports that convince',
-    problem: 'A table of numbers doesn’t move the people who decide.',
-    solution: 'Export the morning as a video and play it in the meeting.',
-    preview: <ExportPreview />,
+    icon: <IconFilm size={18} />,
+    story:
+      'Some days the jams began at 09:00, others at 14:30. A table hides that. A short replay shows it.',
+    stats: [
+      { value: '09:00 to 14:30', label: 'when the jams began' },
+      { value: '36 s', label: 'to replay a whole morning' },
+    ],
+    preview: <ReplayPreview />,
   },
 ]
 
@@ -180,7 +198,7 @@ export default function LandingPage() {
         <section className="bg-canvas">
           <div className={cn(WRAP, 'py-section')}>
             <SectionHead title="Stop guessing what your roads are doing." />
-            <UseCaseTabs cases={USE_CASES} className="mt-xl" />
+            <UseCaseTabs cases={USE_CASES} source={CASE_SOURCE} className="mt-lg" />
           </div>
         </section>
 

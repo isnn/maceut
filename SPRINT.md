@@ -167,6 +167,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-40** Landing: How it works kembali (band ungu), kartu Product seragam 16:10 + teks 3 baris, Use cases jadi masalah → solusi, hero tumpuk interaktif (hover/fokus/tap → ke depan) dengan video di pojok kanan bawah, latar section berselang | review user |
 | ✅ | **FE-41** Landing & pricing: hero tumpuk ditarik keluar lalu ditaruh di atas (default kartu gelap di atas, video paling bawah), ikon tiap langkah How it works, label section dihapus, FAQ jadi "Common questions", pricing tanpa subjudul / catatan paid plans / "What these mean", "Rp 490k" tak disebut di luar kartu harga, poin zona & capture dipisah | review user |
 | ✅ | **FE-42** Landing: Use cases jadi tab (3 masalah paling kena, label = hasilnya), Product tanpa tombol & copy lebih sederhana, Pricing tanpa teks penjelas, badge "Room for a whole city", CTA paket bertingkat (tint / primary / ink + panah) | review user |
+| ✅ | **FE-43** Landing: kasus nyata Yogyakarta (run kita sendiri) di tab masalah, cerita gaya testimoni + 2 angka + visual asli (capture, grafik per jam, replay), tab pill, tinggi section tetap saat ganti tab | review user |
 | ✅ | **BE-19** `GET /zones/:id/frames` — frame Studio dibatasi riwayat paket (Free 7 hari, Standard 90, Premium semua), maks 5.000; export menolak rentang di luar riwayat (403 HISTORY_LIMIT_EXCEEDED, BR-007) | review user |
 | ✅ | **FE-39** Studio: timeframe hanya menawarkan riwayat paket ("All 7 days" / "All 90 days" / "All", baris "Your plan keeps N days of history · Upgrade"); zona terakhir diingat saat kembali ke Studio | review user |
 | ✅ | **BE-18** Worker tahan macet: batas render 3 menit tanpa progres, channel RabbitMQ per consumer + reconnect, restart beneran (tanpa `tsx watch`), healthcheck heartbeat, capture terlambat → `missed` (opsi C), `captured_at` = waktu sampel | insiden 2026-10-08 |
@@ -214,6 +215,14 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   `UseCaseTabs` (Base UI Tabs): 3 tab — No more counting by hand / Proof of what changed / Reports that convince; panel Before → With Maceut + pratinjau produknya. HP: tab 3 kolom, teks membungkus, tanpa scroll.
   Product: tombol dihapus, judul kartu jadi Pick your roads / Set it once / Watch it back / Share the proof. Pricing: subjudul & caption dihapus; tombol Start free, no card (tint) / Choose Standard (primary) / Choose Premium (ink), lebar penuh + panah.
   Cek headless 1440/390: overflow 0, 0 console error, klik & panah kiri-kanan mengganti tab.
+
+[2026-10-11b] FE-43 — landing: kasus nyata Yogyakarta, tab pill, tinggi tetap.
+  Sumber angka: zona YOG (semua jalan), captures status `done`, 23 Sep–11 Okt 2026 WIB, 1.236 capture / 17 hari.
+  - Rata-rata jam_factor per jam (AT TIME ZONE 'Asia/Jakarta'): min 0,55 (03:00), ≥2 dari 14:00 s.d. 20:00, puncak 2,56 (16:00) → `HOURS` di CasePreviews.
+  - Jam pertama jam_factor ≥2 per hari: paling awal 09:00, paling akhir 14:30.
+  - Replay 25 Sep: 36 detik.
+  Atribusi "Maceut team, monitoring Yogyakarta ourselves": bukan kutipan pelanggan (belum ada).
+  Panel: keepMounted + `inert`/`invisible` (bukan `hidden`: base Tailwind `[hidden]` !important) supaya tinggi = kasus tertinggi. Cek headless: tinggi sama di 3 tab (1440 & 390), 0 overflow, 0 error konsol.
 
 [2026-10-08c] FE-38 — landing memakai keluaran asli.
 
