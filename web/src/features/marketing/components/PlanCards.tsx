@@ -47,9 +47,9 @@ export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabl
           >
             {recommended && (
               // A reason, not a popularity claim (FE-36, FE-42): nothing measures popularity,
-              // but Standard's 5 zones, main roads and hourly captures cover one city.
+              // so it names what Standard adds over Free: main roads, captured every hour.
               <span className="absolute -top-2.5 left-xl bg-primary text-on-primary text-micro font-semibold rounded-xs px-sm py-[3px]">
-                Room for a whole city
+                Main roads, every hour
               </span>
             )}
             <div>

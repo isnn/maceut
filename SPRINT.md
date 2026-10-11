@@ -228,6 +228,7 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 [2026-10-11c] FE-44 — landing "seamless" (eksperimen untuk dibandingkan dengan FE-43).
   Hanya gaya di page.tsx + CasePreviews; header, PlanCards, PlanQuestions, halaman pricing tidak disentuh.
   Cek headless 1440/390: warna awal tiap section = warna akhir section sebelumnya (putih → abu → putih …), 0 overflow, 0 error konsol.
+  User memilih gaya ini. Copy: cerita kasus pertama dipersingkat (angka tetap di statistik di bawahnya); badge Standard "Room for a whole city" → "Main roads, every hour".
 
 [2026-10-08c] FE-38 — landing memakai keluaran asli.
 

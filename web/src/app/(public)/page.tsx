@@ -72,8 +72,7 @@ const USE_CASES: UseCase[] = [
   {
     tab: 'No more counting by hand',
     icon: <IconCamera size={18} />,
-    story:
-      'Counting Yogyakarta by hand would mean someone at a junction around the clock. We drew one zone over the city instead, and in under three weeks it collected 1,236 captures on its own, as often as every 15 minutes.',
+    story: 'No one had to stand at a junction. We drew one zone over Yogyakarta, and it captured the traffic on its own, up to every 15 minutes.',
     stats: [
       { value: '1,236', label: 'captures, nobody at a junction' },
       { value: '17 days', label: 'of traffic on record' },
