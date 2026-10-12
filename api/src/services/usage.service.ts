@@ -106,6 +106,10 @@ export async function getUsage(userId: string): Promise<UsageSummary> {
   ])
 
   const activeSchedules = schedules.filter((s) => s.status === 'active')
+  // A paused zone collects nothing, so its windows take nothing from the pool (the
+  // scheduler skips them). They still hold their BR-005 slot while active.
+  const pausedZones = new Set(zones.filter((z) => z.status === 'paused').map((z) => z.id))
+  const collectingSchedules = activeSchedules.filter((s) => !pausedZones.has(s.zoneId))
 
   const now = new Date()
   const [capturesToday, pool, exportsThisMonth, imageBytes, exportBytes, cacheBytes] = await Promise.all([
@@ -125,7 +129,7 @@ export async function getUsage(userId: string): Promise<UsageSummary> {
   let busiestDay = 0
   for (let day = 0; day < 7; day++) {
     let frames = 0
-    for (const s of activeSchedules) {
+    for (const s of collectingSchedules) {
       if (!s.days.includes(day)) continue
       frames += framesPerDay({
         start: s.startTime,
@@ -144,7 +148,7 @@ export async function getUsage(userId: string): Promise<UsageSummary> {
     schedulesActiveCount: activeSchedules.length,
     schedulesLimit: limits.schedulesLimit,
     framesPerDay: busiestDay,
-    framesPerMonth: activeSchedules.reduce(
+    framesPerMonth: collectingSchedules.reduce(
       (sum, s) =>
         sum + framesPerMonth({ start: s.startTime, end: s.endTime, interval: s.interval as CaptureInterval, days: s.days }),
       0,

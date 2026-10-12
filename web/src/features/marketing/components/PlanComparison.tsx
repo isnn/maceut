@@ -13,7 +13,7 @@ const ROWS: { label: string; value: (plan: Plan) => string }[] = [
   { label: 'Active capture windows', value: (p) => formatNumber(PLAN_LIMITS[p].schedulesLimit) },
   { label: 'Fastest interval', value: (p) => PLAN_LIMITS[p].captureInterval },
   { label: 'Road classes', value: (p) => ROAD_CLASS_LABEL[PLAN_LIMITS[p].maxRoadClass] ?? '' },
-  { label: 'History in CSV', value: (p) => PLAN_LIMITS[p].historyLabel },
+  { label: 'History', value: (p) => PLAN_LIMITS[p].historyLabel },
   { label: 'Storage', value: (p) => `${formatNumber(PLAN_LIMITS[p].storageGb)} GB` },
   { label: 'Frames per export', value: (p) => formatNumber(PLAN_LIMITS[p].exportFramesLimit) },
   { label: 'Exports kept', value: (p) => `${PLAN_LIMITS[p].exportRetentionDays} days` },

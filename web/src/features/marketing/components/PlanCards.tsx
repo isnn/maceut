@@ -46,10 +46,10 @@ export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabl
             )}
           >
             {recommended && (
-              // A reason, not a popularity claim (FE-36, FE-42): nothing measures popularity,
-              // so it names what Standard adds over Starter: more zones, and a team.
+              // Not a popularity claim (FE-36, FE-42): nothing measures popularity. Standard
+              // is the lowest price per capture of the paid plans (Rp 175 vs Rp 220 / Rp 497).
               <span className="absolute -top-2.5 left-xl bg-primary text-on-primary text-micro font-semibold rounded-xs px-sm py-[3px]">
-                10 zones, room for a team
+                Best price
               </span>
             )}
             <div>

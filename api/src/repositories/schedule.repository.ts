@@ -1,6 +1,6 @@
 import { eq, and, ne, sql, desc } from 'drizzle-orm'
 import { db } from '../lib/drizzle-client'
-import { schedules } from '../../drizzle/schema'
+import { schedules, zones } from '../../drizzle/schema'
 import type { CaptureInterval, ScheduleStatus } from '../types/schedule'
 
 /** Capture-window data access, scoped by user. No rules — those are in the service. */
@@ -149,6 +149,8 @@ export async function softDelete(id: string): Promise<void> {
 export interface DueWindow extends ScheduleRecord {
   /** The instant this firing was due — `next_fire_at` as it was before the claim. */
   dueAt: Date
+  /** The window's zone is paused: the firing is advanced but nothing is captured. */
+  zonePaused: boolean
 }
 
 /**
@@ -176,15 +178,16 @@ export async function claimDue(now: Date): Promise<DueWindow[]> {
     UPDATE ${schedules} AS s
        SET next_fire_at = NULL
       FROM (
-        SELECT id, next_fire_at AS due_at
-          FROM ${schedules}
-         WHERE status = 'active'
-           AND next_fire_at IS NOT NULL
-           AND next_fire_at <= ${now.toISOString()}::timestamptz
-         FOR UPDATE SKIP LOCKED
+        SELECT w.id, w.next_fire_at AS due_at, z.status AS zone_status
+          FROM ${schedules} AS w
+          JOIN ${zones} AS z ON z.id = w.zone_id
+         WHERE w.status = 'active'
+           AND w.next_fire_at IS NOT NULL
+           AND w.next_fire_at <= ${now.toISOString()}::timestamptz
+         FOR UPDATE OF w SKIP LOCKED
       ) AS due
      WHERE s.id = due.id
-    RETURNING s.*, due.due_at
+    RETURNING s.*, due.due_at, due.zone_status
   `)
 
   // Raw SQL bypasses Drizzle's column mapping, so these arrive snake_case. Spreading
@@ -206,6 +209,7 @@ export async function claimDue(now: Date): Promise<DueWindow[]> {
     created_at: string
     updated_at: string
     due_at: string
+    zone_status: string
   }
 
   return (result.rows as unknown as DueRow[]).map((r) => ({
@@ -223,6 +227,7 @@ export async function claimDue(now: Date): Promise<DueWindow[]> {
     createdAt: new Date(r.created_at),
     updatedAt: new Date(r.updated_at),
     dueAt: new Date(r.due_at),
+    zonePaused: r.zone_status === 'paused',
   }))
 }
 

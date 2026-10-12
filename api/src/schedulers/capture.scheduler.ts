@@ -168,6 +168,8 @@ export async function seedUnseeded(now: Date = new Date()): Promise<number> {
 export interface TickResult {
   fired: number
   refused: number
+  /** Firings skipped because the window's zone is paused. */
+  zonePaused: number
   missed: number
 }
 
@@ -183,7 +185,7 @@ export interface TickResult {
  */
 export async function tick(now: Date = new Date()): Promise<TickResult> {
   const due = await scheduleRepo.claimDue(now)
-  const result: TickResult = { fired: 0, refused: 0, missed: 0 }
+  const result: TickResult = { fired: 0, refused: 0, missed: 0, zonePaused: 0 }
   // An outage is reported once per user, not once per window it swallowed.
   const missedByUser = new Map<string, notificationService.MissedSummary>()
 
@@ -194,6 +196,13 @@ export async function tick(now: Date = new Date()): Promise<TickResult> {
     // never written would look unseeded forever.
     const next = nextFireAfter(window, now)
     await scheduleRepo.setNextFireAt(row.id, next)
+
+    // A paused zone collects nothing, whatever its windows say. The window keeps moving
+    // so resuming the zone picks up at the next firing instead of a backlog.
+    if (row.zonePaused) {
+      result.zonePaused++
+      continue
+    }
 
     const lateBy = now.getTime() - row.dueAt.getTime()
 

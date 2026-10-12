@@ -131,7 +131,7 @@ export default function LandingPage() {
             </h1>
             <p className="mt-lg text-[16px] leading-relaxed text-text-secondary max-w-[46ch]">
               Draw a zone on the map, pick the road classes, set the hours. Maceut captures traffic flow at those times,
-              keeps every snapshot, and lets you replay or export it.
+              keeps each snapshot, and lets you replay or export it.
             </p>
             <div className="mt-xl flex flex-wrap gap-md">
               <Link href="/register" className={buttonClass()}>
