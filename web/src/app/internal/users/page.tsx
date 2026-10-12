@@ -444,8 +444,8 @@ export default function InternalUsersPage() {
         description={
           <>
             <p>
-              This removes <strong>{deleting?.email}</strong> and everything belonging to the account. It cannot be
-              undone.
+              This permanently removes <strong>{deleting?.email}</strong> and everything belonging to the account:
+              zones, capture windows, captures, exports and notifications. It cannot be undone or restored.
             </p>
             {deleting && deleting.usage.zonesCount + deleting.usage.zonesPaused > 0 && (
               <p className="mt-md">
@@ -456,6 +456,7 @@ export default function InternalUsersPage() {
           </>
         }
         confirmLabel="Delete account"
+        confirmPhrase="delete"
         destructive
         pending={deletePending}
         onConfirm={confirmDelete}
