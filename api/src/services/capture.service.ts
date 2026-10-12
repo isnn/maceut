@@ -452,7 +452,14 @@ const CSV_ROAD_CLASS: Record<string, string> = {
   semua: 'all_roads',
 }
 
-const CSV_HEADER = ['captured_at_wib', 'status', 'trigger', 'window', 'road_class', 'roads', 'avg_jam_factor', 'error']
+const CSV_HEADER = ['captured_at_wib', 'status', 'trigger', 'window', 'road_class', 'roads', 'avg_jam_factor', 'error', 'source']
+
+/**
+ * The credit every CSV row carries (H5, Terms §5). The figures come from HERE's traffic;
+ * the CSV holds no map data, so the map credit is not needed here. A column, not a
+ * comment line, so spreadsheets and parsers read the file unchanged.
+ */
+export const CSV_SOURCE = 'Traffic © HERE'
 
 /** RFC 4180: quote a field holding a comma, quote or line break; double inner quotes. */
 export function csvField(value: string | number | null): string {
@@ -501,6 +508,7 @@ export async function exportCsv(
         r.roadsCount,
         r.jamFactorAvg,
         r.error,
+        CSV_SOURCE,
       ]
         .map(csvField)
         .join(','),

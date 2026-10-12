@@ -192,8 +192,8 @@ describe('GET /zones/:id/captures.csv (FE-30)', () => {
     expect(res.headers['content-type']).toMatch(/^text\/csv/)
     expect(res.headers['content-disposition']).toMatch(/attachment; filename="maceut-jl-sudirman-captures-\d{4}-\d{2}-\d{2}\.csv"/)
     const lines = res.text.replace(/^\uFEFF/, '').trim().split('\r\n')
-    expect(lines[0]).toBe('captured_at_wib,status,trigger,window,road_class,roads,avg_jam_factor,error')
-    expect(lines[1]).toBe('2026-09-27 07:30,done,scheduled,"Rush, ""east""",highways,1043,3.25,')
+    expect(lines[0]).toBe('captured_at_wib,status,trigger,window,road_class,roads,avg_jam_factor,error,source')
+    expect(lines[1]).toBe('2026-09-27 07:30,done,scheduled,"Rush, ""east""",highways,1043,3.25,,Traffic © HERE')
   })
 
   it('reaches back as far as the plan’s history (BR-007)', async () => {

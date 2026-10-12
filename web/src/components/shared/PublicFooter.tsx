@@ -4,6 +4,7 @@ const LINKS = [
   { href: '/#product', label: 'Product' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/terms', label: 'Terms of Service' },
+  { href: '/privacy', label: 'Privacy Policy' },
 ]
 
 /** Footer for the public pages (FE-37): only pages that exist. */
