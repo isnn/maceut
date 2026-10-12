@@ -39,7 +39,8 @@ billing records the law requires, separately, and note which ones in the log.
 
 ## 3. Delete the account
 
-Staff → Users → the account's menu → **Delete account** (superadmin only). Write down the counts it reports
+Staff → Users → the account's menu → **Delete account** (superadmin only), then type `delete` to
+enable the button. Write down the counts it reports
 (zones and windows removed). This stops the account's capture windows at once, so no new
 files are written for it.
 
