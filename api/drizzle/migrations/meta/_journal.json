@@ -134,6 +134,13 @@
       "when": 1791776836318,
       "tag": "0018_starter_plan",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791799370730,
+      "tag": "0019_capture_retention",
+      "breakpoints": true
     }
   ]
 }

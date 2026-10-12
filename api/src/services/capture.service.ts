@@ -252,6 +252,8 @@ export async function getCapture(userId: string, captureId: string): Promise<Cap
   const row = await captureRepo.findById(captureId)
   if (!row) throw new NotFoundError('Capture')
   if (row.userId !== userId) throw new ForbiddenError('Capture ini bukan milik Anda.')
+  // Soft-deleted by retention (H1): its HERE traffic is gone and it is hidden everywhere.
+  if (row.deletedAt) throw new NotFoundError('Capture')
 
   return { ...toPublic(row), traffic: row.traffic ?? null }
 }
@@ -277,6 +279,8 @@ export async function getCaptureImage(userId: string, captureId: string): Promis
   const row = await captureRepo.findById(captureId)
   if (!row) throw new NotFoundError('Capture')
   if (row.userId !== userId) throw new ForbiddenError('Capture ini bukan milik Anda.')
+  // Soft-deleted by retention (H1): its HERE traffic is gone and it is hidden everywhere.
+  if (row.deletedAt) throw new NotFoundError('Capture')
   if (!row.filePath) throw new NotFoundError('Gambar capture')
 
   const zone = await zoneRepo.findById(row.zoneId)
@@ -419,6 +423,8 @@ export async function getPlaybackFrame(userId: string, captureId: string): Promi
   const row = await captureRepo.findLiteById(captureId)
   if (!row) throw new NotFoundError('Capture')
   if (row.userId !== userId) throw new ForbiddenError('Capture ini bukan milik Anda.')
+  // Soft-deleted by retention (H1): its HERE traffic is gone and it is hidden everywhere.
+  if (row.deletedAt) throw new NotFoundError('Capture')
 
   return { ...toPublic(row), traffic: await slimFor(row) }
 }
