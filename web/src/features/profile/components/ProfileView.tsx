@@ -271,7 +271,7 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
           <Dialog.Root open={pickerOpen} onOpenChange={setPickerOpen}>
             <Dialog.Portal>
               <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
-              <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[60rem] max-h-[90vh] overflow-y-auto bg-page border border-border rounded-lg p-xl shadow-elevation-3 space-y-lg">
+              <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[76rem] max-h-[90vh] overflow-y-auto bg-page border border-border rounded-lg p-xl shadow-elevation-3 space-y-lg">
                 <DialogCloseX />
                 <Dialog.Title className="pr-xl text-section-title text-text-primary">Change plan</Dialog.Title>
                 {intendedPlan && usage.plan !== intendedPlan && (

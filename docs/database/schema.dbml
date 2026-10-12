@@ -11,7 +11,7 @@
 // Convention: every timestamp is `timestamptz`. A bare `timestamp` carries no
 // offset and means whatever the reading process assumes.
 //
-// Last updated: 2026-10-07 (migration 0017_staff_type — user.staff_type: superadmin | admin)
+// Last updated: 2026-10-12 (migration 0018_starter_plan — plan enum gains starter)
 // =============================================================================
 
 Project maceut {
@@ -132,6 +132,7 @@ Table zones {
 
 Enum plan {
   free
+  starter [note: 'Delivery doc F3 (0018): between Free and Standard']
   standard
   premium
 }

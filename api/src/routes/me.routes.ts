@@ -15,7 +15,7 @@ const router = Router()
  *         id: { type: string }
  *         email: { type: string, format: email }
  *         fullName: { type: string, example: Budi Santoso }
- *         plan: { type: string, enum: [free, standard, premium] }
+ *         plan: { type: string, enum: [free, starter, standard, premium] }
  *         role: { type: string, enum: [user, internal], description: Platform role, ditentukan INTERNAL_EMAILS (BR-027) }
  *         onboardingDone: { type: boolean }
  *         createdAt: { type: string, format: date-time }
@@ -100,7 +100,7 @@ router.post('/me/onboarding', authMiddleware, meController.completeOnboarding)
  *             type: object
  *             required: [plan]
  *             properties:
- *               plan: { type: string, enum: [free, standard, premium] }
+ *               plan: { type: string, enum: [free, starter, standard, premium] }
  *     responses:
  *       200:
  *         description: Paket diubah
@@ -134,7 +134,7 @@ router.patch('/me/plan', authMiddleware, meController.changeOwnPlan)
  *       - in: query
  *         name: plan
  *         required: true
- *         schema: { type: string, enum: [free, standard, premium] }
+ *         schema: { type: string, enum: [free, starter, standard, premium] }
  *     responses:
  *       200:
  *         description: Daftar zona & jendela yang akan di-pause, dengan alasannya
@@ -182,7 +182,7 @@ router.get('/plan/impact', authMiddleware, meController.planImpact)
  *                 data:
  *                   type: object
  *                   properties:
- *                     plan: { type: string, enum: [free, standard, premium] }
+ *                     plan: { type: string, enum: [free, starter, standard, premium] }
  *                     zonesCount: { type: integer }
  *                     zonesLimit: { type: integer }
  *                     schedulesActiveCount: { type: integer }

@@ -12,7 +12,7 @@ import {
 } from '../schemas/user.schema'
 import { UnauthorizedError } from '../errors'
 import { ok, paginated } from '../types/api'
-import type { Plan } from '../types/plan'
+import { PLANS, type Plan } from '../types/plan'
 
 /**
  * Not `.uuid()`: Better Auth issues its own string ids for `user.id` (the column is
@@ -176,7 +176,7 @@ export async function config(req: Request, res: Response, next: NextFunction) {
 export async function planImpact(req: Request, res: Response, next: NextFunction) {
   try {
     const id = z.string().min(1).parse(req.params.id)
-    const plan = z.enum(['free', 'standard', 'premium']).parse(req.query.plan)
+    const plan = z.enum(PLANS as unknown as [Plan, ...Plan[]]).parse(req.query.plan)
     return res.status(200).json(ok(await planService.previewPlanChange(id, plan)))
   } catch (err) {
     next(err)

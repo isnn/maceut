@@ -370,7 +370,7 @@ describe('GET /internal/stats', () => {
     expect(res.status).toBe(200)
     expect(res.body.data.totalUsers).toBe(3)
     expect(res.body.data.internalUsers).toBe(2)
-    expect(res.body.data.planMix).toEqual({ free: 1, standard: 0, premium: 2 })
+    expect(res.body.data.planMix).toEqual({ free: 1, starter: 0, standard: 0, premium: 2 })
   })
 })
 

@@ -6,9 +6,9 @@
  * When a limit changes, both files change, and so does product.md's BR-005/BR-006.
  */
 
-export type Plan = 'free' | 'standard' | 'premium'
+export type Plan = 'free' | 'starter' | 'standard' | 'premium'
 
-export const PLANS: readonly Plan[] = ['free', 'standard', 'premium'] as const
+export const PLANS: readonly Plan[] = ['free', 'starter', 'standard', 'premium'] as const
 
 /**
  * Cheapest to dearest, so "is this an upgrade?" is a comparison rather than a chain of
@@ -66,7 +66,10 @@ export interface PlanLimits {
   maxRoadClass: RoadClass
   /** BR-005 */
   schedulesLimit: number
-  /** BR-006 */
+  /**
+   * BR-006 — captures a day. Starter's 15 is its monthly pool (450) over 30 days, until
+   * the monthly pool replaces the daily limit (delivery doc F5).
+   */
   capturesLimit: number
   zonesLimit: number
   seatsLimit: number
@@ -86,7 +89,8 @@ export interface PlanLimits {
   exportBudgetMpFrames: number
   /**
    * FE-30 — how far back the zone's captures CSV reaches, in days; null = all history.
-   * The same numbers as "History kept" on the plan cards.
+   * The same numbers as "History kept" on the plan cards. 30 at most on every plan:
+   * HERE's terms cap how long its output may be kept (delivery doc, catalog 2026-10).
    */
   historyDays: number | null
 }
@@ -94,7 +98,7 @@ export interface PlanLimits {
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   free: {
     maxRoadClass: 'nasional',
-    schedulesLimit: 10,
+    schedulesLimit: 3,
     capturesLimit: 10,
     zonesLimit: 1,
     seatsLimit: 1,
@@ -103,27 +107,38 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     exportBudgetMpFrames: 120,
     historyDays: 7,
   },
+  starter: {
+    maxRoadClass: 'nasional_provinsi',
+    schedulesLimit: 9,
+    capturesLimit: 15,
+    zonesLimit: 3,
+    seatsLimit: 1,
+    storageGb: 5,
+    exportFramesLimit: 120,
+    exportBudgetMpFrames: 250,
+    historyDays: 30,
+  },
   standard: {
     maxRoadClass: 'nasional_provinsi',
-    schedulesLimit: 20,
+    schedulesLimit: 30,
     capturesLimit: 50,
-    zonesLimit: 5,
+    zonesLimit: 10,
     seatsLimit: 5,
     storageGb: 10,
     exportFramesLimit: 240,
     exportBudgetMpFrames: 500,
-    historyDays: 90,
+    historyDays: 30,
   },
   premium: {
     maxRoadClass: 'semua',
-    schedulesLimit: 50,
+    schedulesLimit: 45,
     capturesLimit: 100,
-    zonesLimit: 25,
-    seatsLimit: 25,
+    zonesLimit: 15,
+    seatsLimit: 5,
     storageGb: 100,
     exportFramesLimit: 720,
     exportBudgetMpFrames: 2900,
-    historyDays: null,
+    historyDays: 30,
   },
 }
 

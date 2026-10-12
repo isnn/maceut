@@ -437,7 +437,7 @@ router.post('/zones/:id/captures', captureController.create)
  *     summary: Export capture zona sebagai CSV (FE-30)
  *     description: >
  *       Satu baris per capture, dari kolom ringkasan tersimpan (tanpa traffic). Jangkauan
- *       mengikuti paket (BR-007) — Free 7 hari, Standard 90 hari, Premium semua — maksimal
+ *       mengikuti paket (BR-007) — Free 7 hari, Starter/Standard/Premium 30 hari — maksimal
  *       50.000 baris. Header `X-Export-Range` menyebut jangkauan yang dipakai.
  *       Kolom: captured_at_wib, status, trigger, window, road_class, roads, avg_jam_factor, error.
  *     tags: [Captures]
@@ -474,8 +474,8 @@ router.get('/zones/:id/captures', captureController.listForZone)
  *     summary: Frame Studio di dalam riwayat paket (BR-007)
  *     description: >
  *       Semua capture `done` milik zona, terlama dulu, tanpa traffic — untuk pemilih
- *       timeframe Studio. Dibatasi riwayat paket — Free 7 hari, Standard 90 hari, Premium
- *       semua — maksimal 5.000 frame terbaru. `historyDays` null = tanpa batas.
+ *       timeframe Studio. Dibatasi riwayat paket — Free 7 hari, paket lain 30 hari
+ *       — maksimal 5.000 frame terbaru. `historyDays` null = tanpa batas.
  *     tags: [Captures]
  *     security: [{ cookieAuth: [] }]
  *     parameters:

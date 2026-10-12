@@ -1,4 +1,4 @@
-export type Plan = 'free' | 'standard' | 'premium'
+export type Plan = 'free' | 'starter' | 'standard' | 'premium'
 
 /**
  * `user` is a paying customer; `internal` is Maceut staff and gates the /internal

@@ -350,7 +350,7 @@ export async function getPlatformStats(): Promise<{
     offset: 0,
   })
 
-  const planMix: Record<Plan, number> = { free: 0, standard: 0, premium: 0 }
+  const planMix: Record<Plan, number> = { free: 0, starter: 0, standard: 0, premium: 0 }
   let estimatedSeats = 0
   for (const row of rows) {
     planMix[row.plan] += 1

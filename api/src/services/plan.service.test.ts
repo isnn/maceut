@@ -96,8 +96,8 @@ describe('interval above the plan', () => {
 
 describe('over the active-window limit (BR-005)', () => {
   it('keeps the oldest and pauses the newest', async () => {
-    // free allows 10 active windows; make 11, all daily so interval is not the cause.
-    const rows = Array.from({ length: 11 }, (_, i) =>
+    // free allows 3 active windows; make 4, all daily so interval is not the cause.
+    const rows = Array.from({ length: 4 }, (_, i) =>
       schedule({
         id: `s${i}`,
         interval: 'daily',
@@ -108,14 +108,14 @@ describe('over the active-window limit (BR-005)', () => {
 
     const impact = await previewPlanChange(USER, 'free')
 
-    // s10 is the newest. An older window is likelier to be the one they depend on.
-    expect(impact.schedulesToPause.map((s) => s.id)).toEqual(['s10'])
+    // s3 is the newest. An older window is likelier to be the one they depend on.
+    expect(impact.schedulesToPause.map((s) => s.id)).toEqual(['s3'])
     expect(impact.schedulesToPause[0]!.reason).toBe('over_schedule_limit')
   })
 
   it('ignores already-paused windows when counting', async () => {
     const rows = [
-      ...Array.from({ length: 10 }, (_, i) => schedule({ id: `a${i}`, interval: 'daily' })),
+      ...Array.from({ length: 3 }, (_, i) => schedule({ id: `a${i}`, interval: 'daily' })),
       schedule({ id: 'paused', interval: 'daily', status: 'paused' }),
     ]
     vi.mocked(scheduleRepo.findByUserId).mockResolvedValue(rows)

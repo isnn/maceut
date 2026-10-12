@@ -29,11 +29,11 @@ interface PlanCardsProps {
   className?: string
 }
 
-const PUBLIC_VARIANT = { free: 'tint', standard: 'primary', premium: 'ink' } as const satisfies Record<Plan, Parameters<typeof buttonClass>[0]>
+const PUBLIC_VARIANT = { free: 'secondary', starter: 'tint', standard: 'primary', premium: 'ink' } as const satisfies Record<Plan, Parameters<typeof buttonClass>[0]>
 
 export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabledPlan, publicLinks, className }: PlanCardsProps) {
   return (
-    <div className={cn('grid grid-cols-1 tablet:grid-cols-3 gap-lg items-start', className)}>
+    <div className={cn('grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-lg items-start', className)}>
       {PLAN_ORDER.map((plan) => {
         const isSelected = selected === plan
         const recommended = plan === 'standard'
@@ -47,9 +47,9 @@ export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabl
           >
             {recommended && (
               // A reason, not a popularity claim (FE-36, FE-42): nothing measures popularity,
-              // so it names what Standard adds over Free: main roads, captured every hour.
+              // so it names what Standard adds over Starter: more zones, and a team.
               <span className="absolute -top-2.5 left-xl bg-primary text-on-primary text-micro font-semibold rounded-xs px-sm py-[3px]">
-                Main roads, every hour
+                10 zones, room for a team
               </span>
             )}
             <div>

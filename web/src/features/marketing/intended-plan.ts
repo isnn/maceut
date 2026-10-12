@@ -11,7 +11,7 @@ import type { Plan } from '@/features/auth/types'
 const KEY = 'maceut.intendedPlan'
 
 export function isPaidPlan(value: unknown): value is Exclude<Plan, 'free'> {
-  return value === 'standard' || value === 'premium'
+  return value === 'starter' || value === 'standard' || value === 'premium'
 }
 
 export function rememberIntendedPlan(plan: Plan): void {

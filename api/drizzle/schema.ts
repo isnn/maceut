@@ -19,7 +19,7 @@ import { user } from './auth-schema'
 
 export * from './auth-schema'
 
-export const planEnum = pgEnum('plan', ['free', 'standard', 'premium'])
+export const planEnum = pgEnum('plan', ['free', 'starter', 'standard', 'premium'])
 
 export const userPlans = pgTable(
   'user_plans',

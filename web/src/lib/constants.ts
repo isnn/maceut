@@ -3,15 +3,15 @@ import type { Plan } from '@/features/auth/types'
 /**
  * Plan catalog — single source of truth for the frontend.
  *
- * `schedulesLimit` and `capturesLimit` carry BR-005 / BR-006 (10/20/50 active
- * schedules, 10/50/100 daily captures). The remaining fields come from the
- * turn 3/4 mockups (zone slots, seats, capture interval, retention, export
- * formats), which price Standard at Rp 490rb and Premium at Rp 1,9jt.
+ * The four-plan catalog from the delivery doc (2026-10). Mirrors PLAN_LIMITS in
+ * api/src/types/plan.ts field for field; api/src/types/plan-catalog.test.ts fails when
+ * the two drift. `capturesLimit` is still a daily limit (BR-006) until the monthly pool
+ * lands; Starter's 15 is its 450-a-month pool over 30 days.
  */
 export const PLAN_LIMITS = {
   free: {
     maxRoadClass: 'nasional',
-    schedulesLimit: 10,
+    schedulesLimit: 3,
     capturesLimit: 10,
     zonesLimit: 1,
     seatsLimit: 1,
@@ -25,17 +25,33 @@ export const PLAN_LIMITS = {
     exportBudgetMpFrames: 120,
     exportLabel: 'Images only',
   },
+  starter: {
+    maxRoadClass: 'nasional_provinsi',
+    schedulesLimit: 9,
+    capturesLimit: 15,
+    zonesLimit: 3,
+    seatsLimit: 1,
+    storageGb: 5,
+    captureInterval: 'Hourly',
+    /** How far back the captures CSV reaches, in days; null = all (FE-30). */
+    historyDays: 30,
+    historyLabel: '30 days',
+    /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
+    exportFramesLimit: 120,
+    exportBudgetMpFrames: 250,
+    exportLabel: 'GIF + MP4',
+  },
   standard: {
     maxRoadClass: 'nasional_provinsi',
-    schedulesLimit: 20,
+    schedulesLimit: 30,
     capturesLimit: 50,
-    zonesLimit: 5,
+    zonesLimit: 10,
     seatsLimit: 5,
     storageGb: 10,
     captureInterval: 'Hourly',
     /** How far back the captures CSV reaches, in days; null = all (FE-30). */
-    historyDays: 90,
-    historyLabel: '90 days',
+    historyDays: 30,
+    historyLabel: '30 days',
     /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
     exportFramesLimit: 240,
     exportBudgetMpFrames: 500,
@@ -43,15 +59,15 @@ export const PLAN_LIMITS = {
   },
   premium: {
     maxRoadClass: 'semua',
-    schedulesLimit: 50,
+    schedulesLimit: 45,
     capturesLimit: 100,
-    zonesLimit: 25,
-    seatsLimit: 25,
+    zonesLimit: 15,
+    seatsLimit: 5,
     storageGb: 100,
     captureInterval: '15 minutes',
     /** How far back the captures CSV reaches, in days; null = all (FE-30). */
-    historyDays: null,
-    historyLabel: 'Unlimited',
+    historyDays: 30,
+    historyLabel: '30 days',
     /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
     exportFramesLimit: 720,
     exportBudgetMpFrames: 2900,
@@ -59,18 +75,20 @@ export const PLAN_LIMITS = {
   },
 } as const
 
-export const PLAN_ORDER: Plan[] = ['free', 'standard', 'premium']
+export const PLAN_ORDER: Plan[] = ['free', 'starter', 'standard', 'premium']
 
 export const PLAN_LABEL: Record<Plan, string> = {
   free: 'Free',
+  starter: 'Starter',
   standard: 'Standard',
   premium: 'Premium',
 }
 
 export const PLAN_PRICE: Record<Plan, { amount: string; period: string }> = {
   free: { amount: 'Rp 0', period: '/ month' },
-  standard: { amount: 'Rp 490k', period: '/ month' },
-  premium: { amount: 'Rp 1.9m', period: '/ month' },
+  starter: { amount: 'Rp 99k', period: '/ month' },
+  standard: { amount: 'Rp 349k', period: '/ month' },
+  premium: { amount: 'Rp 1.49m', period: '/ month' },
 }
 
 /** Bullet list shown on plan cards (landing, sign up, onboarding). */
@@ -78,8 +96,9 @@ export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
   // Facts only (FE-36): every line comes from PLAN_LIMITS / the API's plan rules. Every
   // plan exports ZIP, WebM and MP4, so export formats are not listed as a tier difference.
   free: ['1 zone', '10 captures a day', 'Highways', 'One capture a day per window', '7 days of history in CSV'],
-  standard: ['5 zones', '50 captures a day', 'Highways + main roads', 'Hourly captures', '90 days of history in CSV'],
-  premium: ['25 zones', '100 captures a day', 'All roads, down to local streets', 'Captures every 15 minutes', 'Full history in CSV'],
+  starter: ['3 zones', '15 captures a day', 'Highways + main roads', 'Hourly captures', '30 days of history in CSV'],
+  standard: ['10 zones', '50 captures a day', 'Highways + main roads', 'Hourly captures', '30 days of history in CSV'],
+  premium: ['15 zones', '100 captures a day', 'All roads, down to local streets', 'Captures every 15 minutes', '30 days of history in CSV'],
 }
 
 /**
@@ -95,7 +114,7 @@ export const ROAD_CLASS_LABEL: Record<string, string> = {
 
 export const ROAD_CLASS_REQUIRED_PLAN: Record<string, string> = {
   nasional: 'free',
-  nasional_provinsi: 'standard',
+  nasional_provinsi: 'starter',
   semua: 'premium',
 }
 
