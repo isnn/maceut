@@ -203,42 +203,22 @@ EXPOSE 3000
 CMD ["node", "server.js"]
 ```
 
-*Catatan: `web/next.config.ts` perlu `output: 'standalone'` agar build production ringkas.*
+*Catatan: `web/Dockerfile` memakai `next start` dengan node_modules produksi (tanpa `output: 'standalone'`).*
 
 ---
 
 ## docker-compose.prod.yml (Production Override)
 
-```yaml
-version: '3.9'
+Lihat file `docker-compose.prod.yml` dan panduan lengkap `docs/operations/deploy.md`
+(maceut.hokya.dev + maceut-api.hokya.dev, Cloudflare, reverse proxy, migrasi).
 
-services:
-  api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
-    volumes: []          # tidak mount source code di production
-    command: node dist/src/server.js
-    restart: always
-
-  worker:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
-    volumes: []
-    command: node dist/src/workers/index.js
-    restart: always
-
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    volumes: []
-    restart: always
-
-  # postgres & rabbitmq: gunakan managed service di production (rekomendasi)
-  # jika self-host, tambahkan restart: always dan volume backup strategy
-```
+- `volumes: !reset []` / `ports: !override` / `command: !reset null` — tag Compose ≥ 2.24.
+  `volumes: []` biasa DIGABUNG dengan docker-compose.yml, sehingga bind mount source dev
+  tetap terpasang dan container menjalankan source, bukan hasil build.
+- web & api hanya di `127.0.0.1` (dibuka lewat reverse proxy); postgres & rabbitmq tanpa port publik.
+- `web/Dockerfile` (production): `next build` + `next start`; `NEXT_PUBLIC_*` dari
+  `web/.env.production` dibaca saat BUILD.
+- Template env: `api/.env.production.example`, `web/.env.production.example`.
 
 Deploy command:
 ```bash

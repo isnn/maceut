@@ -1,20 +1,27 @@
-# Gunakan bersama docker-compose.yml:
-# docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Production: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Setup and domain routing: docs/operations/deploy.md.
+#
+# `!reset` drops what docker-compose.yml sets for local development (source mounts, dev
+# commands, public ports) instead of merging with it. A plain `volumes: []` merges, so the
+# dev bind mount would stay and the container would run the source tree, not the build.
 
 services:
   api:
     build:
       context: ./api
       dockerfile: Dockerfile
-    volumes: []          # tidak mount source code di production
+    volumes: !reset []
     command: node dist/src/server.js
+    # Only the reverse proxy on this host reaches it (maceut-api.hokya.dev → 127.0.0.1:8080).
+    ports: !override
+      - "127.0.0.1:8080:8080"
     restart: always
 
   worker:
     build:
       context: ./api
       dockerfile: Dockerfile
-    volumes: []
+    volumes: !reset []
     command: node dist/src/workers/index.js
     restart: always
 
@@ -22,14 +29,21 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
-    volumes: []
+    volumes: !reset []
+    env_file: !override
+      - ./web/.env.production
+    command: !reset null
+    # maceut.hokya.dev → 127.0.0.1:3000
+    ports: !override
+      - "127.0.0.1:3000:3000"
     restart: always
 
-  # postgres & rabbitmq: rekomendasi gunakan managed service di production
-  # (misal: Neon/Supabase untuk Postgres, CloudAMQP untuk RabbitMQ).
-  # Jika tetap self-host, tambahkan strategi backup volume secara terpisah.
+  # Not published to the internet: api and worker reach them on the compose network.
+  # Managed services (Neon/Supabase, CloudAMQP) are fine too; then drop these two.
   postgres:
+    ports: !reset []
     restart: always
 
   rabbitmq:
+    ports: !reset []
     restart: always
