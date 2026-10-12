@@ -181,6 +181,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **H1** Retensi capture 30 hari (P0, syarat HERE): sweeper per jam — 30 hari → data HERE di-NULL + `deleted_at` (soft delete, disembunyikan), 1 tahun → baris + gambar R2 dihapus; migrasi 0019; `npm run retention:dry-run`; mati sampai `RETENTION_SWEEPER_ENABLED=true`; ADR-035 | handover Legal & Retention (H1–H6) |
 | ✅ | **FE-45** Terms §8: email kontak support.maceut@hokya.dev (mailto, menggantikan placeholder); footer publik "© 2026 Maceut by hokya.dev" | permintaan user 2026-10-12 |
 | ✅ | **H2/H3/H5** Halaman legal: /terms & /privacy (EN + ID lewat `?lang=id`, teks final verbatim di features/legal/texts.ts), tautan Privacy di footer & Terms/Privacy di halaman daftar; tes §6 vs PLAN_LIMITS; atribusi: kredit OSM "© OpenStreetMap contributors" (RENDER_VERSION 2), CSV kolom `source` "Traffic © HERE" | handover Legal & Retention (H1–H6) |
+| ✅ | **H4** Persetujuan saat daftar: kotak wajib (teks EN & ID verbatim, tautan Terms/Privacy), diperiksa di server (hook Better Auth → 400 `TERMS_NOT_ACCEPTED`), bukti `user.terms_accepted_at` + `terms_version` (migrasi 0020); akun buatan staf tidak distempel; Swagger POST /api/auth/sign-up/email | handover Legal & Retention (H1–H6) |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -205,6 +206,16 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-12j] H4 — persetujuan saat daftar (feat/terms-consent, di atas docs/legal-pages + feat/data-retention-30d).
+  - Migrasi 0020: user.terms_accepted_at timestamptz + terms_version text (schema.dbml). Branch ini menggabungkan
+    H1 supaya urutan migrasi 0019 → 0020.
+  - Server: `hooks.before` Better Auth pada /sign-up/email dari browser (ada ctx.request) → `consentProblem`;
+    `databaseHooks.user.create.before` menstempel waktu + LEGAL_VERSION. Panggilan server (staf) dilewati.
+  - Nama field body `consentVersion` (bukan termsVersion: Better Auth menolak field yang sama dengan kolom
+    input:false → FIELD_NOT_ALLOWED).
+  - Uji nyata di API lokal: tanpa centang 400, versi lama 400, dengan centang 200 + stempel; akun staf dibuat
+    tanpa stempel. Akun uji dihapus.
 
 [2026-10-12h] H1 — retensi capture 30 hari (feat/data-retention-30d).
   - Keputusan owner (menggantikan "lewati F1"): 30 hari → soft delete, 1 tahun → hapus permanen; dry run dulu.
