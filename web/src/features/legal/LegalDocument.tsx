@@ -43,7 +43,15 @@ export function LegalDocument({ source }: { source: string }) {
   return (
     <div className="space-y-lg">
       {blocks.map((block, i) => {
-        if (block.startsWith('# ')) return null
+        if (block.startsWith('# ')) {
+          // The title is the page's h1; what follows it in the block ("Last updated") stays.
+          const rest = block.split('\n').slice(1).join('\n').trim()
+          return rest ? (
+            <p key={i} className="text-caption text-text-muted">
+              {inline(rest)}
+            </p>
+          ) : null
+        }
         if (block.startsWith('> ')) {
           return (
             <div key={i} className="rounded-md bg-warning-bg px-lg py-md text-body text-warning-text leading-relaxed">

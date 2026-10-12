@@ -184,6 +184,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **H4** Persetujuan saat daftar: kotak wajib (teks EN & ID verbatim, tautan Terms/Privacy), diperiksa di server (hook Better Auth → 400 `TERMS_NOT_ACCEPTED`), bukti `user.terms_accepted_at` + `terms_version` (migrasi 0020); akun buatan staf tidak distempel; Swagger POST /api/auth/sign-up/email | handover Legal & Retention (H1–H6) |
 | ✅ | **H6** Runbook penutupan akun (docs/operations/account-deletion.md): verifikasi dari alamat terdaftar, hapus akun (admin), file R2 (captures/exports/render-cache), email_log & verification, konfirmasi, catatan; usulan perluasan endpoint admin di PR | handover Legal & Retention (H1–H6) |
 | ✅ | **FE-46** Hapus akun (staf): dialog memperingatkan bahwa penghapusan permanen & tak bisa dipulihkan, dan tombol Delete account baru aktif setelah mengetik `delete` (`ConfirmDialog.confirmPhrase`) | permintaan user 2026-10-12 |
+| ✅ | **FE-47** Teks legal & auth: catatan draf & kotak "read first" (termasuk pernyataan Komdigi/PSE) dihapus; catatan independen jadi teks biasa di Terms §1 (EN & ID); teks persetujuan dipersingkat & hanya satu bahasa; lead daftar dihapus; login "Continue with Google" + logo G, ikon email di "Create an account"; ® dihapus dari logo; tagline footer "Connecting people with the road ahead"; baris "Last updated" kini tampil | masukan user 2026-10-12 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -208,6 +209,17 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-12m] FE-47 — revisi teks legal, daftar, login, footer (fix/legal-auth-copy).
+  - Terms/Privacy: Alert draf dihapus; kotak "Please read first" dihapus dari Terms EN & ID, sehingga tidak ada
+    lagi penyebutan Komdigi/PSE. "Maceut is an independent service… anything critical" pindah ke akhir §1 sebagai
+    teks biasa. Teks persetujuan: "I agree to the Terms of Service and Privacy Policy." (ID disesuaikan).
+  - LEGAL_VERSION tetap 2026-10-12 (belum rilis, belum ada persetujuan pengguna nyata).
+  - BUG lama: blok judul (`# …` + "Last updated") dibuang utuh, jadi tanggal tidak pernah tampil; kini dirender.
+  - Daftar: lead "We'll email you a code…" dan kalimat persetujuan bahasa Indonesia di bawah kotak dihapus.
+  - Login: "Continue with Google" + IconGoogle (warna merek Google, satu-satunya ikon berwarna; tombol tetap
+    nonaktif karena SSO belum ada); "Create an account" + IconMail.
+  - Logo tanpa ®; PublicFooter: tagline di samping logo.
 
 [2026-10-12l] FE-46 — konfirmasi ketik untuk hapus akun (feat/delete-account-typed-confirm).
   - ConfirmDialog mendapat prop opsional `confirmPhrase`: kolom ketik; tombol konfirmasi nonaktif sampai isinya
