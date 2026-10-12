@@ -183,6 +183,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **H2/H3/H5** Halaman legal: /terms & /privacy (EN + ID lewat `?lang=id`, teks final verbatim di features/legal/texts.ts), tautan Privacy di footer & Terms/Privacy di halaman daftar; tes §6 vs PLAN_LIMITS; atribusi: kredit OSM "© OpenStreetMap contributors" (RENDER_VERSION 2), CSV kolom `source` "Traffic © HERE" | handover Legal & Retention (H1–H6) |
 | ✅ | **H4** Persetujuan saat daftar: kotak wajib (teks EN & ID verbatim, tautan Terms/Privacy), diperiksa di server (hook Better Auth → 400 `TERMS_NOT_ACCEPTED`), bukti `user.terms_accepted_at` + `terms_version` (migrasi 0020); akun buatan staf tidak distempel; Swagger POST /api/auth/sign-up/email | handover Legal & Retention (H1–H6) |
 | ✅ | **H6** Runbook penutupan akun (docs/operations/account-deletion.md): verifikasi dari alamat terdaftar, hapus akun (admin), file R2 (captures/exports/render-cache), email_log & verification, konfirmasi, catatan; usulan perluasan endpoint admin di PR | handover Legal & Retention (H1–H6) |
+| ✅ | **FE-46** Hapus akun (staf): dialog memperingatkan bahwa penghapusan permanen & tak bisa dipulihkan, dan tombol Delete account baru aktif setelah mengetik `delete` (`ConfirmDialog.confirmPhrase`) | permintaan user 2026-10-12 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -207,6 +208,12 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-12l] FE-46 — konfirmasi ketik untuk hapus akun (feat/delete-account-typed-confirm).
+  - ConfirmDialog mendapat prop opsional `confirmPhrase`: kolom ketik; tombol konfirmasi nonaktif sampai isinya
+    sama persis (spasi di ujung diabaikan); Enter di kolom mengonfirmasi; isi dikosongkan setelah dialog tertutup.
+  - Halaman Users staf memakai `delete`; teks peringatan menyebut isi yang ikut terhapus & bahwa tak bisa dipulihkan.
+  - Hanya UI; endpoint DELETE /internal/users/:id tidak berubah (tetap superadmin + guard yang ada).
 
 [2026-10-12k] H6 — runbook penutupan akun (chore/account-deletion-runbook). Dokumen saja.
   - DELETE /internal/users/:id meng-cascade semua tabel milik akun, tetapi TIDAK menghapus file R2
