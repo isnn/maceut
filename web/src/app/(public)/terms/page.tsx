@@ -20,7 +20,7 @@ const exportByPlan = PLAN_ORDER.map((p) => `${PLAN_LABEL[p]} ${PLAN_LIMITS[p].ex
  * Terms of Service (FE-37). A plain-language DRAFT written to name the data sources the
  * landing page deliberately does not (HERE traffic data, OpenStreetMap map data). It is
  * marked as a draft on the page and must be reviewed by a lawyer before launch.
- * [CONTACT EMAIL] is an honest placeholder until the owner supplies an address.
+ * Questions go to support.maceut@hokya.dev, the address the owner supplied.
  */
 const SECTIONS: { title: string; body: React.ReactNode }[] = [
   {
@@ -53,7 +53,15 @@ const SECTIONS: { title: string; body: React.ReactNode }[] = [
   },
   {
     title: '8. Changes and contact',
-    body: 'We may update these terms; we will show the date of the latest version on this page. Questions: [CONTACT EMAIL].',
+    body: (
+      <>
+        We may update these terms; we will show the date of the latest version on this page. Questions:{' '}
+        <a href="mailto:support.maceut@hokya.dev" className="font-semibold text-primary no-underline hover:underline">
+          support.maceut@hokya.dev
+        </a>
+        .
+      </>
+    ),
   },
 ]
 

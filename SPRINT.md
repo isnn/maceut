@@ -178,6 +178,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **PKG-F9** Masa simpan ekspor per paket (Free 7 / Starter 14 / Standard 30 / Premium 30 hari, maks 30): `expires_at` dari paket pemilik saat ekspor selesai; env `EXPORT_RETENTION_DAYS` dihapus; hari ditampilkan di kartu paket, tabel perbandingan, Profil, dialog ekspor Studio, notifikasi; ADR-034 | docs Delivery Paket & Fitur |
 | ✅ | **PKG-F8** Sapu teks paket: terms §3 (4 paket, kuota bulanan) & §6 (riwayat & simpan ekspor dari katalog), dialog batas zona (paket berikutnya, bukan "Premium 25 zona"), kartu Premium unlocks, papan jadwal per bulan, meta pricing, link Upgrade Studio hanya bila riwayat < 30 hari, Swagger POST /schedules | docs Delivery Paket & Fitur |
 | ✅ | **PKG-FIX1** Masukan paket: scheduler tidak lagi meng-capture zona yang di-pause (claimDue membawa status zona); proyeksi & strip Latest captures tidak menghitung/menampilkan zona yang di-pause; peringatan pool membandingkan proyeksi sisa bulan (bukan sebulan penuh) vs sisa pool; label ekspor jujur (semua paket MP4 & WebM, tanpa API/GIF); badge Standard "Best price"; teks kartu paket & FAQ | masukan user 2026-10-12 |
+| ✅ | **FE-45** Terms §8: email kontak support.maceut@hokya.dev (mailto, menggantikan placeholder); footer publik "© 2026 Maceut by hokya.dev" | permintaan user 2026-10-12 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -202,6 +203,12 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-12g] FE-45 — kontak terms & kredit footer (chore/terms-contact-footer).
+  - Terms §8 kini menautkan support.maceut@hokya.dev; placeholder [CONTACT EMAIL] hilang.
+  - PublicFooter: "© 2026 Maceut by hokya.dev" (tautan ke https://hokya.dev), di landing, pricing, terms.
+  - DB lokal: notifikasi basi "45 of undefined" (1 baris notifications) dihapus atas permintaan user;
+    captures tidak disentuh (1.500 sebelum & sesudah).
 
 [2026-10-12f] PKG-FIX1 — masukan user setelah merge paket (fix/plan-feedback).
   - Notifikasi "45 of undefined … daily limit": baris basi dari kode setengah-jadi saat pengembangan F5 (api hot
