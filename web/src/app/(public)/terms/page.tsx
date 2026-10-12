@@ -41,7 +41,7 @@ const SECTIONS: { title: string; body: React.ReactNode }[] = [
   },
   {
     title: '5. Map data',
-    body: 'Base maps use data from © OpenStreetMap contributors, available under the Open Database License.',
+    body: 'Base maps use data from © OpenStreetMap contributors, available under the Open Database License, served by OpenFreeMap in the OpenMapTiles schema. Every image and export Maceut makes carries these credits and "Traffic © HERE". Keep them when you publish it.',
   },
   {
     title: '6. Your data and exports',
