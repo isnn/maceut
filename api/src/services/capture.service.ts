@@ -194,7 +194,7 @@ export async function listForZone(
 }
 
 /**
- * Where a plan's history starts (BR-007): Free 7 days, Standard 90, Premium all (null).
+ * Where a plan's history starts (BR-007): Free 7 days, every paid plan 30 (null = all).
  * Older captures are kept, not deleted; they are out of reach until the plan allows them.
  */
 export function historySince(plan: Plan, now: Date = new Date()): Date | null {

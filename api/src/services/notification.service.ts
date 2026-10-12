@@ -261,7 +261,7 @@ export async function onExportFinished(exportId: string): Promise<void> {
 
 // --- plan ----------------------------------------------------------------------------
 
-const PLAN_NAME: Record<Plan, string> = { free: 'Free', standard: 'Standard', premium: 'Premium' }
+const PLAN_NAME: Record<Plan, string> = { free: 'Free', starter: 'Starter', standard: 'Standard', premium: 'Premium' }
 
 /**
  * A plan changed. Emails only when STAFF made the change: someone changing their own

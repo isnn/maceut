@@ -89,7 +89,7 @@ router.get('/internal/config', superadminOnly, userController.config)
  *         description: Cocokkan email, nama, atau instansi
  *       - in: query
  *         name: plan
- *         schema: { type: string, enum: [free, standard, premium] }
+ *         schema: { type: string, enum: [free, starter, standard, premium] }
  *       - in: query
  *         name: role
  *         schema: { type: string, enum: [user, internal] }
@@ -208,7 +208,7 @@ router.get('/internal/users/:id/usage', userController.usage)
  *             properties:
  *               email: { type: string, format: email }
  *               fullName: { type: string, example: Siti Aminah }
- *               plan: { type: string, enum: [free, standard, premium], default: free }
+ *               plan: { type: string, enum: [free, starter, standard, premium], default: free }
  *               role: { type: string, enum: [user, internal], default: user }
  *               password: { type: string, minLength: 8, description: Kosongkan agar dibuatkan }
  *     responses:
@@ -273,7 +273,7 @@ router.post('/internal/users', superadminOnly, userController.create)
  *             properties:
  *               fullName: { type: string }
  *               email: { type: string, format: email }
- *               plan: { type: string, enum: [free, standard, premium] }
+ *               plan: { type: string, enum: [free, starter, standard, premium] }
  *               role: { type: string, enum: [user, internal] }
  *               password: { type: string, minLength: 8, description: Mengakhiri semua sesi akun itu }
  *     responses:
@@ -372,7 +372,7 @@ router.delete('/internal/users/:id', superadminOnly, userController.remove)
  *             type: object
  *             required: [plan]
  *             properties:
- *               plan: { type: string, enum: [free, standard, premium] }
+ *               plan: { type: string, enum: [free, starter, standard, premium] }
  *     responses:
  *       200:
  *         description: Paket diubah
@@ -404,7 +404,7 @@ router.delete('/internal/users/:id', superadminOnly, userController.remove)
  *       - in: query
  *         name: plan
  *         required: true
- *         schema: { type: string, enum: [free, standard, premium] }
+ *         schema: { type: string, enum: [free, starter, standard, premium] }
  *     responses:
  *       200: { description: "PlanImpact — zonesToPause, schedulesToPause, clean" }
  *       401: { description: UNAUTHORIZED }

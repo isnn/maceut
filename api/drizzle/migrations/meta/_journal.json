@@ -127,6 +127,13 @@
       "when": 1791300000000,
       "tag": "0017_staff_type",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791776836318,
+      "tag": "0018_starter_plan",
+      "breakpoints": true
     }
   ]
 }

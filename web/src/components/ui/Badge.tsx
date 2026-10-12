@@ -70,7 +70,7 @@ export function RoadClassBadge({ roadClass, className }: { roadClass: RoadClass;
   )
 }
 
-const PLAN_TONE: Record<Plan, PillTone> = { free: 'neutral', standard: 'info', premium: 'brand' }
+const PLAN_TONE: Record<Plan, PillTone> = { free: 'neutral', starter: 'teal', standard: 'info', premium: 'brand' }
 
 export function PlanPill({ plan, className }: { plan: Plan; className?: string }) {
   return (

@@ -1,4 +1,4 @@
-import { PLAN_LABEL, PLAN_LIMITS } from '@/lib/constants'
+import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER } from '@/lib/constants'
 import type { Plan } from '@/features/auth/types'
 import { DAY_NAME, framesPerDay, type CaptureInterval, type CaptureWindow } from './types'
 
@@ -9,13 +9,14 @@ import { DAY_NAME, framesPerDay, type CaptureInterval, type CaptureWindow } from
  */
 export const PLAN_INTERVALS: Record<Plan, CaptureInterval[]> = {
   free: ['daily'],
+  starter: ['daily', 'hourly'],
   standard: ['daily', 'hourly'],
   premium: ['daily', 'hourly', '15min'],
 }
 
 /** The cheapest plan that offers an interval. */
 export function planFor(interval: CaptureInterval): Plan {
-  return (['free', 'standard', 'premium'] as Plan[]).find((p) => PLAN_INTERVALS[p].includes(interval))!
+  return PLAN_ORDER.find((p) => PLAN_INTERVALS[p].includes(interval))!
 }
 
 /** Why the current choices don't fit the plan — shown in the dialog's upgrade panel. */

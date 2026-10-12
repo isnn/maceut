@@ -12,6 +12,8 @@
  * database.
  */
 
+import type { Plan } from './plan'
+
 export type CaptureInterval = '15min' | 'hourly' | 'daily'
 export type ScheduleStatus = 'active' | 'paused' | 'deleted'
 
@@ -25,8 +27,9 @@ export const INTERVAL_PER_HOUR: Record<CaptureInterval, number> = {
 }
 
 /** Interval a plan is allowed to pick — the tier's headline differentiator. */
-export const PLAN_MIN_INTERVAL: Record<'free' | 'standard' | 'premium', CaptureInterval[]> = {
+export const PLAN_MIN_INTERVAL: Record<Plan, CaptureInterval[]> = {
   free: ['daily'],
+  starter: ['daily', 'hourly'],
   standard: ['daily', 'hourly'],
   premium: ['daily', 'hourly', '15min'],
 }

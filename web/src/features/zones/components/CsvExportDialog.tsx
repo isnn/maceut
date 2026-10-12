@@ -8,23 +8,21 @@ import { Button, linkClass } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { IconCrown, IconDownload } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
-import { PLAN_LABEL, PLAN_LIMITS } from '@/lib/constants'
+import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import type { Plan } from '@/features/auth/types'
 import * as zonesApi from '../api'
 
-/** The ranges offered; `null` days = all history. */
+/** The ranges offered; `null` days = all history. 30 days is the longest any plan keeps. */
 const RANGES: { id: zonesApi.CsvRange; label: string; days: number | null }[] = [
   { id: '1', label: 'Last 24 hours', days: 1 },
   { id: '7', label: 'Last 7 days', days: 7 },
   { id: '30', label: 'Last 30 days', days: 30 },
-  { id: '90', label: 'Last 90 days', days: 90 },
-  { id: 'all', label: 'All history', days: null },
 ]
 
 /** The cheapest plan whose history reaches this far. */
 function planReaching(days: number | null): Plan {
-  return (['free', 'standard', 'premium'] as Plan[]).find((p) => {
+  return PLAN_ORDER.find((p) => {
     const h = PLAN_LIMITS[p].historyDays
     return h === null || (days !== null && days <= h)
   })!

@@ -19,7 +19,7 @@ import { accessOf, type Access, type Plan, type User } from '@/features/auth/typ
 import type { AccountUsage, InternalUserRow, PlatformStats } from './types'
 
 /** Rupiah per month, used for the MRR estimate on the overview. */
-const PLAN_MONTHLY_IDR: Record<Plan, number> = { free: 0, standard: 490_000, premium: 1_900_000 }
+const PLAN_MONTHLY_IDR: Record<Plan, number> = { free: 0, starter: 99_000, standard: 349_000, premium: 1_490_000 }
 
 /** Server caps limit at 100 per page; the directory pages through to build the table. */
 const PAGE_SIZE = 100

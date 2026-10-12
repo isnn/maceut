@@ -26,15 +26,20 @@
 
 MVP menggunakan **single workspace** — tidak ada multi-tenant atau team role. Satu akun = satu workspace.
 
-| Permission | Free | Standard | Premium |
-|-----------|:----:|:--------:|:-------:|
-| Buat & kelola zona (polygon) | ✅ | ✅ | ✅ |
-| Road class: Nasional | ✅ | ✅ | ✅ |
-| Road class: Provinsi | ❌ | ✅ | ✅ |
-| Road class: Kota / Lokal | ❌ | ❌ | ✅ |
-| Max Active Schedules | 10 | 20 | 50 |
-| Daily Capture Limit | 10 | 50 | 100 |
-| Export PNG/JPG | ✅ | ✅ | ✅ |
+| Permission | Free | Starter | Standard | Premium |
+|-----------|:----:|:-------:|:--------:|:-------:|
+| Harga / bulan | Rp 0 | Rp 99k | Rp 349k | Rp 1,49m |
+| Buat & kelola zona (polygon) | 1 | 3 | 10 | 15 |
+| Road class: Nasional | ✅ | ✅ | ✅ | ✅ |
+| Road class: Provinsi | ❌ | ✅ | ✅ | ✅ |
+| Road class: Kota / Lokal | ❌ | ❌ | ❌ | ✅ |
+| Max Active Schedules | 3 | 9 | 30 | 45 |
+| Daily Capture Limit (sampai pool bulanan, F5) | 10 | 15 | 50 | 100 |
+| Riwayat (tampilan & CSV) | 7 hari | 30 hari | 30 hari | 30 hari |
+| Pengguna | 1 | 1 | 5 | 5 |
+| Export PNG/JPG | ✅ | ✅ | ✅ | ✅ |
+
+*Katalog 4 paket dari dokumen "Delivery Paket & Fitur" (2026-10). Paket Business ditunda.*
 
 *Semua user bisa membuat zona polygon di area mana saja. Tier membatasi kedalaman data jalan yang bisa dipilih (road class) DAN volume penggunaan (active schedule & daily capture limit) — lihat BR-005, BR-006.*
 
@@ -83,8 +88,8 @@ Lihat `.claude/specs/internal/requirements.md`.
 - BR-023: Style (skema warna overlay + teks title + tampilan timestamp) dipilih **setiap kali** sebelum preview atau trigger manual capture — bersifat ephemeral, **tidak disimpan** sebagai profil per zona maupun per user. Untuk **scheduled capture** (trigger otomatis tanpa interaksi user), sistem menggunakan style preset **"Default"**. Setiap record capture tetap menyimpan snapshot style yang dipakai (`style_used`) untuk keperluan histori, bukan untuk dipakai ulang otomatis.
 
 **Schedule & Capture Limits**
-- BR-005: Batas active schedule bersamaan per user sesuai plan: Free 10, Standard 20, Premium 50. Schedule `paused` atau `deleted` tidak dihitung.
-- BR-006: Daily capture limit per user sesuai plan: Free 10, Standard 50, Premium 100 captures/hari. Dihitung per kalender hari (WIB UTC+7).
+- BR-005: Batas active schedule bersamaan per user sesuai plan: Free 3, Starter 9, Standard 30, Premium 45. Schedule `paused` atau `deleted` tidak dihitung.
+- BR-006: Daily capture limit per user sesuai plan: Free 10, Starter 15, Standard 50, Premium 100 captures/hari (digantikan pool bulanan, delivery doc F5). Dihitung per kalender hari (WIB UTC+7).
 - BR-007: Enforcement limit dilakukan di **service layer** — handler tidak boleh melakukan validasi limit sendiri.
 - BR-008: Jika capture gagal karena limit tercapai, job di-drop (bukan di-retry) dan dicatat di capture history dengan status `skipped_limit`.
 

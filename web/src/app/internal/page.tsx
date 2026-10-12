@@ -17,6 +17,7 @@ import type { Plan } from '@/features/auth/types'
 
 const PLAN_BAR: Record<Plan, string> = {
   free: 'bg-canvas-secondary border border-border',
+  starter: 'bg-primary-soft/50',
   standard: 'bg-primary-soft',
   premium: 'bg-primary',
 }
@@ -124,7 +125,7 @@ export default function InternalOverviewPage() {
               )
             })}
           </div>
-          <dl className="mt-lg grid grid-cols-1 tablet:grid-cols-3 gap-lg">
+          <dl className="mt-lg grid grid-cols-2 tablet:grid-cols-4 gap-lg">
             {PLAN_ORDER.map((plan) => (
               <div key={plan} className="flex items-center gap-sm">
                 <span className={cn('w-3 h-3 rounded-full shrink-0', PLAN_BAR[plan])} />

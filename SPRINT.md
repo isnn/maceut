@@ -173,6 +173,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-39** Studio: timeframe hanya menawarkan riwayat paket ("All 7 days" / "All 90 days" / "All", baris "Your plan keeps N days of history · Upgrade"); zona terakhir diingat saat kembali ke Studio | review user |
 | ✅ | **BE-18** Worker tahan macet: batas render 3 menit tanpa progres, channel RabbitMQ per consumer + reconnect, restart beneran (tanpa `tsx watch`), healthcheck heartbeat, capture terlambat → `missed` (opsi C), `captured_at` = waktu sampel | insiden 2026-10-08 |
 | ✅ | **PKG-F2** Atribusi di setiap gambar capture & ekspor: "Traffic © HERE" + "OpenFreeMap © OpenMapTiles Data from OpenStreetMap" (Esri tetap untuk Satellite); teks di satu tempat (`ATTRIBUTION`, render.ts); terms menyebut kredit yang sama | docs Delivery Paket & Fitur |
+| ✅ | **PKG-F3/F4** Paket Starter (Rp 99k) + katalog 4 paket di backend & frontend (harga, zona, jadwal, riwayat 30 hari, pengguna, ekspor); migrasi 0018 `plan` + starter; tes katalog membandingkan kedua salinan; `npm run plan:impact` (hanya-baca) | docs Delivery Paket & Fitur |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -197,6 +198,19 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-12b] PKG-F3/F4 — paket Starter + katalog baru (feat/starter-plan-catalog).
+  - Plan = free < starter < standard < premium (api/src/types/plan.ts, web/src/lib/constants.ts, enum DB 0018
+    `ADD VALUE 'starter' BEFORE 'standard'`, schema.dbml). Business TIDAK ditambahkan (ditunda).
+  - Nilai dari tabel katalog delivery doc. `capturesLimit` masih harian sampai pool bulanan (F5); Starter
+    sementara 15/hari (= 450 ÷ 30).
+  - Riwayat maks 30 hari di semua paket: CSV tidak lagi menawarkan 90 hari / semua; tidak ada data yang dihapus.
+  - `api/src/types/plan-catalog.test.ts`: angka katalog, urutan & isUpgrade untuk semua pasangan, salinan web
+    = salinan api (dilewati di container api yang tidak me-mount web/).
+  - Keputusan bawaan dari delivery doc: kelas jalan Starter = nasional_provinsi; capture gagal dihitung (F5);
+    tanpa batas harian pengaman; Studio > 30 hari = gambar tersimpan saja (F1 dilewati, jadi belum relevan).
+  - `npm run plan:impact` (hanya-baca, memakai previewPlanChange yang sama dengan dialog ganti paket): di DB
+    lokal 12 akun, 0 melebihi batas baru. Jalankan di produksi sebelum rilis; jeda (ADR-020) setelah notifikasi.
 
 [2026-10-12] PKG-F2 — atribusi HERE + OpenMapTiles pada gambar (fix/capture-attribution).
   Semua gambar server (capture & ekspor) dan pratinjau Studio digambar oleh `drawAttribution` di render.ts,

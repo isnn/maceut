@@ -197,16 +197,17 @@ describe('GET /zones/:id/captures.csv (FE-30)', () => {
   })
 
   it('reaches back as far as the plan’s history (BR-007)', async () => {
-    signedIn() // standard → 90 days
+    signedIn() // standard → 30 days
     const res = await request(app).get(`/zones/${ZONE_ID}/captures.csv`)
-    expect(res.headers['x-export-range']).toBe('last-90-days')
+    expect(res.headers['x-export-range']).toBe('last-30-days')
     const since = vi.mocked(captureRepo.listForCsv).mock.calls[0]![1] as Date
-    expect(Math.round((Date.now() - since.getTime()) / 86_400_000)).toBe(90)
+    expect(Math.round((Date.now() - since.getTime()) / 86_400_000)).toBe(30)
 
+    // Premium no longer keeps everything: 30 days on every paid plan (HERE terms).
     vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue({ plan: 'premium' } as never)
-    const all = await request(app).get(`/zones/${ZONE_ID}/captures.csv`)
-    expect(all.headers['x-export-range']).toBe('all')
-    expect(vi.mocked(captureRepo.listForCsv).mock.calls[1]![1]).toBeNull()
+    const premium = await request(app).get(`/zones/${ZONE_ID}/captures.csv`)
+    expect(premium.headers['x-export-range']).toBe('last-30-days')
+    expect(vi.mocked(captureRepo.listForCsv).mock.calls[1]![1]).not.toBeNull()
 
     vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue({ plan: 'free' } as never)
     const free = await request(app).get(`/zones/${ZONE_ID}/captures.csv`)
@@ -214,14 +215,14 @@ describe('GET /zones/:id/captures.csv (FE-30)', () => {
   })
 
   it('takes a shorter range, and refuses one past the plan (FE-32)', async () => {
-    signedIn() // standard → 90 days
+    signedIn() // standard → 30 days
     const res = await request(app).get(`/zones/${ZONE_ID}/captures.csv?days=7`)
     expect(res.status).toBe(200)
     expect(res.headers['x-export-range']).toBe('last-7-days')
 
     const all = await request(app).get(`/zones/${ZONE_ID}/captures.csv?days=all`)
     expect(all.status).toBe(403)
-    expect(all.body.error).toMatchObject({ code: 'HISTORY_LIMIT_EXCEEDED', details: { historyDays: 90 } })
+    expect(all.body.error).toMatchObject({ code: 'HISTORY_LIMIT_EXCEEDED', details: { historyDays: 30 } })
 
     expect((await request(app).get(`/zones/${ZONE_ID}/captures.csv?days=5`)).status).toBe(422)
   })
@@ -263,15 +264,13 @@ describe('GET /zones/:id/frames (BR-007)', () => {
     expect(Math.abs(before - 7 * DAY - since.getTime())).toBeLessThan(5_000)
   })
 
-  it('gives Standard 90 days and Premium everything', async () => {
-    signedIn('standard')
-    await request(app).get(`/zones/${ZONE_ID}/frames`)
-    const since = vi.mocked(captureRepo.listFramesSince).mock.calls[0]![1] as Date
-    expect(Math.round((Date.now() - since.getTime()) / DAY)).toBe(90)
-
-    signedIn('premium')
-    const res = await request(app).get(`/zones/${ZONE_ID}/frames`)
-    expect(res.body.data.historyDays).toBeNull()
-    expect(vi.mocked(captureRepo.listFramesSince).mock.calls[1]![1]).toBeNull()
+  it('gives Starter, Standard and Premium 30 days', async () => {
+    for (const [i, plan] of (['starter', 'standard', 'premium'] as const).entries()) {
+      signedIn(plan)
+      const res = await request(app).get(`/zones/${ZONE_ID}/frames`)
+      expect(res.body.data.historyDays, plan).toBe(30)
+      const since = vi.mocked(captureRepo.listFramesSince).mock.calls[i]![1] as Date
+      expect(Math.round((Date.now() - since.getTime()) / DAY), plan).toBe(30)
+    }
   })
 })
