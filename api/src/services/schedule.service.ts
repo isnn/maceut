@@ -2,7 +2,6 @@ import * as captureRepo from '../repositories/capture.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import {
-  CaptureLimitExceededError,
   ForbiddenError,
   IntervalNotInPlanError,
   NotFoundError,
@@ -12,6 +11,7 @@ import {
 import { PLAN_LIMITS, type Plan } from '../types/plan'
 import {
   framesPerDay,
+  framesPerMonth,
   parseTime,
   toCron,
   PLAN_MIN_INTERVAL,
@@ -37,8 +37,10 @@ export interface PublicSchedule {
   active: boolean
   /** Paused by a plan change (ADR-020), not by the user. */
   pausedByPlan: boolean
-  /** Frames this window yields on a day it runs — the board's budget figure. */
+  /** Frames this window yields on a day it runs. */
   framesPerDay: number
+  /** Frames in an average month (week × 52 ÷ 12) — compared with the pool (F6). */
+  framesPerMonth: number
   /** Derived, never stored. Shown for transparency and used by the scheduler. */
   cron: string
   /** Frames this window has collected (captures that finished). */
@@ -65,6 +67,7 @@ export function toPublic(row: ScheduleRecord, capturedFrames = 0): PublicSchedul
     active: row.status === 'active',
     pausedByPlan: row.pausedByPlan,
     framesPerDay: framesPerDay(shape),
+    framesPerMonth: framesPerMonth(shape),
     cron: toCron(shape),
     capturedFrames,
     nextFireAt: row.status === 'active' && row.nextFireAt ? row.nextFireAt.toISOString() : null,
@@ -123,39 +126,6 @@ function requireIntervalAllowed(plan: Plan, interval: CaptureInterval): void {
   }
 }
 
-/**
- * BR-006 read forwards: a window must not commit the account to more frames per day
- * than the plan allows.
- *
- * Checked at creation rather than only at capture time, because discovering the limit
- * only when frames start being skipped is a much worse experience — the user would see
- * gaps in their data with no explanation of why.
- */
-async function requireDailyBudget(
-  userId: string,
-  plan: Plan,
-  candidate: { start: string; end: string; interval: CaptureInterval; days: number[] },
-  excludeId?: string,
-): Promise<void> {
-  const existing = await scheduleRepo.findByUserId(userId)
-  const dailyLimit = PLAN_LIMITS[plan].capturesLimit
-
-  // The worst day, not the average: what matters is whether any single day exceeds
-  // the allowance. A window running only on Sunday costs nothing on Monday.
-  for (let day = 0; day < 7; day++) {
-    let frames = 0
-    for (const row of existing) {
-      if (row.id === excludeId || row.status !== 'active' || !row.days.includes(day)) continue
-      frames += framesPerDay({ start: row.startTime, end: row.endTime, interval: row.interval as CaptureInterval, days: row.days })
-    }
-    if (candidate.days.includes(day)) frames += framesPerDay(candidate)
-
-    if (frames > dailyLimit) {
-      throw new CaptureLimitExceededError({ day, frames, dailyLimit, plan })
-    }
-  }
-}
-
 export async function listSchedules(userId: string): Promise<PublicSchedule[]> {
   const [rows, captured] = await Promise.all([scheduleRepo.findByUserId(userId), captureRepo.countDoneBySchedule(userId)])
   return rows.map((row) => toPublic(row, captured.get(row.id) ?? 0))
@@ -187,7 +157,8 @@ export async function createSchedule(
     throw new ScheduleLimitExceededError(limit)
   }
 
-  await requireDailyBudget(userId, plan, input)
+  // No frame budget check here: the monthly pool (BR-006) is enforced per capture, and
+  // the board warns when the windows' projection passes it (delivery doc F6).
 
   const created = await scheduleRepo.create({
     userId,
@@ -248,10 +219,6 @@ export async function updateSchedule(
     }
   }
 
-  if (willBeActive && (shapeChanged || existing.status !== 'active')) {
-    await requireDailyBudget(userId, plan, next, id)
-  }
-
   const status: ScheduleStatus | undefined =
     patch.active === undefined ? undefined : patch.active ? 'active' : 'paused'
 
@@ -270,6 +237,18 @@ export async function updateSchedule(
 export async function deleteSchedule(userId: string, id: string): Promise<void> {
   await ownedSchedule(userId, id)
   await scheduleRepo.softDelete(id)
+}
+
+/** Frames an average month of every active window takes from the pool (F6). */
+export async function totalFramesPerMonth(userId: string): Promise<number> {
+  const rows = await scheduleRepo.findByUserId(userId)
+  return rows
+    .filter((r) => r.status === 'active')
+    .reduce(
+      (sum, r) =>
+        sum + framesPerMonth({ start: r.startTime, end: r.endTime, interval: r.interval as CaptureInterval, days: r.days }),
+      0,
+    )
 }
 
 /** Total frames per day across every active window — the board's budget readout. */

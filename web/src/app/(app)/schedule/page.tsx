@@ -11,7 +11,8 @@ import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
-import { cn } from '@/lib/utils'
+import { cn, formatNumber } from '@/lib/utils'
+import { poolResetDay, projectionExceedsPool, type CapturePool } from '@/features/plan/pool'
 import { ActionMenu } from '@/components/ui/ActionMenu'
 import { NextCollectionCard } from '@/features/schedules/components/NextCollectionCard'
 import { WindowDialog, forgetWindowDraft, peekWindowDraft, type WindowDraft } from '@/features/schedules/components/WindowDialog'
@@ -66,6 +67,7 @@ export default function SchedulePage() {
   const { user } = useCurrentUser()
   const [zones, setZones] = useState<Zone[]>([])
   const [windows, setWindows] = useState<CaptureWindow[] | null>(null)
+  const [pool, setPool] = useState<CapturePool | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [editing, setEditing] = useState<CaptureWindow | null>(null)
   /** Opened from the row menu's Delete: the dialog starts at the confirmation. */
@@ -77,14 +79,20 @@ export default function SchedulePage() {
   const limits = PLAN_LIMITS[plan]
 
   const load = useCallback(async () => {
-    const nextZones = await zonesApi.getZones()
-    return { zones: nextZones, windows: await schedulesApi.getWindows() }
-    // No dependency: both are scoped to the session server-side.
+    const [nextZones, nextWindows, stats] = await Promise.all([
+      zonesApi.getZones(),
+      schedulesApi.getWindows(),
+      // The pool is a readout: the board still works if it can't be read.
+      schedulesApi.getStats().catch(() => null),
+    ])
+    return { zones: nextZones, windows: nextWindows, pool: stats?.pool ?? null }
+    // No dependency: all three are scoped to the session server-side.
   }, [])
 
-  const apply = useCallback((data: { zones: Zone[]; windows: CaptureWindow[] }) => {
+  const apply = useCallback((data: { zones: Zone[]; windows: CaptureWindow[]; pool: CapturePool | null }) => {
     setZones(data.zones)
     setWindows(data.windows)
+    setPool(data.pool)
   }, [])
 
   const refetch = useCallback(() => load().then(apply), [load, apply])
@@ -134,7 +142,7 @@ export default function SchedulePage() {
     pageSize: 10,
   })
 
-  const framesTotal = useMemo(() => (windows ? schedulesApi.totalFramesPerDay(windows) : 0), [windows])
+  const framesMonth = useMemo(() => (windows ? schedulesApi.totalFramesPerMonth(windows) : 0), [windows])
   const activeCount = windows?.filter((w) => w.active).length ?? 0
 
   return (
@@ -253,16 +261,20 @@ export default function SchedulePage() {
 
         <div className="space-y-lg">
           <Card className="p-lg space-y-md">
+            {/* The windows' average month against this month's pool (delivery doc F6). A
+                warning, never a block: captures past the pool are skipped (BR-008). */}
             <div>
-              <p className="text-label text-text-secondary">Frames per day</p>
+              <p className="text-label text-text-secondary">Scheduled a month</p>
               <p className="text-display text-text-primary tabular-nums">
-                {framesTotal}
-                <span className="text-body text-text-muted"> / {limits.capturesLimit}</span>
+                {formatNumber(framesMonth)}
+                <span className="text-body text-text-muted"> / {formatNumber(limits.monthlyCaptures)}</span>
               </p>
-              <ProgressBar value={framesTotal} max={limits.capturesLimit} className="mt-sm" />
-              {framesTotal > limits.capturesLimit && (
-                <p className="text-caption text-warning-text mt-sm">
-                  Over the plan&rsquo;s daily limit — captures beyond it are skipped (BR-006).
+              <ProgressBar value={framesMonth} max={limits.monthlyCaptures} className="mt-sm" />
+              {pool && (
+                <p className={cn('text-caption mt-sm', projectionExceedsPool(framesMonth, pool) ? 'text-warning-text' : 'text-text-muted')}>
+                  {projectionExceedsPool(framesMonth, pool)
+                    ? `More than the ${formatNumber(pool.remaining)} left this month. Captures past that are skipped until ${poolResetDay(pool)}.`
+                    : `${formatNumber(pool.used)} used, ${formatNumber(pool.remaining)} left this month · resets ${poolResetDay(pool)}`}
                 </p>
               )}
             </div>

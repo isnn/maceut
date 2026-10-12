@@ -127,39 +127,23 @@ describe('POST /schedules', () => {
     expect(scheduleRepo.create).not.toHaveBeenCalled()
   })
 
-  it('refuses a window that would exceed the daily frame budget (BR-006)', async () => {
-    signedIn('standard') // 50 captures/day, hourly allowed
-    // 07:00–23:00 hourly = 16 frames; four existing windows like it already run Monday.
+  it('never refuses a window for its frame count: the pool is enforced per capture (F5/F6)', async () => {
+    signedIn('standard')
+    // Three all-day hourly windows already run Monday; a daily cap would have refused a
+    // fourth. With the monthly pool the window saves, and the board warns instead.
     vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([
       row({ id: 'a', startTime: '07:00', endTime: '23:00' }),
       row({ id: 'b', startTime: '07:00', endTime: '23:00' }),
       row({ id: 'c', startTime: '07:00', endTime: '23:00' }),
     ])
+    vi.mocked(scheduleRepo.create).mockResolvedValue(row())
 
     const res = await request(app)
       .post('/schedules')
       .send({ ...body, start: '07:00', end: '23:00' })
 
-    expect(res.status).toBe(422)
-    expect(res.body.error.code).toBe('CAPTURE_LIMIT_EXCEEDED')
-    expect(res.body.error.details).toMatchObject({ dailyLimit: 50, frames: 64, plan: 'standard' })
-    expect(res.body.error.message).not.toMatch(/frame\/hari|Jendela/) // English, not Bahasa (FE-30)
-    expect(scheduleRepo.create).not.toHaveBeenCalled()
-  })
-
-  it('judges the budget on the worst day, not the average', async () => {
-    signedIn('standard')
-    // A heavy window that only runs on Sunday must not block a Monday window.
-    vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([
-      row({ id: 'sunday-only', startTime: '00:00', endTime: '23:00', days: [6] }),
-    ])
-    vi.mocked(scheduleRepo.create).mockResolvedValue(row())
-
-    const res = await request(app)
-      .post('/schedules')
-      .send({ ...body, days: [0] })
-
     expect(res.status).toBe(201)
+    expect(res.body.data.framesPerMonth).toEqual(expect.any(Number))
   })
 
   it('rejects an end time before the start', async () => {

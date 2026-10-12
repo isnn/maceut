@@ -19,6 +19,7 @@ import { Logo } from '@/components/ui/Logo'
 import { Button } from '@/components/ui/Button'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
 import { PLAN_LABEL, PLAN_LIMITS } from '@/lib/constants'
+import { formatNumber } from '@/lib/utils'
 import { ApiError } from '@/types/api'
 import * as authApi from '@/features/auth/api'
 import { peekIntendedPlan } from '@/features/marketing/intended-plan'
@@ -98,8 +99,8 @@ export default function OnboardingPage() {
           />
           <IncludedRow
             label="Captures"
-            value={`${limits.capturesLimit} per day`}
-            note="Counted per day in WIB, across every zone."
+            value={`${formatNumber(limits.monthlyCaptures)} a month`}
+            note="Shared by every zone. Resets on the 1st of each month, 00:00 WIB."
           />
           <IncludedRow label="Road data" value="Highways" note="Motorways and main highways between cities." />
         </section>

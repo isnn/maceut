@@ -7,7 +7,8 @@ import * as renderCacheRepo from '../repositories/render-cache.repository'
 import { wibMonthStart } from './here-usage.service'
 import { NotFoundError } from '../errors'
 import { PLAN_LIMITS, type Plan } from '../types/plan'
-import { framesPerDay, type CaptureInterval } from '../types/schedule'
+import { framesPerDay, framesPerMonth, type CaptureInterval } from '../types/schedule'
+import { getPoolStatus, type PoolStatus } from './pool.service'
 
 /**
  * What the dashboard shows (F-19).
@@ -32,7 +33,10 @@ export interface UsageSummary {
 
   /** Frames the active windows will produce on their busiest day. */
   framesPerDay: number
-  capturesLimit: number
+  /** Frames the active windows take from the pool in an average month (F6). */
+  framesPerMonth: number
+  /** The monthly capture pool (BR-006, delivery doc F5/F7): used, left, and when it resets. */
+  pool: PoolStatus
 
   /** Measured since the captures table landed. */
   capturesToday: number | null
@@ -104,9 +108,10 @@ export async function getUsage(userId: string): Promise<UsageSummary> {
   const activeSchedules = schedules.filter((s) => s.status === 'active')
 
   const now = new Date()
-  const [capturesToday, exportsThisMonth, imageBytes, exportBytes, cacheBytes] = await Promise.all([
-    // BR-006 counts per WIB calendar day, and excludes rows that record a refusal.
+  const [capturesToday, pool, exportsThisMonth, imageBytes, exportBytes, cacheBytes] = await Promise.all([
+    // Per WIB calendar day, excluding rows that record a refusal.
     captureRepo.countForWibDay(userId, now),
+    getPoolStatus(userId, user.plan, now),
     exportRepo.countDoneSince(userId, new Date(`${wibMonthStart(now)}T00:00:00+07:00`)),
     captureRepo.imageBytesForUser(userId),
     exportRepo.fileBytesForUser(userId),
@@ -115,8 +120,8 @@ export async function getUsage(userId: string): Promise<UsageSummary> {
   ])
   const storageUsedBytes = imageBytes + exportBytes + cacheBytes
 
-  // The busiest day, not the sum across the week — the daily limit is per day, and a
-  // window that only runs on Sunday costs Monday nothing.
+  // The busiest day, for the board's per-day figure. A window that only runs on Sunday
+  // costs Monday nothing.
   let busiestDay = 0
   for (let day = 0; day < 7; day++) {
     let frames = 0
@@ -139,7 +144,12 @@ export async function getUsage(userId: string): Promise<UsageSummary> {
     schedulesActiveCount: activeSchedules.length,
     schedulesLimit: limits.schedulesLimit,
     framesPerDay: busiestDay,
-    capturesLimit: limits.capturesLimit,
+    framesPerMonth: activeSchedules.reduce(
+      (sum, s) =>
+        sum + framesPerMonth({ start: s.startTime, end: s.endTime, interval: s.interval as CaptureInterval, days: s.days }),
+      0,
+    ),
+    pool,
 
     capturesToday,
     exportsThisMonth,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Dialog } from '@base-ui/react/dialog'
 import { DialogCloseX } from '@/components/ui/DialogCloseX'
@@ -10,13 +10,14 @@ import { Select } from '@/components/ui/Select'
 import { Switch } from '@/components/ui/Switch'
 import { Alert } from '@/components/ui/Alert'
 import { IconCrown, IconTrash } from '@/components/ui/icons'
-import { cn } from '@/lib/utils'
+import { cn, formatNumber } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_LIMITS } from '@/lib/constants'
 import type { Plan } from '@/features/auth/types'
 import type { Zone } from '@/features/zones/types'
 import * as schedulesApi from '../api'
-import { DAY_LABEL, DAY_NAME, framesPerDay, type CaptureInterval, type CaptureWindow } from '../types'
-import { PLAN_INTERVALS, dayName, latestFittingEnd, planIssue, type PlanIssue } from '../plan-fit'
+import { DAY_LABEL, DAY_NAME, framesPerDay, framesPerMonth, type CaptureInterval, type CaptureWindow } from '../types'
+import { PLAN_INTERVALS, planIssue, projectedMonth, type PlanIssue } from '../plan-fit'
+import { poolResetDay, projectionExceedsPool, type CapturePool } from '@/features/plan/pool'
 import { FIELD_COPY, windowError, type WindowError, type WindowField } from '../errors'
 
 /** The dialog's values — also what is parked in sessionStorage while the user looks at plans. */
@@ -115,6 +116,23 @@ export function WindowDialog({
     [plan, windows, start, end, interval, days, active, excludeId],
   )
   const shownIssue = issue ?? (serverError?.kind === 'plan' ? serverError.issue : null)
+
+  // This month's pool, for the projection note (F6). Read when the dialog opens; the
+  // dialog works without it, it just can't say how much is left.
+  const [pool, setPool] = useState<CapturePool | null>(null)
+  useEffect(() => {
+    if (!open) return
+    let live = true
+    schedulesApi
+      .getStats()
+      .then((s) => live && setPool(s.pool))
+      .catch(() => live && setPool(null))
+    return () => {
+      live = false
+    }
+  }, [open])
+  const projected = projectedMonth(windows, draft, excludeId)
+  const overPool = projectionExceedsPool(projected, pool)
 
   // The dialog's own checks, in the same words the API's errors map to.
   const fieldErrors: Partial<Record<WindowField, string>> = {}
@@ -384,24 +402,39 @@ export function WindowDialog({
               </label>
             )}
 
-            <p
-              className={cn(
-                'text-caption rounded-md p-md flex items-center gap-xs',
-                shownIssue?.kind === 'daily' ? 'bg-primary-soft text-primary' : 'bg-canvas-secondary text-text-secondary',
+            <div className="text-caption rounded-md p-md bg-canvas-secondary text-text-secondary space-y-xs">
+              <p>
+                About <span className="font-semibold tabular-nums">{snapshots} snapshot{snapshots === 1 ? '' : 's'} a day</span>
+                {interval !== 'daily' && <> on each day it runs</>}, or{' '}
+                <span className="font-semibold tabular-nums">{formatNumber(framesPerMonth(draft))} a month</span>.
+              </p>
+              {/* A warning, never a block: captures past the pool are skipped and recorded (BR-008). */}
+              {overPool && pool && (
+                <p className="flex items-start gap-xs text-warning-text" role="status">
+                  <IconCrown size={14} className="shrink-0 mt-[2px]" />
+                  <span>
+                    All your windows together take about {formatNumber(projected)} a month, and{' '}
+                    {formatNumber(pool.remaining)} {pool.remaining === 1 ? 'is' : 'are'} left until {poolResetDay(pool)}. Captures past
+                    that are skipped.
+                    {plan !== 'premium' && (
+                      <>
+                        {' '}
+                        <button type="button" onClick={upgrade} className={linkClass('caption')}>
+                          Upgrade
+                        </button>
+                      </>
+                    )}
+                  </span>
+                </p>
               )}
-            >
-              {shownIssue?.kind === 'daily' && <IconCrown size={14} />}
-              About <span className="font-semibold tabular-nums">{snapshots} snapshot{snapshots === 1 ? '' : 's'} a day</span>
-              {interval !== 'daily' && <> on each day it runs.</>}
-            </p>
+            </div>
 
             {shownIssue && (
               <UpgradePanel
                 issue={shownIssue}
                 plan={plan}
-                fix={fixFor(shownIssue, plan, windows, draft, excludeId, {
+                fix={fixFor(shownIssue, plan, {
                   setInterval: edit(setInterval),
-                  setEnd: edit(setEnd),
                   pauseOne: onPauseOne,
                 })}
                 onUpgrade={upgrade}
@@ -506,22 +539,13 @@ function Chip({ onClick, children }: { onClick: () => void; children: React.Reac
 function fixFor(
   issue: PlanIssue,
   plan: Plan,
-  windows: CaptureWindow[],
-  draft: { start: string; end: string; interval: CaptureInterval; days: number[] },
-  excludeId: string | undefined,
-  act: { setInterval: (i: CaptureInterval) => void; setEnd: (t: string) => void; pauseOne: () => void },
-): Fix | undefined {
+  act: { setInterval: (i: CaptureInterval) => void; pauseOne: () => void },
+): Fix {
   if (issue.kind === 'interval') {
     const fallback = PLAN_INTERVALS[plan].includes('hourly') ? 'hourly' : 'daily'
     return { label: `Use ${fallback}`, run: () => act.setInterval(fallback) }
   }
-  if (issue.kind === 'windows') return { label: 'Pause one', run: act.pauseOne }
-  if (draft.interval === '15min' && PLAN_INTERVALS[plan].includes('hourly')) {
-    const hourly = planIssue(plan, windows, { ...draft, interval: 'hourly', active: true }, excludeId)
-    if (!hourly) return { label: 'Collect hourly', run: () => act.setInterval('hourly') }
-  }
-  const end = draft.interval === 'daily' ? null : latestFittingEnd(plan, windows, draft, excludeId)
-  return end ? { label: `Trim to ${end}`, run: () => act.setEnd(end) } : undefined
+  return { label: 'Pause one', run: act.pauseOne }
 }
 
 /** What doesn't fit the plan, the quick fix, and the way up — one compact brand line. */
@@ -529,9 +553,7 @@ function UpgradePanel({ issue, plan, fix, onUpgrade }: { issue: PlanIssue; plan:
   const message =
     issue.kind === 'interval'
       ? `${INTERVAL_TEXT[issue.interval]} is a ${PLAN_LABEL[issue.needs]} feature.`
-      : issue.kind === 'windows'
-        ? `You’re using all ${issue.limit} windows on ${PLAN_LABEL[plan]}.`
-        : `${dayName(issue.day)} would hit ${issue.frames} snapshots — your plan allows ${issue.limit}.`
+      : `You’re using all ${issue.limit} windows on ${PLAN_LABEL[plan]}.`
   return (
     <div className="rounded-md bg-primary-soft px-md py-sm flex flex-wrap items-center gap-x-sm gap-y-xs" role="status">
       <IconCrown size={14} className="text-primary shrink-0" />

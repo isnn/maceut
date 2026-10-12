@@ -23,7 +23,6 @@ export type ErrorCode =
   | 'EXPORT_IN_PROGRESS'
   | 'EXPORT_LIMIT_EXCEEDED'
   | 'INTERVAL_NOT_IN_PLAN'
-  | 'CAPTURE_LIMIT_EXCEEDED'
   | 'HISTORY_LIMIT_EXCEEDED'
   | 'EXPORT_BUDGET_EXCEEDED'
   | 'TRAFFIC_UNAVAILABLE'
@@ -94,18 +93,6 @@ export class HistoryLimitExceededError extends AppError {
 export class IntervalNotInPlanError extends AppError {
   constructor(interval: string, plan: string) {
     super('INTERVAL_NOT_IN_PLAN', 403, 'This interval isn’t on your plan.', { interval, plan })
-  }
-}
-
-/** BR-006 — a window would take a day past the plan's daily capture allowance. */
-export class CaptureLimitExceededError extends AppError {
-  constructor(details: { day: number; frames: number; dailyLimit: number; plan: string }) {
-    super(
-      'CAPTURE_LIMIT_EXCEEDED',
-      422,
-      `That day would reach ${details.frames} snapshots — your plan allows ${details.dailyLimit}.`,
-      details,
-    )
   }
 }
 

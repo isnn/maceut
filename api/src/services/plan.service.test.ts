@@ -126,32 +126,11 @@ describe('over the active-window limit (BR-005)', () => {
   })
 })
 
-describe('daily frame budget (BR-006)', () => {
-  it('pauses until the worst day fits', async () => {
-    // standard allows 50 frames/day. Four 07:00-23:00 hourly windows = 16 each = 64.
+describe('frame budget (BR-006, monthly pool)', () => {
+  it('does not pause windows for their frame count — the pool skips extra cycles instead', async () => {
+    // Four all-day hourly windows on one day: the old daily cap paused one of them.
     const rows = Array.from({ length: 4 }, (_, i) =>
-      schedule({
-        id: `s${i}`,
-        interval: 'hourly',
-        startTime: '07:00',
-        endTime: '23:00',
-        days: [0],
-        createdAt: new Date(Date.parse('2026-01-01T00:00:00Z') + i * DAY),
-      }),
-    )
-    vi.mocked(scheduleRepo.findByUserId).mockResolvedValue(rows)
-
-    const impact = await previewPlanChange(USER, 'standard')
-
-    // 64 > 50, so the newest is paused; 48 then fits.
-    expect(impact.schedulesToPause.map((s) => s.id)).toEqual(['s3'])
-    expect(impact.schedulesToPause[0]!.reason).toBe('over_daily_frames')
-  })
-
-  it('judges the worst day, not the total across the week', async () => {
-    // Each window is heavy but runs on a different day, so no single day is over.
-    const rows = [0, 1, 2, 3, 4].map((day) =>
-      schedule({ id: `d${day}`, interval: 'hourly', startTime: '07:00', endTime: '23:00', days: [day] }),
+      schedule({ id: `s${i}`, interval: 'hourly', startTime: '07:00', endTime: '23:00', days: [0] }),
     )
     vi.mocked(scheduleRepo.findByUserId).mockResolvedValue(rows)
 

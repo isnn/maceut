@@ -38,6 +38,13 @@ function countToday(): number {
   return readCaptures().filter((c) => new Date(c.createdAt) >= startOfDayWIB).length
 }
 
+function countThisMonth(): number {
+  // WIB is UTC+7: shift by seven hours, then read the calendar month.
+  const wibMonth = (d: Date) => new Date(d.getTime() + 7 * 3_600_000).toISOString().slice(0, 7)
+  const now = wibMonth(new Date())
+  return readCaptures().filter((c) => wibMonth(new Date(c.createdAt)) === now).length
+}
+
 function runMockPipeline(captureId: string) {
   setTimeout(() => updateCapture(captureId, { status: 'processing' }), 1200)
   setTimeout(() => {
@@ -52,12 +59,12 @@ function runMockPipeline(captureId: string) {
 
 export async function triggerManual(zoneId: string, style: CaptureStyleInput): Promise<Capture> {
   const user = await authApi.getMe()
-  const capturesLimit = PLAN_LIMITS[user?.plan ?? 'free'].capturesLimit
-  if (countToday() >= capturesLimit) {
+  const pool = PLAN_LIMITS[user?.plan ?? 'free'].monthlyCaptures
+  if (countThisMonth() >= pool) {
     await delay(null)
     throw new ApiError({
       code: 'PLAN_LIMIT_EXCEEDED',
-      message: `You have reached your limit of ${capturesLimit} captures today.`,
+      message: `You have used all ${pool} captures this month.`,
     })
   }
 

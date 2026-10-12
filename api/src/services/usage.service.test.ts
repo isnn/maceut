@@ -9,6 +9,7 @@ vi.mock('../repositories/schedule.repository', () => ({
 vi.mock('../repositories/user.repository', () => ({ findByIdWithPlan: vi.fn() }))
 vi.mock('../repositories/capture.repository', () => ({
   countForWibDay: vi.fn(async () => 0),
+  countInRange: vi.fn(async () => 0),
   imageBytesForUser: vi.fn(async () => 0),
   problemsForWibDay: vi.fn(async () => ({ failed: 0, missed: 0 })),
   peakForWibDay: vi.fn(async () => undefined),
@@ -68,6 +69,28 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('getUsage', () => {
+  it('reports the monthly pool: used, left and the reset time (F7)', async () => {
+    atWib('2026-10-12T05:00:00Z')
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue({ id: USER, plan: 'standard' } as never)
+    vi.mocked(captureRepo.countInRange).mockResolvedValue(1240)
+
+    const { pool } = await getUsage(USER)
+
+    expect(pool).toEqual({ limit: 2000, used: 1240, remaining: 760, resetsAt: '2026-10-31T17:00:00.000Z' })
+  })
+
+  it('never reports a negative remainder', async () => {
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue({ id: USER, plan: 'free' } as never)
+    vi.mocked(captureRepo.countInRange).mockResolvedValue(50)
+    expect((await getUsage(USER)).pool.remaining).toBe(0)
+  })
+
+  it('projects the active windows over an average month (F6)', async () => {
+    // 07:00–09:00 hourly = 2 a day, Mon–Fri = 10 a week → 10 × 52 ÷ 12 ≈ 43.
+    vi.mocked(scheduleRepo.findByUserId).mockResolvedValue([schedule()])
+    expect((await getUsage(USER)).framesPerMonth).toBe(43)
+  })
+
   it('measures storage from what is actually in R2: capture images plus export files', async () => {
     // The old dashboard reported storage as zones * 1.37 — invented. Now it's the bytes
     // of the files we hold.

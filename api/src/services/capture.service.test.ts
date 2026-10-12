@@ -5,7 +5,7 @@ vi.mock('../repositories/capture.repository', () => ({
   create: vi.fn(),
   findById: vi.fn(),
   markStatus: vi.fn(),
-  countForWibDay: vi.fn(),
+  countInRange: vi.fn(),
   listByZone: vi.fn(),
 }))
 vi.mock('../repositories/zone.repository', () => ({ findById: vi.fn() }))
@@ -51,7 +51,7 @@ function signedIn(plan: Plan, zoneRoadClass: RoadClass = 'semua') {
 beforeEach(() => {
   vi.clearAllMocks()
   signedIn('premium')
-  vi.mocked(captureRepo.countForWibDay).mockResolvedValue(0)
+  vi.mocked(captureRepo.countInRange).mockResolvedValue(0)
   vi.mocked(captureRepo.create).mockImplementation(async (input) => captureRow({ ...input }))
 })
 
@@ -70,9 +70,9 @@ describe('enqueueCapture — ownership', () => {
   })
 })
 
-describe('enqueueCapture — BR-006 daily limit', () => {
-  it('queues while under the limit', async () => {
-    vi.mocked(captureRepo.countForWibDay).mockResolvedValue(99) // premium allows 100
+describe('enqueueCapture — BR-006 monthly pool (delivery doc F5)', () => {
+  it('queues while under the pool', async () => {
+    vi.mocked(captureRepo.countInRange).mockResolvedValue(2999) // premium's pool is 3,000
 
     const out = await enqueueCapture(USER, ZONE)
 
@@ -80,8 +80,8 @@ describe('enqueueCapture — BR-006 daily limit', () => {
     expect(publishCaptureJob).toHaveBeenCalledWith({ captureId: 'cap_01' })
   })
 
-  it('refuses at the limit and records why (BR-008)', async () => {
-    vi.mocked(captureRepo.countForWibDay).mockResolvedValue(100)
+  it('refuses once the pool is used and records why (BR-008)', async () => {
+    vi.mocked(captureRepo.countInRange).mockResolvedValue(3000)
 
     const out = await enqueueCapture(USER, ZONE)
 
@@ -89,25 +89,42 @@ describe('enqueueCapture — BR-006 daily limit', () => {
     // diagnosable if the reason was written down.
     expect(out.queued).toBe(false)
     expect(out.capture.status).toBe('skipped_limit')
+    expect(captureRepo.create).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining('3000') }))
     expect(publishCaptureJob).not.toHaveBeenCalled()
   })
 
-  it('does not retry a refused capture', async () => {
-    vi.mocked(captureRepo.countForWibDay).mockResolvedValue(10)
-    signedIn('free') // free allows 10
+  it('records the 46th Free capture of the month as skipped', async () => {
+    signedIn('free')
+    vi.mocked(captureRepo.countInRange).mockResolvedValue(45)
 
-    await enqueueCapture(USER, ZONE)
+    const out = await enqueueCapture(USER, ZONE)
 
+    expect(out.capture.status).toBe('skipped_limit')
     expect(publishCaptureJob).not.toHaveBeenCalled()
   })
 
-  it('applies each plan’s own limit', async () => {
-    signedIn('standard') // 50
-    vi.mocked(captureRepo.countForWibDay).mockResolvedValue(49)
-    expect((await enqueueCapture(USER, ZONE)).queued).toBe(true)
+  it('applies each plan’s own pool', async () => {
+    for (const [plan, pool] of [['free', 45], ['starter', 450], ['standard', 2000], ['premium', 3000]] as const) {
+      signedIn(plan)
+      vi.mocked(captureRepo.countInRange).mockResolvedValue(pool - 1)
+      expect((await enqueueCapture(USER, ZONE)).queued, plan).toBe(true)
+      vi.mocked(captureRepo.countInRange).mockResolvedValue(pool)
+      expect((await enqueueCapture(USER, ZONE)).queued, plan).toBe(false)
+    }
+  })
 
-    vi.mocked(captureRepo.countForWibDay).mockResolvedValue(50)
-    expect((await enqueueCapture(USER, ZONE)).queued).toBe(false)
+  it('counts the current WIB month', async () => {
+    vi.useFakeTimers()
+    // 31 Oct 2026 20:00 UTC is already 1 Nov 03:00 in Jakarta: November's pool.
+    vi.setSystemTime(new Date('2026-10-31T20:00:00Z'))
+    try {
+      await enqueueCapture(USER, ZONE)
+      const [, start, end] = vi.mocked(captureRepo.countInRange).mock.calls[0]!
+      expect(start.toISOString()).toBe('2026-10-31T17:00:00.000Z')
+      expect(end.toISOString()).toBe('2026-11-30T17:00:00.000Z')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

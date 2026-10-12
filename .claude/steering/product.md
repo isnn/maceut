@@ -34,14 +34,14 @@ MVP menggunakan **single workspace** — tidak ada multi-tenant atau team role. 
 | Road class: Provinsi | ❌ | ✅ | ✅ | ✅ |
 | Road class: Kota / Lokal | ❌ | ❌ | ❌ | ✅ |
 | Max Active Schedules | 3 | 9 | 30 | 45 |
-| Daily Capture Limit (sampai pool bulanan, F5) | 10 | 15 | 50 | 100 |
+| Pool capture / bulan (BR-006) | 45 | 450 | 2.000 | 3.000 |
 | Riwayat (tampilan & CSV) | 7 hari | 30 hari | 30 hari | 30 hari |
 | Pengguna | 1 | 1 | 5 | 5 |
 | Export PNG/JPG | ✅ | ✅ | ✅ | ✅ |
 
 *Katalog 4 paket dari dokumen "Delivery Paket & Fitur" (2026-10). Paket Business ditunda.*
 
-*Semua user bisa membuat zona polygon di area mana saja. Tier membatasi kedalaman data jalan yang bisa dipilih (road class) DAN volume penggunaan (active schedule & daily capture limit) — lihat BR-005, BR-006.*
+*Semua user bisa membuat zona polygon di area mana saja. Tier membatasi kedalaman data jalan yang bisa dipilih (road class) DAN volume penggunaan (active schedule & pool capture bulanan) — lihat BR-005, BR-006.*
 
 ### Platform Administration (prototype)
 
@@ -89,7 +89,7 @@ Lihat `.claude/specs/internal/requirements.md`.
 
 **Schedule & Capture Limits**
 - BR-005: Batas active schedule bersamaan per user sesuai plan: Free 3, Starter 9, Standard 30, Premium 45. Schedule `paused` atau `deleted` tidak dihitung.
-- BR-006: Daily capture limit per user sesuai plan: Free 10, Starter 15, Standard 50, Premium 100 captures/hari (digantikan pool bulanan, delivery doc F5). Dihitung per kalender hari (WIB UTC+7).
+- BR-006: Pool capture bulanan per user sesuai plan: Free 45, Starter 450, Standard 2.000, Premium 3.000 capture per bulan kalender WIB, reset tanggal 1 pukul 00:00 WIB, dibagi bebas antar zona & jadwal. Dihitung: capture terjadwal & manual yang dikirim ke HERE, termasuk yang gagal setelahnya; tidak dihitung: `skipped_limit`, `missed`, preview zona. Jadwal tidak pernah ditolak karena proyeksi — papan jadwal hanya memperingatkan (delivery doc F5/F6).
 - BR-007: Enforcement limit dilakukan di **service layer** — handler tidak boleh melakukan validasi limit sendiri.
 - BR-008: Jika capture gagal karena limit tercapai, job di-drop (bukan di-retry) dan dicatat di capture history dengan status `skipped_limit`.
 

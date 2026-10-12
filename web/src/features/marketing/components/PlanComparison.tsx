@@ -9,7 +9,7 @@ import type { Plan } from '@/features/auth/types'
 const ROWS: { label: string; value: (plan: Plan) => string }[] = [
   { label: 'Price', value: (p) => `${PLAN_PRICE[p].amount} ${PLAN_PRICE[p].period}` },
   { label: 'Zones', value: (p) => formatNumber(PLAN_LIMITS[p].zonesLimit) },
-  { label: 'Captures a day', value: (p) => formatNumber(PLAN_LIMITS[p].capturesLimit) },
+  { label: 'Captures a month', value: (p) => formatNumber(PLAN_LIMITS[p].monthlyCaptures) },
   { label: 'Active capture windows', value: (p) => formatNumber(PLAN_LIMITS[p].schedulesLimit) },
   { label: 'Fastest interval', value: (p) => PLAN_LIMITS[p].captureInterval },
   { label: 'Road classes', value: (p) => ROAD_CLASS_LABEL[PLAN_LIMITS[p].maxRoadClass] ?? '' },

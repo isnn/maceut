@@ -15,6 +15,7 @@ import * as planService from './plan.service'
 import * as notificationService from './notification.service'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
+import { wibMonth } from '../lib/capture-pool'
 import * as captureRepo from '../repositories/capture.repository'
 import * as exportRepo from '../repositories/export.repository'
 import * as renderCacheRepo from '../repositories/render-cache.repository'
@@ -182,6 +183,8 @@ export interface AccountUsage {
   schedulesActiveCount: number
   schedulesPaused: number
   capturesToday: number | null
+  /** Captures taken from this WIB month's pool (delivery doc F7). */
+  capturesThisMonth: number
   storageUsedGb: number
 }
 
@@ -234,10 +237,12 @@ export async function listUsers(params: ListUsersParams): Promise<ListUsersResul
 
   // Two grouped queries for the whole page, not two per row — the directory lists
   // every account, so per-row counting would slow down with every signup.
-  const [zoneCounts, scheduleCounts, captureCounts, storage] = await Promise.all([
+  const month = wibMonth(new Date())
+  const [zoneCounts, scheduleCounts, captureCounts, monthCounts, storage] = await Promise.all([
     zoneRepo.countsByUser(),
     scheduleRepo.countsByUser(),
     captureRepo.countsToday(),
+    captureRepo.countsInRange(month.start, month.end),
     storageBytesByUser(),
   ])
 
@@ -253,6 +258,7 @@ export async function listUsers(params: ListUsersParams): Promise<ListUsersResul
           schedulesActiveCount: sc?.active ?? 0,
           schedulesPaused: sc?.paused ?? 0,
           capturesToday: captureCounts.get(row.id) ?? 0,
+          capturesThisMonth: monthCounts.get(row.id) ?? 0,
           storageUsedGb: toGb(storage.get(row.id) ?? 0),
         },
       }

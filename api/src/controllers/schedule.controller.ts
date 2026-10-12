@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
+import * as poolService from '../services/pool.service'
 import * as scheduleService from '../services/schedule.service'
 import { createScheduleSchema, updateScheduleSchema } from '../schemas/schedule.schema'
 import { UnauthorizedError } from '../errors'
@@ -81,16 +82,25 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-/** Budget readout for the Schedule board header. */
+/**
+ * Budget readout for the Schedule board header: the windows' projected month against
+ * what is left of the pool (delivery doc F6). A warning, never a block.
+ */
 export async function stats(req: Request, res: Response, next: NextFunction) {
   try {
     const { userId, plan } = requireContext(req)
-    const framesPerDay = await scheduleService.totalFramesPerDay(userId)
-    const schedules = await scheduleService.listSchedules(userId)
+    const [framesPerDay, framesPerMonth, schedules, pool] = await Promise.all([
+      scheduleService.totalFramesPerDay(userId),
+      scheduleService.totalFramesPerMonth(userId),
+      scheduleService.listSchedules(userId),
+      poolService.getPoolStatus(userId, plan),
+    ])
 
     return res.status(200).json(
       ok({
         framesPerDay,
+        framesPerMonth,
+        pool,
         activeCount: schedules.filter((s) => s.active).length,
         totalCount: schedules.length,
         plan,

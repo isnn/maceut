@@ -36,7 +36,7 @@ export const INTERVAL_LABEL: Record<CaptureInterval, string> = {
   daily: 'Daily',
 }
 
-/** Frames a window yields per day — drives the "frame per hari" budget. */
+/** Frames a window yields on a day it runs; ×days×52÷12 gives its month (framesPerMonth). */
 export const INTERVAL_PER_HOUR: Record<CaptureInterval, number> = {
   '15min': 4,
   hourly: 1,
@@ -46,12 +46,19 @@ export const INTERVAL_PER_HOUR: Record<CaptureInterval, number> = {
 export const DAY_LABEL = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 export const DAY_NAME = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
+/**
+ * Frames a window takes from the monthly pool in an average month: a week's frames × 52
+ * ÷ 12 (delivery doc F6). Must match `framesPerMonth` in api/src/types/schedule.ts.
+ */
+export function framesPerMonth(window: Pick<CaptureWindow, 'start' | 'end' | 'interval' | 'days'>): number {
+  return Math.round((framesPerDay(window) * window.days.length * 52) / 12)
+}
+
 export function framesPerDay(window: Pick<CaptureWindow, 'start' | 'end' | 'interval'>): number {
   if (window.interval === 'daily') return 1
 
-  // Must match api/src/types/schedule.ts exactly: this number is shown against the
-  // plan's daily budget, and if the two disagree the UI promises a budget the server
-  // does not enforce.
+  // Must match api/src/types/schedule.ts exactly: it feeds the monthly projection shown
+  // against the pool, and if the two disagree the board's warning and the server part.
   //
   // It previously read only the HOUR digits, so 07:30–09:00 counted as two full hours
   // and any window inside a single hour counted as zero — the second of which made

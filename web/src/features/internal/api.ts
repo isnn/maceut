@@ -16,6 +16,7 @@
 import { PLAN_LIMITS, PLAN_PRICE } from '@/lib/constants'
 import { apiClient } from '@/lib/api-client'
 import { accessOf, type Access, type Plan, type User } from '@/features/auth/types'
+import type { CapturePool } from '@/features/plan/pool'
 import type { AccountUsage, InternalUserRow, PlatformStats } from './types'
 
 /** Rupiah per month, used for the MRR estimate on the overview. */
@@ -39,6 +40,7 @@ interface ServerUsage {
   schedulesActiveCount: number
   schedulesPaused: number
   capturesToday: number | null
+  capturesThisMonth?: number
   storageUsedGb: number | null
 }
 
@@ -67,7 +69,8 @@ function usageFor(plan: Plan, measured: ServerUsage | undefined): AccountUsage {
     zonesPaused: measured?.zonesPaused ?? 0,
     zonesLimit: limits.zonesLimit,
     capturesToday: measured?.capturesToday ?? null,
-    capturesLimit: limits.capturesLimit,
+    capturesThisMonth: measured?.capturesThisMonth ?? null,
+    monthlyCaptures: limits.monthlyCaptures,
     schedulesActiveCount: measured?.schedulesActiveCount ?? 0,
     schedulesPaused: measured?.schedulesPaused ?? 0,
     schedulesLimit: limits.schedulesLimit,
@@ -229,7 +232,8 @@ export interface AccountUsageDetail {
     schedulesActiveCount: number
     schedulesLimit: number
     framesPerDay: number
-    capturesLimit: number
+    framesPerMonth: number
+    pool: CapturePool
     capturesToday: number | null
     exportsThisMonth: number
     storageUsedGb: number

@@ -25,7 +25,9 @@ export function captureErrorForUser(status: string, raw: string | null): string 
   if (!raw) return null
   if (status === 'skipped_limit') {
     const limit = /(\d+)/.exec(raw)?.[1]
-    return limit ? `Skipped — the daily limit of ${limit} captures was reached.` : 'Skipped — the daily capture limit was reached.'
+    // Rows refused before the monthly pool (F5) say "per hari"; both read as a limit.
+    const period = /bulan/i.test(raw) ? 'monthly' : 'daily'
+    return limit ? `Skipped — the ${period} limit of ${limit} captures was reached.` : `Skipped — the ${period} capture limit was reached.`
   }
   // A missed cycle is shown as just that: "Missed", with its due time. Why it was
   // missed (the system was down, the queue was stale) is kept on the row for us.

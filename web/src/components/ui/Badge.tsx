@@ -138,7 +138,7 @@ const CAPTURE_LABEL: Record<string, string> = {
   processing: 'Collecting…',
   done: 'Collected',
   failed: 'Failed',
-  skipped_limit: 'Skipped — daily limit',
+  skipped_limit: 'Skipped — monthly limit',
   missed: 'Missed',
 }
 

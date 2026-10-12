@@ -112,18 +112,32 @@ describe('onCaptureDone', () => {
   })
 })
 
-describe('onCaptureQueued (near the daily limit)', () => {
-  // Standard allows 50 captures a day; 80% is 40.
-  it('notes it once usage reaches 80%', async () => {
-    await svc.onCaptureQueued('u1', 'standard', 40, at)
+describe('onCaptureQueued (monthly pool, F7)', () => {
+  // Standard's pool is 2,000 a month; 80% is 1,600.
+  it('notes it once usage reaches 80%, keyed to the WIB month', async () => {
+    await svc.onCaptureQueued('u1', 'standard', 1600, at)
     expect(notificationRepo.insertOnce).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'capture_limit_near', dedupeKey: 'limit-near:2026-09-28' }),
+      expect.objectContaining({ type: 'capture_limit_near', dedupeKey: 'limit-near:2026-09' }),
     )
   })
 
   it('stays quiet below 80%', async () => {
-    await svc.onCaptureQueued('u1', 'standard', 39, at)
+    await svc.onCaptureQueued('u1', 'standard', 1599, at)
     expect(notificationRepo.insertOnce).not.toHaveBeenCalled()
+  })
+
+  it('says the pool is used up when this capture took the last one (100%)', async () => {
+    await svc.onCaptureQueued('u1', 'standard', 2000, at)
+    const row = vi.mocked(notificationRepo.insertOnce).mock.calls[0]![0]
+    expect(row).toMatchObject({ type: 'capture_limit_reached', dedupeKey: 'limit-reached:2026-09' })
+    expect(row.body).toContain('1 October')
+  })
+
+  it('writes the same once-a-month key when a capture is refused', async () => {
+    await svc.onLimitReached('u1', 'free', at)
+    expect(notificationRepo.insertOnce).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'capture_limit_reached', dedupeKey: 'limit-reached:2026-09' }),
+    )
   })
 })
 
