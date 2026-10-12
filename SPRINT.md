@@ -178,6 +178,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **PKG-F9** Masa simpan ekspor per paket (Free 7 / Starter 14 / Standard 30 / Premium 30 hari, maks 30): `expires_at` dari paket pemilik saat ekspor selesai; env `EXPORT_RETENTION_DAYS` dihapus; hari ditampilkan di kartu paket, tabel perbandingan, Profil, dialog ekspor Studio, notifikasi; ADR-034 | docs Delivery Paket & Fitur |
 | ✅ | **PKG-F8** Sapu teks paket: terms §3 (4 paket, kuota bulanan) & §6 (riwayat & simpan ekspor dari katalog), dialog batas zona (paket berikutnya, bukan "Premium 25 zona"), kartu Premium unlocks, papan jadwal per bulan, meta pricing, link Upgrade Studio hanya bila riwayat < 30 hari, Swagger POST /schedules | docs Delivery Paket & Fitur |
 | ✅ | **PKG-FIX1** Masukan paket: scheduler tidak lagi meng-capture zona yang di-pause (claimDue membawa status zona); proyeksi & strip Latest captures tidak menghitung/menampilkan zona yang di-pause; peringatan pool membandingkan proyeksi sisa bulan (bukan sebulan penuh) vs sisa pool; label ekspor jujur (semua paket MP4 & WebM, tanpa API/GIF); badge Standard "Best price"; teks kartu paket & FAQ | masukan user 2026-10-12 |
+| ✅ | **H6** Runbook penutupan akun (docs/operations/account-deletion.md): verifikasi dari alamat terdaftar, hapus akun (admin), file R2 (captures/exports/render-cache), email_log & verification, konfirmasi, catatan; usulan perluasan endpoint admin di PR | handover Legal & Retention (H1–H6) |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -202,6 +203,12 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-12k] H6 — runbook penutupan akun (chore/account-deletion-runbook). Dokumen saja.
+  - DELETE /internal/users/:id meng-cascade semua tabel milik akun, tetapi TIDAK menghapus file R2
+    (captures/, exports/, render-cache/{user_id}), email_log (tanpa FK, per alamat), dan baris verification
+    (kode OTP per email). Runbook menutup ketiganya dengan perintah yang bisa disalin.
+  - Belum diputuskan: masa simpan backup DB (data terhapus hidup di backup sampai kedaluwarsa).
 
 [2026-10-12f] PKG-FIX1 — masukan user setelah merge paket (fix/plan-feedback).
   - Notifikasi "45 of undefined … daily limit": baris basi dari kode setengah-jadi saat pengembangan F5 (api hot
