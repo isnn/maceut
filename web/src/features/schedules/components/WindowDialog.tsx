@@ -17,7 +17,7 @@ import type { Zone } from '@/features/zones/types'
 import * as schedulesApi from '../api'
 import { DAY_LABEL, DAY_NAME, framesPerDay, framesPerMonth, type CaptureInterval, type CaptureWindow } from '../types'
 import { PLAN_INTERVALS, planIssue, projectedMonth, type PlanIssue } from '../plan-fit'
-import { poolResetDay, projectionExceedsPool, type CapturePool } from '@/features/plan/pool'
+import { poolOutlook, poolResetDay, type CapturePool } from '@/features/plan/pool'
 import { FIELD_COPY, windowError, type WindowError, type WindowField } from '../errors'
 
 /** The dialog's values — also what is parked in sessionStorage while the user looks at plans. */
@@ -131,8 +131,14 @@ export function WindowDialog({
       live = false
     }
   }, [open])
-  const projected = projectedMonth(windows, draft, excludeId)
-  const overPool = projectionExceedsPool(projected, pool)
+  // A paused zone's windows take nothing from the pool: the scheduler skips them.
+  const pausedZones = new Set(zones.filter((z) => z.status === 'paused').map((z) => z.id))
+  const projected = projectedMonth(
+    windows.filter((w) => !pausedZones.has(w.zoneId)),
+    { ...draft, active: draft.active && !pausedZones.has(zoneId) },
+    excludeId,
+  )
+  const outlook = poolOutlook(projected, pool)
 
   // The dialog's own checks, in the same words the API's errors map to.
   const fieldErrors: Partial<Record<WindowField, string>> = {}
@@ -409,13 +415,13 @@ export function WindowDialog({
                 <span className="font-semibold tabular-nums">{formatNumber(framesPerMonth(draft))} a month</span>.
               </p>
               {/* A warning, never a block: captures past the pool are skipped and recorded (BR-008). */}
-              {overPool && pool && (
+              {outlook.kind !== 'ok' && pool && (
                 <p className="flex items-start gap-xs text-warning-text" role="status">
                   <IconCrown size={14} className="shrink-0 mt-[2px]" />
                   <span>
-                    All your windows together take about {formatNumber(projected)} a month, and{' '}
-                    {formatNumber(pool.remaining)} {pool.remaining === 1 ? 'is' : 'are'} left until {poolResetDay(pool)}. Captures past
-                    that are skipped.
+                    {outlook.kind === 'short_this_month'
+                      ? `All your windows together take about ${formatNumber(outlook.untilReset)} more before ${poolResetDay(pool)}, and ${formatNumber(pool.remaining)} ${pool.remaining === 1 ? 'is' : 'are'} left. Captures past that are skipped.`
+                      : `All your windows together take about ${formatNumber(projected)} in an average month, more than your plan’s ${formatNumber(pool.limit)}. Captures past that are skipped each month.`}
                     {plan !== 'premium' && (
                       <>
                         {' '}

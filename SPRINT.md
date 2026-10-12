@@ -177,6 +177,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **PKG-F5/F6/F7** Pool capture bulanan (45/450/2.000/3.000, bulan WIB, reset tgl 1) menggantikan batas harian; papan jadwal & dialog jendela memproyeksikan bulan (minggu × 52 ÷ 12) vs sisa pool — peringatan, bukan blokir; dasbor/Profil: terpakai/sisa/tanggal reset; notifikasi 80% & 100% sekali per bulan; konsol staf: pemakaian pool per akun; ADR-033 | docs Delivery Paket & Fitur |
 | ✅ | **PKG-F9** Masa simpan ekspor per paket (Free 7 / Starter 14 / Standard 30 / Premium 30 hari, maks 30): `expires_at` dari paket pemilik saat ekspor selesai; env `EXPORT_RETENTION_DAYS` dihapus; hari ditampilkan di kartu paket, tabel perbandingan, Profil, dialog ekspor Studio, notifikasi; ADR-034 | docs Delivery Paket & Fitur |
 | ✅ | **PKG-F8** Sapu teks paket: terms §3 (4 paket, kuota bulanan) & §6 (riwayat & simpan ekspor dari katalog), dialog batas zona (paket berikutnya, bukan "Premium 25 zona"), kartu Premium unlocks, papan jadwal per bulan, meta pricing, link Upgrade Studio hanya bila riwayat < 30 hari, Swagger POST /schedules | docs Delivery Paket & Fitur |
+| ✅ | **PKG-FIX1** Masukan paket: scheduler tidak lagi meng-capture zona yang di-pause (claimDue membawa status zona); proyeksi & strip Latest captures tidak menghitung/menampilkan zona yang di-pause; peringatan pool membandingkan proyeksi sisa bulan (bukan sebulan penuh) vs sisa pool; label ekspor jujur (semua paket MP4 & WebM, tanpa API/GIF); badge Standard "Best price"; teks kartu paket & FAQ | masukan user 2026-10-12 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -201,6 +202,20 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-12f] PKG-FIX1 — masukan user setelah merge paket (fix/plan-feedback).
+  - Notifikasi "45 of undefined … daily limit": baris basi dari kode setengah-jadi saat pengembangan F5 (api hot
+    reload), bukan kode sekarang. Worker berjalan dengan kode 3 hari lalu (tanpa hot reload) → di-restart.
+  - BUG: zona yang di-pause tetap di-capture (Zona 60: 28 capture sejak di-pause 20 Sep), karena scheduler hanya
+    memeriksa status jendela. claimDue kini JOIN zones dan mengembalikan zonePaused; tick memajukan jendela tanpa
+    capture. Proyeksi (usage, stats, papan, dialog) mengecualikan jendela zona yang di-pause; jendela tetap
+    memegang slot BR-005.
+  - Peringatan pool: proyeksi bulan rata-rata diskalakan ke waktu tersisa sampai reset (`poolOutlook`), plus
+    peringatan terpisah bila bulan rata-rata melebihi kuota paket.
+  - Latest captures di dasbor hanya zona yang collecting; capture 0 jalan → "No roads reported".
+  - Label ekspor: semua paket "MP4 and WebM" (server tidak membatasi format per paket; tidak ada API/GIF).
+  - Copy: badge Standard "Best price" (Rp 175/capture vs 220/497), kartu paket "N captures", "N days data
+    retention", "N days of history"; FAQ menyebut Starter & masa simpan capture; hero "keeps each snapshot".
 
 [2026-10-12e] PKG-F8 — sapu teks paket (docs/plan-copy-update, di atas feat/export-expiry-per-plan).
   - Penerimaan: grep tidak menemukan 90 hari / tanpa batas / 10-50-100 per hari / Rp 490k / Rp 1,9m di UI & terms.

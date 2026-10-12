@@ -239,12 +239,19 @@ export async function deleteSchedule(userId: string, id: string): Promise<void> 
   await scheduleRepo.softDelete(id)
 }
 
-/** Frames an average month of every active window takes from the pool (F6). */
+/**
+ * Active windows on zones that are collecting. A paused zone's windows are skipped by the
+ * scheduler, so they take nothing from the pool and stay out of every projection.
+ */
+async function collectingWindows(userId: string): Promise<ScheduleRecord[]> {
+  const [rows, zones] = await Promise.all([scheduleRepo.findByUserId(userId), zoneRepo.findByUserId(userId)])
+  const paused = new Set(zones.filter((z) => z.status === 'paused').map((z) => z.id))
+  return rows.filter((r) => r.status === 'active' && !paused.has(r.zoneId))
+}
+
+/** Frames an average month of every collecting window takes from the pool (F6). */
 export async function totalFramesPerMonth(userId: string): Promise<number> {
-  const rows = await scheduleRepo.findByUserId(userId)
-  return rows
-    .filter((r) => r.status === 'active')
-    .reduce(
+  return (await collectingWindows(userId)).reduce(
       (sum, r) =>
         sum + framesPerMonth({ start: r.startTime, end: r.endTime, interval: r.interval as CaptureInterval, days: r.days }),
       0,
@@ -253,10 +260,7 @@ export async function totalFramesPerMonth(userId: string): Promise<number> {
 
 /** Total frames per day across every active window — the board's budget readout. */
 export async function totalFramesPerDay(userId: string): Promise<number> {
-  const rows = await scheduleRepo.findByUserId(userId)
-  return rows
-    .filter((r) => r.status === 'active')
-    .reduce(
+  return (await collectingWindows(userId)).reduce(
       (sum, r) =>
         sum + framesPerDay({ start: r.startTime, end: r.endTime, interval: r.interval as CaptureInterval, days: r.days }),
       0,

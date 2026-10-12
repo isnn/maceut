@@ -389,7 +389,8 @@ export async function countAllToday(): Promise<number> {
 }
 
 /**
- * A user's most recent cycles across every zone they own, shared fairly between zones.
+ * A user's most recent cycles across every collecting zone they own, shared fairly
+ * between zones.
  *
  * Backs the dashboard strip, which used to be an empty array with a comment saying
  * captures did not exist yet. `traffic` is excluded for the same reason as the per-zone
@@ -425,7 +426,9 @@ export async function recentForUser(
     })
     .from(captures)
     .innerJoin(zones, eq(zones.id, captures.zoneId))
-    .where(eq(captures.userId, userId))
+    // Paused zones stay out of the strip: it shows what is collecting now, and a paused
+    // zone's last frames read as live when they are not. Their history stays on the zone.
+    .where(and(eq(captures.userId, userId), eq(zones.status, 'collecting')))
     .as('ranked')
 
   // Every zone's newest first, then every zone's second newest, … — a zone collecting

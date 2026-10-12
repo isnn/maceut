@@ -17,7 +17,7 @@ import { ExportPill } from '@/features/exports/components/ExportProgress'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import type { CollectionHealth, UsageSummary } from '@/features/dashboard/api'
 import type { Zone } from '@/features/zones/types'
-import { poolResetDay, projectionExceedsPool } from '@/features/plan/pool'
+import { poolOutlook, poolResetDay } from '@/features/plan/pool'
 import { PlanPausedNotice } from '@/features/plan/PlanPausedNotice'
 
 /**
@@ -156,9 +156,11 @@ export default function DashboardPage() {
           label="Scheduled a month"
           value={formatNumber(usage.framesPerMonth)}
           note={
-            projectionExceedsPool(usage.framesPerMonth, usage.pool)
-              ? `more than the ${formatNumber(usage.pool.remaining)} left · extra captures are skipped`
-              : 'your active windows in an average month'
+            poolOutlook(usage.framesPerMonth, usage.pool).kind === 'short_this_month'
+              ? `more than the ${formatNumber(usage.pool.remaining)} left before ${poolResetDay(usage.pool)} · extra captures are skipped`
+              : poolOutlook(usage.framesPerMonth, usage.pool).kind === 'over_plan'
+                ? `more than your plan’s ${formatNumber(usage.pool.limit)} · extra captures are skipped`
+                : 'your active windows in an average month'
           }
           progress={{ value: usage.framesPerMonth, max: usage.pool.limit }}
         />
@@ -333,6 +335,13 @@ export default function DashboardPage() {
   )
 }
 
+/** "1,204 roads"; a capture HERE answered with no roads in range says so in words. */
+function roadsLabel(count: number | null): string {
+  if (count === null) return '— roads'
+  if (count === 0) return 'No roads reported'
+  return `${formatNumber(count)} roads`
+}
+
 /**
  * One capture in the strip: its small JPEG (CAP-02) when it has one. Older captures,
  * rendered before thumbnails existed, 404 on the thumbnail link and fall back to the
@@ -364,7 +373,7 @@ function CaptureThumb({ capture }: { capture: zonesApi.RecentCapture }) {
           />
         ) : (
           <span className={cn('text-caption tabular-nums', done ? 'text-on-primary/80' : 'text-text-secondary')}>
-            {done ? `${capture.roadsCount === null ? '—' : formatNumber(capture.roadsCount)} roads` : CAPTURE_STATUS_SHORT[capture.status]}
+            {done ? roadsLabel(capture.roadsCount) : CAPTURE_STATUS_SHORT[capture.status]}
           </span>
         )}
         {done && capture.jamFactorAvg !== null && (

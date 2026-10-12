@@ -9,7 +9,7 @@ import { DialogCloseX } from '@/components/ui/DialogCloseX'
 import { PlanPill } from '@/components/ui/Badge'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { UsageMeter, AttributeRow } from '@/components/ui/UsageMeter'
-import { poolResetDay, projectionExceedsPool } from '@/features/plan/pool'
+import { poolOutlook, poolResetDay } from '@/features/plan/pool'
 import { Alert } from '@/components/ui/Alert'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { forgetIntendedPlan, planFromUrl } from '@/features/marketing/intended-plan'
@@ -160,9 +160,11 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                   value={usage.framesPerMonth}
                   max={usage.pool.limit}
                   note={
-                    projectionExceedsPool(usage.framesPerMonth, usage.pool)
-                      ? 'More than is left this month: captures past the limit are skipped'
-                      : 'Your active windows in an average month'
+                    poolOutlook(usage.framesPerMonth, usage.pool).kind === 'short_this_month'
+                      ? `More than the ${formatNumber(usage.pool.remaining)} left before ${poolResetDay(usage.pool)}: captures past that are skipped`
+                      : poolOutlook(usage.framesPerMonth, usage.pool).kind === 'over_plan'
+                        ? `More than your plan’s ${formatNumber(usage.pool.limit)} a month: captures past that are skipped`
+                        : 'Your active windows in an average month'
                   }
                 />
                 <UsageMeter label="Active windows" value={usage.schedulesActiveCount} max={usage.schedulesLimit} />

@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
 import { cn, formatNumber } from '@/lib/utils'
-import { poolResetDay, projectionExceedsPool, type CapturePool } from '@/features/plan/pool'
+import { poolOutlook, poolResetDay, type CapturePool } from '@/features/plan/pool'
 import { ActionMenu } from '@/components/ui/ActionMenu'
 import { NextCollectionCard } from '@/features/schedules/components/NextCollectionCard'
 import { WindowDialog, forgetWindowDraft, peekWindowDraft, type WindowDraft } from '@/features/schedules/components/WindowDialog'
@@ -142,7 +142,13 @@ export default function SchedulePage() {
     pageSize: 10,
   })
 
-  const framesMonth = useMemo(() => (windows ? schedulesApi.totalFramesPerMonth(windows) : 0), [windows])
+  // Windows of paused zones are skipped by the scheduler, so they take nothing from the pool.
+  const framesMonth = useMemo(() => {
+    if (!windows) return 0
+    const paused = new Set((zones ?? []).filter((z) => z.status === 'paused').map((z) => z.id))
+    return schedulesApi.totalFramesPerMonth(windows.filter((w) => !paused.has(w.zoneId)))
+  }, [windows, zones])
+  const outlook = poolOutlook(framesMonth, pool)
   const activeCount = windows?.filter((w) => w.active).length ?? 0
 
   return (
@@ -271,10 +277,12 @@ export default function SchedulePage() {
               </p>
               <ProgressBar value={framesMonth} max={limits.monthlyCaptures} className="mt-sm" />
               {pool && (
-                <p className={cn('text-caption mt-sm', projectionExceedsPool(framesMonth, pool) ? 'text-warning-text' : 'text-text-muted')}>
-                  {projectionExceedsPool(framesMonth, pool)
-                    ? `More than the ${formatNumber(pool.remaining)} left this month. Captures past that are skipped until ${poolResetDay(pool)}.`
-                    : `${formatNumber(pool.used)} used, ${formatNumber(pool.remaining)} left this month · resets ${poolResetDay(pool)}`}
+                <p className={cn('text-caption mt-sm', outlook.kind !== 'ok' ? 'text-warning-text' : 'text-text-muted')}>
+                  {outlook.kind === 'short_this_month'
+                    ? `About ${formatNumber(outlook.untilReset)} more scheduled before ${poolResetDay(pool)}, and ${formatNumber(pool.remaining)} left. Captures past that are skipped until ${poolResetDay(pool)}.`
+                    : outlook.kind === 'over_plan'
+                      ? `An average month needs more than your plan’s ${formatNumber(pool.limit)}. Captures past that are skipped each month.`
+                      : `${formatNumber(pool.used)} used, ${formatNumber(pool.remaining)} left this month · resets ${poolResetDay(pool)}`}
                 </p>
               )}
             </div>

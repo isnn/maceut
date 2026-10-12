@@ -13,11 +13,11 @@ import { linkClass } from '@/components/ui/Button'
 const QUESTIONS: { q: string; a: React.ReactNode }[] = [
   {
     q: 'What is a capture?',
-    a: 'One fetch of your zone’s live traffic at a scheduled time. Each capture is kept as a frame you can replay in Studio or export.',
+    a: 'One fetch of your zone’s live traffic at a scheduled time. Each capture becomes a frame you can replay in Studio or export, for 7 days on Free and 30 days on paid plans.',
   },
   {
     q: 'Which roads can I collect?',
-    a: 'Highways on Free, highways and main roads on Standard, and every road down to local streets on Premium. You choose per zone.',
+    a: 'Highways on Free, highways and main roads on Starter and Standard, and every road down to local streets on Premium. You choose per zone.',
   },
   {
     q: 'Can I take my data out?',
