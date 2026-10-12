@@ -1173,18 +1173,40 @@ function drawTraffic(ctx: CanvasRenderingContext2D, input: RenderInput, v: Viewp
 }
 
 /**
- * The map's credit, small in the bottom-right corner. Not optional: OpenStreetMap's
- * ODbL licence requires attribution on published maps, and Esri's imagery terms do the
- * same. Earlier exports carried none.
+ * The credit lines every image carries: the one place to change their wording.
+ *
+ * Traffic is HERE's on every theme (its terms ask for "© HERE" on any display of its
+ * data); the HERE line is provisional until HERE confirms the exact text. The base map
+ * credit follows the theme: OpenFreeMap tiles are OpenMapTiles' schema over
+ * OpenStreetMap data (ODbL), and Esri's imagery terms ask for their own line.
+ */
+export const ATTRIBUTION = {
+  traffic: 'Traffic © HERE',
+  vector: 'OpenFreeMap © OpenMapTiles Data from OpenStreetMap',
+  satellite: 'Imagery © Esri, Maxar, Earthstar Geographics',
+} as const
+
+/** The full credit for one theme, traffic first. */
+export function attributionText(basemap: BasemapSource): string {
+  return `${ATTRIBUTION.traffic} · ${ATTRIBUTION[basemap]}`
+}
+
+/**
+ * The map's credit, small in the bottom-right corner. Not optional: HERE's terms, the
+ * OpenStreetMap ODbL licence and Esri's imagery terms all require attribution on
+ * published maps. Shrinks rather than overruns on narrow exports.
  */
 function drawAttribution(ctx: CanvasRenderingContext2D, input: RenderInput) {
-  const text =
-    input.theme.basemap === 'satellite'
-      ? 'Imagery © Esri, Maxar, Earthstar Geographics'
-      : '© OpenStreetMap contributors · OpenFreeMap'
-  const size = Math.max(Math.round(input.height / 90), 9)
+  const text = attributionText(input.theme.basemap)
+  const maxWidth = input.width * 0.7
+  let size = Math.max(Math.round(input.height / 90), 9)
   ctx.save()
   ctx.font = `500 ${size}px ui-sans-serif, system-ui, sans-serif`
+  const measured = ctx.measureText(text).width
+  if (measured > maxWidth) {
+    size = Math.max(Math.floor((size * maxWidth) / measured), 7)
+    ctx.font = `500 ${size}px ui-sans-serif, system-ui, sans-serif`
+  }
   ctx.textAlign = 'right'
   ctx.textBaseline = 'bottom'
   const x = input.width - Math.round(input.width * 0.012)
