@@ -231,6 +231,40 @@ export async function countForWibDay(userId: string, when: Date): Promise<number
   return rows[0]?.count ?? 0
 }
 
+/**
+ * BR-006 (delivery doc F5) — captures that used the monthly pool in [start, end).
+ *
+ * Counts every row that was or will be sent to HERE: pending and processing (so two
+ * cycles queued at once cannot both take the last capture), done, and failed — a
+ * failure after the HERE call still cost one (delivery doc decision 1). `skipped_limit`
+ * (a refusal) and `missed` (a firing while the system was down) never reached HERE.
+ * A plain range on captured_at, so `captures_user_captured_idx` serves it.
+ */
+export async function countInRange(userId: string, start: Date, end: Date): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(captures)
+    .where(
+      and(
+        eq(captures.userId, userId),
+        gte(captures.capturedAt, start),
+        lt(captures.capturedAt, end),
+        sql`${captures.status} NOT IN ('skipped_limit', 'missed')`,
+      ),
+    )
+  return rows[0]?.count ?? 0
+}
+
+/** The same count for every account at once, for the staff console (F7). */
+export async function countsInRange(start: Date, end: Date): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ userId: captures.userId, count: sql<number>`count(*)::int` })
+    .from(captures)
+    .where(and(gte(captures.capturedAt, start), lt(captures.capturedAt, end), sql`${captures.status} NOT IN ('skipped_limit', 'missed')`))
+    .groupBy(captures.userId)
+  return new Map(rows.map((r) => [r.userId, r.count]))
+}
+
 /** Same-WIB-day condition as `countForWibDay`, for the dashboard's "today" figures. */
 function onWibDay(when: Date) {
   return sql`(${captures.capturedAt} AT TIME ZONE 'Asia/Jakarta')::date = (${when.toISOString()}::timestamptz AT TIME ZONE 'Asia/Jakarta')::date`

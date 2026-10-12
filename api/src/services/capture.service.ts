@@ -4,6 +4,7 @@ import * as zoneRepo from '../repositories/zone.repository'
 import * as userRepo from '../repositories/user.repository'
 import { publishCaptureJob } from '../lib/rabbitmq-client'
 import * as r2 from '../lib/r2-client'
+import { wibMonth } from '../lib/capture-pool'
 import * as notificationService from './notification.service'
 import { wibParts } from './export.service'
 import { NotFoundError, ForbiddenError, HistoryLimitExceededError } from '../errors'
@@ -85,9 +86,10 @@ export interface EnqueueResult {
 /**
  * Starts one cycle: checks the limit, writes the row, and queues the work.
  *
- * BR-006 caps captures per user per WIB calendar day. BR-008 says a job refused by that
- * cap is dropped rather than retried, and recorded as `skipped_limit` — so the history
- * shows the gap and why, instead of the zone simply going quiet.
+ * BR-006 caps captures per user per WIB calendar month: the monthly pool (delivery doc
+ * F5), shared by every zone and window. BR-008 says a job refused by that cap is dropped
+ * rather than retried, and recorded as `skipped_limit` — so the history shows the gap
+ * and why, instead of the zone simply going quiet.
  *
  * BR-022 caps the road class at capture time: a zone keeps whatever class it was
  * created with, but a downgraded plan collects less. The effective class is stored on
@@ -113,10 +115,11 @@ export async function enqueueCapture(
 
   const roadClass = effectiveRoadClass(zone.roadClass as RoadClass, plan)
 
-  const limit = PLAN_LIMITS[plan].capturesLimit
-  const usedToday = await captureRepo.countForWibDay(userId, new Date())
+  const limit = PLAN_LIMITS[plan].monthlyCaptures
+  const month = wibMonth(new Date())
+  const usedThisMonth = await captureRepo.countInRange(userId, month.start, month.end)
 
-  if (usedToday >= limit) {
+  if (usedThisMonth >= limit) {
     // Recorded, not silently dropped: a zone that stopped collecting is only
     // diagnosable if the reason was written down (BR-008).
     const skipped = await captureRepo.create({
@@ -127,7 +130,7 @@ export async function enqueueCapture(
       roadClass,
       scheduledFor: opts.scheduledFor ?? null,
       status: 'skipped_limit',
-      error: `Batas ${limit} capture per hari sudah tercapai.`,
+      error: `Kuota ${limit} capture bulan ini sudah habis.`,
     })
     await notificationService.onLimitReached(userId, plan)
     return { capture: toPublic(skipped), queued: false }
@@ -157,7 +160,7 @@ export async function enqueueCapture(
     return { capture: toPublic(failed ?? capture), queued: false }
   }
 
-  await notificationService.onCaptureQueued(userId, plan, usedToday + 1)
+  await notificationService.onCaptureQueued(userId, plan, usedThisMonth + 1)
   return { capture: toPublic(capture), queued: true }
 }
 

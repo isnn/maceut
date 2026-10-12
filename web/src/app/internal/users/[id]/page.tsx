@@ -10,6 +10,7 @@ import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { IconArrowLeft } from '@/components/ui/icons'
+import { poolResetDay } from '@/features/plan/pool'
 import { formatDate, formatNumber } from '@/lib/utils'
 import { PLAN_LIMITS } from '@/lib/constants'
 import { ApiError } from '@/types/api'
@@ -108,13 +109,18 @@ export default function InternalUserUsagePage() {
             max={usage.schedulesLimit}
             note={paused.schedules > 0 ? `${paused.schedules} paused by plan` : undefined}
           />
-          <StatTile label="Captures today" value={usage.capturesToday ?? 0} max={usage.capturesLimit} />
+          <StatTile
+            label="Captures this month"
+            value={usage.pool.used}
+            max={usage.pool.limit}
+            note={`${formatNumber(usage.pool.remaining)} left · resets ${poolResetDay(usage.pool)}`}
+          />
           <StatTile label="Storage" value={usage.storageUsedGb} max={usage.storageLimitGb} unit="GB" decimals={2} />
         </div>
         <Card className="p-lg">
           <dl className="grid grid-cols-2 laptop:grid-cols-4 gap-lg">
             <Fact label="Exports this month" value={formatNumber(usage.exportsThisMonth)} />
-            <Fact label="Snapshots a day" value={`${formatNumber(usage.framesPerDay)} / ${formatNumber(usage.capturesLimit)}`} />
+            <Fact label="Scheduled a month" value={`${formatNumber(usage.framesPerMonth)} / ${formatNumber(usage.pool.limit)}`} />
             <Fact label="Capture interval" value={limits.captureInterval} />
             <Fact label="History kept" value={limits.historyLabel} />
           </dl>

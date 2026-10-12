@@ -52,6 +52,7 @@ vi.mock('../repositories/capture.repository', () => ({
   imageBytesByUser: vi.fn(async () => new Map()),
   countsByZoneSince: vi.fn(async () => new Map()),
   countsToday: vi.fn(async () => new Map()),
+  countsInRange: vi.fn(async () => new Map()),
   countAllToday: vi.fn(async () => 0),
 }))
 vi.mock('../lib/internal-access', () => {

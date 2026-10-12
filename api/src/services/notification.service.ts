@@ -6,7 +6,8 @@ import * as userRepo from '../repositories/user.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import { getEmailProvider } from '../lib/email'
 import { NotFoundError } from '../errors'
-import { PLAN_LIMITS, type Plan } from '../types/plan'
+import { PLAN_LIMITS, isUpgrade, type Plan } from '../types/plan'
+import { wibMonth } from '../lib/capture-pool'
 import {
   captureProblemsEmail,
   hereBudgetEmail,
@@ -191,40 +192,55 @@ export async function onCapturesMissed(userId: string, missed: MissedSummary, de
   )
 }
 
-/** The daily capture limit refused a cycle. Once per WIB day. */
+/** "1 November", the day the pool resets — in the user's terms, not an ISO stamp. */
+function resetDay(now: Date): string {
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long' }).format(wibMonth(now).end)
+}
+
+/**
+ * The monthly pool is used up (100%, F7). Once per WIB month: the dedupe key carries
+ * the month, so the capture that used the last one and every refusal after it write the
+ * same notification.
+ */
 export async function onLimitReached(userId: string, plan: Plan, now: Date = new Date()): Promise<void> {
-  const limit = PLAN_LIMITS[plan].capturesLimit
+  const limit = PLAN_LIMITS[plan].monthlyCaptures
+  const month = wibMonth(now)
   await write(
     {
       userId,
       type: 'capture_limit_reached',
       tone: 'warning',
-      title: 'Daily capture limit reached',
-      body: `All ${limit} used. Captures resume at 00:00 WIB.`,
+      title: 'Monthly captures used up',
+      body: `All ${limit} used this month. Captures resume on ${resetDay(now)}, 00:00 WIB.`,
       actionLabel: 'View usage',
       actionHref: '/profile',
-      data: { limit, day: wibDay(now) },
-      dedupeKey: `limit-reached:${wibDay(now)}`,
+      data: { limit, month: month.key },
+      dedupeKey: `limit-reached:${month.key}`,
     },
     'capture_limit_reached',
   )
 }
 
-/** Called after a capture is queued: notes, once a day, when usage crosses 80% of the limit. */
+/**
+ * Called after a capture is queued: notes, once a month each, when usage crosses 80% of
+ * the pool and when this capture used the last of it (F7).
+ */
 export async function onCaptureQueued(userId: string, plan: Plan, usedIncludingThis: number, now: Date = new Date()): Promise<void> {
-  const limit = PLAN_LIMITS[plan].capturesLimit
-  if (usedIncludingThis < Math.ceil(limit * NEAR_LIMIT_AT) || usedIncludingThis >= limit) return
+  const limit = PLAN_LIMITS[plan].monthlyCaptures
+  if (usedIncludingThis >= limit) return onLimitReached(userId, plan, now)
+  if (usedIncludingThis < Math.ceil(limit * NEAR_LIMIT_AT)) return
+  const month = wibMonth(now)
   await write(
     {
       userId,
       type: 'capture_limit_near',
       tone: 'info',
-      title: 'Almost at your daily limit',
-      body: `${usedIncludingThis} of ${limit} captures used today. Extra captures are skipped until 00:00 WIB.`,
+      title: 'Most of this month’s captures used',
+      body: `${usedIncludingThis} of ${limit} used. Captures past ${limit} are skipped until ${resetDay(now)}.`,
       actionLabel: 'View usage',
       actionHref: '/profile',
-      data: { used: usedIncludingThis, limit, day: wibDay(now) },
-      dedupeKey: `limit-near:${wibDay(now)}`,
+      data: { used: usedIncludingThis, limit, month: month.key },
+      dedupeKey: `limit-near:${month.key}`,
     },
     'capture_limit_near',
   )
@@ -273,7 +289,7 @@ export async function onPlanChanged(
   now: Date = new Date(),
 ): Promise<void> {
   if (change.from === change.to) return
-  const up = PLAN_LIMITS[change.to].capturesLimit > PLAN_LIMITS[change.from].capturesLimit
+  const up = isUpgrade(change.from, change.to)
   const pausedText = change.paused.length
     ? ` Paused to fit: ${change.paused.join(', ')}. Nothing was deleted.`
     : ' New limits apply now.'

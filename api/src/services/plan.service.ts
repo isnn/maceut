@@ -1,7 +1,7 @@
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import { PLAN_LIMITS, type Plan } from '../types/plan'
-import { PLAN_MIN_INTERVAL, framesPerDay, type CaptureInterval } from '../types/schedule'
+import { PLAN_MIN_INTERVAL, type CaptureInterval } from '../types/schedule'
 
 /**
  * What happens to an account's data when its plan changes (ADR-020).
@@ -24,7 +24,6 @@ export type ImpactReason =
   | 'interval_above_plan'
   | 'over_schedule_limit'
   | 'over_zone_limit'
-  | 'over_daily_frames'
 
 export interface ImpactItem {
   id: string
@@ -46,7 +45,6 @@ const REASON_DETAIL: Record<ImpactReason, string> = {
   interval_above_plan: 'Interval-nya tidak tersedia di paket baru',
   over_schedule_limit: 'Melebihi batas jendela aktif paket baru',
   over_zone_limit: 'Melebihi batas zona paket baru',
-  over_daily_frames: 'Melebihi anggaran frame per hari paket baru',
 }
 
 function item(id: string, name: string, reason: ImpactReason): ImpactItem {
@@ -62,7 +60,7 @@ function item(id: string, name: string, reason: ImpactReason): ImpactItem {
  *
  * Order matters. Interval violations are resolved first because they are absolute:
  * an hourly window simply cannot run on a free plan, whatever else is going on.
- * Pausing those may already bring the counts and the frame budget back under, which
+ * Pausing those may already bring the window count back under, which
  * means fewer things get paused overall than a naive pass would produce.
  */
 export async function previewPlanChange(userId: string, plan: Plan): Promise<PlanImpact> {
@@ -96,32 +94,10 @@ export async function previewPlanChange(userId: string, plan: Plan): Promise<Pla
     pause(s, 'over_schedule_limit')
   }
 
-  // 3. Daily frame budget (BR-006), judged on the worst day rather than the average —
-  //    a window that only runs on Sunday costs nothing on Monday.
-  const worstDayFrames = (rows: typeof schedules) => {
-    let worst = 0
-    for (let day = 0; day < 7; day++) {
-      let frames = 0
-      for (const s of rows) {
-        if (!s.days.includes(day)) continue
-        frames += framesPerDay({
-          start: s.startTime,
-          end: s.endTime,
-          interval: s.interval as CaptureInterval,
-          days: s.days,
-        })
-      }
-      if (frames > worst) worst = frames
-    }
-    return worst
-  }
+  // The frame budget is not a reason to pause: the monthly pool (BR-006) is enforced
+  // per capture, so a window that would overrun it just has its extra cycles skipped.
 
-  for (const s of byNewest) {
-    if (worstDayFrames(stillActive()) <= limits.capturesLimit) break
-    pause(s, 'over_daily_frames')
-  }
-
-  // 4. Too many collecting zones. Same newest-first rule.
+  // 3. Too many collecting zones. Same newest-first rule.
   const zones = await zoneRepo.findByUserId(userId)
   const collecting = zones
     .filter((z) => z.status === 'collecting')

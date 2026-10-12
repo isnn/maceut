@@ -25,7 +25,7 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
   },
   {
     q: 'What happens if I go over my plan?',
-    a: 'Captures beyond the daily limit are skipped, not charged. If you move to a smaller plan, the zones and windows that no longer fit are paused and nothing is deleted.',
+    a: 'Captures beyond your monthly limit are skipped until it resets on the 1st, not charged. If you move to a smaller plan, the zones and windows that no longer fit are paused and nothing is deleted.',
   },
   {
     q: 'Do I need a card to start?',

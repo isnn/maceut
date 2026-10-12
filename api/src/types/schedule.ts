@@ -75,9 +75,18 @@ export function framesPerDay(window: WindowShape): number {
   return Math.max(Math.ceil((end - start) / step), 0)
 }
 
-/** Frames across a whole week — what the daily budget must be compared against per day. */
+/** Frames across a whole week. */
 export function framesPerWeek(window: WindowShape): number {
   return framesPerDay(window) * window.days.length
+}
+
+/**
+ * Frames a window uses in an average month: a week's frames × 52 ÷ 12 (delivery doc F6).
+ * Compared against the monthly pool. Mirrors `framesPerMonth` in
+ * web/src/features/schedules/types.ts.
+ */
+export function framesPerMonth(window: WindowShape): number {
+  return Math.round((framesPerWeek(window) * 52) / 12)
 }
 
 /**

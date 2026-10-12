@@ -188,6 +188,15 @@ router.get('/plan/impact', authMiddleware, meController.planImpact)
  *                     schedulesActiveCount: { type: integer }
  *                     schedulesLimit: { type: integer }
  *                     framesPerDay: { type: integer, description: Hari tersibuk, bukan jumlah seminggu }
+ *                     framesPerMonth: { type: integer, description: Proyeksi bulanan jendela aktif (F6) }
+ *                     pool:
+ *                       type: object
+ *                       description: Pool capture bulanan (BR-006, delivery doc F5) — bulan kalender WIB
+ *                       properties:
+ *                         limit: { type: integer, example: 2000 }
+ *                         used: { type: integer, example: 1240 }
+ *                         remaining: { type: integer, example: 760 }
+ *                         resetsAt: { type: string, format: date-time, description: 00:00 WIB tanggal 1 bulan berikutnya }
  *                     capturesToday: { type: integer, nullable: true }
  *                     exportsThisMonth: { type: integer, description: Export Studio yang selesai bulan ini (WIB) }
  *                     storageUsedBytes: { type: integer, description: Gambar capture + file export yang masih di R2 }

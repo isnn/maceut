@@ -2,9 +2,10 @@
  * Capture windows, against the real backend
  * (GET/POST /schedules, PATCH/DELETE /schedules/:id).
  *
- * Plan limits (BR-005), the per-plan interval cap and the daily frame budget (BR-006)
- * are enforced server-side now and surface as `ApiError` with the same codes the
- * Schedule board already branches on. Nothing is seeded — the board shows the windows
+ * Plan limits (BR-005) and the per-plan interval cap are enforced server-side and
+ * surface as `ApiError` with the same codes the Schedule board branches on. The frame
+ * budget is the monthly pool (BR-006): enforced per capture, never on a window, so the
+ * board only warns when the windows' projection passes it (delivery doc F6). Nothing is seeded — the board shows the windows
  * that exist on the account.
  *
  * `framesPerDay` stays client-side so the dialog can show what a window will cost
@@ -14,7 +15,8 @@
  */
 
 import { apiClient } from '@/lib/api-client'
-import { framesPerDay, type CaptureWindow, type CreateWindowInput } from './types'
+import { framesPerDay, framesPerMonth, type CaptureWindow, type CreateWindowInput } from './types'
+import type { CapturePool } from '@/features/plan/pool'
 
 /**
  * The server also returns `cron` (derived on read, never stored) and its own
@@ -24,6 +26,7 @@ import { framesPerDay, type CaptureWindow, type CreateWindowInput } from './type
  */
 interface ScheduleResponse extends CaptureWindow {
   framesPerDay: number
+  framesPerMonth: number
   cron: string
 }
 
@@ -63,7 +66,25 @@ export async function deleteWindow(id: string): Promise<void> {
   await apiClient.delete<{ deleted: boolean }>(`/schedules/${id}`)
 }
 
-/** Total frames per day across active windows — the Schedule budget readout. */
+/** Total frames per day across active windows. */
 export function totalFramesPerDay(windows: CaptureWindow[]): number {
   return windows.filter((w) => w.active).reduce((sum, w) => sum + framesPerDay(w), 0)
+}
+
+/** Frames the active windows take from the pool in an average month (F6). */
+export function totalFramesPerMonth(windows: Pick<CaptureWindow, 'start' | 'end' | 'interval' | 'days' | 'active'>[]): number {
+  return windows.filter((w) => w.active).reduce((sum, w) => sum + framesPerMonth(w), 0)
+}
+
+export interface ScheduleStats {
+  framesPerDay: number
+  framesPerMonth: number
+  pool: CapturePool
+  activeCount: number
+  totalCount: number
+}
+
+/** The board's budget readout: projection against this month's pool (GET /schedules/stats). */
+export async function getStats(): Promise<ScheduleStats> {
+  return apiClient.get<ScheduleStats>('/schedules/stats')
 }

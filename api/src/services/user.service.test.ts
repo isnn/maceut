@@ -32,6 +32,7 @@ vi.mock('../repositories/render-cache.repository', () => ({ bytesByUser: vi.fn(a
 vi.mock('../repositories/capture.repository', () => ({
   imageBytesByUser: vi.fn(async () => new Map()),
   countsToday: vi.fn(async () => new Map()),
+  countsInRange: vi.fn(async () => new Map()),
   countAllToday: vi.fn(async () => 0),
 }))
 vi.mock('../lib/auth', () => ({
@@ -198,6 +199,14 @@ describe('listUsers — usage is measured, not guessed', () => {
     const { users } = await listUsers({ page: 1, limit: 25 })
 
     expect(users[0]!.usage.capturesToday).toBe(4)
+  })
+
+  it('counts this WIB month’s pool use per account (F7)', async () => {
+    vi.mocked(captureRepo.countsInRange).mockResolvedValue(new Map([[USER, 312]]))
+
+    const { users } = await listUsers({ page: 1, limit: 25 })
+
+    expect(users[0]!.usage.capturesThisMonth).toBe(312)
   })
 
   it('adds up storage per account: images, exports and cached frames (FE-35)', async () => {

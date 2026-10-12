@@ -9,10 +9,11 @@ import { DialogCloseX } from '@/components/ui/DialogCloseX'
 import { PlanPill } from '@/components/ui/Badge'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { UsageMeter, AttributeRow } from '@/components/ui/UsageMeter'
+import { poolResetDay, projectionExceedsPool } from '@/features/plan/pool'
 import { Alert } from '@/components/ui/Alert'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { forgetIntendedPlan, planFromUrl } from '@/features/marketing/intended-plan'
-import { cn } from '@/lib/utils'
+import { cn, formatNumber } from '@/lib/utils'
 import { IconCheck } from '@/components/ui/icons'
 import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER, PLAN_PRICE, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
@@ -141,8 +142,22 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
               <h2 className="text-heading-sm text-text-primary mb-lg">Plan usage</h2>
               <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
                 <UsageMeter label="Zones" value={usage.zonesCount} max={usage.zonesLimit} />
-                <UsageMeter label="Captures today" value={usage.capturesToday} max={usage.capturesLimit} />
-                <UsageMeter label="Scheduled frames / day" value={usage.framesPerDay} max={usage.capturesLimit} />
+                <UsageMeter
+                  label="Captures this month"
+                  value={usage.pool.used}
+                  max={usage.pool.limit}
+                  note={`${formatNumber(usage.pool.remaining)} left · resets ${poolResetDay(usage.pool)}, 00:00 WIB`}
+                />
+                <UsageMeter
+                  label="Scheduled a month"
+                  value={usage.framesPerMonth}
+                  max={usage.pool.limit}
+                  note={
+                    projectionExceedsPool(usage.framesPerMonth, usage.pool)
+                      ? 'More than is left this month: captures past the limit are skipped'
+                      : 'Your active windows in an average month'
+                  }
+                />
                 <UsageMeter label="Active windows" value={usage.schedulesActiveCount} max={usage.schedulesLimit} />
                 <UsageMeter label="Storage" value={usage.storageUsedGb} max={usage.storageLimitGb} unit=" GB" />
               </div>

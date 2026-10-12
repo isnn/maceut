@@ -5,14 +5,14 @@ import type { Plan } from '@/features/auth/types'
  *
  * The four-plan catalog from the delivery doc (2026-10). Mirrors PLAN_LIMITS in
  * api/src/types/plan.ts field for field; api/src/types/plan-catalog.test.ts fails when
- * the two drift. `capturesLimit` is still a daily limit (BR-006) until the monthly pool
- * lands; Starter's 15 is its 450-a-month pool over 30 days.
+ * the two drift. `monthlyCaptures` is the monthly capture pool (BR-006, delivery doc
+ * F5): captures per WIB calendar month, shared by every zone and window.
  */
 export const PLAN_LIMITS = {
   free: {
     maxRoadClass: 'nasional',
     schedulesLimit: 3,
-    capturesLimit: 10,
+    monthlyCaptures: 45,
     zonesLimit: 1,
     seatsLimit: 1,
     storageGb: 1,
@@ -28,7 +28,7 @@ export const PLAN_LIMITS = {
   starter: {
     maxRoadClass: 'nasional_provinsi',
     schedulesLimit: 9,
-    capturesLimit: 15,
+    monthlyCaptures: 450,
     zonesLimit: 3,
     seatsLimit: 1,
     storageGb: 5,
@@ -44,7 +44,7 @@ export const PLAN_LIMITS = {
   standard: {
     maxRoadClass: 'nasional_provinsi',
     schedulesLimit: 30,
-    capturesLimit: 50,
+    monthlyCaptures: 2000,
     zonesLimit: 10,
     seatsLimit: 5,
     storageGb: 10,
@@ -60,7 +60,7 @@ export const PLAN_LIMITS = {
   premium: {
     maxRoadClass: 'semua',
     schedulesLimit: 45,
-    capturesLimit: 100,
+    monthlyCaptures: 3000,
     zonesLimit: 15,
     seatsLimit: 5,
     storageGb: 100,
@@ -95,10 +95,10 @@ export const PLAN_PRICE: Record<Plan, { amount: string; period: string }> = {
 export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
   // Facts only (FE-36): every line comes from PLAN_LIMITS / the API's plan rules. Every
   // plan exports ZIP, WebM and MP4, so export formats are not listed as a tier difference.
-  free: ['1 zone', '10 captures a day', 'Highways', 'One capture a day per window', '7 days of history in CSV'],
-  starter: ['3 zones', '15 captures a day', 'Highways + main roads', 'Hourly captures', '30 days of history in CSV'],
-  standard: ['10 zones', '50 captures a day', 'Highways + main roads', 'Hourly captures', '30 days of history in CSV'],
-  premium: ['15 zones', '100 captures a day', 'All roads, down to local streets', 'Captures every 15 minutes', '30 days of history in CSV'],
+  free: ['1 zone', '45 captures a month', 'Highways', 'One capture a day per window', '7 days of history in CSV'],
+  starter: ['3 zones', '450 captures a month', 'Highways + main roads', 'Hourly captures', '30 days of history in CSV'],
+  standard: ['10 zones', '2,000 captures a month', 'Highways + main roads', 'Hourly captures', '30 days of history in CSV'],
+  premium: ['15 zones', '3,000 captures a month', 'All roads, down to local streets', 'Captures every 15 minutes', '30 days of history in CSV'],
 }
 
 /**

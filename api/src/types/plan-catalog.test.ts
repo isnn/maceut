@@ -34,7 +34,7 @@ describe('plan catalog', () => {
     expect(PLAN_LIMITS.starter).toEqual({
       maxRoadClass: 'nasional_provinsi',
       schedulesLimit: 9,
-      capturesLimit: 15,
+      monthlyCaptures: 450,
       zonesLimit: 3,
       seatsLimit: 1,
       storageGb: 5,
@@ -45,6 +45,7 @@ describe('plan catalog', () => {
     expect(PLANS.map((p) => PLAN_LIMITS[p].zonesLimit)).toEqual([1, 3, 10, 15])
     expect(PLANS.map((p) => PLAN_LIMITS[p].schedulesLimit)).toEqual([3, 9, 30, 45])
     expect(PLANS.map((p) => PLAN_LIMITS[p].seatsLimit)).toEqual([1, 1, 5, 5])
+    expect(PLANS.map((p) => PLAN_LIMITS[p].monthlyCaptures)).toEqual([45, 450, 2000, 3000])
     expect(PLANS.map((p) => PLAN_LIMITS[p].historyDays)).toEqual([7, 30, 30, 30])
   })
 

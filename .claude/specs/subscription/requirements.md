@@ -65,7 +65,7 @@ Sebagai **sistem**, saya perlu **memastikan user tidak melampaui batas limit pla
 supaya **business rules ditegakkan secara konsisten di semua entry point**.
 
 **Acceptance Criteria:**
-- [ ] Daily capture limit (sesuai plan — Free 10, Starter 15, Standard 50, Premium 100; digantikan pool bulanan F5) di-enforce di `CaptureService.TriggerManual` dan `CaptureService.TriggerScheduled` (BR-006, BR-007)
+- [x] Pool capture bulanan (sesuai plan — Free 45, Starter 450, Standard 2.000, Premium 3.000 per bulan WIB) di-enforce di `CaptureService.TriggerManual` dan `CaptureService.TriggerScheduled` (BR-006, BR-007)
 - [ ] Active schedule limit (sesuai plan — Free 3, Starter 9, Standard 30, Premium 45) di-enforce di `ScheduleService.CreateSchedule` dan `ScheduleService.ResumeSchedule` (BR-005, BR-007)
 - [ ] Road class filter di-enforce di `ZoneService.GetRoadClassFilter(plan)` — hasil filter dikirim ke Playwright sebagai konfigurasi layer HERE Maps (BR-001..003)
 - [ ] Capture yang di-skip karena limit dicatat dengan status `skipped_limit` (BR-008)

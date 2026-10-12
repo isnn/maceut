@@ -17,6 +17,7 @@ import { ExportPill } from '@/features/exports/components/ExportProgress'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import type { CollectionHealth, UsageSummary } from '@/features/dashboard/api'
 import type { Zone } from '@/features/zones/types'
+import { poolResetDay, projectionExceedsPool } from '@/features/plan/pool'
 import { PlanPausedNotice } from '@/features/plan/PlanPausedNotice'
 
 /**
@@ -60,7 +61,7 @@ const CAPTURE_STATUS_SHORT: Record<zonesApi.CaptureStatus, string> = {
   processing: 'Collecting…',
   done: 'Collected',
   failed: 'Failed',
-  skipped_limit: 'Over daily limit',
+  skipped_limit: 'Over monthly limit',
   missed: 'Missed',
 }
 
@@ -146,16 +147,20 @@ export default function DashboardPage() {
           progress={{ value: usage.zonesCount, max: usage.zonesLimit }}
         />
         <StatTile
-          label="Captures today"
-          value={usage.capturesToday === null ? '—' : formatNumber(usage.capturesToday)}
-          note={`of ${formatNumber(usage.capturesLimit)} a day · resets 00:00 WIB`}
-          progress={usage.capturesToday === null ? undefined : { value: usage.capturesToday, max: usage.capturesLimit }}
+          label="Captures this month"
+          value={formatNumber(usage.pool.used)}
+          note={`of ${formatNumber(usage.pool.limit)} · ${formatNumber(usage.pool.remaining)} left · resets ${poolResetDay(usage.pool)}`}
+          progress={{ value: usage.pool.used, max: usage.pool.limit }}
         />
         <StatTile
-          label="Scheduled per day"
-          value={formatNumber(usage.framesPerDay)}
-          note={`captures on your busiest day · limit ${formatNumber(usage.capturesLimit)}`}
-          progress={{ value: usage.framesPerDay, max: usage.capturesLimit }}
+          label="Scheduled a month"
+          value={formatNumber(usage.framesPerMonth)}
+          note={
+            projectionExceedsPool(usage.framesPerMonth, usage.pool)
+              ? `more than the ${formatNumber(usage.pool.remaining)} left · extra captures are skipped`
+              : 'your active windows in an average month'
+          }
+          progress={{ value: usage.framesPerMonth, max: usage.pool.limit }}
         />
         <StatTile
           label="Storage"

@@ -67,10 +67,11 @@ export interface PlanLimits {
   /** BR-005 */
   schedulesLimit: number
   /**
-   * BR-006 — captures a day. Starter's 15 is its monthly pool (450) over 30 days, until
-   * the monthly pool replaces the daily limit (delivery doc F5).
+   * BR-006 — the monthly capture pool (delivery doc F5): captures per WIB calendar month,
+   * shared by every zone and window, reset on the 1st at 00:00 WIB. Scheduled and manual
+   * captures both count; zone previews do not.
    */
-  capturesLimit: number
+  monthlyCaptures: number
   zonesLimit: number
   seatsLimit: number
   storageGb: number
@@ -99,7 +100,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   free: {
     maxRoadClass: 'nasional',
     schedulesLimit: 3,
-    capturesLimit: 10,
+    monthlyCaptures: 45,
     zonesLimit: 1,
     seatsLimit: 1,
     storageGb: 1,
@@ -110,7 +111,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   starter: {
     maxRoadClass: 'nasional_provinsi',
     schedulesLimit: 9,
-    capturesLimit: 15,
+    monthlyCaptures: 450,
     zonesLimit: 3,
     seatsLimit: 1,
     storageGb: 5,
@@ -121,7 +122,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   standard: {
     maxRoadClass: 'nasional_provinsi',
     schedulesLimit: 30,
-    capturesLimit: 50,
+    monthlyCaptures: 2000,
     zonesLimit: 10,
     seatsLimit: 5,
     storageGb: 10,
@@ -132,7 +133,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   premium: {
     maxRoadClass: 'semua',
     schedulesLimit: 45,
-    capturesLimit: 100,
+    monthlyCaptures: 3000,
     zonesLimit: 15,
     seatsLimit: 5,
     storageGb: 100,

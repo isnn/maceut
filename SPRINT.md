@@ -173,6 +173,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-39** Studio: timeframe hanya menawarkan riwayat paket ("All 7 days" / "All 90 days" / "All", baris "Your plan keeps N days of history · Upgrade"); zona terakhir diingat saat kembali ke Studio | review user |
 | ✅ | **BE-18** Worker tahan macet: batas render 3 menit tanpa progres, channel RabbitMQ per consumer + reconnect, restart beneran (tanpa `tsx watch`), healthcheck heartbeat, capture terlambat → `missed` (opsi C), `captured_at` = waktu sampel | insiden 2026-10-08 |
 | ✅ | **PKG-F3/F4** Paket Starter (Rp 99k) + katalog 4 paket di backend & frontend (harga, zona, jadwal, riwayat 30 hari, pengguna, ekspor); migrasi 0018 `plan` + starter; tes katalog membandingkan kedua salinan; `npm run plan:impact` (hanya-baca) | docs Delivery Paket & Fitur |
+| ✅ | **PKG-F5/F6/F7** Pool capture bulanan (45/450/2.000/3.000, bulan WIB, reset tgl 1) menggantikan batas harian; papan jadwal & dialog jendela memproyeksikan bulan (minggu × 52 ÷ 12) vs sisa pool — peringatan, bukan blokir; dasbor/Profil: terpakai/sisa/tanggal reset; notifikasi 80% & 100% sekali per bulan; konsol staf: pemakaian pool per akun; ADR-033 | docs Delivery Paket & Fitur |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -197,6 +198,21 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-12c] PKG-F5/F6/F7 — pool capture bulanan (feat/monthly-capture-pool, di atas feat/starter-plan-catalog).
+  - `PlanLimits.capturesLimit` (harian) → `monthlyCaptures`. Hitungan dari tabel captures (ADR-033): rentang
+    bulan WIB sebagai instan (`lib/capture-pool.ts`), status selain skipped_limit/missed — pending/processing
+    ikut supaya dua job serentak tak memakai sisa terakhir; gagal tetap dihitung (keputusan 1).
+  - Pool habis → `skipped_limit` "Kuota N capture bulan ini sudah habis" (BR-008), notifikasi 100%; 80% sekali
+    per bulan (dedupe `limit-near:YYYY-MM`). Tanpa batas harian pengaman (keputusan 2).
+  - Jadwal tidak lagi ditolak karena frame: `CAPTURE_LIMIT_EXCEEDED` dan `requireDailyBudget` dihapus; turun
+    paket tidak lagi menjeda jendela karena frame (alasan `over_daily_frames` dihapus).
+  - `GET /schedules/stats` + `GET /me/usage`: `framesPerMonth` dan `pool { limit, used, remaining, resetsAt }`;
+    jadwal: `framesPerMonth`. Konsol staf: `capturesThisMonth` per akun. Swagger diperbarui.
+  - Web: kartu "Scheduled a month" di papan jadwal, catatan proyeksi (non-blokir) di dialog jendela,
+    dasbor & Profil "Captures this month" + reset, PLAN_HIGHLIGHTS/onboarding/perbandingan per bulan.
+  - Tes: capture-pool (batas bulan WIB, Desember→Januari, kabisat), pool per paket, capture ke-46 Free,
+    notifikasi 80/100%, usage pool & proyeksi; 516 lulus (container 42/42 file).
 
 [2026-10-12b] PKG-F3/F4 — paket Starter + katalog baru (feat/starter-plan-catalog).
   - Plan = free < starter < standard < premium (api/src/types/plan.ts, web/src/lib/constants.ts, enum DB 0018

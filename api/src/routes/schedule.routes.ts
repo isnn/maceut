@@ -32,6 +32,7 @@ router.use(['/schedules', '/schedules/:id'], authMiddleware, planCheck)
  *           description: 0 = Senin … 6 = Minggu
  *         active: { type: boolean }
  *         framesPerDay: { type: integer, example: 2 }
+ *         framesPerMonth: { type: integer, example: 43, description: Frame seminggu × 52 ÷ 12 (F6) }
  *         cron: { type: string, example: "0 7-8 * * 1-5", description: Diturunkan, tidak disimpan }
  *         capturedFrames: { type: integer, description: Frame yang sudah terkumpul oleh jendela ini }
  *         nextFireAt: { type: string, format: date-time, nullable: true, description: Kapan scheduler menembak berikutnya (next_fire_at); null saat di-pause }
@@ -69,11 +70,37 @@ router.get('/schedules', scheduleController.list)
  * /schedules/stats:
  *   get:
  *     summary: Ringkasan anggaran frame untuk header papan Jadwal
+ *     description: |
+ *       Proyeksi bulanan jendela aktif (frame seminggu × 52 ÷ 12) dibanding pool capture
+ *       bulan ini (delivery doc F6). Hanya peringatan — jendela tidak pernah ditolak karena
+ *       proyeksi; kelebihan capture tercatat `skipped_limit` saat pool habis (BR-008).
  *     tags: [Schedules]
  *     security: [{ cookieAuth: [] }]
  *     responses:
  *       200:
- *         description: Total frame/hari dan jumlah jendela aktif
+ *         description: Frame/hari, proyeksi frame/bulan, pool, dan jumlah jendela
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     framesPerDay: { type: integer }
+ *                     framesPerMonth: { type: integer, description: Proyeksi bulan rata-rata }
+ *                     pool:
+ *                       type: object
+ *                       description: Pool capture bulanan (BR-006, delivery doc F5) — bulan kalender WIB
+ *                       properties:
+ *                         limit: { type: integer, example: 2000 }
+ *                         used: { type: integer, example: 1240 }
+ *                         remaining: { type: integer, example: 760 }
+ *                         resetsAt: { type: string, format: date-time, description: 00:00 WIB tanggal 1 bulan berikutnya }
+ *                     activeCount: { type: integer }
+ *                     totalCount: { type: integer }
+ *                     plan: { type: string, enum: [free, starter, standard, premium] }
  */
 router.get('/schedules/stats', scheduleController.stats)
 
@@ -108,7 +135,7 @@ router.get('/schedules/stats', scheduleController.stats)
  *         description: Jendela dibuat
  *       403: { description: FORBIDDEN — interval di luar paket, atau peran Viewer }
  *       404: { description: NOT_FOUND — zona bukan milik Anda }
- *       422: { description: SCHEDULE_LIMIT_EXCEEDED (BR-005) atau anggaran frame terlampaui }
+ *       422: { description: SCHEDULE_LIMIT_EXCEEDED (BR-005) atau VALIDATION_ERROR }
  */
 router.post('/schedules', scheduleController.create)
 

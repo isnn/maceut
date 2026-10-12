@@ -50,11 +50,6 @@ export function windowError(err: unknown, plan: Plan): WindowError {
     }
     case 'SCHEDULE_LIMIT_EXCEEDED':
       return { kind: 'plan', issue: { kind: 'windows', limit: Number(details.limit ?? PLAN_LIMITS[plan].schedulesLimit) } }
-    case 'CAPTURE_LIMIT_EXCEEDED':
-      return {
-        kind: 'plan',
-        issue: { kind: 'daily', day: Number(details.day ?? 0), frames: Number(details.frames), limit: Number(details.dailyLimit) },
-      }
     case 'VALIDATION_ERROR': {
       // Zod reports { field: message }; the service reports { field } with the message.
       if (typeof details.field === 'string') {

@@ -14,7 +14,9 @@ export interface AccountUsage {
   zonesPaused: number
   zonesLimit: number
   capturesToday: number | null
-  capturesLimit: number
+  /** This WIB month's pool use (delivery doc F7); null when the server didn't send it. */
+  capturesThisMonth: number | null
+  monthlyCaptures: number
   schedulesActiveCount: number
   schedulesPaused: number
   schedulesLimit: number

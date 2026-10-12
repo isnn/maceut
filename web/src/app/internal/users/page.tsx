@@ -73,7 +73,7 @@ export default function InternalUsersPage() {
       zones: (row) => row.usage.zonesCount,
       paused: (row) => row.usage.zonesPaused + row.usage.schedulesPaused,
       windows: (row) => row.usage.schedulesActiveCount,
-      captures: (row) => row.usage.capturesToday,
+      captures: (row) => row.usage.capturesThisMonth,
       storage: (row) => row.usage.storageUsedGb,
       joined: (row) => row.createdAt,
     },
@@ -259,7 +259,7 @@ export default function InternalUsersPage() {
                   direction={table.sort?.direction ?? 'asc'}
                   onSort={() => table.toggleSort('captures')}
                 >
-                  Captures
+                  Captures / month
                 </SortableTh>
                 <SortableTh
                   className="text-right"
@@ -368,8 +368,8 @@ export default function InternalUsersPage() {
                       <span className="text-text-muted">/{row.usage.schedulesLimit}</span>
                     </Td>
                     <Td className="text-right tabular-nums text-text-secondary whitespace-nowrap">
-                      {row.usage.capturesToday ?? <span className="text-text-muted">&mdash;</span>}
-                      <span className="text-text-muted">/{row.usage.capturesLimit}</span>
+                      {row.usage.capturesThisMonth ?? <span className="text-text-muted">&mdash;</span>}
+                      <span className="text-text-muted">/{formatNumber(row.usage.monthlyCaptures)}</span>
                     </Td>
                     <Td className="text-right tabular-nums text-text-secondary whitespace-nowrap">
                       {formatNumber(row.usage.storageUsedGb ?? 0, 2)}

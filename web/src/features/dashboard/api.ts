@@ -32,6 +32,8 @@ export interface CollectionHealth {
   peakZoneName: string | null
 }
 
+import type { CapturePool } from '@/features/plan/pool'
+
 export interface UsageSummary {
   plan: Plan
 
@@ -42,7 +44,10 @@ export interface UsageSummary {
 
   /** Frames the active windows produce on their busiest day. */
   framesPerDay: number
-  capturesLimit: number
+  /** Frames the active windows take from the pool in an average month (F6). */
+  framesPerMonth: number
+  /** The monthly capture pool (BR-006, delivery doc F5/F7). */
+  pool: CapturePool
 
   capturesToday: number | null
   exportsThisMonth: number
