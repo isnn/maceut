@@ -1,4 +1,4 @@
-import { eq, and, asc, desc, gte, inArray, lt, lte, ne, sql } from 'drizzle-orm'
+import { eq, and, asc, desc, gte, inArray, isNull, lt, lte, ne, sql } from 'drizzle-orm'
 import { db } from '../lib/drizzle-client'
 import { captures, schedules, zones } from '../../drizzle/schema'
 import type { RoadClass } from '../types/plan'
@@ -87,7 +87,8 @@ export async function listFramesSince(
   since: Date | null,
   cap: number,
 ): Promise<{ id: string; capturedAt: Date; jamFactorAvg: string | null; roadsCount: number | null }[]> {
-  const conditions = [eq(captures.zoneId, zoneId), eq(captures.status, 'done')]
+  // Soft-deleted frames (H1) have no traffic left to draw: Studio never lists them.
+  const conditions = [eq(captures.zoneId, zoneId), eq(captures.status, 'done'), isNull(captures.deletedAt)]
   if (since) conditions.push(gte(captures.capturedAt, since))
   const rows = await db
     .select({ id: captures.id, capturedAt: captures.capturedAt, jamFactorAvg: captures.jamFactorAvg, roadsCount: captures.roadsCount })
@@ -136,6 +137,7 @@ const LITE_COLUMNS = {
   scheduledFor: captures.scheduledFor,
   capturedAt: captures.capturedAt,
   createdAt: captures.createdAt,
+  deletedAt: captures.deletedAt,
 }
 
 export type CaptureLite = Omit<CaptureRecord, 'traffic'>
@@ -191,9 +193,10 @@ export async function listByZone(
       scheduledFor: captures.scheduledFor,
       capturedAt: captures.capturedAt,
       createdAt: captures.createdAt,
+      deletedAt: captures.deletedAt,
     })
     .from(captures)
-    .where(eq(captures.zoneId, zoneId))
+    .where(and(eq(captures.zoneId, zoneId), isNull(captures.deletedAt)))
     .orderBy(desc(captures.capturedAt))
     .limit(opts.limit)
     .offset(opts.offset)
@@ -201,7 +204,7 @@ export async function listByZone(
   const countRows = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(captures)
-    .where(eq(captures.zoneId, zoneId))
+    .where(and(eq(captures.zoneId, zoneId), isNull(captures.deletedAt)))
 
   return { rows, total: countRows[0]?.count ?? 0 }
 }
@@ -418,6 +421,7 @@ export async function recentForUser(
       scheduledFor: captures.scheduledFor,
       capturedAt: captures.capturedAt,
       createdAt: captures.createdAt,
+      deletedAt: captures.deletedAt,
       zoneName: zones.name,
       // Each zone's captures numbered newest-first, so the strip can take turns (FE-31).
       zoneRank: sql<number>`row_number() over (partition by ${captures.zoneId} order by ${captures.capturedAt} desc)`.as(
@@ -428,7 +432,7 @@ export async function recentForUser(
     .innerJoin(zones, eq(zones.id, captures.zoneId))
     // Paused zones stay out of the strip: it shows what is collecting now, and a paused
     // zone's last frames read as live when they are not. Their history stays on the zone.
-    .where(and(eq(captures.userId, userId), eq(zones.status, 'collecting')))
+    .where(and(eq(captures.userId, userId), eq(zones.status, 'collecting'), isNull(captures.deletedAt)))
     .as('ranked')
 
   // Every zone's newest first, then every zone's second newest, … — a zone collecting
@@ -465,6 +469,7 @@ export async function listDoneIdsBetween(
       and(
         eq(captures.zoneId, zoneId),
         eq(captures.status, 'done'),
+        isNull(captures.deletedAt),
         gte(captures.capturedAt, from),
         lte(captures.capturedAt, to),
       ),
@@ -499,7 +504,7 @@ export async function listForCsv(zoneId: string, since: Date | null, limit: numb
     })
     .from(captures)
     .leftJoin(schedules, eq(captures.scheduleId, schedules.id))
-    .where(since ? and(eq(captures.zoneId, zoneId), gte(captures.capturedAt, since)) : eq(captures.zoneId, zoneId))
+    .where(and(eq(captures.zoneId, zoneId), isNull(captures.deletedAt), since ? gte(captures.capturedAt, since) : undefined))
     .orderBy(asc(captures.capturedAt))
     .limit(limit)
 }
@@ -522,4 +527,60 @@ export async function imageBytesByUser(): Promise<Map<string, number>> {
     .where(sql`${captures.filePath} IS NOT NULL`)
     .groupBy(captures.userId)
   return new Map(rows.map((r) => [r.userId, Number(r.bytes)]))
+}
+
+// --- retention (H1, ADR-035) -------------------------------------------------------
+
+/**
+ * Soft-deletes up to `limit` live captures taken before `before`, oldest first: stamps
+ * `deleted_at` and nothing else, so every user list hides the capture while its row,
+ * traffic and image stay whole. Restoring is clearing `deleted_at`. Safe to run again: a
+ * soft-deleted row no longer matches. Returns how many rows changed.
+ */
+export async function softDeleteBefore(before: Date, limit: number, now: Date = new Date()): Promise<number> {
+  const batch = db
+    .select({ id: captures.id })
+    .from(captures)
+    .where(and(isNull(captures.deletedAt), lt(captures.capturedAt, before)))
+    .orderBy(asc(captures.capturedAt))
+    .limit(limit)
+  const rows = await db
+    .update(captures)
+    .set({ deletedAt: now })
+    .where(inArray(captures.id, batch))
+    .returning({ id: captures.id })
+  return rows.length
+}
+
+/** Captures taken before `before`, oldest first, with their image path: the hard-delete batch. */
+export async function findPurgeable(before: Date, limit: number): Promise<{ id: string; filePath: string | null }[]> {
+  return db
+    .select({ id: captures.id, filePath: captures.filePath })
+    .from(captures)
+    .where(lt(captures.capturedAt, before))
+    .orderBy(asc(captures.capturedAt))
+    .limit(limit)
+}
+
+/** Deletes capture rows for good. Its render-cache rows go with it (ON DELETE CASCADE). */
+export async function deleteByIds(ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0
+  const rows = await db.delete(captures).where(inArray(captures.id, ids)).returning({ id: captures.id })
+  return rows.length
+}
+
+/** What the sweeper would change now — the read-only dry run. */
+export async function retentionCounts(softBefore: Date, purgeBefore: Date): Promise<{
+  toSoftDelete: number
+  toPurge: number
+  toPurgeWithImage: number
+}> {
+  const rows = await db
+    .select({
+      toSoftDelete: sql<number>`count(*) filter (where ${captures.deletedAt} is null and ${captures.capturedAt} < ${softBefore.toISOString()}::timestamptz)::int`,
+      toPurge: sql<number>`count(*) filter (where ${captures.capturedAt} < ${purgeBefore.toISOString()}::timestamptz)::int`,
+      toPurgeWithImage: sql<number>`count(*) filter (where ${captures.capturedAt} < ${purgeBefore.toISOString()}::timestamptz and ${captures.filePath} is not null)::int`,
+    })
+    .from(captures)
+  return rows[0] ?? { toSoftDelete: 0, toPurge: 0, toPurgeWithImage: 0 }
 }

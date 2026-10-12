@@ -1,11 +1,13 @@
 import { betterAuth } from 'better-auth'
 import { emailOTP } from 'better-auth/plugins'
+import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { db } from './drizzle-client'
 import * as schema from '../../drizzle/schema'
 import { config } from '../config/env'
 import { expiryToSeconds } from './duration'
 import { OTP_EXPIRES_SECONDS, sendOtpEmail } from '../services/email.service'
+import { consentProblem, consentStamp, TERMS_NOT_ACCEPTED } from '../services/consent.service'
 
 /**
  * Better Auth owns the auth module (ADR-009).
@@ -113,6 +115,34 @@ export const auth = betterAuth({
         required: false,
         defaultValue: false,
         input: false,
+      },
+      /** H4 — proof of consent, stamped by databaseHooks below. Server-set only. */
+      termsAcceptedAt: { type: 'date', required: false, input: false },
+      termsVersion: { type: 'string', required: false, input: false },
+    },
+  },
+
+  /**
+   * H4 — a browser sign-up must agree to the current Terms and Privacy policy. Checked
+   * here, server-side, so a request that skips the form is refused too. Staff-created
+   * accounts (user.service createUser) call sign-up from inside the server with no
+   * request: no one ticked a box, so nothing is required and nothing is stamped.
+   */
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== '/sign-up/email' || !ctx.request) return
+      const problem = consentProblem(ctx.body)
+      if (problem) throw new APIError('BAD_REQUEST', { code: TERMS_NOT_ACCEPTED, message: problem })
+    }),
+  },
+
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user, ctx) => {
+          if (ctx?.path !== '/sign-up/email' || !ctx.request) return
+          return { data: { ...user, ...consentStamp() } }
+        },
       },
     },
   },

@@ -5,6 +5,7 @@ import { closeQueue } from './lib/rabbitmq-client'
 import { startScheduler, stopScheduler } from './schedulers/capture.scheduler'
 import { startExportSweeper, stopExportSweeper } from './schedulers/export.sweeper'
 import { startNotificationSweeper, stopNotificationSweeper } from './schedulers/notification.sweeper'
+import { startRetentionSweeper, stopRetentionSweeper } from './schedulers/retention.sweeper'
 
 const server = app.listen(config.port, () => {
   console.log(`[api] listening on :${config.port} (${config.nodeEnv})`)
@@ -26,6 +27,7 @@ const server = app.listen(config.port, () => {
   startScheduler()
   startExportSweeper()
   startNotificationSweeper()
+  startRetentionSweeper()
 })
 
 async function shutdown(signal: string) {
@@ -33,6 +35,7 @@ async function shutdown(signal: string) {
   stopScheduler()
   stopExportSweeper()
   stopNotificationSweeper()
+  stopRetentionSweeper()
   server.close(async () => {
     await Promise.allSettled([closeDb(), closeQueue()])
     process.exit(0)

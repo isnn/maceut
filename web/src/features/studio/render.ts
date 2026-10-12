@@ -1178,11 +1178,12 @@ function drawTraffic(ctx: CanvasRenderingContext2D, input: RenderInput, v: Viewp
  * Traffic is HERE's on every theme (its terms ask for "© HERE" on any display of its
  * data); the HERE line is provisional until HERE confirms the exact text. The base map
  * credit follows the theme: OpenFreeMap tiles are OpenMapTiles' schema over
- * OpenStreetMap data (ODbL), and Esri's imagery terms ask for their own line.
+ * OpenStreetMap data (ODbL), whose licence asks for "© OpenStreetMap contributors" word
+ * for word (Terms §5 promises it, H5); Esri's imagery terms ask for their own line.
  */
 export const ATTRIBUTION = {
   traffic: 'Traffic © HERE',
-  vector: 'OpenFreeMap © OpenMapTiles Data from OpenStreetMap',
+  vector: 'OpenFreeMap © OpenMapTiles © OpenStreetMap contributors',
   satellite: 'Imagery © Esri, Maxar, Earthstar Geographics',
 } as const
 

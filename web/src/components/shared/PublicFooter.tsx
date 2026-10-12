@@ -4,6 +4,7 @@ const LINKS = [
   { href: '/#product', label: 'Product' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/terms', label: 'Terms of Service' },
+  { href: '/privacy', label: 'Privacy Policy' },
 ]
 
 /** Footer for the public pages (FE-37): only pages that exist. */
@@ -19,7 +20,12 @@ export function PublicFooter() {
             </a>
           ))}
         </nav>
-        <p className="w-full text-caption text-text-secondary">© 2026 Maceut</p>
+        <p className="w-full text-caption text-text-secondary">
+          © 2026 Maceut by{' '}
+          <a href="https://hokya.dev" className="text-text-secondary underline-offset-2 hover:text-text-primary hover:underline">
+            hokya.dev
+          </a>
+        </p>
       </div>
     </footer>
   )

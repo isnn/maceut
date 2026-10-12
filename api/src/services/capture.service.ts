@@ -252,6 +252,8 @@ export async function getCapture(userId: string, captureId: string): Promise<Cap
   const row = await captureRepo.findById(captureId)
   if (!row) throw new NotFoundError('Capture')
   if (row.userId !== userId) throw new ForbiddenError('Capture ini bukan milik Anda.')
+  // Soft-deleted by retention (H1): its HERE traffic is gone and it is hidden everywhere.
+  if (row.deletedAt) throw new NotFoundError('Capture')
 
   return { ...toPublic(row), traffic: row.traffic ?? null }
 }
@@ -277,6 +279,8 @@ export async function getCaptureImage(userId: string, captureId: string): Promis
   const row = await captureRepo.findById(captureId)
   if (!row) throw new NotFoundError('Capture')
   if (row.userId !== userId) throw new ForbiddenError('Capture ini bukan milik Anda.')
+  // Soft-deleted by retention (H1): its HERE traffic is gone and it is hidden everywhere.
+  if (row.deletedAt) throw new NotFoundError('Capture')
   if (!row.filePath) throw new NotFoundError('Gambar capture')
 
   const zone = await zoneRepo.findById(row.zoneId)
@@ -419,6 +423,8 @@ export async function getPlaybackFrame(userId: string, captureId: string): Promi
   const row = await captureRepo.findLiteById(captureId)
   if (!row) throw new NotFoundError('Capture')
   if (row.userId !== userId) throw new ForbiddenError('Capture ini bukan milik Anda.')
+  // Soft-deleted by retention (H1): its HERE traffic is gone and it is hidden everywhere.
+  if (row.deletedAt) throw new NotFoundError('Capture')
 
   return { ...toPublic(row), traffic: await slimFor(row) }
 }
@@ -446,7 +452,14 @@ const CSV_ROAD_CLASS: Record<string, string> = {
   semua: 'all_roads',
 }
 
-const CSV_HEADER = ['captured_at_wib', 'status', 'trigger', 'window', 'road_class', 'roads', 'avg_jam_factor', 'error']
+const CSV_HEADER = ['captured_at_wib', 'status', 'trigger', 'window', 'road_class', 'roads', 'avg_jam_factor', 'error', 'source']
+
+/**
+ * The credit every CSV row carries (H5, Terms §5). The figures come from HERE's traffic;
+ * the CSV holds no map data, so the map credit is not needed here. A column, not a
+ * comment line, so spreadsheets and parsers read the file unchanged.
+ */
+export const CSV_SOURCE = 'Traffic © HERE'
 
 /** RFC 4180: quote a field holding a comma, quote or line break; double inner quotes. */
 export function csvField(value: string | number | null): string {
@@ -495,6 +508,7 @@ export async function exportCsv(
         r.roadsCount,
         r.jamFactorAvg,
         r.error,
+        CSV_SOURCE,
       ]
         .map(csvField)
         .join(','),
