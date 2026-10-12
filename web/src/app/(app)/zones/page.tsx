@@ -321,6 +321,12 @@ export default function ZonesPage() {
   )
 }
 
+const CAPTURE_PHRASE: Record<string, string> = {
+  Daily: 'daily capture',
+  Hourly: 'hourly capture',
+  '15 minutes': '15-minute capture',
+}
+
 /** 3e — the paywall shown when every zone slot on the plan is in use. */
 function ZoneLimitDialog({
   open,
@@ -368,7 +374,7 @@ function ZoneLimitDialog({
               <div className="flex justify-between px-lg py-md">
                 <dt className="text-body text-text-secondary">{PLAN_LABEL[next]} allows</dt>
                 <dd className="text-body font-semibold text-text-primary">
-                  {PLAN_LIMITS[next].zonesLimit} zones · {PLAN_LIMITS[next].captureInterval.toLowerCase()} capture
+                  {PLAN_LIMITS[next].zonesLimit} zones · {CAPTURE_PHRASE[PLAN_LIMITS[next].captureInterval]}
                 </dd>
               </div>
             )}
