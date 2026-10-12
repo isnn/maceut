@@ -16,6 +16,7 @@ const ROWS: { label: string; value: (plan: Plan) => string }[] = [
   { label: 'History in CSV', value: (p) => PLAN_LIMITS[p].historyLabel },
   { label: 'Storage', value: (p) => `${formatNumber(PLAN_LIMITS[p].storageGb)} GB` },
   { label: 'Frames per export', value: (p) => formatNumber(PLAN_LIMITS[p].exportFramesLimit) },
+  { label: 'Exports kept', value: (p) => `${PLAN_LIMITS[p].exportRetentionDays} days` },
   { label: 'Export formats', value: () => 'CSV, ZIP, MP4, WebM' },
 ]
 

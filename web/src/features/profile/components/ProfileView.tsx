@@ -169,6 +169,7 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                 <AttributeRow label="Capture interval" value={limits.captureInterval} />
                 <AttributeRow label="History kept" value={limits.historyLabel} />
                 <AttributeRow label="Animation export" value={limits.exportLabel} />
+                <AttributeRow label="Exports kept" value={`${limits.exportRetentionDays} days`} />
                 <AttributeRow label="Road classes" value={ROAD_CLASS_LABEL[limits.maxRoadClass]} />
               </dl>
             </Card>

@@ -36,6 +36,7 @@ MVP menggunakan **single workspace** — tidak ada multi-tenant atau team role. 
 | Max Active Schedules | 3 | 9 | 30 | 45 |
 | Pool capture / bulan (BR-006) | 45 | 450 | 2.000 | 3.000 |
 | Riwayat (tampilan & CSV) | 7 hari | 30 hari | 30 hari | 30 hari |
+| File ekspor disimpan (PKG-F9) | 7 hari | 14 hari | 30 hari | 30 hari |
 | Pengguna | 1 | 1 | 5 | 5 |
 | Export PNG/JPG | ✅ | ✅ | ✅ | ✅ |
 

@@ -28,7 +28,7 @@ vi.mock('../repositories/zone.repository', () => ({
 vi.mock('../services/notification.service', () => ({ onExportFinished: vi.fn(async () => undefined) }))
 vi.mock('../services/export.service', () => ({
   exportPath: () => 'exports/u1/e1.zip',
-  expiryFrom: () => new Date('2026-10-12T00:00:00Z'),
+  expiryForOwner: async () => new Date('2026-10-12T00:00:00Z'),
   frameFileName: (i: number) => `${i + 1}.png`,
 }))
 vi.mock('../services/capture.service', () => ({ slimFor: async () => ({ type: 'FeatureCollection', features: [] }) }))

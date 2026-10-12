@@ -48,7 +48,7 @@ router.use(['/zones/:id/exports', '/exports', '/exports/:id', '/exports/:id/retr
  *         createdAt: { type: string, format: date-time }
  *         startedAt: { type: string, format: date-time, nullable: true }
  *         finishedAt: { type: string, format: date-time, nullable: true }
- *         expiresAt: { type: string, format: date-time, nullable: true }
+ *         expiresAt: { type: string, format: date-time, nullable: true, description: 'Kapan file dihapus dari R2. Diisi saat export selesai dari paket pemilik saat itu — Free 7 hari, Starter 14, Standard/Premium 30 (PKG-F9); ganti paket tidak menggesernya' }
  */
 
 /**

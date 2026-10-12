@@ -174,6 +174,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **BE-18** Worker tahan macet: batas render 3 menit tanpa progres, channel RabbitMQ per consumer + reconnect, restart beneran (tanpa `tsx watch`), healthcheck heartbeat, capture terlambat → `missed` (opsi C), `captured_at` = waktu sampel | insiden 2026-10-08 |
 | ✅ | **PKG-F3/F4** Paket Starter (Rp 99k) + katalog 4 paket di backend & frontend (harga, zona, jadwal, riwayat 30 hari, pengguna, ekspor); migrasi 0018 `plan` + starter; tes katalog membandingkan kedua salinan; `npm run plan:impact` (hanya-baca) | docs Delivery Paket & Fitur |
 | ✅ | **PKG-F5/F6/F7** Pool capture bulanan (45/450/2.000/3.000, bulan WIB, reset tgl 1) menggantikan batas harian; papan jadwal & dialog jendela memproyeksikan bulan (minggu × 52 ÷ 12) vs sisa pool — peringatan, bukan blokir; dasbor/Profil: terpakai/sisa/tanggal reset; notifikasi 80% & 100% sekali per bulan; konsol staf: pemakaian pool per akun; ADR-033 | docs Delivery Paket & Fitur |
+| ✅ | **PKG-F9** Masa simpan ekspor per paket (Free 7 / Starter 14 / Standard 30 / Premium 30 hari, maks 30): `expires_at` dari paket pemilik saat ekspor selesai; env `EXPORT_RETENTION_DAYS` dihapus; hari ditampilkan di kartu paket, tabel perbandingan, Profil, dialog ekspor Studio, notifikasi; ADR-034 | docs Delivery Paket & Fitur |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -198,6 +199,13 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-12d] PKG-F9 — masa simpan ekspor per paket (feat/export-expiry-per-plan, di atas feat/monthly-capture-pool).
+  - `PlanLimits.exportRetentionDays` 7/14/30/30 di kedua salinan; `MAX_EXPORT_RETENTION_DAYS` = 30 (tahap 2 menunggu HERE).
+  - Worker memanggil `expiryForOwner(userId)` saat ekspor selesai → tanggal tetap di baris; ganti paket tidak menggeser.
+  - Keputusan: cache render TETAP 7 hari (ADR-034) — ekspor yang selesai tidak membaca cache; menaikkan ke 30 hanya
+    menambah biaya R2. Env `EXPORT_RETENTION_DAYS` dihapus (bukan cadangan) supaya tidak ada dua sumber angka.
+  - Notifikasi "siap" kini menyebut tanggal hapus (WIB). Ekspor lama tetap memakai tanggal yang sudah tersimpan.
 
 [2026-10-12c] PKG-F5/F6/F7 — pool capture bulanan (feat/monthly-capture-pool, di atas feat/starter-plan-catalog).
   - `PlanLimits.capturesLimit` (harian) → `monthlyCaptures`. Hitungan dari tabel captures (ADR-033): rentang
