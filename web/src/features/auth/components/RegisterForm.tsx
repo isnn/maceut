@@ -105,8 +105,7 @@ export function RegisterForm() {
       </div>
 
 
-      {/* H4 — the owner's consent text, verbatim (features/legal/texts.ts), with the two
-          documents linked. The Indonesian version prevails (Terms §14), so it is shown too. */}
+      {/* H4 — the owner's consent text (features/legal/texts.ts), with the two documents linked. */}
       <label className="flex items-start gap-sm text-body text-text-secondary">
         <Checkbox
           checked={agreed}
@@ -114,12 +113,7 @@ export function RegisterForm() {
           aria-invalid={agreedError ? true : undefined}
           className="mt-[2px] shrink-0"
         />
-        <span className="space-y-xs">
-          <span className="block">{withLinks(CONSENT_TEXT.en, 'Terms of Service', 'Privacy Policy', '')}</span>
-          <span lang="id" className="block text-caption text-text-muted">
-            {withLinks(CONSENT_TEXT.id, 'Syarat Layanan', 'Kebijakan Privasi', '?lang=id')}
-          </span>
-        </span>
+        <span>{withLinks(CONSENT_TEXT.en, 'Terms of Service', 'Privacy Policy', '')}</span>
       </label>
       {agreedError && <p className="text-caption text-danger-text">{agreedError}</p>}
 

@@ -1,22 +1,16 @@
 import Link from 'next/link'
 import { PublicHeader } from '@/components/shared/PublicHeader'
 import { PublicFooter } from '@/components/shared/PublicFooter'
-import { Alert } from '@/components/ui/Alert'
 import { cn } from '@/lib/utils'
 import { LegalDocument, legalTitle } from './LegalDocument'
 import type { LegalLang } from './texts'
-
-const DRAFT_NOTE: Record<LegalLang, string> = {
-  en: 'Draft: not yet reviewed by a lawyer. The Indonesian version prevails if the two differ.',
-  id: 'Draf: belum ditinjau oleh pengacara. Jika terdapat perbedaan, versi bahasa Indonesia yang berlaku.',
-}
 
 /** `?lang=id` picks Indonesian; anything else is English. */
 export function langFrom(value: string | string[] | undefined): LegalLang {
   return value === 'id' ? 'id' : 'en'
 }
 
-/** Terms and Privacy share one layout: title, language switch, draft note, the text. */
+/** Terms and Privacy share one layout: title, language switch, the text. */
 export function LegalPage({ path, lang, texts }: { path: string; lang: LegalLang; texts: Record<LegalLang, string> }) {
   const source = texts[lang]
   return (
@@ -44,9 +38,6 @@ export function LegalPage({ path, lang, texts }: { path: string; lang: LegalLang
               ))}
             </nav>
           </div>
-          <Alert variant="info" className="mt-lg">
-            {DRAFT_NOTE[lang]}
-          </Alert>
           <div className="mt-xl">
             <LegalDocument source={source} />
           </div>

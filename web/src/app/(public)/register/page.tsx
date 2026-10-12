@@ -36,10 +36,7 @@ function RegisterPageContent() {
       <div className="w-full max-w-[34rem]">
         <Logo href="/" />
 
-        <h1 className="mt-xxl text-display text-text-primary">Create your account</h1>
-        <p className="mt-xs text-body text-text-secondary mb-xl">
-          We&rsquo;ll email you a code to verify your address, then you&rsquo;re in.
-        </p>
+        <h1 className="mt-xxl mb-xl text-display text-text-primary">Create your account</h1>
         {intended && (
           <Alert variant="info" className="mb-lg">
             You picked {PLAN_LABEL[intended]}. Your account starts on Free, and {PLAN_LABEL[intended]} is ready to

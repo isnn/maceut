@@ -4,7 +4,7 @@ import { FormEvent, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button, buttonClass, linkClass } from '@/components/ui/Button'
-import { IconMail } from '@/components/ui/icons'
+import { IconGoogle } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
 import { Checkbox, FormLabel, Input, PasswordInput } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
@@ -100,8 +100,8 @@ export function LoginForm() {
           title="SSO is not wired up in this build"
           className={cn(buttonClass('secondary'), 'w-full')}
         >
-          <IconMail size={18} />
-          Continue with Google Workspace
+          <IconGoogle size={18} />
+          Continue with Google
         </button>
       </div>
 

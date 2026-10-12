@@ -12,7 +12,10 @@ export function PublicFooter() {
   return (
     <footer className="border-t border-border">
       <div className="mx-auto max-w-[1600px] px-lg tablet:px-xl py-xl flex flex-wrap items-center justify-between gap-lg">
-        <Logo />
+        <div className="flex flex-wrap items-baseline gap-x-md gap-y-xs">
+          <Logo />
+          <p className="text-body text-text-secondary">Connecting people with the road ahead</p>
+        </div>
         <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-xl gap-y-sm">
           {LINKS.map((l) => (
             <a key={l.href} href={l.href} className="inline-flex items-center min-h-11 text-body text-text-secondary no-underline hover:text-text-primary transition-colors">
