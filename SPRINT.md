@@ -209,7 +209,7 @@ Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
-[2026-10-12j] FE-46 — konfirmasi ketik untuk hapus akun (feat/delete-account-typed-confirm).
+[2026-10-12l] FE-46 — konfirmasi ketik untuk hapus akun (feat/delete-account-typed-confirm).
   - ConfirmDialog mendapat prop opsional `confirmPhrase`: kolom ketik; tombol konfirmasi nonaktif sampai isinya
     sama persis (spasi di ujung diabaikan); Enter di kolom mengonfirmasi; isi dikosongkan setelah dialog tertutup.
   - Halaman Users staf memakai `delete`; teks peringatan menyebut isi yang ikut terhapus & bahwa tak bisa dipulihkan.
