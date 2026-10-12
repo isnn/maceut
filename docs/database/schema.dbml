@@ -11,7 +11,7 @@
 // Convention: every timestamp is `timestamptz`. A bare `timestamp` carries no
 // offset and means whatever the reading process assumes.
 //
-// Last updated: 2026-10-12 (migration 0018_starter_plan — plan enum gains starter)
+// Last updated: 2026-10-12 (migration 0019_capture_retention — captures.deleted_at + retention index)
 // =============================================================================
 
 Project maceut {
@@ -230,8 +230,8 @@ Table captures {
   status capture_status [not null, default: 'pending']
   trigger capture_trigger [not null]
   road_class road_class [not null, note: 'Class actually collected, after BR-022 cap']
-  traffic jsonb [note: 'HERE FeatureCollection, clipped to the zone polygon']
-  traffic_slim jsonb [note: 'Lines + colours only (≈575 KB vs ≈2 MB), written at collection (EXP-A2); null on older rows until first read']
+  traffic jsonb [note: 'HERE FeatureCollection, clipped to the zone polygon. Erased (NULL) 30 days after capture (H1, HERE terms)']
+  traffic_slim jsonb [note: 'Lines + colours only (≈575 KB vs ≈2 MB), written at collection (EXP-A2); null on older rows until first read. Erased with traffic after 30 days']
   roads_count integer
   jam_factor_avg "numeric(4,2)"
   file_path text [note: 'BR-011 R2 path. Null until CAP-02 renders an image']
@@ -241,8 +241,10 @@ Table captures {
   scheduled_for timestamptz [note: 'When the cycle was due; null for manual']
   captured_at timestamptz [not null, default: `now()`]
   created_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz [note: 'Soft delete (H1, ADR-035): set with the traffic erase 30 days after capture; hidden from every user list, still counted by the pool. Row + R2 image deleted 1 year after capture']
 
   Indexes {
+    captured_at [name: 'captures_retention_idx', note: 'Partial: WHERE deleted_at IS NULL — the retention sweeper scan']
     (zone_id, captured_at) [name: 'captures_zone_captured_idx']
     (user_id, captured_at) [name: 'captures_user_captured_idx', note: 'BR-006 daily count']
     schedule_id [name: 'captures_schedule_idx']

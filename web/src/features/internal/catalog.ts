@@ -67,6 +67,7 @@ export const CONFIG_VARS: ConfigVarMeta[] = [
   { key: 'RABBITMQ_QUEUE_RENDER', group: 'queue', label: 'Capture-image queue', defaultValue: 'render-jobs' },
   { key: 'RABBITMQ_QUEUE_DEAD_LETTER', group: 'queue', label: 'Dead-letter queue', defaultValue: 'capture-dead-letter' },
   { key: 'CAPTURE_CONCURRENCY', group: 'queue', label: 'Captures at once', defaultValue: '4' },
+  { key: 'RETENTION_SWEEPER_ENABLED', group: 'queue', label: 'Capture retention sweeper (30 d / 1 y)', defaultValue: 'false' },
 
   { key: 'PLAYWRIGHT_HEADLESS', group: 'capture_engine', label: 'Headless', defaultValue: 'true' },
   { key: 'PLAYWRIGHT_TIMEOUT_MS', group: 'capture_engine', label: 'Timeout (ms)', defaultValue: '30000' },

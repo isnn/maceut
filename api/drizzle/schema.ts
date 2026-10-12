@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, timestamp, integer, bigint, numeric, jsonb, pgEnum, unique, index, date, primaryKey, boolean } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 import { user } from './auth-schema'
 
 /**
@@ -243,8 +244,18 @@ export const captures = pgTable(
     /** When the traffic was sampled, not when the row was written. */
     capturedAt: timestamp('captured_at', { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Soft delete (H1, ADR-035). Set by the retention sweeper 30 days after `captured_at`,
+     * in the same update that erases `traffic` and `traffic_slim`: HERE's terms allow its
+     * output to be kept 30 days at most. The row and its image stay (the pool still counts
+     * it, and the frame stays explainable) but every user-facing list hides it. One year
+     * after capture the row and its R2 image are deleted for good.
+     */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (t) => [
+    // The retention sweeper's scan: live rows oldest first.
+    index('captures_retention_idx').on(t.capturedAt).where(sql`${t.deletedAt} IS NULL`),
     // The zone page reads its own history newest-first; this is that query.
     index('captures_zone_captured_idx').on(t.zoneId, t.capturedAt),
     // BR-006 counts a user's captures for the current WIB day.
