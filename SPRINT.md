@@ -182,6 +182,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **H1** Retensi capture 30 hari (P0, syarat HERE): sweeper per jam — 30 hari → `deleted_at` (soft delete: disembunyikan, data utuh, bisa dipulihkan), 6 bulan → baris + gambar R2 dihapus; migrasi 0019; `npm run retention:dry-run`; mati sampai `RETENTION_SWEEPER_ENABLED=true`; ADR-035 | handover Legal & Retention (H1–H6) |
 | ✅ | **H2/H3/H5** Halaman legal: /terms & /privacy (EN + ID lewat `?lang=id`, teks final verbatim di features/legal/texts.ts), tautan Privacy di footer & Terms/Privacy di halaman daftar; tes §6 vs PLAN_LIMITS; atribusi: kredit OSM "© OpenStreetMap contributors" (RENDER_VERSION 2), CSV kolom `source` "Traffic © HERE" | handover Legal & Retention (H1–H6) |
 | ✅ | **H4** Persetujuan saat daftar: kotak wajib (teks EN & ID verbatim, tautan Terms/Privacy), diperiksa di server (hook Better Auth → 400 `TERMS_NOT_ACCEPTED`), bukti `user.terms_accepted_at` + `terms_version` (migrasi 0020); akun buatan staf tidak distempel; Swagger POST /api/auth/sign-up/email | handover Legal & Retention (H1–H6) |
+| ✅ | **H6** Runbook penutupan akun (docs/operations/account-deletion.md): verifikasi dari alamat terdaftar, hapus akun (admin), file R2 (captures/exports/render-cache), email_log & verification, konfirmasi, catatan; usulan perluasan endpoint admin di PR | handover Legal & Retention (H1–H6) |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -206,6 +207,12 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-12k] H6 — runbook penutupan akun (chore/account-deletion-runbook). Dokumen saja.
+  - DELETE /internal/users/:id meng-cascade semua tabel milik akun, tetapi TIDAK menghapus file R2
+    (captures/, exports/, render-cache/{user_id}), email_log (tanpa FK, per alamat), dan baris verification
+    (kode OTP per email). Runbook menutup ketiganya dengan perintah yang bisa disalin.
+  - Belum diputuskan: masa simpan backup DB (data terhapus hidup di backup sampai kedaluwarsa).
 
 [2026-10-12j] H4 — persetujuan saat daftar (feat/terms-consent, di atas docs/legal-pages + feat/data-retention-30d).
   - Migrasi 0020: user.terms_accepted_at timestamptz + terms_version text (schema.dbml). Branch ini menggabungkan
