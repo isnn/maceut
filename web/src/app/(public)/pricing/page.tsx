@@ -9,7 +9,7 @@ import { buttonClass } from '@/components/ui/Button'
 
 export const metadata: Metadata = {
   title: 'Pricing',
-  description: 'Free for one zone. Compare zones, captures, road classes and history across Free, Standard and Premium.',
+  description: 'Free for one zone. Compare zones, captures, road classes and history across Free, Starter, Standard and Premium.',
 }
 
 const WRAP = 'mx-auto max-w-[1600px] px-lg tablet:px-xl'

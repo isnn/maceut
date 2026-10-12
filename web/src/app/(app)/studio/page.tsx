@@ -27,7 +27,7 @@ import { Button, buttonClass } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
 import { Switch } from '@/components/ui/Switch'
-import { PLAN_LIMITS } from '@/lib/constants'
+import { PLAN_LIMITS, PLAN_ORDER } from '@/lib/constants'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import type { Plan } from '@/features/auth/types'
 import { Input as BaseInput } from '@base-ui/react/input'
@@ -1022,10 +1022,16 @@ export default function StudioPage() {
               ))}
               {historyDays !== null && (
                 <p className="text-caption text-text-muted">
-                  Your plan keeps {historyDays} days of history.{' '}
-                  <Link href="/profile" className="font-semibold text-primary no-underline hover:underline">
-                    Upgrade
-                  </Link>
+                  Your plan keeps {historyDays} days of history.
+                  {/* 30 days is the most any plan keeps (PKG-F8): only offer an upgrade that reaches further. */}
+                  {historyDays < MAX_HISTORY_DAYS && (
+                    <>
+                      {' '}
+                      <Link href="/profile" className="font-semibold text-primary no-underline hover:underline">
+                        Upgrade
+                      </Link>
+                    </>
+                  )}
                 </p>
               )}
             </section>
@@ -1559,6 +1565,9 @@ interface ExportItem {
   onSelect: () => void
   disabled?: boolean
 }
+
+/** The longest history any plan keeps. */
+const MAX_HISTORY_DAYS = Math.max(...PLAN_ORDER.map((p) => PLAN_LIMITS[p].historyDays ?? 0))
 
 /**
  * How a server export sits against the plan (EXP-C): a frame limit, and a budget of

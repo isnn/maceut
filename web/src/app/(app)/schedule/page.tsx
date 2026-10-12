@@ -23,7 +23,7 @@ import * as schedulesApi from '@/features/schedules/api'
 import {
   DAY_LABEL,
   INTERVAL_LABEL,
-  framesPerDay,
+  framesPerMonth,
   type CaptureWindow,
 } from '@/features/schedules/types'
 import type { Zone } from '@/features/zones/types'
@@ -134,7 +134,7 @@ export default function SchedulePage() {
       label: (w) => w.label.toLowerCase(),
       zone: (w) => zoneName(w.zoneId).toLowerCase(),
       hours: (w) => w.start,
-      frames: (w) => framesPerDay(w),
+      frames: (w) => framesPerMonth(w),
       // Active first when ascending: what is running belongs at the top.
       status: (w) => (w.active ? 0 : 1),
     },
@@ -206,7 +206,7 @@ export default function SchedulePage() {
                             ? zone.pausedByPlan
                               ? 'Paused — over your plan’s limits'
                               : 'Paused — resume to collect'
-                            : `${zoneWindows.length} windows · ${zoneWindows.reduce((s, w) => s + framesPerDay(w), 0)} frames/day`}
+                            : `${zoneWindows.length} windows · ${formatNumber(zoneWindows.reduce((s, w) => s + framesPerMonth(w), 0))} a month`}
                         </p>
                       </div>
                       <div className="space-y-1">
@@ -347,7 +347,7 @@ export default function SchedulePage() {
                       direction={windowTable.sort?.direction ?? 'asc'}
                       onSort={() => windowTable.toggleSort('frames')}
                     >
-                      Frames / day
+                      Frames / month
                     </SortableTh>
                     <SortableTh
                       active={windowTable.sort?.key === 'status'}
@@ -386,7 +386,7 @@ export default function SchedulePage() {
                           ))}
                         </span>
                       </Td>
-                      <Td className="text-right tabular-nums">{framesPerDay(w)}</Td>
+                      <Td className="text-right tabular-nums">{formatNumber(framesPerMonth(w))}</Td>
                       <Td>
                         <StatusPill
                           tone={w.active ? 'success' : w.pausedByPlan ? 'warning' : 'neutral'}

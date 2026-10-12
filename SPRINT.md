@@ -176,6 +176,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **PKG-F3/F4** Paket Starter (Rp 99k) + katalog 4 paket di backend & frontend (harga, zona, jadwal, riwayat 30 hari, pengguna, ekspor); migrasi 0018 `plan` + starter; tes katalog membandingkan kedua salinan; `npm run plan:impact` (hanya-baca) | docs Delivery Paket & Fitur |
 | ✅ | **PKG-F5/F6/F7** Pool capture bulanan (45/450/2.000/3.000, bulan WIB, reset tgl 1) menggantikan batas harian; papan jadwal & dialog jendela memproyeksikan bulan (minggu × 52 ÷ 12) vs sisa pool — peringatan, bukan blokir; dasbor/Profil: terpakai/sisa/tanggal reset; notifikasi 80% & 100% sekali per bulan; konsol staf: pemakaian pool per akun; ADR-033 | docs Delivery Paket & Fitur |
 | ✅ | **PKG-F9** Masa simpan ekspor per paket (Free 7 / Starter 14 / Standard 30 / Premium 30 hari, maks 30): `expires_at` dari paket pemilik saat ekspor selesai; env `EXPORT_RETENTION_DAYS` dihapus; hari ditampilkan di kartu paket, tabel perbandingan, Profil, dialog ekspor Studio, notifikasi; ADR-034 | docs Delivery Paket & Fitur |
+| ✅ | **PKG-F8** Sapu teks paket: terms §3 (4 paket, kuota bulanan) & §6 (riwayat & simpan ekspor dari katalog), dialog batas zona (paket berikutnya, bukan "Premium 25 zona"), kartu Premium unlocks, papan jadwal per bulan, meta pricing, link Upgrade Studio hanya bila riwayat < 30 hari, Swagger POST /schedules | docs Delivery Paket & Fitur |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -200,6 +201,12 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-12e] PKG-F8 — sapu teks paket (docs/plan-copy-update, di atas feat/export-expiry-per-plan).
+  - Penerimaan: grep tidak menemukan 90 hari / tanpa batas / 10-50-100 per hari / Rp 490k / Rp 1,9m di UI & terms.
+  - Terms §6 membaca angka dari PLAN_LIMITS supaya tidak basi lagi. §5 (atribusi) sengaja tidak disentuh: ada di #81.
+  - Dialog batas zona menawarkan paket berikutnya yang punya zona lebih banyak; di Premium hanya "hapus zona".
+  - Studio: "Upgrade" di catatan riwayat hanya muncul bila riwayat paket < 30 hari (Free).
 
 [2026-10-12d] PKG-F9 — masa simpan ekspor per paket (feat/export-expiry-per-plan, di atas feat/monthly-capture-pool).
   - `PlanLimits.exportRetentionDays` 7/14/30/30 di kedua salinan; `MAX_EXPORT_RETENTION_DAYS` = 30 (tahap 2 menunggu HERE).

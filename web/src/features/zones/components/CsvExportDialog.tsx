@@ -13,7 +13,7 @@ import { ApiError } from '@/types/api'
 import type { Plan } from '@/features/auth/types'
 import * as zonesApi from '../api'
 
-/** The ranges offered; `null` days = all history. 30 days is the longest any plan keeps. */
+/** The ranges offered. 30 days is the longest any plan keeps (PKG-F8). */
 const RANGES: { id: zonesApi.CsvRange; label: string; days: number | null }[] = [
   { id: '1', label: 'Last 24 hours', days: 1 },
   { id: '7', label: 'Last 7 days', days: 7 },

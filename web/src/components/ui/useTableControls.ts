@@ -13,7 +13,7 @@ import type { SortDirection } from './Table'
  * what an empty search or a null value means.
  *
  * Filtering happens in the browser, on rows already loaded. That is the right trade at
- * this scale — a workspace has at most 25 zones, and the user directory pages the API
+ * this scale — a workspace has at most 15 zones, and the user directory pages the API
  * until it has everyone — and it keeps sorting instant. It stops being the right trade
  * when the directory outgrows one fetch; at that point this hook's shape is what the
  * server call has to match, which is why the sort keys are plain strings.
