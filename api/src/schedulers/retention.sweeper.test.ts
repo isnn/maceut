@@ -36,9 +36,9 @@ describe('retention cutoffs (H1)', () => {
     expect(isSoft(30 + 1 / 86_400_000)).toBe(true)
   })
 
-  it('deletes for good only after a year', () => {
-    expect(isPurged(364)).toBe(false)
-    expect(isPurged(366)).toBe(true)
+  it('deletes for good only after 6 months (180 days)', () => {
+    expect(isPurged(179)).toBe(false)
+    expect(isPurged(181)).toBe(true)
   })
 })
 

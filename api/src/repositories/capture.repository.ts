@@ -532,10 +532,10 @@ export async function imageBytesByUser(): Promise<Map<string, number>> {
 // --- retention (H1, ADR-035) -------------------------------------------------------
 
 /**
- * Soft-deletes up to `limit` live captures taken before `before`, oldest first: erases
- * HERE's traffic (`traffic`, `traffic_slim`) and stamps `deleted_at`, in one update. The
- * row, its counts and its image stay. Safe to run again: a soft-deleted row no longer
- * matches. Returns how many rows changed.
+ * Soft-deletes up to `limit` live captures taken before `before`, oldest first: stamps
+ * `deleted_at` and nothing else, so every user list hides the capture while its row,
+ * traffic and image stay whole. Restoring is clearing `deleted_at`. Safe to run again: a
+ * soft-deleted row no longer matches. Returns how many rows changed.
  */
 export async function softDeleteBefore(before: Date, limit: number, now: Date = new Date()): Promise<number> {
   const batch = db
@@ -546,7 +546,7 @@ export async function softDeleteBefore(before: Date, limit: number, now: Date = 
     .limit(limit)
   const rows = await db
     .update(captures)
-    .set({ traffic: null, trafficSlim: null, deletedAt: now })
+    .set({ deletedAt: now })
     .where(inArray(captures.id, batch))
     .returning({ id: captures.id })
   return rows.length
@@ -572,17 +572,15 @@ export async function deleteByIds(ids: string[]): Promise<number> {
 /** What the sweeper would change now — the read-only dry run. */
 export async function retentionCounts(softBefore: Date, purgeBefore: Date): Promise<{
   toSoftDelete: number
-  toSoftDeleteWithTraffic: number
   toPurge: number
   toPurgeWithImage: number
 }> {
   const rows = await db
     .select({
       toSoftDelete: sql<number>`count(*) filter (where ${captures.deletedAt} is null and ${captures.capturedAt} < ${softBefore.toISOString()}::timestamptz)::int`,
-      toSoftDeleteWithTraffic: sql<number>`count(*) filter (where ${captures.deletedAt} is null and ${captures.capturedAt} < ${softBefore.toISOString()}::timestamptz and (${captures.traffic} is not null or ${captures.trafficSlim} is not null))::int`,
       toPurge: sql<number>`count(*) filter (where ${captures.capturedAt} < ${purgeBefore.toISOString()}::timestamptz)::int`,
       toPurgeWithImage: sql<number>`count(*) filter (where ${captures.capturedAt} < ${purgeBefore.toISOString()}::timestamptz and ${captures.filePath} is not null)::int`,
     })
     .from(captures)
-  return rows[0] ?? { toSoftDelete: 0, toSoftDeleteWithTraffic: 0, toPurge: 0, toPurgeWithImage: 0 }
+  return rows[0] ?? { toSoftDelete: 0, toPurge: 0, toPurgeWithImage: 0 }
 }

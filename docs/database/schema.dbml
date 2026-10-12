@@ -241,7 +241,7 @@ Table captures {
   scheduled_for timestamptz [note: 'When the cycle was due; null for manual']
   captured_at timestamptz [not null, default: `now()`]
   created_at timestamptz [not null, default: `now()`]
-  deleted_at timestamptz [note: 'Soft delete (H1, ADR-035): set with the traffic erase 30 days after capture; hidden from every user list, still counted by the pool. Row + R2 image deleted 1 year after capture']
+  deleted_at timestamptz [note: 'Soft delete (H1, ADR-035): set 30 days after capture; hidden from every user list, traffic and image kept (restore = set back to null), still counted by the pool. Row + R2 image deleted 180 days after capture']
 
   Indexes {
     captured_at [name: 'captures_retention_idx', note: 'Partial: WHERE deleted_at IS NULL — the retention sweeper scan']

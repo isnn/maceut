@@ -14,7 +14,7 @@ async function main() {
 
   console.log('Capture retention — dry run (read-only, nothing changed)\n')
   console.log(`  Soft delete: captured before ${softBefore.toISOString()} (${SOFT_DELETE_AFTER_DAYS} days)`)
-  console.log(`    ${c.toSoftDelete} captures would be hidden; ${c.toSoftDeleteWithTraffic} of them still hold HERE traffic to erase`)
+  console.log(`    ${c.toSoftDelete} captures would be hidden from their owners (data kept, restorable)`)
   console.log(`  Hard delete: captured before ${purgeBefore.toISOString()} (${HARD_DELETE_AFTER_DAYS} days)`)
   console.log(`    ${c.toPurge} capture rows would be deleted; ${c.toPurgeWithImage} image files (+ thumbnails) removed from R2`)
   console.log(`\nSweeper is ${config.retentionSweeperEnabled ? 'ON' : 'OFF'} (RETENTION_SWEEPER_ENABLED).`)

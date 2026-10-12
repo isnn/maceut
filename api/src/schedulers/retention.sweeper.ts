@@ -5,12 +5,11 @@ import { config, isR2Configured } from '../config/env'
 /**
  * Capture retention (H1, ADR-035), hourly, in the API process beside the other sweepers.
  *
- * 1. **Soft delete at 30 days.** HERE's terms allow its output to be kept 30 days at
- *    most, and the Terms (§6) and Privacy policy (§4) promise the same. A capture older
- *    than that loses `traffic` and `traffic_slim` and gets `deleted_at`; every user list
- *    hides it. The row stays (the monthly pool and the operator figures still count it)
- *    and so does its rendered image.
- * 2. **Hard delete at one year.** The row goes, and its image and thumbnail in R2.
+ * 1. **Soft delete at 30 days.** A capture older than that gets `deleted_at` and every
+ *    user list hides it. Nothing else changes: the row, its traffic and its image stay,
+ *    so an operator can restore it by clearing `deleted_at` (owner decision 2026-10-12).
+ *    The monthly pool and the operator figures still count it.
+ * 2. **Hard delete at 6 months (180 days).** The row goes, and its image and thumbnail in R2.
  *
  * Batched and idempotent: each step takes BATCH rows per statement, at most MAX_BATCHES
  * per tick, so a first run over a large backlog spreads over several hours instead of
@@ -21,7 +20,7 @@ import { config, isR2Configured } from '../config/env'
  */
 
 export const SOFT_DELETE_AFTER_DAYS = 30
-export const HARD_DELETE_AFTER_DAYS = 365
+export const HARD_DELETE_AFTER_DAYS = 180
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const BATCH = 500
