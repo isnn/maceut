@@ -39,7 +39,14 @@ const TABS_FOR: Record<'tenant' | 'internal', readonly Tab[]> = {
   internal: ['Account', 'Notifications'],
 }
 
-const PREMIUM_UNLOCKS = ['15-minute capture', 'City and local streets', 'Unlimited history', 'WebM export + API access']
+/** What only Premium has (PKG-F8). History is 30 days on every paid plan, so it is not listed. */
+const PREMIUM = PLAN_LIMITS.premium
+const PREMIUM_UNLOCKS = [
+  'Captures every 15 minutes',
+  'All roads, down to local streets',
+  `${PREMIUM.zonesLimit} zones and ${formatNumber(PREMIUM.monthlyCaptures)} captures a month`,
+  `${formatNumber(PREMIUM.exportFramesLimit)} frames per export`,
+]
 
 export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'internal' }) {
   const { user } = useCurrentUser()

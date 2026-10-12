@@ -111,9 +111,9 @@ router.get('/schedules/stats', scheduleController.stats)
  *     summary: Buat jendela pengumpulan (F-05)
  *     description: >
  *       Menegakkan BR-005 (batas jendela AKTIF per paket — yang di-pause tidak
- *       dihitung), batas interval per paket, dan anggaran frame/hari BR-006. Anggaran
- *       diperiksa per hari terburuk, bukan rata-rata: jendela yang hanya jalan hari
- *       Minggu tidak membebani hari Senin.
+ *       dihitung) dan batas interval per paket. Jumlah frame TIDAK memblokir: sejak
+ *       pool bulanan (BR-006, ADR-033) proyeksi bulan hanya diperingatkan di UI, dan
+ *       capture yang melewati pool dicatat skipped_limit.
  *     tags: [Schedules]
  *     security: [{ cookieAuth: [] }]
  *     requestBody:

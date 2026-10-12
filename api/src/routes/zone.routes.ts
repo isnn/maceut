@@ -475,7 +475,7 @@ router.get('/zones/:id/captures', captureController.listForZone)
  *     description: >
  *       Semua capture `done` milik zona, terlama dulu, tanpa traffic — untuk pemilih
  *       timeframe Studio. Dibatasi riwayat paket — Free 7 hari, paket lain 30 hari
- *       — maksimal 5.000 frame terbaru. `historyDays` null = tanpa batas.
+ *       — maksimal 5.000 frame terbaru. `historyDays` null = tanpa batas (tidak dipakai paket mana pun sejak katalog 2026-10; maks 30 hari).
  *     tags: [Captures]
  *     security: [{ cookieAuth: [] }]
  *     parameters:

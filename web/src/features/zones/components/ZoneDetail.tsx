@@ -57,7 +57,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
   const [windowDeleting, setWindowDeleting] = useState(false)
   const [csvOpen, setCsvOpen] = useState(false)
 
-  // A zone can hold up to 50 windows on Premium, well past what anyone can scan in
+  // A zone can hold up to 45 windows on Premium, well past what anyone can scan in
   // one list — so this gets the same search, sort and paging as every other table.
   const windowTable = useTableControls<CaptureWindow>({
     rows: windows,

@@ -16,11 +16,12 @@ import { ActionMenu } from '@/components/ui/ActionMenu'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { cn, formatDate } from '@/lib/utils'
-import { PLAN_LABEL, PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
+import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER, ROAD_CLASS_LABEL } from '@/lib/constants'
 import * as zonesApi from '@/features/zones/api'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import { ROAD_CLASS_ORDER } from '@/features/zones/components/RoadClassPicker'
 import type { RoadClass, Zone } from '@/features/zones/types'
+import type { Plan } from '@/features/auth/types'
 
 type Filter = 'all' | 'collecting' | 'paused'
 type SortKey = 'name' | 'area' | 'roads' | 'interval' | 'hours' | 'status' | 'created'
@@ -315,7 +316,7 @@ export default function ZonesPage() {
         onCancel={() => setPendingDelete(null)}
       />
 
-      <ZoneLimitDialog open={limitOpen} onClose={() => setLimitOpen(false)} used={zones?.length ?? 0} limit={zonesLimit} planLabel={PLAN_LABEL[plan]} />
+      <ZoneLimitDialog open={limitOpen} onClose={() => setLimitOpen(false)} used={zones?.length ?? 0} limit={zonesLimit} plan={plan} />
     </div>
   )
 }
@@ -326,14 +327,16 @@ function ZoneLimitDialog({
   onClose,
   used,
   limit,
-  planLabel,
+  plan,
 }: {
   open: boolean
   onClose: () => void
   used: number
   limit: number
-  planLabel: string
+  plan: Plan
 }) {
+  // The next plan up that holds more zones; none on Premium.
+  const next = PLAN_ORDER.slice(PLAN_ORDER.indexOf(plan) + 1).find((p) => PLAN_LIMITS[p].zonesLimit > limit)
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
@@ -345,8 +348,14 @@ function ZoneLimitDialog({
           </span>
           <Dialog.Title className="pr-xl text-section-title text-text-primary mb-sm">Zone limit reached</Dialog.Title>
           <Dialog.Description className="text-body text-text-secondary mb-lg">
-            The {planLabel} plan includes <span className="font-semibold text-text-primary">{limit} zones</span> and all
-            of them are in use. Upgrade to Premium for 25 zones, or free a slot by deleting one you no longer collect.
+            The {PLAN_LABEL[plan]} plan includes{' '}
+            <span className="font-semibold text-text-primary">
+              {limit} zone{limit === 1 ? '' : 's'}
+            </span>{' '}
+            and all of them are in use.{' '}
+            {next
+              ? `Upgrade to ${PLAN_LABEL[next]} for ${PLAN_LIMITS[next].zonesLimit} zones, or free a slot by deleting one you no longer collect.`
+              : 'Free a slot by deleting a zone you no longer collect.'}
           </Dialog.Description>
           <dl className="border border-border rounded-md divide-y divide-divider mb-lg">
             <div className="flex justify-between px-lg py-md">
@@ -355,10 +364,14 @@ function ZoneLimitDialog({
                 {used} / {limit}
               </dd>
             </div>
-            <div className="flex justify-between px-lg py-md">
-              <dt className="text-body text-text-secondary">Premium allows</dt>
-              <dd className="text-body font-semibold text-text-primary">25 zones · 15-minute capture</dd>
-            </div>
+            {next && (
+              <div className="flex justify-between px-lg py-md">
+                <dt className="text-body text-text-secondary">{PLAN_LABEL[next]} allows</dt>
+                <dd className="text-body font-semibold text-text-primary">
+                  {PLAN_LIMITS[next].zonesLimit} zones · {PLAN_LIMITS[next].captureInterval.toLowerCase()} capture
+                </dd>
+              </div>
+            )}
           </dl>
           <div className="flex justify-end gap-sm">
             <Button variant="secondary" onClick={onClose}>
