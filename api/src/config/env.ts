@@ -147,6 +147,11 @@ const schema = z.object({
   RENDER_BASE_URL: z.string().url().default('http://web:3000'),
 
   SWAGGER_ENABLED: boolFromEnv(true),
+  /**
+   * H1 — the capture retention sweeper (ADR-035). Off until the owner has read
+   * `npm run retention:dry-run` against the real data, then switched on.
+   */
+  RETENTION_SWEEPER_ENABLED: boolFromEnv(false),
 
   /**
    * Transactional email — sign-up verification and password-reset codes (lib/email).
@@ -270,6 +275,7 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
     renderBaseUrl: e.RENDER_BASE_URL,
 
     swaggerEnabled: e.SWAGGER_ENABLED,
+    retentionSweeperEnabled: e.RETENTION_SWEEPER_ENABLED,
 
     emailProvider: e.EMAIL_PROVIDER,
     emailFrom: e.EMAIL_FROM,
