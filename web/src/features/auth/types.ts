@@ -49,4 +49,6 @@ export interface RegisterInput {
   fullName: string
   email: string
   password: string
+  /** H4 — the consent box. The server refuses a sign-up without it. */
+  acceptTerms: boolean
 }

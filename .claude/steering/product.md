@@ -37,6 +37,7 @@ MVP menggunakan **single workspace** — tidak ada multi-tenant atau team role. 
 | Pool capture / bulan (BR-006) | 45 | 450 | 2.000 | 3.000 |
 | Riwayat (tampilan & CSV) | 7 hari | 30 hari | 30 hari | 30 hari |
 | File ekspor disimpan (PKG-F9) | 7 hari | 14 hari | 30 hari | 30 hari |
+| Data capture (H1, ADR-035) | 30 hari, lalu soft delete (disembunyikan, bisa dipulihkan); dihapus permanen setelah 6 bulan | sama | sama | sama |
 | Pengguna | 1 | 1 | 5 | 5 |
 | Export PNG/JPG | ✅ | ✅ | ✅ | ✅ |
 

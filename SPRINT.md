@@ -178,6 +178,11 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **PKG-F9** Masa simpan ekspor per paket (Free 7 / Starter 14 / Standard 30 / Premium 30 hari, maks 30): `expires_at` dari paket pemilik saat ekspor selesai; env `EXPORT_RETENTION_DAYS` dihapus; hari ditampilkan di kartu paket, tabel perbandingan, Profil, dialog ekspor Studio, notifikasi; ADR-034 | docs Delivery Paket & Fitur |
 | ✅ | **PKG-F8** Sapu teks paket: terms §3 (4 paket, kuota bulanan) & §6 (riwayat & simpan ekspor dari katalog), dialog batas zona (paket berikutnya, bukan "Premium 25 zona"), kartu Premium unlocks, papan jadwal per bulan, meta pricing, link Upgrade Studio hanya bila riwayat < 30 hari, Swagger POST /schedules | docs Delivery Paket & Fitur |
 | ✅ | **PKG-FIX1** Masukan paket: scheduler tidak lagi meng-capture zona yang di-pause (claimDue membawa status zona); proyeksi & strip Latest captures tidak menghitung/menampilkan zona yang di-pause; peringatan pool membandingkan proyeksi sisa bulan (bukan sebulan penuh) vs sisa pool; label ekspor jujur (semua paket MP4 & WebM, tanpa API/GIF); badge Standard "Best price"; teks kartu paket & FAQ | masukan user 2026-10-12 |
+| ✅ | **FE-45** Terms §8: email kontak support.maceut@hokya.dev (mailto, menggantikan placeholder); footer publik "© 2026 Maceut by hokya.dev" | permintaan user 2026-10-12 |
+| ✅ | **H1** Retensi capture 30 hari (P0, syarat HERE): sweeper per jam — 30 hari → `deleted_at` (soft delete: disembunyikan, data utuh, bisa dipulihkan), 6 bulan → baris + gambar R2 dihapus; migrasi 0019; `npm run retention:dry-run`; mati sampai `RETENTION_SWEEPER_ENABLED=true`; ADR-035 | handover Legal & Retention (H1–H6) |
+| ✅ | **H2/H3/H5** Halaman legal: /terms & /privacy (EN + ID lewat `?lang=id`, teks final verbatim di features/legal/texts.ts), tautan Privacy di footer & Terms/Privacy di halaman daftar; tes §6 vs PLAN_LIMITS; atribusi: kredit OSM "© OpenStreetMap contributors" (RENDER_VERSION 2), CSV kolom `source` "Traffic © HERE" | handover Legal & Retention (H1–H6) |
+| ✅ | **H4** Persetujuan saat daftar: kotak wajib (teks EN & ID verbatim, tautan Terms/Privacy), diperiksa di server (hook Better Auth → 400 `TERMS_NOT_ACCEPTED`), bukti `user.terms_accepted_at` + `terms_version` (migrasi 0020); akun buatan staf tidak distempel; Swagger POST /api/auth/sign-up/email | handover Legal & Retention (H1–H6) |
+| ✅ | **H6** Runbook penutupan akun (docs/operations/account-deletion.md): verifikasi dari alamat terdaftar, hapus akun (admin), file R2 (captures/exports/render-cache), email_log & verification, konfirmasi, catatan; usulan perluasan endpoint admin di PR | handover Legal & Retention (H1–H6) |
 | ✅ | **FE-46** Hapus akun (staf): dialog memperingatkan bahwa penghapusan permanen & tak bisa dipulihkan, dan tombol Delete account baru aktif setelah mengetik `delete` (`ConfirmDialog.confirmPhrase`) | permintaan user 2026-10-12 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
@@ -209,6 +214,53 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
     sama persis (spasi di ujung diabaikan); Enter di kolom mengonfirmasi; isi dikosongkan setelah dialog tertutup.
   - Halaman Users staf memakai `delete`; teks peringatan menyebut isi yang ikut terhapus & bahwa tak bisa dipulihkan.
   - Hanya UI; endpoint DELETE /internal/users/:id tidak berubah (tetap superadmin + guard yang ada).
+
+[2026-10-12k] H6 — runbook penutupan akun (chore/account-deletion-runbook). Dokumen saja.
+  - DELETE /internal/users/:id meng-cascade semua tabel milik akun, tetapi TIDAK menghapus file R2
+    (captures/, exports/, render-cache/{user_id}), email_log (tanpa FK, per alamat), dan baris verification
+    (kode OTP per email). Runbook menutup ketiganya dengan perintah yang bisa disalin.
+  - Belum diputuskan: masa simpan backup DB (data terhapus hidup di backup sampai kedaluwarsa).
+
+[2026-10-12j] H4 — persetujuan saat daftar (feat/terms-consent, di atas docs/legal-pages + feat/data-retention-30d).
+  - Migrasi 0020: user.terms_accepted_at timestamptz + terms_version text (schema.dbml). Branch ini menggabungkan
+    H1 supaya urutan migrasi 0019 → 0020.
+  - Server: `hooks.before` Better Auth pada /sign-up/email dari browser (ada ctx.request) → `consentProblem`;
+    `databaseHooks.user.create.before` menstempel waktu + LEGAL_VERSION. Panggilan server (staf) dilewati.
+  - Nama field body `consentVersion` (bukan termsVersion: Better Auth menolak field yang sama dengan kolom
+    input:false → FIELD_NOT_ALLOWED).
+  - Uji nyata di API lokal: tanpa centang 400, versi lama 400, dengan centang 200 + stempel; akun staf dibuat
+    tanpa stempel. Akun uji dihapus.
+
+[2026-10-12i] H2/H3/H5 — halaman legal & cek atribusi (docs/legal-pages, di atas chore/terms-contact-footer).
+  - Teks Terms/Privacy EN & ID disalin VERBATIM oleh skrip dari legal-texts.md (owner) ke texts.ts; dirender
+    oleh LegalDocument (subset markdown: judul, **tebal**, [tautan](url), > kotak, tabel) tanpa library baru.
+  - Tes api `legal-terms.test.ts`: §6 (riwayat 7–30 hari; ekspor Free 7/Starter 14/Standard 30/Premium 30)
+    cocok dengan PLAN_LIMITS di EN & ID. Tidak ada selisih.
+  - Tautan HERE dibuka (200): AUP diarahkan ke acceptable-use-policy-january-2022.
+  - Atribusi (H5): gambar, frame ZIP, MP4/WebM lewat renderer yang sama (drawAttribution) → ada. Baris peta
+    kini "OpenFreeMap © OpenMapTiles © OpenStreetMap contributors" (sesuai §5 & ODbL); RENDER_VERSION 1 → 2
+    supaya gambar lama tidak dipakai ulang di ekspor. CSV tadinya tanpa kredit → kolom `source` per baris.
+  - Belum diputuskan (owner): Privacy §4 "7 hingga 30 hari" vs H1 yang menyimpan baris & gambar sampai 6 bulan.
+
+[2026-10-12g] FE-45 — kontak terms & kredit footer (chore/terms-contact-footer).
+  - Terms §8 kini menautkan support.maceut@hokya.dev; placeholder [CONTACT EMAIL] hilang.
+  - PublicFooter: "© 2026 Maceut by hokya.dev" (tautan ke https://hokya.dev), di landing, pricing, terms.
+  - DB lokal: notifikasi basi "45 of undefined" (1 baris notifications) dihapus atas permintaan user;
+    captures tidak disentuh (1.500 sebelum & sesudah).
+
+[2026-10-12h] H1 — retensi capture 30 hari (feat/data-retention-30d).
+  - Keputusan owner (menggantikan "lewati F1"): 30 hari → soft delete, 1 tahun → hapus permanen; dry run dulu.
+  - Migrasi 0019: `captures.deleted_at` timestamptz + indeks parsial `captures_retention_idx (captured_at) WHERE
+    deleted_at IS NULL`; schema.dbml diperbarui.
+  - Soft delete = traffic & traffic_slim NULL + deleted_at, satu UPDATE per batch 500. Disembunyikan dari Studio,
+    riwayat zona, CSV, strip dasbor, pemilihan frame ekspor; GET capture/playback/image → 404. Pool & statistik
+    staf tetap menghitung (capture itu memanggil HERE).
+  - Hapus permanen: gambar + thumbnail R2 dulu, baris kemudian; gagal R2 → baris tetap, dicoba lagi tick berikutnya.
+  - Verifikasi di DB lokal (baris uji, lalu dihapus): 31 hari → NULL + deleted_at; 29 hari utuh; jalan kedua 0.
+    Dry run lokal: 0 / 0 (data lokal mulai 20 Sep).
+  - Revisi owner: soft delete hanya menyembunyikan (traffic tidak di-NULL lagi) supaya bisa dipulihkan;
+    hapus permanen 180 hari (6 bulan), bukan 1 tahun.
+
 [2026-10-12f] PKG-FIX1 — masukan user setelah merge paket (fix/plan-feedback).
   - Notifikasi "45 of undefined … daily limit": baris basi dari kode setengah-jadi saat pengembangan F5 (api hot
     reload), bukan kode sekarang. Worker berjalan dengan kode 3 hari lalu (tanpa hot reload) → di-restart.

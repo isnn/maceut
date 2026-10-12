@@ -15,6 +15,7 @@
 import type { LoginInput, Plan, RegisterInput, User } from './types'
 import { ApiError } from '@/types/api'
 import { apiClient, authRequest } from '@/lib/api-client'
+import { LEGAL_VERSION } from '@/features/legal/texts'
 
 /**
  * Creates the account. Returns no user: there is no session until the address is
@@ -31,6 +32,9 @@ export async function register(input: RegisterInput): Promise<void> {
     password: input.password,
     // Better Auth's field is `name`; every screen here calls it fullName.
     name: input.fullName,
+    // H4 — consent, checked server-side: the box, and the version of the texts it showed.
+    acceptTerms: input.acceptTerms,
+    consentVersion: LEGAL_VERSION,
   })
 }
 

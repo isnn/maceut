@@ -28,6 +28,11 @@ export const user = pgTable("user", {
   // FE-34: "superadmin" | "admin" when role = "internal"; null for customers.
   staffType: text("staff_type"),
   onboardingDone: boolean("onboarding_done").default(false),
+  // H4: proof of consent at self sign-up — when, and which version of the Terms and
+  // Privacy policy. Null for accounts staff created (no one ticked a box) and for
+  // accounts from before consent was recorded. Server-set only (input: false).
+  termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
+  termsVersion: text("terms_version"),
 });
 
 export const session = pgTable(
