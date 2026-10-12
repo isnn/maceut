@@ -248,6 +248,13 @@ export async function onCaptureQueued(userId: string, plan: Plan, usedIncludingT
 
 // --- exports -------------------------------------------------------------------------
 
+/** "Download it by 19 Oct." — the date stored on the export row (PKG-F9), in WIB. */
+export function readyBody(expiresAt: Date | null): string {
+  if (!expiresAt) return 'Download it from the zone page.'
+  const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' }).format(expiresAt)
+  return `Download it by ${day}.`
+}
+
 /** An export finished — done or failed. In-app only (the user asked; the page shows a toast). */
 export async function onExportFinished(exportId: string): Promise<void> {
   try {
@@ -262,7 +269,7 @@ export async function onExportFinished(exportId: string): Promise<void> {
         type: done ? 'export_ready' : 'export_failed',
         tone: done ? 'success' : 'warning',
         title: done ? `${kind} ready · ${zoneName}` : `${kind} didn’t finish · ${zoneName}`,
-        body: done ? 'Download it within 7 days.' : 'Retry it from the zone page.',
+        body: done ? readyBody(row.expiresAt) : 'Retry it from the zone page.',
         actionLabel: done ? 'Download' : 'Retry',
         actionHref: `/zones/${row.zoneId}#exports`,
         data: { exportId: row.id, zoneId: row.zoneId, zoneName, format: row.format },

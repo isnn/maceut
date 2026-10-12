@@ -10,7 +10,7 @@ import * as notificationService from '../services/notification.service'
 import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import { slimFor } from '../services/capture.service'
-import { exportPath, expiryFrom, frameFileName, type StoredSpec } from '../services/export.service'
+import { exportPath, expiryForOwner, frameFileName, type StoredSpec } from '../services/export.service'
 import { cachePath, matchesCaptureImage, specHash } from '../services/render-cache.service'
 import * as renderCacheRepo from '../repositories/render-cache.repository'
 import * as r2 from '../lib/r2-client'
@@ -394,7 +394,7 @@ export async function runExport(exportId: string): Promise<void> {
         return
       }
       const size = await upload()
-      if (!(await exportRepo.complete(exportId, key, size, expiryFrom(new Date())))) {
+      if (!(await exportRepo.complete(exportId, key, size, await expiryForOwner(row.userId)))) {
         // Cancelled during the final upload: the file exists but nobody wants it.
         await r2.remove(key).catch(() => undefined)
         outcome = 'cancelled'

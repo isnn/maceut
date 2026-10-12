@@ -23,6 +23,8 @@ export const PLAN_LIMITS = {
     /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
     exportFramesLimit: 60,
     exportBudgetMpFrames: 120,
+    /** Days a finished export stays downloadable (PKG-F9). */
+    exportRetentionDays: 7,
     exportLabel: 'Images only',
   },
   starter: {
@@ -39,6 +41,8 @@ export const PLAN_LIMITS = {
     /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
     exportFramesLimit: 120,
     exportBudgetMpFrames: 250,
+    /** Days a finished export stays downloadable (PKG-F9). */
+    exportRetentionDays: 14,
     exportLabel: 'GIF + MP4',
   },
   standard: {
@@ -55,6 +59,8 @@ export const PLAN_LIMITS = {
     /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
     exportFramesLimit: 240,
     exportBudgetMpFrames: 500,
+    /** Days a finished export stays downloadable (PKG-F9). */
+    exportRetentionDays: 30,
     exportLabel: 'GIF + MP4',
   },
   premium: {
@@ -71,6 +77,8 @@ export const PLAN_LIMITS = {
     /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
     exportFramesLimit: 720,
     exportBudgetMpFrames: 2900,
+    /** Days a finished export stays downloadable (PKG-F9). */
+    exportRetentionDays: 30,
     exportLabel: 'All formats + API',
   },
 } as const
@@ -95,10 +103,10 @@ export const PLAN_PRICE: Record<Plan, { amount: string; period: string }> = {
 export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
   // Facts only (FE-36): every line comes from PLAN_LIMITS / the API's plan rules. Every
   // plan exports ZIP, WebM and MP4, so export formats are not listed as a tier difference.
-  free: ['1 zone', '45 captures a month', 'Highways', 'One capture a day per window', '7 days of history in CSV'],
-  starter: ['3 zones', '450 captures a month', 'Highways + main roads', 'Hourly captures', '30 days of history in CSV'],
-  standard: ['10 zones', '2,000 captures a month', 'Highways + main roads', 'Hourly captures', '30 days of history in CSV'],
-  premium: ['15 zones', '3,000 captures a month', 'All roads, down to local streets', 'Captures every 15 minutes', '30 days of history in CSV'],
+  free: ['1 zone', '45 captures a month', 'Highways', 'One capture a day per window', '7 days of history in CSV', 'Exports kept 7 days'],
+  starter: ['3 zones', '450 captures a month', 'Highways + main roads', 'Hourly captures', '30 days of history in CSV', 'Exports kept 14 days'],
+  standard: ['10 zones', '2,000 captures a month', 'Highways + main roads', 'Hourly captures', '30 days of history in CSV', 'Exports kept 30 days'],
+  premium: ['15 zones', '3,000 captures a month', 'All roads, down to local streets', 'Captures every 15 minutes', '30 days of history in CSV', 'Exports kept 30 days'],
 }
 
 /**

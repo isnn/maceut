@@ -18,7 +18,12 @@ import { createHash } from 'node:crypto'
  */
 export const RENDER_VERSION = 1
 
-/** How long cached frames are kept. Matches the export retention. */
+/**
+ * How long cached frames are kept. Independent of export retention (PKG-F9): a finished
+ * export is one self-contained file in R2 and never reads the cache again. Only a retry
+ * or a second export of the same range does, and those happen within days. Raising this
+ * to 30 would store every drawn frame four times as long for no export that needs it.
+ */
 export const RENDER_CACHE_DAYS = 7
 
 /** The parts of an export spec that change the picture. */

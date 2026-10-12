@@ -2,9 +2,10 @@ import { exportErrorForUser } from './user-facing-errors'
 import * as exportRepo from '../repositories/export.repository'
 import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
+import * as userRepo from '../repositories/user.repository'
 import * as r2 from '../lib/r2-client'
 import { publishExportJob } from '../lib/rabbitmq-client'
-import { config, isR2Configured } from '../config/env'
+import { isR2Configured } from '../config/env'
 import {
   ExportBudgetExceededError,
   ExportInProgressError,
@@ -15,7 +16,7 @@ import {
   UpstreamError,
   ValidationError,
 } from '../errors'
-import { PLAN_LIMITS, type Plan } from '../types/plan'
+import { MAX_EXPORT_RETENTION_DAYS, PLAN_LIMITS, type Plan } from '../types/plan'
 import { historySince } from './capture.service'
 import type { CreateExportInput, ExportSpec } from '../schemas/export.schema'
 import type { ExportRecord } from '../repositories/export.repository'
@@ -333,7 +334,20 @@ export function exportPath(row: Pick<ExportRecord, 'id' | 'userId' | 'format'>):
   return `exports/${row.userId}/${row.id}.${row.format}`
 }
 
-/** When a file finished now should be deleted. */
-export function expiryFrom(now: Date): Date {
-  return new Date(now.getTime() + config.exportRetentionDays * 24 * 60 * 60 * 1000)
+/**
+ * When a file finished `now` should be deleted, on `plan` (PKG-F9): Free 7 days,
+ * Starter 14, Standard and Premium 30. Never past MAX_EXPORT_RETENTION_DAYS.
+ */
+export function expiryFrom(now: Date, plan: Plan): Date {
+  const days = Math.min(PLAN_LIMITS[plan].exportRetentionDays, MAX_EXPORT_RETENTION_DAYS)
+  return new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
+}
+
+/**
+ * The expiry for an export finishing now, from its owner's plan at this moment. Stored on
+ * the row, so a later upgrade or downgrade leaves existing exports' dates alone.
+ */
+export async function expiryForOwner(userId: string, now: Date = new Date()): Promise<Date> {
+  const account = await userRepo.findByIdWithPlan(userId)
+  return expiryFrom(now, account?.plan ?? 'free')
 }

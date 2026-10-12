@@ -94,7 +94,18 @@ export interface PlanLimits {
    * HERE's terms cap how long its output may be kept (delivery doc, catalog 2026-10).
    */
   historyDays: number | null
+  /**
+   * PKG-F9 — days a finished export file stays downloadable before the sweeper deletes it
+   * from R2. Fixed on the export row when the file is finished, from the owner's plan at
+   * that moment, so a later plan change never moves an existing export's date. Product
+   * policy, not research: 30 at most until HERE confirms in writing how long derived
+   * images and video may be kept (MAX_EXPORT_RETENTION_DAYS).
+   */
+  exportRetentionDays: number
 }
+
+/** Ceiling on `exportRetentionDays`. Raise only on the product owner's instruction. */
+export const MAX_EXPORT_RETENTION_DAYS = 30
 
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   free: {
@@ -107,6 +118,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     exportFramesLimit: 60,
     exportBudgetMpFrames: 120,
     historyDays: 7,
+    exportRetentionDays: 7,
   },
   starter: {
     maxRoadClass: 'nasional_provinsi',
@@ -118,6 +130,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     exportFramesLimit: 120,
     exportBudgetMpFrames: 250,
     historyDays: 30,
+    exportRetentionDays: 14,
   },
   standard: {
     maxRoadClass: 'nasional_provinsi',
@@ -129,6 +142,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     exportFramesLimit: 240,
     exportBudgetMpFrames: 500,
     historyDays: 30,
+    exportRetentionDays: 30,
   },
   premium: {
     maxRoadClass: 'semua',
@@ -140,6 +154,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     exportFramesLimit: 720,
     exportBudgetMpFrames: 2900,
     historyDays: 30,
+    exportRetentionDays: 30,
   },
 }
 

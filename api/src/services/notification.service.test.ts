@@ -156,6 +156,21 @@ describe('onExportFinished', () => {
     expect(row).toMatchObject({ type: 'export_ready', title: 'Animation ready · Sudirman', dedupeKey: 'export-done:e1' })
     expect(row.emailStatus).toBeUndefined()
   })
+
+  it('names the date the file is deleted, from the export row (PKG-F9)', async () => {
+    vi.mocked(exportRepo.findById).mockResolvedValue({
+      id: 'e2',
+      userId: 'u1',
+      zoneId: 'z1',
+      status: 'done',
+      format: 'zip',
+      spec: { zoneName: 'Sudirman' },
+      // 18 Oct 20:00 UTC is already 19 Oct in WIB.
+      expiresAt: new Date('2026-10-18T20:00:00Z'),
+    } as never)
+    await svc.onExportFinished('e2')
+    expect(vi.mocked(notificationRepo.insertOnce).mock.calls[0]![0]).toMatchObject({ body: 'Download it by 19 Oct.' })
+  })
 })
 
 describe('onPlanChanged', () => {

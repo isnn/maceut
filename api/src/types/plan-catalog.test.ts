@@ -41,12 +41,14 @@ describe('plan catalog', () => {
       exportFramesLimit: 120,
       exportBudgetMpFrames: 250,
       historyDays: 30,
+      exportRetentionDays: 14,
     })
     expect(PLANS.map((p) => PLAN_LIMITS[p].zonesLimit)).toEqual([1, 3, 10, 15])
     expect(PLANS.map((p) => PLAN_LIMITS[p].schedulesLimit)).toEqual([3, 9, 30, 45])
     expect(PLANS.map((p) => PLAN_LIMITS[p].seatsLimit)).toEqual([1, 1, 5, 5])
     expect(PLANS.map((p) => PLAN_LIMITS[p].monthlyCaptures)).toEqual([45, 450, 2000, 3000])
     expect(PLANS.map((p) => PLAN_LIMITS[p].historyDays)).toEqual([7, 30, 30, 30])
+    expect(PLANS.map((p) => PLAN_LIMITS[p].exportRetentionDays)).toEqual([7, 14, 30, 30])
   })
 
   it('keeps history to 30 days at most on every plan (HERE terms)', () => {

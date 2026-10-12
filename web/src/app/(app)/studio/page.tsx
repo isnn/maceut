@@ -1325,6 +1325,7 @@ export default function StudioPage() {
               {exportError && <p className="text-caption text-danger-text">{exportError}</p>}
               <ExportDialog
                 view={exportDialog}
+                keptDays={PLAN_LIMITS[user?.plan ?? 'free'].exportRetentionDays}
                 onClose={() => setExportDialog('closed')}
                 starting={starting}
                 job={activeExport}
@@ -1596,6 +1597,7 @@ function ExportDialog({
   busy,
   onRetry,
   extra,
+  keptDays,
 }: {
   view: 'closed' | 'choose' | 'progress'
   onClose: () => void
@@ -1609,6 +1611,8 @@ function ExportDialog({
   onRetry: (job: ExportJob) => Promise<void>
   /** Shown above the options — export settings, like the ZIP image format. */
   extra?: React.ReactNode
+  /** How long the plan keeps a finished file (PKG-F9). */
+  keptDays: number
 }) {
   const [retrying, setRetrying] = useState(false)
   const showProgress = view === 'progress' && job !== null
@@ -1646,7 +1650,7 @@ function ExportDialog({
               {isActive(job) && (
                 <p className="text-caption text-text-muted">
                   This runs on our servers. You can close this, keep editing, or leave Studio — the file will wait for
-                  you on the zone page for 7 days.
+                  you on the zone page for {keptDays} days.
                 </p>
               )}
 
