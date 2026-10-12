@@ -172,6 +172,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **BE-19** `GET /zones/:id/frames` — frame Studio dibatasi riwayat paket (Free 7 hari, Standard 90, Premium semua), maks 5.000; export menolak rentang di luar riwayat (403 HISTORY_LIMIT_EXCEEDED, BR-007) | review user |
 | ✅ | **FE-39** Studio: timeframe hanya menawarkan riwayat paket ("All 7 days" / "All 90 days" / "All", baris "Your plan keeps N days of history · Upgrade"); zona terakhir diingat saat kembali ke Studio | review user |
 | ✅ | **BE-18** Worker tahan macet: batas render 3 menit tanpa progres, channel RabbitMQ per consumer + reconnect, restart beneran (tanpa `tsx watch`), healthcheck heartbeat, capture terlambat → `missed` (opsi C), `captured_at` = waktu sampel | insiden 2026-10-08 |
+| ✅ | **PKG-F2** Atribusi di setiap gambar capture & ekspor: "Traffic © HERE" + "OpenFreeMap © OpenMapTiles Data from OpenStreetMap" (Esri tetap untuk Satellite); teks di satu tempat (`ATTRIBUTION`, render.ts); terms menyebut kredit yang sama | docs Delivery Paket & Fitur |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -196,6 +197,12 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-12] PKG-F2 — atribusi HERE + OpenMapTiles pada gambar (fix/capture-attribution).
+  Semua gambar server (capture & ekspor) dan pratinjau Studio digambar oleh `drawAttribution` di render.ts,
+  jadi satu perubahan menutup PNG, ZIP, GIF dan MP4. Teks ada di `ATTRIBUTION` (baris HERE sementara sampai
+  HERE mengonfirmasi teksnya). Huruf mengecil bila kredit lebih lebar dari 70% gambar.
+  Delivery doc: F1 (retensi 30 hari, menghapus data) DILEWATI atas permintaan user.
 
 [2026-10-08f] FE-40 — landing: hero interaktif, kartu seragam, masalah → solusi.
 
