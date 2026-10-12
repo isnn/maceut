@@ -93,6 +93,8 @@ function row(over: Partial<userRepo.UserWithPlan> = {}): userRepo.UserWithPlan {
     role: 'user',
     staffType: null,
     onboardingDone: true,
+    termsAcceptedAt: null,
+    termsVersion: null,
     createdAt: new Date('2026-09-18T00:00:00Z'),
     updatedAt: new Date('2026-09-18T00:00:00Z'),
     plan: 'free',

@@ -141,6 +141,13 @@
       "when": 1791799370730,
       "tag": "0019_capture_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791799975002,
+      "tag": "0020_terms_consent",
+      "breakpoints": true
     }
   ]
 }
