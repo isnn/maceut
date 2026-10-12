@@ -172,6 +172,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **BE-19** `GET /zones/:id/frames` — frame Studio dibatasi riwayat paket (Free 7 hari, Standard 90, Premium semua), maks 5.000; export menolak rentang di luar riwayat (403 HISTORY_LIMIT_EXCEEDED, BR-007) | review user |
 | ✅ | **FE-39** Studio: timeframe hanya menawarkan riwayat paket ("All 7 days" / "All 90 days" / "All", baris "Your plan keeps N days of history · Upgrade"); zona terakhir diingat saat kembali ke Studio | review user |
 | ✅ | **BE-18** Worker tahan macet: batas render 3 menit tanpa progres, channel RabbitMQ per consumer + reconnect, restart beneran (tanpa `tsx watch`), healthcheck heartbeat, capture terlambat → `missed` (opsi C), `captured_at` = waktu sampel | insiden 2026-10-08 |
+| ✅ | **PKG-F2** Atribusi di setiap gambar capture & ekspor: "Traffic © HERE" + "OpenFreeMap © OpenMapTiles Data from OpenStreetMap" (Esri tetap untuk Satellite); teks di satu tempat (`ATTRIBUTION`, render.ts); terms menyebut kredit yang sama | docs Delivery Paket & Fitur |
 | ✅ | **PKG-F3/F4** Paket Starter (Rp 99k) + katalog 4 paket di backend & frontend (harga, zona, jadwal, riwayat 30 hari, pengguna, ekspor); migrasi 0018 `plan` + starter; tes katalog membandingkan kedua salinan; `npm run plan:impact` (hanya-baca) | docs Delivery Paket & Fitur |
 | ✅ | **PKG-F5/F6/F7** Pool capture bulanan (45/450/2.000/3.000, bulan WIB, reset tgl 1) menggantikan batas harian; papan jadwal & dialog jendela memproyeksikan bulan (minggu × 52 ÷ 12) vs sisa pool — peringatan, bukan blokir; dasbor/Profil: terpakai/sisa/tanggal reset; notifikasi 80% & 100% sekali per bulan; konsol staf: pemakaian pool per akun; ADR-033 | docs Delivery Paket & Fitur |
 
@@ -226,6 +227,12 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
     tanpa batas harian pengaman; Studio > 30 hari = gambar tersimpan saja (F1 dilewati, jadi belum relevan).
   - `npm run plan:impact` (hanya-baca, memakai previewPlanChange yang sama dengan dialog ganti paket): di DB
     lokal 12 akun, 0 melebihi batas baru. Jalankan di produksi sebelum rilis; jeda (ADR-020) setelah notifikasi.
+
+[2026-10-12] PKG-F2 — atribusi HERE + OpenMapTiles pada gambar (fix/capture-attribution).
+  Semua gambar server (capture & ekspor) dan pratinjau Studio digambar oleh `drawAttribution` di render.ts,
+  jadi satu perubahan menutup PNG, ZIP, GIF dan MP4. Teks ada di `ATTRIBUTION` (baris HERE sementara sampai
+  HERE mengonfirmasi teksnya). Huruf mengecil bila kredit lebih lebar dari 70% gambar.
+  Delivery doc: F1 (retensi 30 hari, menghapus data) DILEWATI atas permintaan user.
 
 [2026-10-08f] FE-40 — landing: hero interaktif, kartu seragam, masalah → solusi.
 
