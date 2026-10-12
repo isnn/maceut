@@ -70,7 +70,7 @@ export function Select({
         className={cn(
           'inline-flex items-center justify-between gap-sm rounded-sm border border-border bg-canvas text-text-primary',
           'hover:bg-canvas-secondary data-[popup-open]:border-primary transition-colors',
-          'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+          'focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
           'disabled:opacity-60 disabled:cursor-not-allowed',
           TRIGGER_SIZE[size],
           className

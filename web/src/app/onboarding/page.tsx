@@ -21,6 +21,7 @@ import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
 import { PLAN_LABEL, PLAN_LIMITS } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import * as authApi from '@/features/auth/api'
+import { peekIntendedPlan } from '@/features/marketing/intended-plan'
 
 export default function OnboardingPage() {
   const { user, loading } = useCurrentUser()
@@ -45,7 +46,12 @@ export default function OnboardingPage() {
     setError(null)
     try {
       await authApi.completeOnboarding()
-      router.push('/dashboard')
+      // A paid plan picked on /pricing before sign-up opens the plan picker (FE-37).
+      const intended = peekIntendedPlan()
+      // A full load, not router.push: Profile reads `?plan=` as it mounts, and a client
+      // navigation can render it before the address bar has changed.
+      if (intended) window.location.assign(`/profile?plan=${intended}`)
+      else router.push('/dashboard')
     } catch (err) {
       // Previously this failure was swallowed: the button stayed in its pending state
       // with nothing on screen explaining why nothing happened.

@@ -17,7 +17,7 @@ export function DialogCloseX({ disabled, className }: { disabled?: boolean; clas
       className={cn(
         'absolute top-lg right-lg w-8 h-8 rounded-sm inline-flex items-center justify-center text-text-muted',
         'hover:text-text-primary hover:bg-canvas-secondary transition-colors',
-        'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+        'focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         className,
       )}

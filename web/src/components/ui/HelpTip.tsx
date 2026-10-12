@@ -14,7 +14,7 @@ export function HelpTip({ label, children }: { label: string; children: React.Re
       <Tooltip.Trigger
         delay={150}
         aria-label={label}
-        className="inline-grid place-items-center h-6 w-6 rounded-full text-text-muted hover:text-text-primary hover:bg-canvas-secondary focus:outline-none focus-visible:outline-2 focus-visible:outline-primary transition-colors"
+        className="inline-grid place-items-center h-6 w-6 rounded-full text-text-muted hover:text-text-primary hover:bg-canvas-secondary focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-primary transition-colors"
       >
         <IconInfo size={16} />
       </Tooltip.Trigger>

@@ -20,8 +20,8 @@ const config: Config = {
 
         // Text
         'text-primary': '#1F1F24',
-        'text-secondary': '#6B6B76',
-        'text-muted': '#9A9AA5',
+        'text-secondary': '#575762', // FE-37: darkened one step so muted stays visibly lighter.
+        'text-muted': '#6A6A74', // FE-37: was #9A9AA5 (2.5 to 2.8:1). Now 4.5:1 or more on canvas, page and primary-soft (WCAG AA).
         'on-primary': '#FFFFFF',
 
         // Semantic — Success
