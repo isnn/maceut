@@ -179,6 +179,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **PKG-F8** Sapu teks paket: terms §3 (4 paket, kuota bulanan) & §6 (riwayat & simpan ekspor dari katalog), dialog batas zona (paket berikutnya, bukan "Premium 25 zona"), kartu Premium unlocks, papan jadwal per bulan, meta pricing, link Upgrade Studio hanya bila riwayat < 30 hari, Swagger POST /schedules | docs Delivery Paket & Fitur |
 | ✅ | **PKG-FIX1** Masukan paket: scheduler tidak lagi meng-capture zona yang di-pause (claimDue membawa status zona); proyeksi & strip Latest captures tidak menghitung/menampilkan zona yang di-pause; peringatan pool membandingkan proyeksi sisa bulan (bukan sebulan penuh) vs sisa pool; label ekspor jujur (semua paket MP4 & WebM, tanpa API/GIF); badge Standard "Best price"; teks kartu paket & FAQ | masukan user 2026-10-12 |
 | ✅ | **FE-45** Terms §8: email kontak support.maceut@hokya.dev (mailto, menggantikan placeholder); footer publik "© 2026 Maceut by hokya.dev" | permintaan user 2026-10-12 |
+| ✅ | **H2/H3/H5** Halaman legal: /terms & /privacy (EN + ID lewat `?lang=id`, teks final verbatim di features/legal/texts.ts), tautan Privacy di footer & Terms/Privacy di halaman daftar; tes §6 vs PLAN_LIMITS; atribusi: kredit OSM "© OpenStreetMap contributors" (RENDER_VERSION 2), CSV kolom `source` "Traffic © HERE" | handover Legal & Retention (H1–H6) |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -203,6 +204,17 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-12i] H2/H3/H5 — halaman legal & cek atribusi (docs/legal-pages, di atas chore/terms-contact-footer).
+  - Teks Terms/Privacy EN & ID disalin VERBATIM oleh skrip dari legal-texts.md (owner) ke texts.ts; dirender
+    oleh LegalDocument (subset markdown: judul, **tebal**, [tautan](url), > kotak, tabel) tanpa library baru.
+  - Tes api `legal-terms.test.ts`: §6 (riwayat 7–30 hari; ekspor Free 7/Starter 14/Standard 30/Premium 30)
+    cocok dengan PLAN_LIMITS di EN & ID. Tidak ada selisih.
+  - Tautan HERE dibuka (200): AUP diarahkan ke acceptable-use-policy-january-2022.
+  - Atribusi (H5): gambar, frame ZIP, MP4/WebM lewat renderer yang sama (drawAttribution) → ada. Baris peta
+    kini "OpenFreeMap © OpenMapTiles © OpenStreetMap contributors" (sesuai §5 & ODbL); RENDER_VERSION 1 → 2
+    supaya gambar lama tidak dipakai ulang di ekspor. CSV tadinya tanpa kredit → kolom `source` per baris.
+  - Belum diputuskan (owner): Privacy §4 "7 hingga 30 hari" vs H1 yang menyimpan baris & gambar sampai 1 tahun.
 
 [2026-10-12g] FE-45 — kontak terms & kredit footer (chore/terms-contact-footer).
   - Terms §8 kini menautkan support.maceut@hokya.dev; placeholder [CONTACT EMAIL] hilang.
