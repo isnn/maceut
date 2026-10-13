@@ -13,10 +13,9 @@ import { homePathFor } from '../home-path'
 /** Seconds before "Send a new code" is offered again — each send replaces the last code. */
 const RESEND_COOLDOWN_S = 30
 
-/** `initialCode`: from the email's button (`?code=`); fills the boxes, the person still presses Verify. */
-export function VerifyEmailForm({ email, initialCode = '' }: { email: string; initialCode?: string }) {
+export function VerifyEmailForm({ email }: { email: string }) {
   const router = useRouter()
-  const [code, setCode] = useState(initialCode)
+  const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [verifying, setVerifying] = useState(false)

@@ -22,10 +22,7 @@ function ForgotPassword() {
         </>
       }
     >
-      <ForgotPasswordForm
-        initialEmail={params.get('email') ?? ''}
-        initialCode={/^\d{6}$/.test(params.get('code') ?? '') ? params.get('code')! : ''}
-      />
+      <ForgotPasswordForm initialEmail={params.get('email') ?? ''} />
     </AuthShell>
   )
 }

@@ -22,33 +22,33 @@ describe('otpEmail', () => {
     expect(m.to).toBe('rizky@example.com')
     expect(m.category).toBe('email-verification')
     for (const body of [m.html, m.text]) {
-      expect(body.match(/482913/g)?.length).toBe(2) // the code, and the button link
+      expect(body.match(/482913/g)?.length).toBe(1)
       expect(body.indexOf('Halo Rizky,')).toBeLessThan(body.indexOf('Hi Rizky,'))
       expect(body).toContain('Kode berlaku 10 menit')
       expect(body).toContain('expires in 10 minutes')
-      expect(body).toContain('Verification code (OTP)')
+      expect(body).toContain('Kode verifikasi')
+      expect(body).toContain("This is an automated email, please don't reply.")
+      expect(body).not.toContain('Verification code (OTP)')
     }
   })
 
   it('names the OTP in the subject but never puts the code there', () => {
     const m = otpEmail('rizky@example.com', '482913', 'email-verification', { appUrl: app })
-    expect(m.subject).toBe('Kode verifikasi Maceut (OTP) · Maceut verification code')
+    expect(m.subject).toBe('Kode verifikasi Maceut (OTP)')
     expect(m.subject).not.toContain('482913')
   })
 
-  it('links the button to the code page with the code filled in', () => {
-    const v = otpEmail('a+b@example.com', '482913', 'email-verification', { appUrl: app })
-    expect(v.text).toContain(`${app}/verify-email?email=a%2Bb%40example.com&code=482913`)
-    const r = otpEmail('a@example.com', '111111', 'forget-password', { appUrl: app })
-    expect(r.subject).toContain('reset')
-    expect(r.text).toContain(`${app}/forgot-password?email=a%40example.com&code=111111`)
-    expect(r.text).toContain("your password hasn't changed")
+  it('has no button or link to the app, only the logo', () => {
+    const m = otpEmail('a@example.com', '482913', 'email-verification', { appUrl: app })
+    expect(m.html).not.toContain('<a href="https://')
+    expect(m.html).toContain(`<img src="${app}/email/maceut-logo.png"`)
+    expect(m.text).not.toContain(app)
   })
 
-  it('has no button where there is no page to open', () => {
-    const m = otpEmail('a@example.com', '222222', 'change-email', { appUrl: app })
-    expect(m.text.match(/222222/g)?.length).toBe(1)
-    expect(m.html).not.toContain('<a href="https://maceut')
+  it('words a password reset as a reset', () => {
+    const m = otpEmail('a@example.com', '111111', 'forget-password', { appUrl: app })
+    expect(m.subject).toBe('Kode reset kata sandi Maceut (OTP)')
+    expect(m.text).toContain("your password hasn't changed")
   })
 
   it('greets without a name, and escapes the name it has', () => {

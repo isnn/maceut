@@ -47,6 +47,8 @@ export interface PublicUser {
    */
   roleLockedByConfig: boolean
   onboardingDone: boolean
+  /** The address was confirmed with its sign-up code (Better Auth's `email_verified`). */
+  emailVerified: boolean
   createdAt: string
 }
 
@@ -66,6 +68,7 @@ export function toPublic(row: userRepo.UserWithPlan): PublicUser {
     staffType: resolveStaffType(row.email, (row.role ?? 'user') as PlatformRole, row.staffType ?? null),
     roleLockedByConfig: isInternalByConfig(row.email),
     onboardingDone: row.onboardingDone ?? false,
+    emailVerified: row.emailVerified,
     createdAt: row.createdAt.toISOString(),
   }
 }

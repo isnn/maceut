@@ -18,6 +18,7 @@ const router = Router()
  *         plan: { type: string, enum: [free, starter, standard, premium] }
  *         role: { type: string, enum: [user, internal], description: Platform role, ditentukan INTERNAL_EMAILS (BR-027) }
  *         onboardingDone: { type: boolean }
+ *         emailVerified: { type: boolean, description: Alamat sudah dikonfirmasi dengan kode OTP }
  *         createdAt: { type: string, format: date-time }
  */
 

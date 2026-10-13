@@ -18,12 +18,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * does, and the copy follows ("if an account exists"), so the form can't be used to
  * check who has one.
  */
-/** `initialCode`: from the reset email's button (`?code=`); opens straight on the new-password step. */
-export function ForgotPasswordForm({ initialEmail, initialCode = '' }: { initialEmail: string; initialCode?: string }) {
+export function ForgotPasswordForm({ initialEmail }: { initialEmail: string }) {
   const router = useRouter()
-  const [step, setStep] = useState<'email' | 'reset'>(initialCode && initialEmail ? 'reset' : 'email')
+  const [step, setStep] = useState<'email' | 'reset'>('email')
   const [email, setEmail] = useState(initialEmail)
-  const [code, setCode] = useState(initialCode)
+  const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -81,9 +80,7 @@ export function ForgotPasswordForm({ initialEmail, initialCode = '' }: { initial
   return (
     <form onSubmit={reset} className="space-y-lg" noValidate>
       <Alert variant="success">
-        {code === initialCode && initialCode
-          ? `The code from your email is filled in. Choose a new password for ${email.trim()}.`
-          : `If an account exists for ${email.trim()}, a 6-digit code is on its way. It expires after 10 minutes.`}
+        If an account exists for {email.trim()}, a 6-digit code is on its way. It expires after 10 minutes.
       </Alert>
       {error && <Alert variant="warning">{error}</Alert>}
 

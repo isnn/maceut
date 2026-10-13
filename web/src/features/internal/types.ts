@@ -34,6 +34,8 @@ export interface InternalUserRow {
   access: Access
   /** Staff by INTERNAL_EMAILS — can't be demoted here (BR-027). Decided by the server. */
   roleLockedByConfig: boolean
+  /** Confirmed with the sign-up code; until then the account cannot log in. */
+  emailVerified: boolean
   createdAt: string
   /** The signed-in account — shown with a "you" marker and locked against self-edits. */
   isYou: boolean

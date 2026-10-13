@@ -32,44 +32,40 @@ interface OtpCopy {
   enFor: string
   idIgnore: string
   enIgnore: string
-  /** The button that opens the code page already filled in; absent where there is no such page. */
-  button?: { id: string; en: string; path: string }
 }
 
 /**
- * Indonesian first, English second (owner, 2026-10-13). The subject and the line above
- * the code say "OTP" and "verification code" in English too: Gmail offers its "Copy
- * code" chip from that wording next to one lone number, and it reads English best.
- * The code itself never goes in the subject.
+ * Indonesian first, English second (owner, 2026-10-13), each language in its own block,
+ * never both on one line; the footer is English. The subject and the text around the
+ * code name it an OTP / verification code next to one lone number: the wording Gmail
+ * reads to offer its "Copy code" chip. The code itself never goes in the subject.
  */
 const COPY: Record<OtpPurpose, OtpCopy> = {
   'email-verification': {
-    subject: 'Kode verifikasi Maceut (OTP) · Maceut verification code',
+    subject: 'Kode verifikasi Maceut (OTP)',
     idFor: 'menyelesaikan pendaftaran akun Maceut Anda',
     enFor: 'finish creating your Maceut account',
     idIgnore: 'Bukan Anda yang mendaftar? Abaikan email ini.',
     enIgnore: "Didn't sign up? You can ignore this email.",
-    button: { id: 'Verifikasi email', en: 'Verify email', path: '/verify-email' },
   },
   'forget-password': {
-    subject: 'Kode reset kata sandi Maceut (OTP) · Maceut password reset code',
+    subject: 'Kode reset kata sandi Maceut (OTP)',
     idFor: 'mengatur ulang kata sandi akun Maceut Anda',
     enFor: 'reset the password of your Maceut account',
     idIgnore: 'Tidak meminta reset? Abaikan email ini, kata sandi Anda tidak berubah.',
     enIgnore: "Didn't ask for a reset? Ignore this email, your password hasn't changed.",
-    button: { id: 'Atur ulang kata sandi', en: 'Reset password', path: '/forgot-password' },
   },
   // Not offered in the app today (sign-in is by password); kept so an unexpected type
   // still produces a sensible email rather than an exception.
   'sign-in': {
-    subject: 'Kode masuk Maceut (OTP) · Maceut sign-in code',
+    subject: 'Kode masuk Maceut (OTP)',
     idFor: 'masuk ke Maceut',
     enFor: 'sign in to Maceut',
     idIgnore: 'Bukan Anda yang mencoba masuk? Abaikan email ini.',
     enIgnore: "Didn't try to sign in? You can ignore this email.",
   },
   'change-email': {
-    subject: 'Konfirmasi email baru Maceut (OTP) · Confirm your new Maceut email',
+    subject: 'Kode konfirmasi email baru Maceut (OTP)',
     idFor: 'mengonfirmasi alamat email baru akun Maceut Anda',
     enFor: 'confirm this new address for your Maceut account',
     idIgnore: 'Tidak meminta perubahan ini? Abaikan email ini.',
@@ -93,12 +89,9 @@ export function otpEmail(
   const copy = COPY[purpose]
   const minutes = Math.round(OTP_EXPIRES_SECONDS / 60)
   const name = opts.name?.trim().split(/\s+/)[0]
-  const appUrl = opts.appUrl ?? config.frontendUrl
-  // Opens the code page with the code filled in; the person still presses the button
-  // there. A mail scanner that follows the link therefore cannot spend the code (ADR-026).
-  const link = copy.button
-    ? `${appUrl.replace(/\/$/, '')}${copy.button.path}?email=${encodeURIComponent(to)}&code=${otp}`
-    : undefined
+  // The web's wordmark as an image (web/public/email): mail clients don't load the brand
+  // font, so text would fall back to Arial. The alt text keeps a wordmark when images are off.
+  const logoUrl = `${(opts.appUrl ?? config.frontendUrl).replace(/\/$/, '')}/email/maceut-logo.png`
 
   const id = {
     hi: name ? `Halo ${name},` : 'Halo,',
@@ -110,7 +103,7 @@ export function otpEmail(
     lead: `Use the verification code (OTP) above to ${copy.enFor}.`,
     expiry: `It expires in ${minutes} minutes and works once. Don't share it with anyone, including the Maceut team.`,
   }
-  const preheader = 'Kode OTP Anda untuk Maceut · Your Maceut verification code (OTP)'
+  const preheader = 'Kode verifikasi (OTP) Anda untuk Maceut'
 
   // Email HTML: tables, inline styles and literal colours, because mail clients ignore
   // stylesheets and have never heard of the app's Tailwind tokens. The colours are the
@@ -124,22 +117,15 @@ export function otpEmail(
   <div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(preheader)}</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#FFFFFF;border:1px solid #E4E6EB;border-radius:12px">
     <tr><td style="padding:24px 32px;border-bottom:1px solid #E4E6EB">
-      <span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#1F2330">maceut</span>
+      <img src="${logoUrl}" width="92" height="36" alt="maceut" style="display:block;border:0;outline:none;font-size:22px;font-weight:800;color:#1F1F24">
     </td></tr>
     <tr><td style="padding:28px 32px 8px">
       ${p(id.hi)}
       ${p(id.lead)}
-      <p style="margin:20px 0 8px;font-size:12px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:#5B6170;text-align:center">Kode verifikasi · Verification code (OTP)</p>
+      <p style="margin:20px 0 8px;font-size:12px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:#5B6170;text-align:center">Kode verifikasi</p>
       <div style="margin:0 0 20px;padding:18px 12px;background:#EEE9FE;border-radius:10px;text-align:center">
         <span style="font-size:34px;font-weight:700;letter-spacing:10px;font-family:Menlo,Consolas,'Courier New',monospace;color:#1F2330">${otp}</span>
-      </div>${
-        link && copy.button
-          ? `
-      <div style="margin:0 0 24px;text-align:center">
-        <a href="${escapeHtml(link)}" style="display:inline-block;padding:12px 24px;background:#5A35F3;border-radius:8px;color:#FFFFFF;font-size:15px;font-weight:600;text-decoration:none">${escapeHtml(`${copy.button.id} · ${copy.button.en}`)}</a>
-      </div>`
-          : ''
-      }
+      </div>
       ${muted(id.expiry)}
       ${muted(copy.idIgnore)}
     </td></tr>
@@ -152,8 +138,8 @@ export function otpEmail(
     </td></tr>
     <tr><td style="padding:20px 32px;background:#FAFAFB;border-top:1px solid #E4E6EB;border-radius:0 0 12px 12px">
       <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#1F2330">${TAGLINE}</p>
-      <p style="margin:0 0 4px;font-size:12px;line-height:1.5;color:#5B6170">Bantuan · Help: <a href="mailto:${SUPPORT_EMAIL}" style="color:#5A35F3;text-decoration:none">${SUPPORT_EMAIL}</a></p>
-      <p style="margin:0;font-size:12px;line-height:1.5;color:#8A8F9C">Email otomatis, mohon tidak dibalas. · Automated email, please don't reply.</p>
+      <p style="margin:0 0 4px;font-size:12px;line-height:1.5;color:#5B6170">Need help? <a href="mailto:${SUPPORT_EMAIL}" style="color:#5A35F3;text-decoration:none">${SUPPORT_EMAIL}</a></p>
+      <p style="margin:0;font-size:12px;line-height:1.5;color:#8A8F9C">This is an automated email, please don't reply.</p>
     </td></tr>
   </table>
 </body></html>`
@@ -162,10 +148,9 @@ export function otpEmail(
     id.hi,
     id.lead,
     '',
-    'Kode verifikasi · Verification code (OTP):',
+    'Kode verifikasi:',
     otp,
     '',
-    ...(link && copy.button ? [`${copy.button.id} · ${copy.button.en}: ${link}`, ''] : []),
     id.expiry,
     copy.idIgnore,
     '',
@@ -177,8 +162,8 @@ export function otpEmail(
     '',
     '--',
     `Maceut · ${TAGLINE}`,
-    `Bantuan · Help: ${SUPPORT_EMAIL}`,
-    "Email otomatis, mohon tidak dibalas. · Automated email, please don't reply.",
+    `Need help? ${SUPPORT_EMAIL}`,
+    "This is an automated email, please don't reply.",
     '',
   ].join('\n')
 

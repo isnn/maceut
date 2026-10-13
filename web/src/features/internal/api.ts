@@ -90,6 +90,7 @@ export async function getUserDirectory(): Promise<InternalUserRow[]> {
     role: user.role,
     access: accessOf(user),
     roleLockedByConfig: user.roleLockedByConfig ?? false,
+    emailVerified: user.emailVerified ?? false,
     createdAt: user.createdAt,
     isYou: user.id === me.id,
     usage: usageFor(user.plan, user.usage),
