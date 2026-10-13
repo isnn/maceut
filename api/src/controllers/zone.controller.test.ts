@@ -183,6 +183,18 @@ describe('POST /zones', () => {
     expect(res.status).toBe(422)
   })
 
+  it('refuses a zone more than 100 km across, before saving it', async () => {
+    signedIn()
+    // ~120 km wide near Yogyakarta.
+    const big = [[[110, -7.8], [111.1, -7.8], [111.1, -7.7], [110, -7.8]]]
+
+    const res = await request(app).post('/zones').send({ ...body, geometry: { type: 'Polygon', coordinates: big } })
+
+    expect(res.status).toBe(422)
+    expect(res.body.error.message).toMatch(/maksimum 100 km/)
+    expect(res.body.error.details).toMatchObject({ maxSideKm: 100 })
+  })
+
   it('rejects coordinates outside WGS84 range', async () => {
     signedIn()
     const bad = [[[200, -7.8], [110.37, -7.8], [110.37, -7.79], [200, -7.8]]]

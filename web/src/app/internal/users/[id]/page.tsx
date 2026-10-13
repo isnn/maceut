@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/Button'
+import { useCurrentUser } from '@/features/auth/hooks/useAuth'
+import { EditUserDialog } from '@/features/internal/components/EditUserDialog'
+import { DeleteUserDialog } from '@/features/internal/components/DeleteUserDialog'
+import type { InternalUserRow } from '@/features/internal/types'
 import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
 import { AccountPlanPill, RoadClassBadge, RolePill, StatusPill } from '@/components/ui/Badge'
@@ -30,6 +35,15 @@ export default function InternalUserUsagePage() {
   const params = useParams<{ id: string }>()
   const [data, setData] = useState<internalApi.AccountUsageDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+  const { user: me } = useCurrentUser()
+  // The same account actions as the Users list (superadmin only, FE-34); the server refuses admins too.
+  const isSuperadmin = me ? accessOf(me) === 'superadmin' : false
+  const [editing, setEditing] = useState<InternalUserRow | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  // Bumped after an edit, to read the account again.
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     if (!params?.id) return
@@ -39,7 +53,7 @@ export default function InternalUserUsagePage() {
       .catch((err) =>
         setError(err instanceof ApiError && err.code === 'NOT_FOUND' ? 'notfound' : 'Couldn’t load this account’s usage.'),
       )
-  }, [params?.id])
+  }, [params?.id, reloadKey])
 
   const back = (
     <Link
@@ -92,11 +106,44 @@ export default function InternalUserUsagePage() {
             {user.email}
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-sm">
+        <div className="ml-auto flex flex-wrap items-center gap-sm">
           <AccountPlanPill access={accessOf(user)} plan={user.plan} />
           <RolePill role={user.role} />
+          {isSuperadmin && (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => setEditing(internalApi.rowFromDetail(data, me?.id))}>
+                Edit account
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleting(true)}
+                disabled={user.id === me?.id}
+                title={user.id === me?.id ? 'You can’t delete your own account' : undefined}
+              >
+                Delete account
+              </Button>
+            </>
+          )}
         </div>
       </div>
+
+      <EditUserDialog row={editing} onClose={() => setEditing(null)} onSaved={() => setReloadKey((k) => k + 1)} />
+      <DeleteUserDialog
+        target={
+          deleting
+            ? {
+                id: user.id,
+                fullName: user.fullName || user.email,
+                email: user.email,
+                zones: usage.zonesCount + paused.zones,
+                windows: usage.schedulesActiveCount + paused.schedules,
+              }
+            : null
+        }
+        onClose={() => setDeleting(false)}
+        onDeleted={() => router.push('/internal/users')}
+      />
 
       <section className="space-y-md">
         <h2 className="text-section-title text-text-primary">Usage</h2>

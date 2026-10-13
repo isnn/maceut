@@ -27,6 +27,7 @@ export type ErrorCode =
   | 'EXPORT_BUDGET_EXCEEDED'
   | 'TRAFFIC_UNAVAILABLE'
   | 'UPSTREAM_ERROR'
+  | 'RATE_LIMITED'
   | 'INTERNAL_ERROR'
 
 export class AppError extends Error {
@@ -201,6 +202,16 @@ export class ExportLimitExceededError extends AppError {
 export class TrafficUnavailableError extends AppError {
   constructor() {
     super('TRAFFIC_UNAVAILABLE', 503, 'Data lalu lintas sedang tidak tersedia. Coba lagi nanti.')
+  }
+}
+
+/** Too many HERE-backed previews or searches from one account in a short time. */
+export class RateLimitedError extends AppError {
+  constructor(readonly retryAfterSeconds: number) {
+    const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60))
+    super('RATE_LIMITED', 429, `Too many previews. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`, {
+      retryAfterSeconds,
+    })
   }
 }
 

@@ -260,3 +260,40 @@ export async function downloadCapturesCsv(zoneId: string, days: CsvRange): Promi
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+
+export interface PlaceResult {
+  label: string
+  lat: number
+  lng: number
+  /** [west, south, east, north], or null for a single point. */
+  bbox: [number, number, number, number] | null
+  /** ISO 3166 alpha-2, lower case (`id`, `jp`). */
+  countryCode: string | null
+}
+
+/** Place search for the zone map: HERE, then OpenStreetMap past the monthly allowance. */
+export function searchPlaces(q: string) {
+  return apiClient.get<{ provider: 'here' | 'osm'; results: PlaceResult[] }>(`/geocode?q=${encodeURIComponent(q)}`)
+}
+
+/** A zone's box may be at most this many km a side (owner, 2026-10-13); the API refuses larger. */
+export const MAX_ZONE_SIDE_KM = 100
+/** HERE Traffic's own limit per side; tighter than 100 km far from the equator. */
+export const MAX_ZONE_SIDE_DEGREES = 1
+
+/** Width (at the middle latitude) and height of a box in km. Same formula as the API's bboxSideKm. */
+export function bboxSideKm([west, south, east, north]: [number, number, number, number]): { widthKm: number; heightKm: number } {
+  const midLat = ((south + north) / 2) * (Math.PI / 180)
+  return { widthKm: (east - west) * 111.32 * Math.cos(midLat), heightKm: (north - south) * 110.574 }
+}
+
+/** True when the box is within both the 100 km and HERE's 1° per-side limits. */
+export function bboxFits(bbox: [number, number, number, number]): boolean {
+  const { widthKm, heightKm } = bboxSideKm(bbox)
+  return (
+    widthKm <= MAX_ZONE_SIDE_KM &&
+    heightKm <= MAX_ZONE_SIDE_KM &&
+    bbox[2] - bbox[0] <= MAX_ZONE_SIDE_DEGREES &&
+    bbox[3] - bbox[1] <= MAX_ZONE_SIDE_DEGREES
+  )
+}

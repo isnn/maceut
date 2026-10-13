@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, sql } from 'drizzle-orm'
+import { and, asc, eq, gte, inArray, ne, sql } from 'drizzle-orm'
 import { db } from '../lib/drizzle-client'
 import { hereUsage, platformSettings } from '../../drizzle/schema'
 
@@ -7,6 +7,13 @@ import { hereUsage, platformSettings } from '../../drizzle/schema'
 export type HereSource = 'capture' | 'preview' | 'road_counts' | 'zone_stats'
 export const HERE_SOURCES: HereSource[] = ['capture', 'preview', 'road_counts', 'zone_stats']
 
+/**
+ * Place search (HERE Geocoding) shares the counter table but is a different HERE product
+ * with its own free tier, so it never counts toward the Traffic totals or cap below.
+ */
+export const GEOCODE_SOURCE = 'geocode'
+const trafficOnly = ne(hereUsage.source, GEOCODE_SOURCE)
+
 export interface UsageCounts {
   requests: number
   failed: number
@@ -14,7 +21,7 @@ export interface UsageCounts {
 }
 
 /** Adds to one day's counters for one source — creating the row on its first call. */
-export async function increment(day: string, source: HereSource, by: Partial<UsageCounts>): Promise<void> {
+export async function increment(day: string, source: HereSource | typeof GEOCODE_SOURCE, by: Partial<UsageCounts>): Promise<void> {
   const requests = by.requests ?? 0
   const failed = by.failed ?? 0
   const refused = by.refused ?? 0
@@ -41,8 +48,17 @@ export async function totalsSince(fromDay: string): Promise<UsageCounts> {
       refused: sql<number>`coalesce(sum(${hereUsage.refused}), 0)::int`,
     })
     .from(hereUsage)
-    .where(gte(hereUsage.day, fromDay))
+    .where(and(gte(hereUsage.day, fromDay), trafficOnly))
   return rows[0] ?? { requests: 0, failed: 0, refused: 0 }
+}
+
+/** HERE place searches sent from `fromDay` (inclusive) onward. */
+export async function geocodeRequestsSince(fromDay: string): Promise<number> {
+  const rows = await db
+    .select({ requests: sql<number>`coalesce(sum(${hereUsage.requests}), 0)::int` })
+    .from(hereUsage)
+    .where(and(gte(hereUsage.day, fromDay), eq(hereUsage.source, GEOCODE_SOURCE)))
+  return rows[0]?.requests ?? 0
 }
 
 /** Totals for exactly one day. */
@@ -54,8 +70,17 @@ export async function totalsOn(day: string): Promise<UsageCounts> {
       refused: sql<number>`coalesce(sum(${hereUsage.refused}), 0)::int`,
     })
     .from(hereUsage)
-    .where(eq(hereUsage.day, day))
+    .where(and(eq(hereUsage.day, day), trafficOnly))
   return rows[0] ?? { requests: 0, failed: 0, refused: 0 }
+}
+
+/** Requests on one day from the given sources only, e.g. the wizard previews. */
+export async function requestsOnFor(day: string, sources: HereSource[]): Promise<number> {
+  const rows = await db
+    .select({ requests: sql<number>`coalesce(sum(${hereUsage.requests}), 0)::int` })
+    .from(hereUsage)
+    .where(and(eq(hereUsage.day, day), inArray(hereUsage.source, sources)))
+  return rows[0]?.requests ?? 0
 }
 
 /** Every per-source row from `fromDay` on, oldest first — the admin chart. */
@@ -69,7 +94,7 @@ export async function rowsSince(fromDay: string) {
       refused: hereUsage.refused,
     })
     .from(hereUsage)
-    .where(and(gte(hereUsage.day, fromDay)))
+    .where(and(gte(hereUsage.day, fromDay), trafficOnly))
     .orderBy(asc(hereUsage.day))
 }
 

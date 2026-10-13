@@ -79,6 +79,32 @@ function usageFor(plan: Plan, measured: ServerUsage | undefined): AccountUsage {
   }
 }
 
+/** The user page's account as a directory row, so it can open the same Edit dialog as the list. */
+export function rowFromDetail(d: AccountUsageDetail, meId: string | undefined): InternalUserRow {
+  const { user, usage } = d
+  return {
+    id: user.id,
+    fullName: user.fullName || user.email.split('@')[0],
+    email: user.email,
+    plan: user.plan,
+    role: user.role,
+    access: accessOf(user),
+    roleLockedByConfig: user.roleLockedByConfig ?? false,
+    emailVerified: user.emailVerified ?? false,
+    createdAt: user.createdAt,
+    isYou: user.id === meId,
+    usage: {
+      ...usageFor(user.plan, undefined),
+      zonesCount: usage.zonesCount,
+      zonesPaused: usage.pausedByPlan.zones,
+      schedulesActiveCount: usage.schedulesActiveCount,
+      schedulesPaused: usage.pausedByPlan.schedules,
+      capturesToday: usage.capturesToday,
+      storageUsedGb: usage.storageUsedGb,
+    },
+  }
+}
+
 export async function getUserDirectory(): Promise<InternalUserRow[]> {
   const [users, me] = await Promise.all([fetchAllUsers(), apiClient.get<User>('/me')])
 

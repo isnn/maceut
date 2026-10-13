@@ -130,6 +130,19 @@ const schema = z.object({
 
   HERE_API_KEY: optionalStr,
   HERE_TRAFFIC_FLOW_URL: z.string().url().default('https://data.traffic.hereapi.com/v7/flow'),
+  /**
+   * Place search on the zone map. HERE Geocoding's free tier is 5,000 a month; past this
+   * many HERE searches in a WIB month, search moves to OpenStreetMap Nominatim.
+   */
+  HERE_GEOCODE_MONTHLY_LIMIT: z.coerce.number().int().min(0).default(4000),
+  /**
+   * Per-account limits on the HERE-backed wizard calls (map previews, road-class counts,
+   * place search), together. Each cache miss is a billed HERE request.
+   */
+  PREVIEW_RATE_PER_10MIN: z.coerce.number().int().min(1).default(30),
+  PREVIEW_RATE_PER_DAY: z.coerce.number().int().min(1).default(200),
+  /** Previews may use at most this share of the HERE daily cap, so captures keep the rest. */
+  PREVIEW_CAP_SHARE: z.coerce.number().min(0).max(1).default(0.3),
 
   OSM_TILE_URL: z.string().trim().default('https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
 
@@ -260,6 +273,10 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
 
     hereApiKey: e.HERE_API_KEY,
     hereTrafficFlowUrl: e.HERE_TRAFFIC_FLOW_URL,
+    hereGeocodeMonthlyLimit: e.HERE_GEOCODE_MONTHLY_LIMIT,
+    previewRatePer10Min: e.PREVIEW_RATE_PER_10MIN,
+    previewRatePerDay: e.PREVIEW_RATE_PER_DAY,
+    previewCapShare: e.PREVIEW_CAP_SHARE,
 
     osmTileUrl: e.OSM_TILE_URL,
 

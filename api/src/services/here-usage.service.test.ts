@@ -6,6 +6,7 @@ vi.mock('../repositories/here-usage.repository', () => ({
   increment: vi.fn(async () => undefined),
   totalsOn: vi.fn(),
   totalsSince: vi.fn(),
+  requestsOnFor: vi.fn(async () => 0),
 }))
 vi.mock('../lib/here-traffic-client', () => ({ getTrafficFlow: vi.fn() }))
 
@@ -86,6 +87,24 @@ describe('assertWithinBudget', () => {
     expect(err).toBeInstanceOf(TrafficUnavailableError)
     expect(err.message).not.toMatch(/here|budget|limit/i)
     expect(usageRepo.increment).toHaveBeenCalledWith(expect.any(String), 'preview', { refused: 1 })
+  })
+
+  it('gives previews only 30% of the daily cap, while captures keep going', async () => {
+    budget({ dailyLimit: 100 })
+    vi.mocked(usageRepo.totalsOn).mockResolvedValue({ ...zero, requests: 40 })
+    vi.mocked(usageRepo.requestsOnFor).mockResolvedValue(30)
+
+    await expect(assertWithinBudget('preview')).rejects.toBeInstanceOf(TrafficUnavailableError)
+    await expect(assertWithinBudget('road_counts')).rejects.toBeInstanceOf(TrafficUnavailableError)
+    expect(usageRepo.increment).toHaveBeenCalledWith(expect.any(String), 'preview', { refused: 1 })
+    await expect(assertWithinBudget('capture')).resolves.not.toBeNull()
+    expect(usageRepo.requestsOnFor).toHaveBeenCalledWith(expect.any(String), ['preview', 'road_counts'])
+  })
+
+  it('lets previews through under their share', async () => {
+    budget({ dailyLimit: 100 })
+    vi.mocked(usageRepo.requestsOnFor).mockResolvedValue(29)
+    await expect(assertWithinBudget('preview')).resolves.not.toBeNull()
   })
 
   it('refuses at the monthly cap', async () => {

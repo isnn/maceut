@@ -191,6 +191,8 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **BE-OTP-EMAIL** Email OTP dwibahasa (blok ID dulu, lalu EN; tiap baris satu bahasa), logo wordmark web (PNG), kode sekali dalam kotak violet berlabel "Kode verifikasi", footer bahasa Inggris; subjek menyebut OTP tanpa kode. Flow tidak berubah (tanpa tombol). Internal → Users: pill Verified / Unverified dari `email_verified` | masukan user 2026-10-13 |
 | ✅ | **FE-50** Bersih-bersih teks: penjelasan setelah "—" (D1–D45) dihapus/ditulis ulang; rangkaian fakta "·" (B1–B33) dihapus atau dipecah jadi baris (dashboard StatTile `aside`/`sub`, UsageMeter `sub`, opsi export Studio dua baris + chip WebP, "Kept until" baris sendiri); import GeoJSON/SHP jadi "Coming soon" | keputusan owner 2026-10-13 |
 | ✅ | **FE-51** Placeholder email login dihapus, daftar → "rizky@maceut.com"; kursor "not-allowed" dihapus dari semua kontrol nonaktif (tetap redup, kursor biasa) | masukan user 2026-10-13 |
+| ✅ | **FE-52** Cari tempat di peta pembuatan zona (`GET /geocode`: HERE Geocoding ≤ 4.000/bulan, lalu OpenStreetMap Nominatim) + peta lebih besar (480px, 640px di laptop); halaman user staf: tombol Edit & Delete seperti di daftar; bug dialog hapus (`<p>` di dalam `<p>`) diperbaiki, error tampil di dalam dialog | masukan user 2026-10-13 |
+| ✅ | **FE-53** Peta zona: pencarian seluruh dunia (Indonesia didahulukan), kotak cari tetap di atas peta; batas zona 100 km/sisi (pop-up saat menggambar, 422 di API); tombol "Next"; kelas jalan default = tertinggi di paket; pelindung biaya pratinjau (limit per akun 30/10 mnt & 200/hari, bbox dibulatkan 0,005°, pratinjau maks 30% batas harian HERE) | masukan user 2026-10-13 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -215,6 +217,30 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-13h] FE-53 — peta zona: cari dunia, batas 100 km, default kelas jalan, pelindung biaya pratinjau.
+  - Geocode: tanpa filter negara; hasil Indonesia diurutkan dulu (rankIndonesiaFirst), countryCode di hasil.
+    Hint `at` HERE dicoba lalu dibuang: menarik "Malioboro" ke Balikpapan. Overlay di dalam peta & catatan WIB
+    untuk tempat luar negeri sempat dibuat lalu dibatalkan owner: kotak cari kembali di atas peta.
+  - Batas zona: MAX_ZONE_SIDE_KM=100 + MAX_BBOX_DEGREES 0,5 → 1 (batas HERE). validateGeometry memanggil
+    validateBBox → 422 saat create. Wizard: titik yang melewati batas tidak ditambahkan, InfoDialog "Zone too
+    large"; caption menampilkan lebar × tinggi km. Zona lokal terbesar (JKT) ~37 × 28 km, tidak terdampak.
+  - Peta gambar tidak lagi auto-center/fit tiap titik ditambah (MapCanvas `fitToShape={false}`); pratinjau tetap fit.
+  - Wizard: tombol "Next"; masuk langkah kelas jalan → roadClass = PLAN_LIMITS[plan].maxRoadClass bila kosong.
+  - Biaya pratinjau: middlewares/rate-limit (in-process, per akun, staf bebas) pada /traffic/preview,
+    /traffic/road-class-counts, /geocode → 429 RATE_LIMITED + Retry-After; traffic-cache membulatkan bbox ke
+    grid 0,005° (kecuali bila itu membuatnya lewat batas); assertWithinBudget menolak sumber preview/road_counts
+    setelah PREVIEW_CAP_SHARE (30%) batas harian. Wizard menampilkan pesan, tidak mengulang.
+
+[2026-10-13g] FE-52 — pencarian tempat di peta zona, aksi di halaman user, bug hapus (feat/zone-search-user-actions).
+  - API `GET /geocode?q=` (login): lib/geocoder.ts (HERE geocode, Nominatim), services/geocode.service.ts. HERE selama
+    pencarian HERE bulan WIB ini < HERE_GEOCODE_MONTHLY_LIMIT (4000, free tier HERE 5000); sesudahnya, atau HERE
+    gagal/tanpa kunci → Nominatim (User-Agent Maceut, maks 1 req/detik, tanpa type-ahead). Cache 24 jam / 500 entri.
+    Dihitung di here_usage dengan source `geocode`, TIDAK masuk total/batas HERE Traffic.
+  - Web: kotak "Search a place" di atas peta gambar (Enter/tombol), hasil → map.fitBounds. Peta wizard 480px/640px.
+  - Bug: ConfirmDialog merender description di <p> sementara isinya <p> → error overlay React saat dialog hapus
+    dibuka. Description kini <div>; error hapus tampil di dalam dialog (prop `error`). DeleteUserDialog dipakai
+    bersama oleh daftar Users dan halaman user; halaman user dapat tombol Edit account / Delete account (superadmin).
 
 [2026-10-13f] FE-51 — placeholder auth & kursor tombol nonaktif (fix/auth-placeholders-cursor).
   - LoginForm: placeholder email dihapus. RegisterForm: placeholder "rizky@maceut.com".

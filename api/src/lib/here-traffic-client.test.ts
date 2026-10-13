@@ -85,9 +85,21 @@ describe('validateBBox', () => {
     expect(() => validateBBox([110.36, -91, 110.37, -7.79])).toThrow(ValidationError)
   })
 
-  it('rejects a box too large to bill or render', () => {
+  it('rejects a box wider than HERE allows', () => {
     const huge: BBox = [110, -8, 110 + MAX_BBOX_DEGREES + 0.1, -7.9]
     expect(() => validateBBox(huge)).toThrow(/terlalu luas/)
+  })
+
+  it('allows 99 km a side and refuses 101 km', () => {
+    // Near the equator 1° of longitude is ~111 km, so 0.89° is ~99 km and 0.91° ~101 km.
+    expect(() => validateBBox([110, -7.5, 110.89, -7.4])).not.toThrow()
+    expect(() => validateBBox([110, -7.5, 110.91, -7.4])).toThrow(/maksimum 100 km/)
+    expect(() => validateBBox([110, -8, 110.1, -8 + 0.92])).toThrow(/maksimum 100 km/)
+  })
+
+  it('applies HERE\'s 1° even where it is under 100 km (far north)', () => {
+    // At 60°N, 1.2° of longitude is only ~67 km, but HERE still refuses more than 1°.
+    expect(() => validateBBox([10, 60, 11.2, 60.1])).toThrow(/terlalu luas/)
   })
 
   it('rejects NaN rather than passing it to HERE', () => {

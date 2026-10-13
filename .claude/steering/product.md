@@ -103,6 +103,8 @@ Lihat `.claude/specs/internal/requirements.md`.
 
 **Zone & Geometry**
 - BR-013: Zone disimpan sebagai PostGIS Polygon dalam CRS WGS84 (SRID 4326).
+  Bounding box zona maksimal **100 km per sisi** dan ≤ 1° per sisi (batas bbox HERE Traffic Flow v7);
+  ditolak 422 saat dibuat, dan wizard menolak titik yang melewatinya dengan pop-up (2026-10-13).
 - BR-014: User menggambar polygon zone secara manual di peta. Tidak ada import dari file eksternal di MVP.
 - BR-015: Nama zone bersifat unik per user (case-insensitive).
 

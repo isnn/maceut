@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import * as zoneController from '../controllers/zone.controller'
 import * as trafficController from '../controllers/traffic.controller'
+import { previewRateLimit } from '../middlewares/rate-limit.middleware'
 import * as captureController from '../controllers/capture.controller'
 import { authMiddleware, planCheck } from '../middlewares/auth.middleware'
 
@@ -250,9 +251,10 @@ router.delete('/zones/:id', zoneController.remove)
  *                     features: { type: array, items: { type: object } }
  *       401: { description: UNAUTHORIZED }
  *       422: { description: VALIDATION_ERROR — bbox tidak valid atau terlalu luas }
+ *       429: { description: 'RATE_LIMITED — terlalu banyak pratinjau dari akun ini; lihat header Retry-After' }
  *       502: { description: UPSTREAM_ERROR — HERE gagal, quota habis, atau key salah }
  */
-router.get('/traffic/preview', trafficController.preview)
+router.get('/traffic/preview', previewRateLimit, trafficController.preview)
 
 /**
  * @swagger
@@ -307,9 +309,10 @@ router.get('/traffic/preview', trafficController.preview)
  *                       description: Kelas tertinggi yang boleh dipakai paket pemanggil
  *       401: { description: UNAUTHORIZED }
  *       422: { description: VALIDATION_ERROR — bbox tidak valid atau terlalu luas }
+ *       429: { description: 'RATE_LIMITED — terlalu banyak pratinjau dari akun ini; lihat header Retry-After' }
  *       502: { description: UPSTREAM_ERROR — HERE gagal atau quota habis }
  */
-router.get('/traffic/road-class-counts', trafficController.roadClassCounts)
+router.get('/traffic/road-class-counts', previewRateLimit, trafficController.roadClassCounts)
 
 /**
  * @swagger
