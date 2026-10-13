@@ -15,10 +15,8 @@ beforeEach(() => {
 })
 
 describe('otpEmail', () => {
-  const app = 'https://maceut.hokya.dev'
-
   it('Indonesian first, then English, with the code once and its expiry in both bodies', () => {
-    const m = otpEmail('rizky@example.com', '482913', 'email-verification', { name: 'Rizky Pratama', appUrl: app })
+    const m = otpEmail('rizky@example.com', '482913', 'email-verification', { name: 'Rizky Pratama' })
     expect(m.to).toBe('rizky@example.com')
     expect(m.category).toBe('email-verification')
     for (const body of [m.html, m.text]) {
@@ -33,27 +31,28 @@ describe('otpEmail', () => {
   })
 
   it('names the OTP in the subject but never puts the code there', () => {
-    const m = otpEmail('rizky@example.com', '482913', 'email-verification', { appUrl: app })
+    const m = otpEmail('rizky@example.com', '482913', 'email-verification')
     expect(m.subject).toBe('Kode verifikasi Maceut (OTP)')
     expect(m.subject).not.toContain('482913')
   })
 
-  it('has no button or link to the app, only the logo', () => {
-    const m = otpEmail('a@example.com', '482913', 'email-verification', { appUrl: app })
+  it('has no button or link to the app; the logo travels inside the message', () => {
+    const m = otpEmail('a@example.com', '482913', 'email-verification')
     expect(m.html).not.toContain('<a href="https://')
-    expect(m.html).toContain(`<img src="${app}/email/maceut-logo.png"`)
-    expect(m.text).not.toContain(app)
+    expect(m.html).toContain('<img src="cid:maceut-logo"')
+    expect(m.inline).toEqual([expect.objectContaining({ contentId: 'maceut-logo', contentType: 'image/png' })])
+    expect(Buffer.from(m.inline![0]!.content, 'base64').subarray(1, 4).toString()).toBe('PNG')
   })
 
   it('words a password reset as a reset', () => {
-    const m = otpEmail('a@example.com', '111111', 'forget-password', { appUrl: app })
+    const m = otpEmail('a@example.com', '111111', 'forget-password')
     expect(m.subject).toBe('Kode reset kata sandi Maceut (OTP)')
     expect(m.text).toContain("your password hasn't changed")
   })
 
   it('greets without a name, and escapes the name it has', () => {
-    expect(otpEmail('a@example.com', '1', 'email-verification', { appUrl: app }).text).toContain('Halo,')
-    expect(otpEmail('a@example.com', '1', 'email-verification', { name: '<b>x</b>', appUrl: app }).html).toContain('Halo &lt;b&gt;x&lt;/b&gt;,')
+    expect(otpEmail('a@example.com', '1', 'email-verification').text).toContain('Halo,')
+    expect(otpEmail('a@example.com', '1', 'email-verification', { name: '<b>x</b>' }).html).toContain('Halo &lt;b&gt;x&lt;/b&gt;,')
   })
 })
 

@@ -54,7 +54,7 @@ export function LoginForm() {
       {error && <Alert variant="warning">{error}</Alert>}
 
       <div className="space-y-xs">
-        <FormLabel htmlFor="email">Work email</FormLabel>
+        <FormLabel htmlFor="email">Email</FormLabel>
         <Input
           id="email"
           type="email"

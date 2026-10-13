@@ -9,8 +9,7 @@ import { Logo } from '@/components/ui/Logo'
 import { LoginForm } from '@/features/auth/components/LoginForm'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import { homePathFor } from '@/features/auth/home-path'
-import { IconCheck, IconMail } from '@/components/ui/icons'
-import { cn } from '@/lib/utils'
+import { IconCheck } from '@/components/ui/icons'
 
 const VALUE_PROPS = [
   'Zones drawn or imported as GeoJSON / SHP',
@@ -100,8 +99,7 @@ export default function LoginPage() {
 
               <p className="text-body text-text-secondary text-center mt-xl">
                 New to Maceut?{' '}
-                <Link href="/register" className={cn(linkClass(), 'inline-flex items-center gap-xs align-middle')}>
-                  <IconMail size={16} />
+                <Link href="/register" className={linkClass()}>
                   Create an account
                 </Link>
               </p>

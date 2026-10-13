@@ -107,6 +107,29 @@ describe('console provider', () => {
   })
 })
 
+describe('inline images', () => {
+  const withLogo: EmailMessage = {
+    ...message,
+    inline: [{ contentId: 'maceut-logo', filename: 'maceut-logo.png', contentType: 'image/png', content: 'iVBO' }],
+  }
+
+  it('mailtrap sends them as inline attachments', async () => {
+    const f = fakeFetch(200, { success: true })
+    await createMailtrapProvider({ apiToken: 'tok', from: 'a@b.c', fetch: f }).send(withLogo)
+    expect(sent(f).body.attachments).toEqual([
+      { content: 'iVBO', filename: 'maceut-logo.png', type: 'image/png', disposition: 'inline', content_id: 'maceut-logo' },
+    ])
+  })
+
+  it('resend sends them with a content id', async () => {
+    const f = fakeFetch(200, { id: 'x' })
+    await createResendProvider({ apiKey: 're', from: 'a@b.c', fetch: f }).send(withLogo)
+    expect(sent(f).body.attachments).toEqual([
+      { content: 'iVBO', filename: 'maceut-logo.png', content_type: 'image/png', content_id: 'maceut-logo' },
+    ])
+  })
+})
+
 describe('createEmailProvider', () => {
   const c = { emailFrom: 'a@b.c', resendApiKey: 're', mailtrapApiToken: 'mt', mailtrapInboxId: undefined }
   it('builds the single provider config names', () => {

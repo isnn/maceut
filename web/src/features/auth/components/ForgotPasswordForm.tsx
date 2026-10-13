@@ -67,7 +67,7 @@ export function ForgotPasswordForm({ initialEmail }: { initialEmail: string }) {
       <form onSubmit={sendCode} className="space-y-lg" noValidate>
         {error && <Alert variant="warning">{error}</Alert>}
         <div className="space-y-xs">
-          <FormLabel htmlFor="email">Work email</FormLabel>
+          <FormLabel htmlFor="email">Email</FormLabel>
           <Input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <Button type="submit" disabled={loading} className="w-full">

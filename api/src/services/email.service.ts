@@ -1,5 +1,7 @@
 import { config } from '../config/env'
-import { getEmailProvider, type EmailMessage } from '../lib/email'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { getEmailProvider, type EmailMessage, type InlineImage } from '../lib/email'
 import * as notificationRepo from '../repositories/notification.repository'
 import * as userRepo from '../repositories/user.repository'
 
@@ -73,6 +75,19 @@ const COPY: Record<OtpPurpose, OtpCopy> = {
   },
 }
 
+/**
+ * The wordmark, attached to the message and shown by cid: (owner's image, cropped).
+ * Mail clients don't load the brand font, so live text would fall back to Arial; a
+ * hosted URL would not show in the sandbox or before the web is public. Read from the
+ * api root, which is the working directory in both the dev and the production image.
+ */
+const LOGO: InlineImage = {
+  contentId: 'maceut-logo',
+  filename: 'maceut-logo.png',
+  contentType: 'image/png',
+  content: readFileSync(resolve(process.cwd(), 'assets/email/maceut-logo.png')).toString('base64'),
+}
+
 const SUPPORT_EMAIL = 'support.maceut@hokya.dev'
 const TAGLINE = 'Connecting people with the road ahead'
 
@@ -84,14 +99,11 @@ export function otpEmail(
   to: string,
   otp: string,
   purpose: OtpPurpose,
-  opts: { name?: string | null; appUrl?: string } = {},
+  opts: { name?: string | null } = {},
 ): EmailMessage {
   const copy = COPY[purpose]
   const minutes = Math.round(OTP_EXPIRES_SECONDS / 60)
   const name = opts.name?.trim().split(/\s+/)[0]
-  // The web's wordmark as an image (web/public/email): mail clients don't load the brand
-  // font, so text would fall back to Arial. The alt text keeps a wordmark when images are off.
-  const logoUrl = `${(opts.appUrl ?? config.frontendUrl).replace(/\/$/, '')}/email/maceut-logo.png`
 
   const id = {
     hi: name ? `Halo ${name},` : 'Halo,',
@@ -117,7 +129,7 @@ export function otpEmail(
   <div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(preheader)}</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#FFFFFF;border:1px solid #E4E6EB;border-radius:12px">
     <tr><td style="padding:24px 32px;border-bottom:1px solid #E4E6EB">
-      <img src="${logoUrl}" width="92" height="36" alt="maceut" style="display:block;border:0;outline:none;font-size:22px;font-weight:800;color:#1F1F24">
+      <img src="cid:${LOGO.contentId}" width="102" height="24" alt="maceut" style="display:block;border:0;outline:none;font-size:22px;font-weight:800;color:#1F1F24">
     </td></tr>
     <tr><td style="padding:28px 32px 8px">
       ${p(id.hi)}
@@ -167,7 +179,7 @@ export function otpEmail(
     '',
   ].join('\n')
 
-  return { to, subject: copy.subject, html, text, category: purpose }
+  return { to, subject: copy.subject, html, text, category: purpose, inline: [LOGO] }
 }
 
 /**

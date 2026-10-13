@@ -5,7 +5,7 @@ import { createMailtrapProvider } from './mailtrap.provider'
 import { createResendProvider } from './resend.provider'
 import type { EmailProvider } from './types'
 
-export type { EmailMessage, EmailProvider } from './types'
+export type { EmailMessage, EmailProvider, InlineImage } from './types'
 export { EmailSendError } from './types'
 
 /**

@@ -213,6 +213,14 @@ Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
+[2026-10-13d] BE-OTP-EMAIL (lanjutan) + FE-49 — logo inline & teks auth (feat/otp-email-bilingual).
+  - Logo email = gambar dari owner (dipotong) di api/assets/email/maceut-logo.png, dikirim sebagai lampiran
+    inline (`cid:maceut-logo`) lewat `EmailMessage.inline` di Mailtrap & Resend: tampil di sandbox dan sebelum web
+    publik. web/public/email dihapus. Dockerfile produksi ikut menyalin assets/.
+  - Login: ikon email di "Create an account" dihapus. Label "Work email" → "Email" (login, daftar, lupa sandi).
+  - Halaman kode: tombol "Verify email" → "Send code" (permintaan owner).
+  - Daftar: "Tick the box…" → "Check the box to accept the Terms of Service and Privacy Policy."
+
 [2026-10-13c] BE-OTP-EMAIL — email OTP dwibahasa + status verifikasi di Internal (feat/otp-email-bilingual).
   - email.service otpEmail: blok ID lalu blok EN (tidak ada baris dwibahasa); subjek "Kode verifikasi Maceut (OTP)"
     (tanpa kode); label kode "Kode verifikasi"; kode tampil SATU kali (dicontoh dari email Midtrans: kata OTP/

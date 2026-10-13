@@ -34,6 +34,17 @@ export function createMailtrapProvider(opts: {
             html: message.html,
             text: message.text,
             ...(message.category ? { category: message.category } : {}),
+            ...(message.inline?.length
+              ? {
+                  attachments: message.inline.map((a) => ({
+                    content: a.content,
+                    filename: a.filename,
+                    type: a.contentType,
+                    disposition: 'inline',
+                    content_id: a.contentId,
+                  })),
+                }
+              : {}),
           }),
         })
       } catch (err) {

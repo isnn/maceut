@@ -25,6 +25,8 @@ ENV NODE_ENV=production
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/drizzle ./drizzle
+# Email images (the wordmark), read at runtime from the working directory.
+COPY --from=builder /app/assets ./assets
 COPY package.json ./
 
 # Don't run as root. node:alpine ships a `node` user for exactly this.
