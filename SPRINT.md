@@ -185,6 +185,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **H6** Runbook penutupan akun (docs/operations/account-deletion.md): verifikasi dari alamat terdaftar, hapus akun (admin), file R2 (captures/exports/render-cache), email_log & verification, konfirmasi, catatan; usulan perluasan endpoint admin di PR | handover Legal & Retention (H1–H6) |
 | ✅ | **FE-46** Hapus akun (staf): dialog memperingatkan bahwa penghapusan permanen & tak bisa dipulihkan, dan tombol Delete account baru aktif setelah mengetik `delete` (`ConfirmDialog.confirmPhrase`) | permintaan user 2026-10-12 |
 | ✅ | **FE-47** Teks legal & auth: catatan draf & kotak "read first" (termasuk pernyataan Komdigi/PSE) dihapus; catatan independen jadi teks biasa di Terms §1 (EN & ID); teks persetujuan dipersingkat & hanya satu bahasa; lead daftar dihapus; login "Continue with Google" + logo G, ikon email di "Create an account"; ® dihapus dari logo; tagline footer "Connecting people with the road ahead"; baris "Last updated" kini tampil | masukan user 2026-10-12 |
+| ✅ | **OPS-1** Setup deploy maceut.hokya.dev: `web/Dockerfile` produksi (`next build`/`next start`), docker-compose.prod.yml diperbaiki (`!reset`/`!override`: tanpa mount source, port hanya 127.0.0.1, postgres/rabbitmq tanpa port publik), template `api/.env.production.example` & `web/.env.production.example`, panduan docs/operations/deploy.md | permintaan user 2026-10-12 |
 | ✅ | **BE-EMAIL-FB** Email cadangan: `EMAIL_PROVIDER=auto` (default) memakai kunci yang ada, Mailtrap dulu lalu Resend bila Mailtrap gagal; email_log mencatat provider yang benar-benar mengirim | masukan user 2026-10-13 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
@@ -218,6 +219,15 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
     diisi, kosong → console (ditolak di production). Nama provider eksplisit = satu provider tanpa cadangan.
     `emailProvider` diganti `emailProviders` (array).
   - sendLogged mencatat provider yang benar-benar mengirim (resend saat cadangan dipakai). ADR-026 diperbarui.
+[2026-10-12n] OPS-1 — setup deploy maceut.hokya.dev (chore/deploy-maceut-subdomain).
+  - Situs live: berjalan `next dev` (chunk next-devtools) dan bundle memanggil http://15.235.167.41:8080 dari
+    halaman https (diblokir browser). Link /login relatif dan server menjawab 200 tanpa redirect → lompatan ke
+    hokya.dev/login bukan dari aplikasi; dugaan: aturan redirect Cloudflare di zona hokya.dev (dicek user).
+  - Host API: maceut-api.hokya.dev (bukan api.maceut.hokya.dev: sertifikat gratis Cloudflare hanya *.hokya.dev
+    satu level). Path /api di host yang sama tidak bisa: rute API di root (/zones, /me) bentrok dengan halaman web.
+  - docker-compose.prod.yml lama: `volumes: []` digabung, bukan mengganti → mount source dev tetap terpasang.
+  - Verifikasi: `docker compose ... config` sesuai; image web produksi dibangun & dijalankan: / dan /login 200,
+    bundle memanggil https://maceut-api.hokya.dev, tanpa next-devtools. Image uji dihapus.
 
 [2026-10-12m] FE-47 — revisi teks legal, daftar, login, footer (fix/legal-auth-copy).
   - Terms/Privacy: Alert draf dihapus; kotak "Please read first" dihapus dari Terms EN & ID, sehingga tidak ada
