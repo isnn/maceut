@@ -33,6 +33,8 @@ export interface User {
   staffType?: StaffType | null
   /** Cleared once the user finishes the onboarding wizard (3p). */
   onboardingDone: boolean
+  /** Confirmed with the sign-up code. */
+  emailVerified?: boolean
   createdAt: string
 }
 

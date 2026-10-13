@@ -188,6 +188,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **OPS-1** Setup deploy maceut.hokya.dev: `web/Dockerfile` produksi (`next build`/`next start`), docker-compose.prod.yml diperbaiki (`!reset`/`!override`: tanpa mount source, port hanya 127.0.0.1, postgres/rabbitmq tanpa port publik), template `api/.env.production.example` & `web/.env.production.example`, panduan docs/operations/deploy.md | permintaan user 2026-10-12 |
 | ✅ | **BE-EMAIL-FB** Email cadangan: `EMAIL_PROVIDER=auto` (default) memakai kunci yang ada, Mailtrap dulu lalu Resend bila Mailtrap gagal; email_log mencatat provider yang benar-benar mengirim | masukan user 2026-10-13 |
 | ✅ | **FE-48** Header onboarding = header app (`AppHeader minimal`): lebar, tinggi, sticky & menu akun (avatar → email, plan, Sign out) sama; tanpa navigasi app, lonceng & link profil | masukan user 2026-10-13 |
+| ✅ | **BE-OTP-EMAIL** Email OTP dwibahasa (blok ID dulu, lalu EN; tiap baris satu bahasa), logo wordmark web (PNG), kode sekali dalam kotak violet berlabel "Kode verifikasi", footer bahasa Inggris; subjek menyebut OTP tanpa kode. Flow tidak berubah (tanpa tombol). Internal → Users: pill Verified / Unverified dari `email_verified` | masukan user 2026-10-13 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -213,6 +214,23 @@ Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
+[2026-10-13d] BE-OTP-EMAIL (lanjutan) + FE-49 — logo inline & teks auth (feat/otp-email-bilingual).
+  - Logo email = gambar dari owner (dipotong) di api/assets/email/maceut-logo.png, dikirim sebagai lampiran
+    inline (`cid:maceut-logo`) lewat `EmailMessage.inline` di Mailtrap & Resend: tampil di sandbox dan sebelum web
+    publik. web/public/email dihapus. Dockerfile produksi ikut menyalin assets/.
+  - Login: ikon email di "Create an account" dihapus. Label "Work email" → "Email" (login, daftar, lupa sandi).
+  - Halaman kode: tombol "Verify email" → "Send code" (permintaan owner).
+  - Daftar: "Tick the box…" → "Check the box to accept the Terms of Service and Privacy Policy."
+
+[2026-10-13c] BE-OTP-EMAIL — email OTP dwibahasa + status verifikasi di Internal (feat/otp-email-bilingual).
+  - email.service otpEmail: blok ID lalu blok EN (tidak ada baris dwibahasa); subjek "Kode verifikasi Maceut (OTP)"
+    (tanpa kode); label kode "Kode verifikasi"; kode tampil SATU kali (dicontoh dari email Midtrans: kata OTP/
+    verification code + satu angka sendiri = Gmail menawarkan "Copy code"); sapaan nama depan dari user.repository.
+  - Logo = wordmark web (Bricolage Grotesque 800, #1F1F24) dirender ke web/public/email/maceut-logo.png, alt "maceut".
+  - Footer bahasa Inggris: tagline, "Need help? support.maceut@hokya.dev", "This is an automated email…".
+  - Tanpa tombol / link isi-otomatis: flow verifikasi tidak diubah (keputusan owner).
+  - Kolom sudah ada: Better Auth `user.email_verified` (boolean). PublicUser kini membawa `emailVerified`;
+    Internal → Users menampilkan pill Verified (hijau) / Unverified (kuning) di sebelah email.
 [2026-10-13b] FE-48 — header onboarding konsisten dengan app (fix/onboarding-header).
   - AppHeader dapat prop `minimal`: logo ke /onboarding, tanpa nav/NotificationBell/link profil; menu akun tetap.
   - onboarding/page.tsx memakai `<AppHeader minimal />` menggantikan header buatan sendiri (email polos + Sign out).

@@ -83,7 +83,7 @@ export function VerifyEmailForm({ email }: { email: string }) {
       </div>
 
       <Button type="submit" disabled={verifying || code.length !== 6} className="w-full">
-        {verifying ? 'Verifying…' : 'Verify email'}
+        {verifying ? 'Sending…' : 'Send code'}
       </Button>
 
       <p className="text-caption text-text-secondary text-center">

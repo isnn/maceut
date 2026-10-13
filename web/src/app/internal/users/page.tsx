@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Alert } from '@/components/ui/Alert'
+import { StatusPill } from '@/components/ui/Badge'
 import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
 import { ActionMenu } from '@/components/ui/ActionMenu'
@@ -308,7 +309,16 @@ export default function InternalUsersPage() {
                             {row.fullName}
                             {row.isYou && <span className="ml-sm text-micro text-text-muted font-normal">You</span>}
                           </Link>
-                          <p className="text-caption text-text-muted truncate">{row.email}</p>
+                          <p className="flex items-center gap-sm text-caption text-text-muted min-w-0">
+                            <span className="truncate">{row.email}</span>
+                            {row.emailVerified ? (
+                              <StatusPill tone="success" className="shrink-0">Verified</StatusPill>
+                            ) : (
+                              <StatusPill tone="warning" className="shrink-0" title="Hasn't entered the sign-up code yet, so can't log in">
+                                Unverified
+                              </StatusPill>
+                            )}
+                          </p>
                         </div>
                       </div>
                     </Td>

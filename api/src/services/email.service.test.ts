@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const send = vi.fn()
 vi.mock('../lib/email', () => ({ getEmailProvider: () => ({ name: 'console', send }) }))
 vi.mock('../repositories/notification.repository', () => ({ countSent: vi.fn(async () => 0), logEmail: vi.fn(async () => undefined) }))
+vi.mock('../repositories/user.repository', () => ({ findByEmail: vi.fn(async () => ({ name: 'Rizky Pratama' })) }))
 
 import { captureProblemsEmail, otpEmail, sendOtpEmail } from './email.service'
 import * as notificationRepo from '../repositories/notification.repository'
@@ -14,21 +15,44 @@ beforeEach(() => {
 })
 
 describe('otpEmail', () => {
-  it('puts the code, its expiry and the purpose in both bodies', () => {
-    const m = otpEmail('rizky@example.com', '482913', 'email-verification')
+  it('Indonesian first, then English, with the code once and its expiry in both bodies', () => {
+    const m = otpEmail('rizky@example.com', '482913', 'email-verification', { name: 'Rizky Pratama' })
     expect(m.to).toBe('rizky@example.com')
-    expect(m.subject).toBe('Your Maceut verification code')
     expect(m.category).toBe('email-verification')
     for (const body of [m.html, m.text]) {
-      expect(body).toContain('482913')
+      expect(body.match(/482913/g)?.length).toBe(1)
+      expect(body.indexOf('Halo Rizky,')).toBeLessThan(body.indexOf('Hi Rizky,'))
+      expect(body).toContain('Kode berlaku 10 menit')
       expect(body).toContain('expires in 10 minutes')
+      expect(body).toContain('Kode verifikasi')
+      expect(body).toContain("This is an automated email, please don't reply.")
+      expect(body).not.toContain('Verification code (OTP)')
     }
   })
 
+  it('names the OTP in the subject but never puts the code there', () => {
+    const m = otpEmail('rizky@example.com', '482913', 'email-verification')
+    expect(m.subject).toBe('Kode verifikasi Maceut (OTP)')
+    expect(m.subject).not.toContain('482913')
+  })
+
+  it('has no button or link to the app; the logo travels inside the message', () => {
+    const m = otpEmail('a@example.com', '482913', 'email-verification')
+    expect(m.html).not.toContain('<a href="https://')
+    expect(m.html).toContain('<img src="cid:maceut-logo"')
+    expect(m.inline).toEqual([expect.objectContaining({ contentId: 'maceut-logo', contentType: 'image/png' })])
+    expect(Buffer.from(m.inline![0]!.content, 'base64').subarray(1, 4).toString()).toBe('PNG')
+  })
+
   it('words a password reset as a reset', () => {
-    const m = otpEmail('rizky@example.com', '111111', 'forget-password')
-    expect(m.subject).toBe('Your Maceut password reset code')
+    const m = otpEmail('a@example.com', '111111', 'forget-password')
+    expect(m.subject).toBe('Kode reset kata sandi Maceut (OTP)')
     expect(m.text).toContain("your password hasn't changed")
+  })
+
+  it('greets without a name, and escapes the name it has', () => {
+    expect(otpEmail('a@example.com', '1', 'email-verification').text).toContain('Halo,')
+    expect(otpEmail('a@example.com', '1', 'email-verification', { name: '<b>x</b>' }).html).toContain('Halo &lt;b&gt;x&lt;/b&gt;,')
   })
 })
 
@@ -36,6 +60,11 @@ describe('sendOtpEmail', () => {
   it('hands the message to the configured provider', async () => {
     await sendOtpEmail('rizky@example.com', '482913', 'forget-password')
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ to: 'rizky@example.com', category: 'forget-password' }))
+  })
+
+  it("greets with the account's first name", async () => {
+    await sendOtpEmail('rizky@example.com', '482913', 'email-verification')
+    expect(send.mock.calls[0]![0].text).toContain('Halo Rizky,')
   })
 
   it('logs rather than throws when the provider fails', async () => {

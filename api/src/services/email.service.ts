@@ -1,6 +1,9 @@
 import { config } from '../config/env'
-import { getEmailProvider, type EmailMessage } from '../lib/email'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { getEmailProvider, type EmailMessage, type InlineImage } from '../lib/email'
 import * as notificationRepo from '../repositories/notification.repository'
+import * as userRepo from '../repositories/user.repository'
 
 /**
  * What Maceut emails, and what those emails say. Which company delivers them is
@@ -24,55 +27,159 @@ export const OTP_EXPIRES_SECONDS = 10 * 60
 
 export type OtpPurpose = 'email-verification' | 'forget-password' | 'sign-in' | 'change-email'
 
-const COPY: Record<OtpPurpose, { subject: string; lead: string; ignore: string }> = {
+interface OtpCopy {
+  subject: string
+  /** What the code is for, after "Gunakan kode verifikasi (OTP) di bawah untuk" / "Use the verification code (OTP) above to". */
+  idFor: string
+  enFor: string
+  idIgnore: string
+  enIgnore: string
+}
+
+/**
+ * Indonesian first, English second (owner, 2026-10-13), each language in its own block,
+ * never both on one line; the footer is English. The subject and the text around the
+ * code name it an OTP / verification code next to one lone number: the wording Gmail
+ * reads to offer its "Copy code" chip. The code itself never goes in the subject.
+ */
+const COPY: Record<OtpPurpose, OtpCopy> = {
   'email-verification': {
-    subject: 'Your Maceut verification code',
-    lead: 'Enter this code to verify your email and finish creating your Maceut account.',
-    ignore: "If you didn't create a Maceut account, you can ignore this email.",
+    subject: 'Kode verifikasi Maceut (OTP)',
+    idFor: 'menyelesaikan pendaftaran akun Maceut Anda',
+    enFor: 'finish creating your Maceut account',
+    idIgnore: 'Bukan Anda yang mendaftar? Abaikan email ini.',
+    enIgnore: "Didn't sign up? You can ignore this email.",
   },
   'forget-password': {
-    subject: 'Your Maceut password reset code',
-    lead: 'Enter this code to choose a new password for your Maceut account.',
-    ignore: "If you didn't ask to reset your password, you can ignore this email — your password hasn't changed.",
+    subject: 'Kode reset kata sandi Maceut (OTP)',
+    idFor: 'mengatur ulang kata sandi akun Maceut Anda',
+    enFor: 'reset the password of your Maceut account',
+    idIgnore: 'Tidak meminta reset? Abaikan email ini, kata sandi Anda tidak berubah.',
+    enIgnore: "Didn't ask for a reset? Ignore this email, your password hasn't changed.",
   },
   // Not offered in the app today (sign-in is by password); kept so an unexpected type
   // still produces a sensible email rather than an exception.
   'sign-in': {
-    subject: 'Your Maceut sign-in code',
-    lead: 'Enter this code to sign in to Maceut.',
-    ignore: "If you didn't try to sign in, you can ignore this email.",
+    subject: 'Kode masuk Maceut (OTP)',
+    idFor: 'masuk ke Maceut',
+    enFor: 'sign in to Maceut',
+    idIgnore: 'Bukan Anda yang mencoba masuk? Abaikan email ini.',
+    enIgnore: "Didn't try to sign in? You can ignore this email.",
   },
   'change-email': {
-    subject: 'Confirm your new Maceut email',
-    lead: 'Enter this code to confirm this address for your Maceut account.',
-    ignore: "If you didn't ask for this change, you can ignore this email.",
+    subject: 'Kode konfirmasi email baru Maceut (OTP)',
+    idFor: 'mengonfirmasi alamat email baru akun Maceut Anda',
+    enFor: 'confirm this new address for your Maceut account',
+    idIgnore: 'Tidak meminta perubahan ini? Abaikan email ini.',
+    enIgnore: "Didn't ask for this change? You can ignore this email.",
   },
 }
 
+/**
+ * The wordmark, attached to the message and shown by cid: (owner's image, cropped).
+ * Mail clients don't load the brand font, so live text would fall back to Arial; a
+ * hosted URL would not show in the sandbox or before the web is public. Read from the
+ * api root, which is the working directory in both the dev and the production image.
+ */
+const LOGO: InlineImage = {
+  contentId: 'maceut-logo',
+  filename: 'maceut-logo.png',
+  contentType: 'image/png',
+  content: readFileSync(resolve(process.cwd(), 'assets/email/maceut-logo.png')).toString('base64'),
+}
+
+const SUPPORT_EMAIL = 'support.maceut@hokya.dev'
+const TAGLINE = 'Connecting people with the road ahead'
+
+const escapeHtml = (v: string) =>
+  v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
 /** Builds the message; separate from sending so it can be tested without a provider. */
-export function otpEmail(to: string, otp: string, purpose: OtpPurpose): EmailMessage {
+export function otpEmail(
+  to: string,
+  otp: string,
+  purpose: OtpPurpose,
+  opts: { name?: string | null } = {},
+): EmailMessage {
   const copy = COPY[purpose]
   const minutes = Math.round(OTP_EXPIRES_SECONDS / 60)
-  const expiry = `The code expires in ${minutes} minutes and works once.`
+  const name = opts.name?.trim().split(/\s+/)[0]
 
-  // Email HTML: inline styles and literal colours, because mail clients ignore
-  // stylesheets and have never heard of the app's Tailwind tokens.
+  const id = {
+    hi: name ? `Halo ${name},` : 'Halo,',
+    lead: `Gunakan kode verifikasi (OTP) di bawah untuk ${copy.idFor}.`,
+    expiry: `Kode berlaku ${minutes} menit dan hanya bisa dipakai sekali. Jangan bagikan kode ini kepada siapa pun, termasuk tim Maceut.`,
+  }
+  const en = {
+    hi: name ? `Hi ${name},` : 'Hi,',
+    lead: `Use the verification code (OTP) above to ${copy.enFor}.`,
+    expiry: `It expires in ${minutes} minutes and works once. Don't share it with anyone, including the Maceut team.`,
+  }
+  const preheader = 'Kode verifikasi (OTP) Anda untuk Maceut'
+
+  // Email HTML: tables, inline styles and literal colours, because mail clients ignore
+  // stylesheets and have never heard of the app's Tailwind tokens. The colours are the
+  // app's: ink #1F2330, secondary #5B6170, primary #5A35F3, primary-soft #EEE9FE.
+  const p = (text: string, style = '') =>
+    `<p style="margin:0 0 12px;font-size:15px;line-height:1.55;color:#1F2330;${style}">${escapeHtml(text)}</p>`
+  const muted = (text: string) => p(text, 'font-size:13px;color:#5B6170;')
   const html = `<!doctype html>
-<html><body style="margin:0;padding:24px;background:#f5f6f8;font-family:Inter,Segoe UI,Arial,sans-serif;color:#1f2330">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;margin:0 auto;background:#ffffff;border:1px solid #e4e6eb;border-radius:12px">
-    <tr><td style="padding:32px">
-      <p style="margin:0 0 24px;font-size:18px;font-weight:700">Maceut</p>
-      <p style="margin:0 0 16px;font-size:15px;line-height:1.5">${copy.lead}</p>
-      <p style="margin:0 0 16px;font-size:32px;font-weight:700;letter-spacing:8px;font-family:Menlo,Consolas,monospace">${otp}</p>
-      <p style="margin:0 0 24px;font-size:13px;color:#5b6170">${expiry}</p>
-      <p style="margin:0;font-size:13px;color:#5b6170">${copy.ignore}</p>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>${escapeHtml(copy.subject)}</title></head>
+<body style="margin:0;padding:24px 12px;background:#F5F6F8;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;color:#1F2330">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(preheader)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#FFFFFF;border:1px solid #E4E6EB;border-radius:12px">
+    <tr><td style="padding:24px 32px;border-bottom:1px solid #E4E6EB">
+      <img src="cid:${LOGO.contentId}" width="102" height="24" alt="maceut" style="display:block;border:0;outline:none;font-size:22px;font-weight:800;color:#1F1F24">
+    </td></tr>
+    <tr><td style="padding:28px 32px 8px">
+      ${p(id.hi)}
+      ${p(id.lead)}
+      <p style="margin:20px 0 8px;font-size:12px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:#5B6170;text-align:center">Kode verifikasi</p>
+      <div style="margin:0 0 20px;padding:18px 12px;background:#EEE9FE;border-radius:10px;text-align:center">
+        <span style="font-size:34px;font-weight:700;letter-spacing:10px;font-family:Menlo,Consolas,'Courier New',monospace;color:#1F2330">${otp}</span>
+      </div>
+      ${muted(id.expiry)}
+      ${muted(copy.idIgnore)}
+    </td></tr>
+    <tr><td style="padding:8px 32px 24px">
+      <p style="margin:0 0 16px;font-size:12px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:#8A8F9C;border-top:1px solid #E4E6EB;padding-top:20px">English</p>
+      ${p(en.hi)}
+      ${p(en.lead)}
+      ${muted(en.expiry)}
+      ${muted(copy.enIgnore)}
+    </td></tr>
+    <tr><td style="padding:20px 32px;background:#FAFAFB;border-top:1px solid #E4E6EB;border-radius:0 0 12px 12px">
+      <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#1F2330">${TAGLINE}</p>
+      <p style="margin:0 0 4px;font-size:12px;line-height:1.5;color:#5B6170">Need help? <a href="mailto:${SUPPORT_EMAIL}" style="color:#5A35F3;text-decoration:none">${SUPPORT_EMAIL}</a></p>
+      <p style="margin:0;font-size:12px;line-height:1.5;color:#8A8F9C">This is an automated email, please don't reply.</p>
     </td></tr>
   </table>
 </body></html>`
 
-  const text = `${copy.lead}\n\n${otp}\n\n${expiry}\n\n${copy.ignore}\n`
+  const text = [
+    id.hi,
+    id.lead,
+    '',
+    'Kode verifikasi:',
+    otp,
+    '',
+    id.expiry,
+    copy.idIgnore,
+    '',
+    '---- English ----',
+    en.hi,
+    en.lead,
+    en.expiry,
+    copy.enIgnore,
+    '',
+    '--',
+    `Maceut · ${TAGLINE}`,
+    `Need help? ${SUPPORT_EMAIL}`,
+    "This is an automated email, please don't reply.",
+    '',
+  ].join('\n')
 
-  return { to, subject: copy.subject, html, text, category: purpose }
+  return { to, subject: copy.subject, html, text, category: purpose, inline: [LOGO] }
 }
 
 /**
@@ -135,7 +242,12 @@ export async function sendOtpEmail(email: string, otp: string, purpose: OtpPurpo
     // The limit is protection, not a gate: if it can't be checked, still send.
     console.error('[email] OTP limit check failed:', err instanceof Error ? err.message : err)
   }
-  await sendLogged(otpEmail(email, otp, purpose), purpose)
+  // The greeting uses the account's name when there is one; a failed lookup only costs the name.
+  const name = await userRepo
+    .findByEmail(email)
+    .then((u) => u?.name)
+    .catch(() => undefined)
+  await sendLogged(otpEmail(email, otp, purpose, { name }), purpose)
 }
 
 // --- notification emails ---------------------------------------------------------------

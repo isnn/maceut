@@ -50,7 +50,7 @@ export function RegisterForm() {
   const nameError = submitted && !fullName.trim() ? 'Full name is required.' : null
   const emailError = submitted && !EMAIL_RE.test(email) ? 'Enter a valid email address.' : null
   const passwordError = submitted && password.length < 8 ? 'Password must be at least 8 characters.' : null
-  const agreedError = submitted && !agreed ? 'Tick the box to accept the Terms of Service and Privacy Policy.' : null
+  const agreedError = submitted && !agreed ? 'Check the box to accept the Terms of Service and Privacy Policy.' : null
   const clientValid = fullName.trim() !== '' && EMAIL_RE.test(email) && password.length >= 8 && agreed
 
   async function handleSubmit(e: FormEvent) {
@@ -78,7 +78,7 @@ export function RegisterForm() {
       </div>
 
       <div className="space-y-xs">
-        <FormLabel htmlFor="email">Work email</FormLabel>
+        <FormLabel htmlFor="email">Email</FormLabel>
         <Input id="email" type="email" placeholder="rizky@binamarga.go.id" value={email} onChange={(e) => setEmail(e.target.value)} />
         {emailError && <p className="text-caption text-danger-text">{emailError}</p>}
         {serverError && <p className="text-caption text-danger-text">{serverError}</p>}

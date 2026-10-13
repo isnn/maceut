@@ -15,6 +15,20 @@ export interface EmailMessage {
   text: string
   /** Groups messages in the provider's dashboard, e.g. `email-verification`. */
   category?: string
+  /**
+   * Images carried inside the message and shown by `cid:<contentId>` in the HTML. Unlike
+   * a hosted URL they show in every inbox and in the Mailtrap sandbox, and they don't
+   * depend on the web being reachable.
+   */
+  inline?: InlineImage[]
+}
+
+export interface InlineImage {
+  contentId: string
+  filename: string
+  contentType: string
+  /** Base64. */
+  content: string
 }
 
 export interface EmailProvider {

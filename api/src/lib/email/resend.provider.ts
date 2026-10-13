@@ -23,6 +23,16 @@ export function createResendProvider(opts: { apiKey: string; from: string; fetch
             html: message.html,
             text: message.text,
             ...(message.category ? { tags: [{ name: 'category', value: message.category.replace(/[^\w-]/g, '_') }] } : {}),
+            ...(message.inline?.length
+              ? {
+                  attachments: message.inline.map((a) => ({
+                    content: a.content,
+                    filename: a.filename,
+                    content_type: a.contentType,
+                    content_id: a.contentId,
+                  })),
+                }
+              : {}),
           }),
         })
       } catch (err) {
