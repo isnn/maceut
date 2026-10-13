@@ -119,8 +119,7 @@ export function AddUserDialog({ open, onClose, onCreated }: { open: boolean; onC
               {handover.password ? (
                 <>
                   <Alert variant="warning" className="mb-lg">
-                    This password is shown once. It&rsquo;s stored hashed, so nobody &mdash; including you &mdash; can
-                    read it back. Copy it now and pass it on.
+                    This password is shown once.
                   </Alert>
                   <div className="flex items-center gap-md">
                     <code className="flex-1 bg-canvas-secondary border border-border rounded-sm px-md py-sm text-body text-text-primary break-all select-all">
@@ -190,8 +189,8 @@ export function AddUserDialog({ open, onClose, onCreated }: { open: boolean; onC
                         value={role}
                         onValueChange={(v) => setRole(v as Access)}
                         options={[
-                        { value: 'admin', label: 'Admin — helps customers' },
-                        { value: 'superadmin', label: 'Superadmin — runs the platform' },
+                        { value: 'admin', label: 'Admin' },
+                        { value: 'superadmin', label: 'Superadmin' },
                       ]}
                         aria-label="Staff plan for the new account"
                       />
@@ -204,7 +203,7 @@ export function AddUserDialog({ open, onClose, onCreated }: { open: boolean; onC
                       onValueChange={(v) => setRole(v === 'internal' ? 'admin' : 'user')}
                       options={[
                         { value: 'user', label: 'Customer' },
-                        { value: 'internal', label: 'Internal — Maceut staff' },
+                        { value: 'internal', label: 'Internal' },
                       ]}
                       aria-label="Role for the new account"
                     />
@@ -214,7 +213,7 @@ export function AddUserDialog({ open, onClose, onCreated }: { open: boolean; onC
                 {role !== 'user' && (
                   <p className="text-caption text-text-muted">
                     {role === 'admin'
-                      ? 'Admins see Overview and Users and can change a customer’s plan — nothing else.'
+                      ? 'Admins see Overview and Users.'
                       : 'Superadmins can do everything, including config, the HERE budget and staff access.'}{' '}
                     Staff aren&rsquo;t counted as customers.
                   </p>

@@ -93,8 +93,7 @@ export function exportErrorMessage(err: unknown): string {
       return 'Another export is still being made. Wait for it to finish, or cancel it on its zone page.'
     case 'EXPORT_LIMIT_EXCEEDED': {
       const limit = err.details?.limit
-      const requested = err.details?.requested
-      return `Your plan exports up to ${limit} frames at a time — this range has ${requested}. Narrow the time range and try again.`
+      return `Your plan exports up to ${limit} frames at a time. Narrow the time range.`
     }
     case 'EXPORT_BUDGET_EXCEEDED': {
       const d = err.details as { width?: number; height?: number; maxFrames?: number } | undefined

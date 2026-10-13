@@ -56,7 +56,7 @@ export async function login(input: LoginInput): Promise<User> {
  * OTP") name the mechanism, not what to do next.
  */
 const OTP_MESSAGE: Record<string, string> = {
-  INVALID_OTP: "That code isn't right. Check the most recent email — only the latest code works.",
+  INVALID_OTP: "That code isn't right. Use the code from the latest email.",
   OTP_EXPIRED: 'That code has expired. Send a new one.',
   TOO_MANY_ATTEMPTS: 'Too many wrong tries for this code. Send a new one.',
 }

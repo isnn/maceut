@@ -1235,7 +1235,7 @@ export function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
-        reject(new Error('Canvas could not be exported — a tile may have blocked cross-origin reads.'))
+        reject(new Error("This frame couldn't be exported. Try again."))
         return
       }
       resolve(blob)

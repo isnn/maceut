@@ -38,7 +38,7 @@ const STATUS_LABEL: Record<zonesApi.CaptureStatus, string> = {
   processing: 'Collecting…',
   done: 'Collected',
   failed: 'Failed',
-  skipped_limit: 'Skipped — monthly limit',
+  skipped_limit: 'Skipped: monthly limit',
   missed: 'Missed',
 }
 
@@ -247,8 +247,7 @@ export function ZoneCaptures({ zone, refreshKey = 0 }: { zone: Zone; refreshKey?
           <span className="block font-semibold">Scheduled collection has been failing since {formatWib(streak.since)}</span>
           <span className="block mt-xs">
             {streak.count === 1 ? 'The last scheduled capture failed.' : `The last ${streak.count} scheduled captures failed.`}{' '}
-            We retry at every scheduled time and collection resumes on its own once the cause clears — you don&rsquo;t
-            need to do anything. Frames missed in the meantime can&rsquo;t be recovered.
+            We retry at every scheduled time.
           </span>
           {streak.error && <span className="block mt-xs text-caption opacity-80">Last error: {streak.error}</span>}
         </Alert>
@@ -389,7 +388,7 @@ export function ZoneCaptures({ zone, refreshKey = 0 }: { zone: Zone; refreshKey?
                   icon={<IconCarFront size={18} />}
                   label="Avg jam factor"
                   value={selected.jamFactorAvg === null ? '—' : <JamValue value={selected.jamFactorAvg} />}
-                  hint="0 clear · 10 closed"
+                  hint="0 = clear, 10 = closed"
                 />
                 <Stat icon={<IconRoute size={18} />} label="Road class" value={ROAD_CLASS_LABEL[selected.roadClass]} />
                 <Stat icon={<IconZap size={18} />} label="Trigger" value={TRIGGER_LABEL[selected.trigger]} />

@@ -88,7 +88,7 @@ export function ManualCaptureButton({ zoneId, zoneName, variant = 'primary', cla
           <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[28rem] bg-card border border-border rounded-lg p-xl shadow-elevation-3">
             <DialogCloseX />
             <Dialog.Title className="pr-xl text-section-title text-text-primary mb-lg">
-              Capture — {zoneName}
+              Capture {zoneName}
             </Dialog.Title>
 
             {error && <Alert variant="warning" className="mb-lg">{error}</Alert>}

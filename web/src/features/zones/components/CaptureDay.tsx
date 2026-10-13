@@ -48,7 +48,7 @@ function extreme(captures: Capture[], pick: 'max' | 'min'): string {
   const hit = scored.reduce((a, b) =>
     pick === 'max' ? (a.jamFactorAvg! >= b.jamFactorAvg! ? a : b) : a.jamFactorAvg! <= b.jamFactorAvg! ? a : b,
   )
-  return `${wibClock(hit.capturedAt)} · ${hit.jamFactorAvg!.toFixed(2)}`
+  return `${wibClock(hit.capturedAt)}, ${hit.jamFactorAvg!.toFixed(2)}`
 }
 
 export function CaptureDay({
@@ -118,7 +118,7 @@ export function CaptureDay({
                 key={c.id}
                 type="button"
                 onClick={() => onSelect(c.id)}
-                title={`${wibClock(c.capturedAt)} · jam ${jam.toFixed(2)}`}
+                title={`${wibClock(c.capturedAt)}, jam ${jam.toFixed(2)}`}
                 aria-label={`Show the ${wibClock(c.capturedAt)} capture`}
                 aria-pressed={active}
                 className={cn(

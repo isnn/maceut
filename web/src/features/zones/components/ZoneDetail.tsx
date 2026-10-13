@@ -340,7 +340,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                   <dd className="text-label font-semibold text-text-primary text-right">
                     {zone.cadence ?? (
                       <Link href="/schedule" className={linkClass('caption')}>
-                        Not scheduled — set a window
+                        Not scheduled
                       </Link>
                     )}
                   </dd>
@@ -391,7 +391,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
         {windows.length === 0 ? (
           <div className="bg-card border border-border rounded-lg p-lg">
             <p className="text-body text-text-secondary">
-              No capture windows yet — this zone stays idle until one is set.
+              No capture windows yet.
             </p>
             <Link href="/schedule" className={cn(buttonClass('tint'), 'mt-md')}>
               <IconCalendar size={16} />
@@ -483,7 +483,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
                           tone={w.active ? 'success' : w.pausedByPlan ? 'warning' : 'neutral'}
                           title={!w.active && w.pausedByPlan ? 'Paused because it is over your plan’s limits' : undefined}
                         >
-                          {w.active ? 'Active' : w.pausedByPlan ? 'Paused · plan limit' : 'Paused'}
+                          {w.active ? 'Active' : 'Paused'}
                         </StatusPill>
                       </Td>
                       <Td className="text-right">
@@ -525,7 +525,7 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
 
         {zone.status === 'paused' && windows.length > 0 && (
           <Alert variant="warning">
-            This zone is paused, so none of its windows are collecting — resume it to start again.
+            This zone is paused. Resume it to collect again.
           </Alert>
         )}
       </section>

@@ -209,10 +209,8 @@ export default function SchedulePage() {
                         <p className="text-label font-semibold text-text-primary truncate">{zone.name}</p>
                         <p className="text-micro text-text-muted mt-xs">
                           {zone.status === 'paused'
-                            ? zone.pausedByPlan
-                              ? 'Paused — over your plan’s limits'
-                              : 'Paused — resume to collect'
-                            : `${zoneWindows.length} windows · ${formatNumber(zoneWindows.reduce((s, w) => s + framesPerMonth(w), 0))} a month`}
+                            ? 'Paused'
+                            : `${zoneWindows.length} ${zoneWindows.length === 1 ? 'window' : 'windows'}`}
                         </p>
                       </div>
                       <div className="space-y-1">
@@ -233,7 +231,7 @@ export default function SchedulePage() {
                                 <button
                                   key={w.id}
                                   onClick={() => setEditing(w)}
-                                  title={`${w.label} · ${w.start}–${w.end}`}
+                                  title={w.label}
                                   className={cn(
                                     'absolute top-1 bottom-1 rounded-sm px-sm text-micro font-semibold truncate text-left transition-colors',
                                     w.active
@@ -282,7 +280,7 @@ export default function SchedulePage() {
                     ? `About ${formatNumber(outlook.untilReset)} more scheduled before ${poolResetDay(pool)}, and ${formatNumber(pool.remaining)} left. Captures past that are skipped until ${poolResetDay(pool)}.`
                     : outlook.kind === 'over_plan'
                       ? `An average month needs more than your plan’s ${formatNumber(pool.limit)}. Captures past that are skipped each month.`
-                      : `${formatNumber(pool.used)} used, ${formatNumber(pool.remaining)} left this month · resets ${poolResetDay(pool)}`}
+                      : `${formatNumber(pool.remaining)} left this month`}
                 </p>
               )}
             </div>
@@ -400,7 +398,7 @@ export default function SchedulePage() {
                           tone={w.active ? 'success' : w.pausedByPlan ? 'warning' : 'neutral'}
                           title={!w.active && w.pausedByPlan ? 'Paused because it is over your plan’s limits' : undefined}
                         >
-                          {w.active ? 'Active' : w.pausedByPlan ? 'Paused · plan limit' : 'Paused'}
+                          {w.active ? 'Active' : 'Paused'}
                         </StatusPill>
                       </Td>
                       <Td className="text-right">

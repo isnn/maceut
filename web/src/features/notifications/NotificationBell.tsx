@@ -67,7 +67,7 @@ function toRows(items: AppNotification[]): Row[] {
     const listed = names.length > 3 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more` : names.join(', ')
     const failing = row.items[0]!.type === 'capture_failing'
     row.title = failing ? `${row.items.length} zones stopped collecting` : `${row.items.length} zones are collecting again`
-    row.body = failing ? `${listed}. We’re retrying — no action needed.` : listed
+    row.body = failing ? `${listed}. We’re retrying.` : listed
     row.href = '/zones'
     row.actionLabel = 'Open zones'
   }
