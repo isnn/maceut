@@ -41,7 +41,7 @@ export function ActionMenu({ label, items }: { label: string; items: ActionItem[
                     'block w-full text-left px-md py-sm rounded-sm text-body cursor-pointer select-none outline-none transition-colors',
                     item.destructive ? 'text-danger-text' : 'text-text-secondary',
                     state.highlighted && (item.destructive ? 'bg-danger-bg/60' : 'bg-canvas-secondary text-text-primary'),
-                    state.disabled && 'opacity-50 cursor-not-allowed'
+                    state.disabled && 'opacity-50'
                   )
                 }
               >

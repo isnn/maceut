@@ -190,6 +190,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-48** Header onboarding = header app (`AppHeader minimal`): lebar, tinggi, sticky & menu akun (avatar → email, plan, Sign out) sama; tanpa navigasi app, lonceng & link profil | masukan user 2026-10-13 |
 | ✅ | **BE-OTP-EMAIL** Email OTP dwibahasa (blok ID dulu, lalu EN; tiap baris satu bahasa), logo wordmark web (PNG), kode sekali dalam kotak violet berlabel "Kode verifikasi", footer bahasa Inggris; subjek menyebut OTP tanpa kode. Flow tidak berubah (tanpa tombol). Internal → Users: pill Verified / Unverified dari `email_verified` | masukan user 2026-10-13 |
 | ✅ | **FE-50** Bersih-bersih teks: penjelasan setelah "—" (D1–D45) dihapus/ditulis ulang; rangkaian fakta "·" (B1–B33) dihapus atau dipecah jadi baris (dashboard StatTile `aside`/`sub`, UsageMeter `sub`, opsi export Studio dua baris + chip WebP, "Kept until" baris sendiri); import GeoJSON/SHP jadi "Coming soon" | keputusan owner 2026-10-13 |
+| ✅ | **FE-51** Placeholder email login dihapus, daftar → "rizky@maceut.com"; kursor "not-allowed" dihapus dari semua kontrol nonaktif (tetap redup, kursor biasa) | masukan user 2026-10-13 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -215,6 +216,10 @@ Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
+[2026-10-13f] FE-51 — placeholder auth & kursor tombol nonaktif (fix/auth-placeholders-cursor).
+  - LoginForm: placeholder email dihapus. RegisterForm: placeholder "rizky@maceut.com".
+  - `cursor-not-allowed` dihapus dari Button, Select, ActionMenu, Table, DialogCloseX, Studio: kontrol nonaktif
+    cukup redup (opacity), kursor tetap panah biasa.
 [2026-10-13e] FE-50 — teks tanpa penjelasan "—" dan tanpa rangkaian "·" (fix/copy-dash-dot-cleanup).
   - D (onboarding, dashboard, zona, jadwal, Studio, plan, internal): klausa setelah "—" dihapus; D5 ditulis ulang
     ("These are over your plan's limits. Pause something else to make room, or upgrade."); D11 jadi "Coming soon".

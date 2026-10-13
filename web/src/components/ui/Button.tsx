@@ -11,7 +11,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const BASE =
   'inline-flex items-center justify-center gap-sm font-semibold rounded-md no-underline transition-colors ' +
   'focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ' +
-  'disabled:opacity-50 disabled:cursor-not-allowed'
+  'disabled:opacity-50'
 
 const SIZES = {
   md: 'h-11 px-lg text-body',

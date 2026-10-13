@@ -79,7 +79,7 @@ export function RegisterForm() {
 
       <div className="space-y-xs">
         <FormLabel htmlFor="email">Email</FormLabel>
-        <Input id="email" type="email" placeholder="rizky@binamarga.go.id" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <Input id="email" type="email" placeholder="rizky@maceut.com" value={email} onChange={(e) => setEmail(e.target.value)} />
         {emailError && <p className="text-caption text-danger-text">{emailError}</p>}
         {serverError && <p className="text-caption text-danger-text">{serverError}</p>}
       </div>

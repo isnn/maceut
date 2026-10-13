@@ -210,7 +210,7 @@ function PageButton({
         active
           ? 'bg-primary border-primary text-on-primary'
           : 'bg-canvas border-border text-text-secondary hover:border-primary hover:text-text-primary',
-        'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-text-secondary',
+        'disabled:opacity-40 disabled:hover:border-border disabled:hover:text-text-secondary',
       )}
     >
       {children}
