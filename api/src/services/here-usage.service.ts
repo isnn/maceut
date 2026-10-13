@@ -1,3 +1,4 @@
+import { config } from '../config/env'
 import * as usageRepo from '../repositories/here-usage.repository'
 import * as here from '../lib/here-traffic-client'
 import { TrafficUnavailableError } from '../errors'
@@ -37,6 +38,9 @@ export interface HereBudget {
    */
   alertEmail: string | null
 }
+
+/** The zone wizard's HERE calls, capped at PREVIEW_CAP_SHARE of the daily limit. */
+export const PREVIEW_SOURCES: HereSource[] = ['preview', 'road_counts']
 
 export const BUDGET_KEY = 'here_budget'
 export const NO_BUDGET: HereBudget = { dailyLimit: null, monthlyLimit: null, costPer1000: null, alertEmail: null }
@@ -124,6 +128,15 @@ export async function assertWithinBudget(
     await usageRepo.increment(wibDay(now), source, { refused: 1 })
     reportThresholds(budget, today.requests, month.requests, now)
     throw new TrafficUnavailableError()
+  }
+  // Wizard previews get only a share of the daily cap, so a burst of previewing can never
+  // use up the requests scheduled captures need (owner, 2026-10-13).
+  if (budget.dailyLimit !== null && PREVIEW_SOURCES.includes(source)) {
+    const previewCap = Math.floor(budget.dailyLimit * config.previewCapShare)
+    if ((await usageRepo.requestsOnFor(wibDay(now), PREVIEW_SOURCES)) >= previewCap) {
+      await usageRepo.increment(wibDay(now), source, { refused: 1 })
+      throw new TrafficUnavailableError()
+    }
   }
   return { budget, today, month }
 }

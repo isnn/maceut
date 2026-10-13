@@ -48,13 +48,24 @@ export interface TrafficCollection {
 export type BBox = [number, number, number, number]
 
 /**
- * Largest bbox we will ask HERE for.
- *
- * HERE bills per request and a continent-sized box returns a response big enough to
- * stall the API, so an oversized zone is rejected with a 422 rather than forwarded.
- * Roughly 0.5° square — comfortably larger than any city-scale zone.
+ * Largest bbox HERE Traffic Flow v7 accepts: 1° wide and 1° tall
+ * (docs.here.com/traffic-api/docs/geospatial-filters-here-traffic-api-v7-concepts).
+ * Near the equator the km rule below is the tighter one; far north or south, this is.
  */
-export const MAX_BBOX_DEGREES = 0.5
+export const MAX_BBOX_DEGREES = 1
+
+/**
+ * A zone's box may be at most 100 km wide and 100 km tall (owner, 2026-10-13): big enough
+ * for a metropolitan area, small enough that one HERE answer stays fast to fetch and draw.
+ */
+export const MAX_ZONE_SIDE_KM = 100
+
+/** Width (at the box's middle latitude) and height of a bbox in km. Same formula as the web wizard. */
+export function bboxSideKm(bbox: BBox): { widthKm: number; heightKm: number } {
+  const [west, south, east, north] = bbox
+  const midLat = ((south + north) / 2) * (Math.PI / 180)
+  return { widthKm: (east - west) * 111.32 * Math.cos(midLat), heightKm: (north - south) * 110.574 }
+}
 
 /**
  * BR-017 thresholds on HERE's 0–10 jam factor.
@@ -130,11 +141,14 @@ export function validateBBox(bbox: BBox): void {
   if (west < -180 || east > 180 || south < -90 || north > 90) {
     throw new ValidationError('bbox di luar rentang WGS84 yang sah.')
   }
-  if (east - west > MAX_BBOX_DEGREES || north - south > MAX_BBOX_DEGREES) {
-    throw new ValidationError(
-      `Area terlalu luas — maksimum ${MAX_BBOX_DEGREES}° per sisi. Perkecil zona lalu coba lagi.`,
-      { maxDegrees: MAX_BBOX_DEGREES },
-    )
+  const { widthKm, heightKm } = bboxSideKm(bbox)
+  if (east - west > MAX_BBOX_DEGREES || north - south > MAX_BBOX_DEGREES || widthKm > MAX_ZONE_SIDE_KM || heightKm > MAX_ZONE_SIDE_KM) {
+    throw new ValidationError(`Zona terlalu luas: maksimum ${MAX_ZONE_SIDE_KM} km per sisi.`, {
+      maxSideKm: MAX_ZONE_SIDE_KM,
+      maxDegrees: MAX_BBOX_DEGREES,
+      widthKm: Math.round(widthKm),
+      heightKm: Math.round(heightKm),
+    })
   }
 }
 

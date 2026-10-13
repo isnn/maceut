@@ -4,8 +4,13 @@ import * as usageRepo from '../repositories/here-usage.repository'
 import { UpstreamError } from '../errors'
 import { wibDay, wibMonthStart } from './here-usage.service'
 
+/** Indonesian places first, the provider's order kept within each group; five shown. */
+export function rankIndonesiaFirst(results: PlaceResult[]): PlaceResult[] {
+  return [...results.filter((r) => r.countryCode === 'id'), ...results.filter((r) => r.countryCode !== 'id')].slice(0, 5)
+}
+
 /**
- * Place search on the zone map (owner, 2026-10-13): HERE while this WIB month has sent
+ * Place search on the zone map (owner, 2026-10-13): worldwide, Indonesia ranked first. HERE while this WIB month has sent
  * fewer than HERE_GEOCODE_MONTHLY_LIMIT searches (4,000 of HERE's 5,000 free), then
  * OpenStreetMap Nominatim. HERE failing, or no key, also falls to Nominatim. HERE
  * searches are counted under their own source, apart from the Traffic cap.
@@ -67,7 +72,7 @@ export async function searchPlaces(query: string, deps: Partial<GeocodeDeps> = {
       try {
         const results = await d.here(q, d.apiKey)
         await usageRepo.increment(wibDay(now), usageRepo.GEOCODE_SOURCE, { requests: 1 }).catch(() => undefined)
-        value = { provider: 'here', results }
+        value = { provider: 'here', results: rankIndonesiaFirst(results) }
       } catch (err) {
         await usageRepo.increment(wibDay(now), usageRepo.GEOCODE_SOURCE, { requests: 1, failed: 1 }).catch(() => undefined)
         console.warn('[geocode] HERE failed, using OpenStreetMap:', err instanceof Error ? err.message : err)
@@ -76,7 +81,7 @@ export async function searchPlaces(query: string, deps: Partial<GeocodeDeps> = {
   }
   if (!value) {
     try {
-      value = { provider: 'osm', results: await throttledOsm(q, d.osm) }
+      value = { provider: 'osm', results: rankIndonesiaFirst(await throttledOsm(q, d.osm)) }
     } catch (err) {
       throw new UpstreamError('Place search', err instanceof GeocodeError ? err.message : 'unavailable')
     }

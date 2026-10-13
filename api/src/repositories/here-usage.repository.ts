@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, ne, sql } from 'drizzle-orm'
+import { and, asc, eq, gte, inArray, ne, sql } from 'drizzle-orm'
 import { db } from '../lib/drizzle-client'
 import { hereUsage, platformSettings } from '../../drizzle/schema'
 
@@ -72,6 +72,15 @@ export async function totalsOn(day: string): Promise<UsageCounts> {
     .from(hereUsage)
     .where(and(eq(hereUsage.day, day), trafficOnly))
   return rows[0] ?? { requests: 0, failed: 0, refused: 0 }
+}
+
+/** Requests on one day from the given sources only, e.g. the wizard previews. */
+export async function requestsOnFor(day: string, sources: HereSource[]): Promise<number> {
+  const rows = await db
+    .select({ requests: sql<number>`coalesce(sum(${hereUsage.requests}), 0)::int` })
+    .from(hereUsage)
+    .where(and(eq(hereUsage.day, day), inArray(hereUsage.source, sources)))
+  return rows[0]?.requests ?? 0
 }
 
 /** Every per-source row from `fromDay` on, oldest first — the admin chart. */

@@ -7,10 +7,10 @@ vi.mock('../repositories/here-usage.repository', () => ({
 }))
 
 import * as usageRepo from '../repositories/here-usage.repository'
-import { clearGeocodeCache, searchPlaces } from './geocode.service'
+import { clearGeocodeCache, rankIndonesiaFirst, searchPlaces } from './geocode.service'
 import { GeocodeError, type PlaceResult } from '../lib/geocoder'
 
-const place: PlaceResult = { label: 'Malioboro, Yogyakarta', lat: -7.79, lng: 110.36, bbox: [110.35, -7.8, 110.37, -7.78] }
+const place: PlaceResult = { label: 'Malioboro, Yogyakarta', lat: -7.79, lng: 110.36, bbox: [110.35, -7.8, 110.37, -7.78], countryCode: 'id' }
 const now = () => new Date('2026-10-13T05:00:00Z')
 
 beforeEach(() => {
@@ -72,5 +72,13 @@ describe('searchPlaces', () => {
     await expect(searchPlaces('Tugu', { here: vi.fn(), osm, now, apiKey: undefined, monthlyLimit: 4000 })).rejects.toMatchObject({
       code: 'UPSTREAM_ERROR',
     })
+  })
+})
+
+describe('rankIndonesiaFirst', () => {
+  it('puts Indonesian places ahead of foreign ones and keeps five', () => {
+    const at = (label: string, countryCode: string | null): PlaceResult => ({ ...place, label, countryCode })
+    const ranked = rankIndonesiaFirst([at('Tokyo', 'jp'), at('Jakarta', 'id'), at('Osaka', 'jp'), at('Bandung', 'id'), at('?', null), at('Kyoto', 'jp')])
+    expect(ranked.map((r) => r.label)).toEqual(['Jakarta', 'Bandung', 'Tokyo', 'Osaka', '?'])
   })
 })

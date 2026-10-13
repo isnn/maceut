@@ -18,12 +18,16 @@ import { app } from '../app'
 import { auth } from '../lib/auth'
 import * as userRepo from '../repositories/user.repository'
 import * as geocode from '../services/geocode.service'
+import { resetRateLimits } from '../middlewares/rate-limit.middleware'
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  resetRateLimits()
+})
 
-function signedIn() {
+function signedIn(email = 'budi@example.com', role: 'user' | 'internal' = 'user') {
   vi.mocked(auth.api.getSession).mockResolvedValue({ user: { id: 'u1' }, session: { id: 's' } } as never)
-  vi.mocked(userRepo.findById).mockResolvedValue({ id: 'u1', email: 'budi@example.com', role: 'user' } as never)
+  vi.mocked(userRepo.findById).mockResolvedValue({ id: 'u1', email, role } as never)
 }
 
 describe('GET /geocode', () => {
@@ -39,6 +43,23 @@ describe('GET /geocode', () => {
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ success: true, data: { provider: 'here', results: [] } })
     expect(geocode.searchPlaces).toHaveBeenCalledWith('Malioboro')
+  })
+
+  it('limits one account to 30 HERE-backed calls in ten minutes', async () => {
+    signedIn()
+    vi.mocked(geocode.searchPlaces).mockResolvedValue({ provider: 'here', results: [] })
+    for (let i = 0; i < 30; i++) expect((await request(app).get('/geocode?q=Malioboro')).status).toBe(200)
+
+    const res = await request(app).get('/geocode?q=Malioboro')
+    expect(res.status).toBe(429)
+    expect(res.body.error.code).toBe('RATE_LIMITED')
+    expect(Number(res.headers['retry-after'])).toBeGreaterThan(0)
+  })
+
+  it('does not limit staff', async () => {
+    signedIn('ops@maceut.id', 'internal')
+    vi.mocked(geocode.searchPlaces).mockResolvedValue({ provider: 'here', results: [] })
+    for (let i = 0; i < 31; i++) expect((await request(app).get('/geocode?q=Malioboro')).status).toBe(200)
   })
 
   it('refuses a query shorter than 2 letters', async () => {

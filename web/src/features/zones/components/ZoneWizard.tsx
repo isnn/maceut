@@ -12,6 +12,7 @@ import { IconCheck } from '@/components/ui/icons'
 import { PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import { MapCanvas } from './MapCanvas'
+import { InfoDialog } from '@/components/ui/InfoDialog'
 import { ZoneMapEditor, pointsToGeometry } from './ZoneMapEditor'
 import { RoadClassPicker } from './RoadClassPicker'
 import * as zonesApi from '../api'
@@ -35,10 +36,28 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
   const [withTraffic, setWithTraffic] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The size a refused point would have made the zone, for the "too large" pop-up.
+  const [tooLarge, setTooLarge] = useState<{ widthKm: number; heightKm: number } | null>(null)
+  // Keyed by the ring it happened on, so redrawing the boundary clears it.
+  const [previewFailure, setPreviewFailure] = useState<{ key: string; message: string } | null>(null)
 
   const geometry = pointsToGeometry(points)
+
+  /** Adds a point unless it would make the zone more than 100 km a side; then the pop-up says so. */
+  function addPoint(lat: number, lng: number) {
+    const all = [...(points as [number, number][]), [lat, lng] as [number, number]]
+    const lats = all.map(([la]) => la)
+    const lngs = all.map(([, ln]) => ln)
+    const box: [number, number, number, number] = [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)]
+    if (!zonesApi.bboxFits(box)) {
+      setTooLarge(zonesApi.bboxSideKm(box))
+      return
+    }
+    setPoints(all)
+  }
   const nameTaken = name.trim() !== '' && existingZones.some((z) => z.name.toLowerCase() === name.trim().toLowerCase())
   const area = geometry ? zonesApi.areaKm2(geometry) : 0
+  const sideKm = useMemo(() => (geometry ? zonesApi.bboxSideKm(zonesApi.bboxOf(geometry)) : null), [geometry])
 
   // Real counts for the drawn boundary, from HERE. Fetched once per geometry, not per
   // class: one answer carries all three tiers, so switching class costs nothing.
@@ -102,7 +121,12 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
         // Already loaded for this ring — switching class down and back costs nothing.
         const t = tiersRef.current
         if (t.key === ringKey && t.byClass[tier] !== undefined) continue
-        const roads = await zonesApi.getTrafficTier(bbox, tier, ring).catch(() => null)
+        const roads = await zonesApi.getTrafficTier(bbox, tier, ring).catch((err) => {
+          // Rate-limited or over the preview budget: say so once, and don't keep asking.
+          if (!cancelled)
+            setPreviewFailure({ key: ringKey, message: err instanceof ApiError ? err.message : 'The traffic preview is unavailable right now.' })
+          return null
+        })
         if (cancelled || !roads) return
         setTiers((t) => ({ key: ringKey, byClass: { ...(t.key === ringKey ? t.byClass : {}), [tier]: roads } }))
       }
@@ -118,7 +142,8 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
     const features = wantedTiers.flatMap((t) => tiers.byClass[t]?.features ?? [])
     return { type: 'FeatureCollection' as const, features }
   }, [tiers, ringKey, wantedTiers])
-  const loadingTier = step === 1 && withTraffic ? wantedTiers.find((t) => tiers.key !== ringKey || !tiers.byClass[t]) : undefined
+  const previewError = previewFailure?.key === ringKey ? previewFailure.message : null
+  const loadingTier = step === 1 && withTraffic && !previewError ? wantedTiers.find((t) => tiers.key !== ringKey || !tiers.byClass[t]) : undefined
 
 
   async function submit() {
@@ -201,14 +226,16 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
                 <>
                   <ZoneMapEditor
                     points={points}
-                    onAddPoint={(lat, lng) => setPoints((p) => [...p, [lat, lng]])}
+                    onAddPoint={addPoint}
                     onUndo={() => setPoints((p) => p.slice(0, -1))}
                     onReset={() => setPoints([])}
                   />
                   <p className="text-caption text-text-secondary">
                     {points.length === 0 && 'Click the map to start. Add at least 3 points to close the shape.'}
                     {points.length > 0 && points.length < 3 && 'Place at least 3 points.'}
-                    {points.length >= 3 && `${area} km² drawn`}
+                    {points.length >= 3 &&
+                      sideKm &&
+                      `${area} km² drawn, ${Math.round(sideKm.widthKm)} × ${Math.round(sideKm.heightKm)} km (max ${zonesApi.MAX_ZONE_SIDE_KM} km a side)`}
                   </p>
                 </>
               ) : (
@@ -257,6 +284,11 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
                 slimTraffic={step === 1 && withTraffic ? shownRoads : undefined}
                 className="h-[480px] laptop:h-[640px] w-full"
               />
+              {previewError && step === 1 && withTraffic && (
+                <p className="text-caption text-warning-text" role="status">
+                  {previewError}
+                </p>
+              )}
               {loadingTier && (
                 <p className="text-caption text-text-muted" aria-live="polite">
                   Loading {ROAD_CLASS_LABEL[loadingTier].toLowerCase()} roads…
@@ -364,9 +396,13 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
           {step < 2 && (
             <Button
               disabled={step === 0 ? !canLeaveStep1 : !canLeaveStep2}
-              onClick={() => setStep(step + 1)}
+              onClick={() => {
+                // Start on the widest road class the plan allows; the user can still go narrower.
+                if (step === 0 && !roadClass) setRoadClass(PLAN_LIMITS[plan].maxRoadClass)
+                setStep(step + 1)
+              }}
             >
-              {step === 0 ? 'Next: road class' : 'Next: review'}
+              Next
             </Button>
           )}
           {step === 2 && (
@@ -377,6 +413,18 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
         </div>
       </div>
 
+      <InfoDialog
+        open={tooLarge !== null}
+        title="Zone too large"
+        description={
+          <p>
+            A zone can be at most {zonesApi.MAX_ZONE_SIDE_KM} km across. This point would make it{' '}
+            {tooLarge && `${Math.round(tooLarge.widthKm)} × ${Math.round(tooLarge.heightKm)} km`}. Draw a smaller area, or
+            split it into several zones.
+          </p>
+        }
+        onClose={() => setTooLarge(null)}
+      />
     </div>
   )
 }

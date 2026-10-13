@@ -1,4 +1,4 @@
-import type * as here from '../lib/here-traffic-client'
+import * as here from '../lib/here-traffic-client'
 import { functionalClassesFor } from '../lib/here-traffic-client'
 import { meteredTrafficFlow } from './here-usage.service'
 import type { HereSource } from '../repositories/here-usage.repository'
@@ -22,6 +22,30 @@ const MAX_ENTRIES = 40
 
 const cache = new Map<string, { at: number; flow: here.TrafficCollection }>()
 
+/**
+ * Boxes are widened outward to a 0.005° grid (~500 m) before asking HERE, so nudging a
+ * polygon point (or a script trying new boxes) lands on the same cached flow instead of a
+ * new billed request. Callers clip to their real ring, so the wider box changes nothing shown.
+ */
+const GRID = 0.005
+
+export function snapBBox(bbox: here.BBox): here.BBox {
+  const [west, south, east, north] = bbox
+  const down = (n: number) => Math.floor(n / GRID) * GRID
+  const up = (n: number) => Math.ceil(n / GRID) * GRID
+  return [down(west), down(south), up(east), up(north)].map((n) => Math.round(n * 1e6) / 1e6) as here.BBox
+}
+
+/** Widening a zone already at the 100 km limit could push it over; such a box is sent as is. */
+function fitsAfterSnap(bbox: here.BBox): boolean {
+  try {
+    here.validateBBox(snapBBox(bbox))
+    return true
+  } catch {
+    return false
+  }
+}
+
 function keyFor(bbox: here.BBox, roadClass: RoadClass): string {
   return `${bbox.map((n) => n.toFixed(6)).join(',')}|${roadClass}`
 }
@@ -33,11 +57,12 @@ export async function getFlow(
   roadClass: RoadClass,
   now: number = Date.now(),
 ): Promise<here.TrafficCollection> {
-  const key = keyFor(bbox, roadClass)
+  const box = fitsAfterSnap(bbox) ? snapBBox(bbox) : bbox
+  const key = keyFor(box, roadClass)
   const hit = cache.get(key)
   if (hit && now - hit.at < TTL_MS) return hit.flow
 
-  const flow = await meteredTrafficFlow(source, bbox, { functionalClasses: functionalClassesFor(roadClass) })
+  const flow = await meteredTrafficFlow(source, box, { functionalClasses: functionalClassesFor(roadClass) })
   cache.delete(key)
   cache.set(key, { at: now, flow })
   while (cache.size > MAX_ENTRIES) cache.delete(cache.keys().next().value!)

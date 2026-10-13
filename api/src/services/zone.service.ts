@@ -128,6 +128,10 @@ export function validateGeometry(geometry: ZoneGeometry): void {
   if (first[0] !== last[0] || first[1] !== last[1]) {
     throw new ValidationError('Polygon harus tertutup — titik pertama dan terakhir wajib sama.')
   }
+
+  // At most 100 km a side (and HERE's 1°): refused here, at create, rather than saved and
+  // then failing on every capture.
+  here.validateBBox(bboxOfGeometry(geometry))
 }
 
 /** Bounding box of a GeoJSON polygon, as [west, south, east, north]. */
