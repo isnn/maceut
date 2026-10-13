@@ -133,8 +133,7 @@ export default function HereUsagePage() {
 
       {data.status === 'blocked' && (
         <Alert variant="warning">
-          A cap is reached — HERE calls are being refused, so captures and map previews are failing with &ldquo;traffic
-          data unavailable&rdquo;. Raise or clear the cap below to resume.
+          A cap is reached. HERE calls are being refused.
         </Alert>
       )}
       {data.status === 'warning' && (
@@ -165,7 +164,7 @@ export default function HereUsagePage() {
         <UsageTile
           label="Refused this month"
           value={formatNumber(data.month.refused)}
-          note={`Calls the cap stopped · ${formatNumber(data.month.failed)} failed at HERE`}
+          note="Calls the cap stopped"
         />
       </div>
 
@@ -188,7 +187,7 @@ export default function HereUsagePage() {
               <div
                 key={d.day}
                 className="flex-1 min-w-[4px] h-full flex flex-col justify-end"
-                title={`${shortDay(d.day)} · ${formatNumber(d.total)} requests${d.refused ? ` · ${d.refused} refused` : ''}`}
+                title={`${shortDay(d.day)}: ${formatNumber(d.total)} requests`}
               >
                 {SOURCES.map((s) =>
                   d.bySource[s] > 0 ? (
@@ -221,7 +220,7 @@ export default function HereUsagePage() {
       <section className="space-y-md">
         <SectionHeader
           title="Budget cap"
-          description="When a cap is reached, HERE calls are refused before they're sent — they aren't billed, but captures and previews fail until the next day or month. Leave a field empty for no cap."
+          description="Leave a field empty for no cap."
         />
         <Card className="p-lg space-y-lg">
           <CardTitle>Limits</CardTitle>
@@ -266,7 +265,7 @@ export default function HereUsagePage() {
             <Input
               id="here-alert-email"
               type="email"
-              placeholder="ops@maceut.id — leave empty for bell only"
+              placeholder="ops@maceut.id"
               value={form.alertEmail}
               onChange={(e) => setForm({ ...form, alertEmail: e.target.value })}
             />
@@ -323,7 +322,7 @@ function UsageTile({
             />
           </div>
           <StatusPill tone={level === 'blocked' ? 'danger' : level === 'warning' ? 'warning' : 'success'}>
-            {level === 'blocked' ? 'Cap reached' : level === 'warning' ? 'Near cap' : 'Within budget'} · {pct(share)} used
+            {pct(share)} used
           </StatusPill>
         </div>
       )}

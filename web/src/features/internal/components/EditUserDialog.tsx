@@ -106,7 +106,7 @@ function EditUserForm({
             <Dialog.Title className="pr-xl text-section-title text-text-primary">Edit account</Dialog.Title>
             <Dialog.Description className="text-caption text-text-secondary mt-xs mb-lg">
               {row.email}
-              {row.isYou && ' · this is you'}
+              
             </Dialog.Description>
 
             {error && (
@@ -150,8 +150,8 @@ function EditUserForm({
                       onValueChange={(v) => setRole(v as Access)}
                       disabled={row.isYou || roleByConfig}
                       options={[
-                      { value: 'admin', label: 'Admin — helps customers' },
-                      { value: 'superadmin', label: 'Superadmin — runs the platform' },
+                      { value: 'admin', label: 'Admin' },
+                      { value: 'superadmin', label: 'Superadmin' },
                     ]}
                       aria-label="Staff plan"
                     />
@@ -165,7 +165,7 @@ function EditUserForm({
                     disabled={row.isYou || roleByConfig}
                     options={[
                       { value: 'user', label: 'Customer' },
-                      { value: 'internal', label: 'Internal — Maceut staff' },
+                      { value: 'internal', label: 'Internal' },
                     ]}
                     aria-label="Role"
                   />
@@ -178,8 +178,7 @@ function EditUserForm({
 
               {lowersPlan && (
                 <Alert variant="warning">
-                  Moving down a plan pauses anything over the new limits &mdash; zones, capture windows and intervals.
-                  Nothing is deleted.
+                  Moving down a plan pauses anything over the new limits.
                 </Alert>
               )}
 

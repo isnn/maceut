@@ -6,7 +6,7 @@ import type { LatLngExpression } from 'leaflet'
 import { Button } from '@/components/ui/Button'
 import { FormLabel, Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
-import { RoadClassBadge } from '@/components/ui/Badge'
+import { RoadClassBadge, StatusPill } from '@/components/ui/Badge'
 import { cn, formatNumber, formatKm } from '@/lib/utils'
 import { IconCheck } from '@/components/ui/icons'
 import { PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
@@ -207,17 +207,17 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
                   />
                   <p className="text-caption text-text-secondary">
                     {points.length === 0 && 'Click the map to start. Add at least 3 points to close the shape.'}
-                    {points.length > 0 && points.length < 3 && `${points.length} point(s) placed · needs at least 3.`}
-                    {points.length >= 3 && `${points.length} points · shape closed · ${area} km²`}
+                    {points.length > 0 && points.length < 3 && 'Place at least 3 points.'}
+                    {points.length >= 3 && `${area} km² drawn`}
                   </p>
                 </>
               ) : (
                 <div className="border border-dashed border-border rounded-md p-section text-center space-y-sm">
-                  <p className="text-body text-text-primary font-medium">Import a boundary file</p>
-                  <p className="text-caption text-text-secondary">
-                    GeoJSON and SHP are in the mockups, but boundary import is out of MVP scope — draw the boundary on
-                    the map for now.
+                  <p className="flex items-center justify-center gap-sm text-body text-text-primary font-medium">
+                    Import a boundary file
+                    <StatusPill tone="info">Coming soon</StatusPill>
                   </p>
+                  <p className="text-caption text-text-secondary">Draw the boundary on the map for now.</p>
                   <div className="flex justify-center gap-sm pt-sm">
                     <span className="text-micro text-text-muted border border-border rounded-xs px-sm py-xs">GeoJSON</span>
                     <span className="text-micro text-text-muted border border-border rounded-xs px-sm py-xs">SHP</span>
@@ -275,7 +275,7 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
                       <li key={row.label} className="flex items-center gap-sm text-caption">
                         <span className={cn('w-2.5 h-2.5 rounded-full', row.collected ? 'bg-success-icon' : 'bg-border')} />
                         <span className={row.collected ? 'text-text-primary' : 'text-text-muted'}>
-                          {row.label} · {row.collected ? 'with traffic' : 'not collected'}
+                          {row.label}: {row.collected ? 'with traffic' : 'not collected'}
                         </span>
                       </li>
                     ))}
@@ -306,12 +306,12 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
           </div>
 
           <dl className="space-y-md border-t border-divider pt-lg">
-            <RailRow label="Area drawn" value={points.length >= 3 ? `${area} km² · ${points.length} points` : '—'} />
+            <RailRow label="Area drawn" value={points.length >= 3 ? `${area} km²` : '—'} />
             <RailRow
               label="Roads inside"
               value={
                 matched
-                  ? `${formatNumber(matched.roads)} · ${formatKm(matched.lengthKm)}`
+                  ? `${formatNumber(matched.roads)} roads, ${formatKm(matched.lengthKm)}`
                   : '—'
               }
             />
@@ -321,8 +321,8 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
 
           {step === 0 && (
             <p className="text-caption text-text-secondary border-t border-divider pt-lg">
-              <span className="font-semibold text-text-primary">Tip</span> — draw a little wider than the roads you care
-              about. You pick which road classes to collect in the next step.
+              <span className="font-semibold text-text-primary">Tip:</span> draw a little wider than the roads you care
+              about.
             </p>
           )}
 
@@ -342,7 +342,7 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
                 {roadClass && <RoadClassBadge roadClass={roadClass} />}
               </div>
               <p className="text-caption text-text-secondary">
-                No capture times yet. After creating, set windows on the Schedule page — until then this zone stays idle.
+                No capture times yet. Set them on the Schedule page after creating.
               </p>
               {error && <Alert variant="warning">{error}</Alert>}
             </div>
@@ -353,7 +353,7 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
       {/* Footer actions */}
       <div className="flex flex-wrap items-center justify-between gap-md border-t border-border pt-lg">
         <span className="text-caption text-text-muted">
-          Step {step + 1} of 3 · {STEPS[step]}
+          Step {step + 1} of 3: {STEPS[step]}
         </span>
         <div className="flex gap-sm">
           {step > 0 && (

@@ -13,13 +13,16 @@ export function UsageMeter({
   max,
   unit = '',
   note,
+  sub,
 }: {
   label: string
   value: number | null
   max: number
   unit?: string
-  /** One line under the bar — when it resets, what is left. */
+  /** One line under the bar: what is left. */
   note?: string
+  /** A second line: when it resets. */
+  sub?: string
 }) {
   return (
     <div>
@@ -32,6 +35,7 @@ export function UsageMeter({
       </div>
       <ProgressBar value={value ?? 0} max={max} className="mt-sm" />
       {note && <p className="mt-xs text-caption text-text-muted">{note}</p>}
+      {sub && <p className="text-caption text-text-muted">{sub}</p>}
     </div>
   )
 }

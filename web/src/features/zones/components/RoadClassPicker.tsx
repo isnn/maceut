@@ -87,7 +87,7 @@ export function RoadClassPicker({ value, onChange, geometry, plan }: RoadClassPi
       return 'HERE has no traffic data for any road inside this boundary, so every capture would be empty. Try drawing a larger area, or one that crosses a main road.'
     }
     const widerLocked = ROAD_CLASS_ORDER.indexOf(wider) > ROAD_CLASS_ORDER.indexOf(maxRoadClass)
-    return `No ${NONE_OF[value]} runs through this area — normal for a small zone in a city centre — so captures would be empty. ${ROAD_CLASS_LABEL[wider]} covers ${formatNumber(counts[wider]!.roads)} roads here${widerLocked ? ` (${REQUIRED_PLAN_LABEL[wider]} plan)` : ''}, or draw a larger boundary that reaches a main road.`
+    return `No ${NONE_OF[value]} in this area, so captures would be empty. ${ROAD_CLASS_LABEL[wider]} covers ${formatNumber(counts[wider]!.roads)} roads here${widerLocked ? ` (${REQUIRED_PLAN_LABEL[wider]} plan)` : ''}, or draw a larger boundary that reaches a main road.`
   })()
 
   function pick(next: RoadClass) {
@@ -102,7 +102,7 @@ export function RoadClassPicker({ value, onChange, geometry, plan }: RoadClassPi
   return (
     <div className="space-y-sm">
       <p className="text-label text-text-secondary">
-        Road class · {ROAD_CLASS_ORDER.indexOf(maxRoadClass) + 1} of 3 on your plan
+        Road class ({ROAD_CLASS_ORDER.indexOf(maxRoadClass) + 1} of 3 on your plan)
       </p>
 
       {ROAD_CLASS_ORDER.map((option) => {
@@ -132,7 +132,7 @@ export function RoadClassPicker({ value, onChange, geometry, plan }: RoadClassPi
               {count
                 ? count.roads === 0
                   ? 'No roads of this class in this area'
-                  : `${formatNumber(count.roads)} roads · ${formatKm(count.lengthKm)}`
+                  : `${formatNumber(count.roads)} roads, ${formatKm(count.lengthKm)}`
                 : countsFailed
                   ? 'Road count unavailable'
                   : 'Counting roads…'}

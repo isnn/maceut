@@ -48,8 +48,8 @@ export function PlanChangeDialog({
             <Dialog.Description className="text-body text-text-secondary">Nothing will be paused.</Dialog.Description>
           ) : (
             <>
-              <ImpactList title="Will be paused — zones" items={impact.zonesToPause} />
-              <ImpactList title="Will be paused — capture windows" items={impact.schedulesToPause} />
+              <ImpactList title="Zones to pause" items={impact.zonesToPause} />
+              <ImpactList title="Capture windows to pause" items={impact.schedulesToPause} />
               <Dialog.Description className="text-caption text-text-muted">Nothing is deleted.</Dialog.Description>
             </>
           )}
@@ -80,7 +80,7 @@ function ImpactList({ title, items }: { title: string; items: ImpactItem[] }) {
   return (
     <div className="space-y-xs">
       <p className="text-micro font-semibold uppercase tracking-wider text-text-muted">
-        {title} · {items.length}
+        {title}
       </p>
       <ul className="rounded-md border border-border divide-y divide-divider">
         {items.map((it) => (

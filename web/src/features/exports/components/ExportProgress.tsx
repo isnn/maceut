@@ -48,19 +48,24 @@ export function detailFor(job: ExportJob): string {
   switch (job.status) {
     case 'queued':
       return job.queuePosition
-        ? `Waiting — ${job.queuePosition} export${job.queuePosition === 1 ? '' : 's'} ahead of yours`
+        ? `${job.queuePosition} export${job.queuePosition === 1 ? '' : 's'} ahead of yours`
         : 'Starting…'
     case 'rendering':
       return job.etaSeconds !== null ? eta(job.etaSeconds) : 'Drawing the first frame…'
     case 'uploading':
       return job.fileSize ? `Uploading ${formatFileSize(job.fileSize)}` : 'Saving the file…'
     case 'done':
-      return `${job.fileSize ? formatFileSize(job.fileSize) : 'Ready'}${job.expiresAt ? ` · kept until ${shortDate(job.expiresAt)}` : ''}`
+      return job.fileSize ? formatFileSize(job.fileSize) : 'Ready'
     case 'failed':
       return job.error ?? 'Something went wrong while rendering.'
     case 'expired':
       return 'Deleted after its retention period.'
   }
+}
+
+/** A finished export's second line: how long the file stays. */
+export function keptUntil(job: ExportJob): string | null {
+  return job.status === 'done' && job.expiresAt ? `Kept until ${shortDate(job.expiresAt)}` : null
 }
 
 const TONE: Record<ReturnType<typeof pillFor>['tone'], PillTone> = {
@@ -101,9 +106,9 @@ export function ExportBar({ job, className }: { job: ExportJob; className?: stri
 }
 
 export const FORMAT_LABEL: Record<ExportJob['format'], string> = {
-  zip: 'Frames · ZIP',
-  webm: 'Animation · WebM',
-  mp4: 'Animation · MP4',
+  zip: 'ZIP',
+  webm: 'WebM',
+  mp4: 'MP4',
 }
 
 /** True while the page is visible — polling pauses in a background tab. */

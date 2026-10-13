@@ -47,8 +47,7 @@ export default function InternalConfigPage() {
         <p className="text-label text-text-secondary">Platform</p>
         <h1 className="text-page-title font-bold text-text-primary mt-xs">Configuration</h1>
         <p className="text-body text-text-secondary mt-xs">
-          What the API server is running with. Read-only — to change a value, edit <code>api/.env</code> and restart the
-          service.
+          What the API server is running with. Read-only.
         </p>
       </div>
 
@@ -102,12 +101,12 @@ function ConfigRow({ entry }: { entry: ServerConfigEntry }) {
       </dt>
       <dd className="min-w-0 flex items-start">
         {entry.secret ? (
-          <StatusPill tone={entry.set ? 'success' : 'warning'}>{entry.set ? 'Set · hidden' : 'Not set'}</StatusPill>
+          <StatusPill tone={entry.set ? 'success' : 'warning'}>{entry.set ? 'Set' : 'Not set'}</StatusPill>
         ) : entry.set ? (
           <code className="text-label text-text-primary break-all bg-canvas-secondary rounded-xs px-sm py-xs">{entry.value}</code>
         ) : (
           <span className="text-caption text-text-muted">
-            Not set{meta?.defaultValue !== undefined && <> — default <code>{meta.defaultValue}</code></>}
+            Not set
           </span>
         )}
       </dd>

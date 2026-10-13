@@ -54,11 +54,10 @@ function RegisterPageContent() {
             Log in
           </Link>
         </p>
-        <p className="text-caption text-text-muted text-center mt-md">
+        <p className="flex justify-center gap-lg text-caption text-text-muted mt-md">
           <Link href="/terms" className={linkClass('caption')}>
             Terms of Service
           </Link>
-          {' · '}
           <Link href="/privacy" className={linkClass('caption')}>
             Privacy Policy
           </Link>

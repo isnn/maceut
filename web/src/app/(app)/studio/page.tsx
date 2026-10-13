@@ -92,6 +92,7 @@ import {
   ExportPill,
   FORMAT_LABEL,
   detailFor,
+  keptUntil,
   useExport,
 } from '@/features/exports/components/ExportProgress'
 import type { Zone } from '@/features/zones/types'
@@ -1324,14 +1325,13 @@ export default function StudioPage() {
                 <div className="pt-xs">
                   <ProgressBar value={exporting.done} max={exporting.total} />
                   <p className="text-micro text-text-muted mt-xs tabular-nums">
-                    {exporting.label} — {exporting.done} / {exporting.total}
+                    {exporting.label} {exporting.done} / {exporting.total}
                   </p>
                 </div>
               )}
               {exportError && <p className="text-caption text-danger-text">{exportError}</p>}
               <ExportDialog
                 view={exportDialog}
-                keptDays={PLAN_LIMITS[user?.plan ?? 'free'].exportRetentionDays}
                 onClose={() => setExportDialog('closed')}
                 starting={starting}
                 job={activeExport}
@@ -1358,13 +1358,15 @@ export default function StudioPage() {
                   },
                   {
                     label: 'All frames',
-                    format: zipWebp ? 'ZIP · WebP' : 'ZIP',
+                    format: 'ZIP',
+                    formatExtra: zipWebp ? 'WebP' : undefined,
                     detail:
                       frames.length === 0
                         ? 'No frames in range'
                         : fit.ok
-                          ? `${frames.length} image${frames.length === 1 ? '' : 's'} · ${fit.note}`
+                          ? `${frames.length} image${frames.length === 1 ? '' : 's'}`
                           : fit.note,
+                    note: frames.length > 0 && fit.ok ? fit.note : undefined,
                     onSelect: () => void startServerExport('zip'),
                     disabled: frames.length === 0 || !fit.ok,
                   },
@@ -1375,8 +1377,9 @@ export default function StudioPage() {
                       frames.length < 2
                         ? 'Needs at least 2 frames in range'
                         : fit.ok
-                          ? `${frames.length} frames at ${SPEEDS[speed]!.label} speed · ${fit.note}`
+                          ? `${frames.length} frames at ${SPEEDS[speed]!.label} speed`
                           : fit.note,
+                    note: frames.length >= 2 && fit.ok ? fit.note : undefined,
                     onSelect: () => void startServerExport('webm'),
                     disabled: frames.length < 2 || !fit.ok,
                   },
@@ -1389,8 +1392,9 @@ export default function StudioPage() {
                       frames.length < 2
                         ? 'Needs at least 2 frames in range'
                         : fit.ok
-                          ? `${frames.length} frames · plays on phones, slides and chat apps`
+                          ? `${frames.length} frames`
                           : fit.note,
+                    note: frames.length >= 2 && fit.ok ? 'Plays on phones, slides and chat apps' : undefined,
                     onSelect: () => void startServerExport('mp4'),
                     disabled: frames.length < 2 || !fit.ok,
                   },
@@ -1561,7 +1565,11 @@ function ShapeGlyph({ shape }: { shape: { width: number; height: number } | 'man
 interface ExportItem {
   label: string
   format: string
+  /** A second format chip, e.g. WebP beside ZIP. */
+  formatExtra?: string
   detail: string
+  /** A second, muted line under `detail`. */
+  note?: string
   onSelect: () => void
   disabled?: boolean
 }
@@ -1578,10 +1586,7 @@ function exportFit(plan: Plan, frames: number, width: number, height: number): {
   const limits = PLAN_LIMITS[plan]
   if (frames > limits.exportFramesLimit) return { ok: false, note: `Your plan exports up to ${limits.exportFramesLimit} frames` }
   const used = (frames * width * height) / 1_000_000
-  if (used > limits.exportBudgetMpFrames) {
-    const max = Math.floor((limits.exportBudgetMpFrames * 1_000_000) / (width * height))
-    return { ok: false, note: `Too big for your plan — at ${width} × ${height} up to ${max} frames` }
-  }
+  if (used > limits.exportBudgetMpFrames) return { ok: false, note: 'Too big for your plan' }
   return { ok: true, note: `${Math.max(1, Math.round((used / limits.exportBudgetMpFrames) * 100))}% of your plan’s export size` }
 }
 
@@ -1606,7 +1611,6 @@ function ExportDialog({
   busy,
   onRetry,
   extra,
-  keptDays,
 }: {
   view: 'closed' | 'choose' | 'progress'
   onClose: () => void
@@ -1620,8 +1624,6 @@ function ExportDialog({
   onRetry: (job: ExportJob) => Promise<void>
   /** Shown above the options — export settings, like the ZIP image format. */
   extra?: React.ReactNode
-  /** How long the plan keeps a finished file (PKG-F9). */
-  keptDays: number
 }) {
   const [retrying, setRetrying] = useState(false)
   const showProgress = view === 'progress' && job !== null
@@ -1644,7 +1646,10 @@ function ExportDialog({
                         : 'Collecting your frames'}
                 </Dialog.Title>
                 <Dialog.Description className="text-body text-text-secondary mt-xs tabular-nums">
-                  {job.frameCount} frames · {job.width} × {job.height} · {job.format === 'zip' ? 'ZIP of PNGs' : job.format.toUpperCase()}
+                  <span className="block">{job.frameCount} frames</span>
+                  <span className="block text-caption text-text-muted">
+                    {job.width} × {job.height}, {job.format === 'zip' ? 'ZIP of PNGs' : job.format.toUpperCase()}
+                  </span>
                 </Dialog.Description>
               </div>
 
@@ -1654,12 +1659,12 @@ function ExportDialog({
                 <p className={cn('text-caption', job.status === 'failed' ? 'text-danger-text' : 'text-text-secondary')}>
                   {detailFor(job)}
                 </p>
+                {keptUntil(job) && <p className="text-caption text-text-muted">{keptUntil(job)}</p>}
               </div>
 
               {isActive(job) && (
                 <p className="text-caption text-text-muted">
-                  This runs on our servers. You can close this, keep editing, or leave Studio — the file will wait for
-                  you on the zone page for {keptDays} days.
+                  This runs on our servers. You can close this, keep editing, or leave Studio.
                 </p>
               )}
 
@@ -1724,11 +1729,16 @@ function ExportDialog({
                       <span className="min-w-0">
                         <span className="block text-body font-semibold text-text-primary">{item.label}</span>
                         <span className="block text-caption text-text-muted mt-xs">
-                          {blocked ? 'Another export is still being made — one at a time' : item.detail}
+                          {blocked ? 'Another export is in progress' : item.detail}
                         </span>
+                        {!blocked && item.note && <span className="block text-caption text-text-muted">{item.note}</span>}
                       </span>
-                      <span className="shrink-0 text-micro font-semibold text-primary bg-primary-soft rounded-xs px-sm py-xs">
-                        {item.format}
+                      <span className="shrink-0 flex gap-xs">
+                        {[item.format, item.formatExtra].filter(Boolean).map((f) => (
+                          <span key={f} className="text-micro font-semibold text-primary bg-primary-soft rounded-xs px-sm py-xs">
+                            {f}
+                          </span>
+                        ))}
                       </span>
                     </button>
                   )

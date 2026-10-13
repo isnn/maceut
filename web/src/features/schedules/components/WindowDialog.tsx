@@ -179,7 +179,7 @@ export function WindowDialog({
     : Object.keys(fieldErrors).length > 0
       ? 'Fix the highlighted fields'
       : issue
-        ? 'Not on your plan — see the note above'
+        ? 'Not on your plan'
         : null
 
   function upgrade() {
@@ -348,7 +348,7 @@ export function WindowDialog({
                       key={option}
                       type="button"
                       aria-pressed={interval === option}
-                      title={locked ? 'Not on your plan — pick it to see how to upgrade' : undefined}
+                      title={locked ? 'Not on your plan' : undefined}
                       onClick={() => edit(setInterval)(option)}
                       className={cn(
                         'flex-1 h-9 rounded-sm text-label transition-colors inline-flex items-center justify-center gap-xs',

@@ -119,7 +119,7 @@ export function ZoneStatusPill({
       title={byPlan ? 'Paused because it is over your plan’s limits' : undefined}
       className={className}
     >
-      {status === 'collecting' ? 'Collecting' : byPlan ? 'Paused · plan limit' : 'Paused'}
+      {status === 'collecting' ? 'Collecting' : 'Paused'}
     </StatusPill>
   )
 }
@@ -138,7 +138,7 @@ const CAPTURE_LABEL: Record<string, string> = {
   processing: 'Collecting…',
   done: 'Collected',
   failed: 'Failed',
-  skipped_limit: 'Skipped — monthly limit',
+  skipped_limit: 'Skipped: monthly limit',
   missed: 'Missed',
 }
 

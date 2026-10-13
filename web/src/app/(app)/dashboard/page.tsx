@@ -43,7 +43,7 @@ function greeting(now = new Date()): string {
 /** One line under the greeting: the single most useful thing to know right now. */
 function headline(health: CollectionHealth): string {
   if (health.zonesFailing > 0) {
-    return `${health.zonesFailing} ${health.zonesFailing === 1 ? 'zone has' : 'zones have'} stopped collecting — we keep retrying at every scheduled time.`
+    return `${health.zonesFailing} ${health.zonesFailing === 1 ? 'zone has' : 'zones have'} stopped collecting.`
   }
   if (health.status === 'idle') return 'Nothing is scheduled yet. Add a capture window to start collecting.'
   const zones = `${health.zonesCollecting} ${health.zonesCollecting === 1 ? 'zone is' : 'zones are'} collecting`
@@ -143,13 +143,16 @@ export default function DashboardPage() {
         <StatTile
           label="Zones collecting"
           value={formatNumber(usage.zonesCount)}
-          note={`of ${usage.zonesLimit} on ${PLAN_LABEL[usage.plan]} · ${Math.max(usage.zonesLimit - usage.zonesCount, 0)} left`}
+          note={`of ${usage.zonesLimit} on ${PLAN_LABEL[usage.plan]}`}
+          aside={`${Math.max(usage.zonesLimit - usage.zonesCount, 0)} left`}
           progress={{ value: usage.zonesCount, max: usage.zonesLimit }}
         />
         <StatTile
           label="Captures this month"
           value={formatNumber(usage.pool.used)}
-          note={`of ${formatNumber(usage.pool.limit)} · ${formatNumber(usage.pool.remaining)} left · resets ${poolResetDay(usage.pool)}`}
+          note={`of ${formatNumber(usage.pool.limit)}`}
+          aside={`${formatNumber(usage.pool.remaining)} left`}
+          sub={`Resets ${poolResetDay(usage.pool)}`}
           progress={{ value: usage.pool.used, max: usage.pool.limit }}
         />
         <StatTile
@@ -157,17 +160,19 @@ export default function DashboardPage() {
           value={formatNumber(usage.framesPerMonth)}
           note={
             poolOutlook(usage.framesPerMonth, usage.pool).kind === 'short_this_month'
-              ? `more than the ${formatNumber(usage.pool.remaining)} left before ${poolResetDay(usage.pool)} · extra captures are skipped`
+              ? 'More than you have left this month.'
               : poolOutlook(usage.framesPerMonth, usage.pool).kind === 'over_plan'
-                ? `more than your plan’s ${formatNumber(usage.pool.limit)} · extra captures are skipped`
+                ? `More than your plan’s ${formatNumber(usage.pool.limit)}.`
                 : 'your active windows in an average month'
           }
+          sub={poolOutlook(usage.framesPerMonth, usage.pool).kind !== 'ok' ? 'Extra captures are skipped.' : undefined}
+          tone="warning"
           progress={{ value: usage.framesPerMonth, max: usage.pool.limit }}
         />
         <StatTile
           label="Storage"
           value={formatFileSize(usage.storageUsedBytes)}
-          note={`of ${usage.storageLimitGb} GB · capture images and exports`}
+          note={`of ${usage.storageLimitGb} GB`}
           progress={{ value: usage.storageUsedBytes, max: storageLimitBytes }}
         />
       </div>
@@ -189,7 +194,7 @@ export default function DashboardPage() {
             {zones.length === 0 ? (
               <EmptyState
                 title="No zones yet"
-                description="Draw an area on the map and choose which roads to watch — traffic collection starts from its first capture window."
+                description="Draw an area on the map and choose which roads to watch."
                 action={
                   <Link href="/zones/new" className={buttonClass()}>
                     Create your first zone
@@ -206,11 +211,12 @@ export default function DashboardPage() {
                     >
                       <div className="min-w-0">
                         <p className="text-body font-semibold text-text-primary truncate">{zone.name}</p>
-                        <p className="text-caption text-text-muted mt-xs">
-                          {zone.cadence ?? 'No capture window yet'}
-                          {zone.roadsCount !== null && ` · ${formatNumber(zone.roadsCount)} roads`}
-                          {zone.lengthKm !== null && ` · ${formatKm(zone.lengthKm)}`}
-                        </p>
+                        <p className="text-caption text-text-muted mt-xs">{zone.cadence ?? 'No capture window yet'}</p>
+                        {zone.roadsCount !== null && (
+                          <p className="text-caption text-text-muted">
+                            {formatNumber(zone.roadsCount)} roads{zone.lengthKm !== null && `, ${formatKm(zone.lengthKm)}`}
+                          </p>
+                        )}
                       </div>
                       <ZoneStatusPill status={zone.status} pausedByPlan={zone.pausedByPlan} />
                     </Link>
@@ -237,8 +243,7 @@ export default function DashboardPage() {
             <div className="bg-card border border-border rounded-lg p-lg">
               {captures.length === 0 ? (
                 <p className="text-body text-text-secondary">
-                  No captures yet. Each zone collects when one of its capture windows comes round — or press Capture now
-                  on a zone.
+                  No captures yet.
                 </p>
               ) : (
                 <div className="flex gap-md overflow-x-auto pb-xs">
@@ -280,7 +285,7 @@ export default function DashboardPage() {
                 label="Problems today"
                 tone={health.problemsToday.failed + health.problemsToday.missed > 0 ? 'warning' : 'ok'}
               >
-                <span title={`${health.problemsToday.failed} failed · ${health.problemsToday.missed} missed`}>
+                <span title={`${health.problemsToday.failed} failed, ${health.problemsToday.missed} missed`}>
                   {health.problemsToday.failed + health.problemsToday.missed}
                 </span>
               </HealthRow>
@@ -308,8 +313,7 @@ export default function DashboardPage() {
             </div>
             {exports.length === 0 ? (
               <p className="text-caption text-text-muted">
-                No exports yet. In Studio, turn a day of captures into a ZIP of frames or a WebM animation — it renders here
-                while you do something else.
+                No exports yet.
               </p>
             ) : (
               <ul className="space-y-md">
@@ -319,8 +323,11 @@ export default function DashboardPage() {
                       <p className="text-label font-semibold text-text-primary truncate group-hover:text-primary transition-colors">
                         {job.zoneName}
                       </p>
-                      <p className="text-micro text-text-muted mt-[2px]">
-                        {job.format === 'zip' ? 'ZIP' : job.format === 'webm' ? 'WebM' : 'MP4'} · {job.frameCount} frames
+                      <p className="flex items-center gap-xs text-micro text-text-muted mt-[2px]">
+                        <span className="font-semibold text-primary bg-primary-soft rounded-xs px-xs">
+                          {job.format === 'zip' ? 'ZIP' : job.format === 'webm' ? 'WebM' : 'MP4'}
+                        </span>
+                        {job.frameCount} frames
                       </p>
                     </Link>
                     <ExportPill job={job} />
@@ -389,15 +396,26 @@ function CaptureThumb({ capture }: { capture: zonesApi.RecentCapture }) {
   )
 }
 
+/**
+ * One fact per slot instead of a "·" chain: `note` left under the bar, `aside` right
+ * (what's left), `sub` on its own line (when it resets, what happens past the limit).
+ */
 function StatTile({
   label,
   value,
   note,
+  aside,
+  sub,
+  tone,
   progress,
 }: {
   label: string
   value: string
   note: string
+  aside?: string
+  sub?: string
+  /** `warning` colours `sub`, for a schedule that outruns the pool. */
+  tone?: 'warning'
   progress?: { value: number; max: number }
 }) {
   return (
@@ -405,7 +423,11 @@ function StatTile({
       <p className="text-label text-text-secondary">{label}</p>
       <p className="text-display text-text-primary mt-xs tabular-nums">{value}</p>
       {progress && <ProgressBar value={progress.value} max={progress.max} className="mt-sm" />}
-      <p className="text-caption text-text-muted mt-sm">{note}</p>
+      <p className="flex items-baseline justify-between gap-sm text-caption text-text-muted mt-sm tabular-nums">
+        <span>{note}</span>
+        {aside && <span className="text-text-secondary">{aside}</span>}
+      </p>
+      {sub && <p className={cn('text-caption mt-xs', tone === 'warning' ? 'text-warning-text' : 'text-text-muted')}>{sub}</p>}
     </Card>
   )
 }

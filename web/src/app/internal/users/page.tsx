@@ -121,14 +121,7 @@ export default function InternalUsersPage() {
       const res = await internalApi.deleteUser(deleting.id)
       setDeleting(null)
       refetch()
-      // Say what actually went, rather than leaving the operator to wonder what they
-      // just destroyed. The server counts it before deleting, so this is measured.
-      setNotice(
-        `Deleted ${res.deleted.email}` +
-          (res.removed.zones || res.removed.schedules
-            ? ` · ${res.removed.zones} zones and ${res.removed.schedules} capture windows removed`
-            : ''),
-      )
+      setNotice(`Deleted ${res.deleted.email}`)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not delete the account. Please try again.')
     } finally {
@@ -156,7 +149,7 @@ export default function InternalUsersPage() {
     <div className="space-y-lg">
       <div className="flex flex-wrap items-start gap-lg">
         <div>
-          <p className="text-label text-text-secondary">Platform · {rows?.length ?? 0} accounts</p>
+          <p className="text-label text-text-secondary">{rows?.length ?? 0} accounts</p>
           <h1 className="text-page-title font-bold text-text-primary mt-xs">Users</h1>
         </div>
         {isSuperadmin && (
@@ -288,7 +281,7 @@ export default function InternalUsersPage() {
                 const lockReason = !isSuperadmin
                   ? 'Only a superadmin can change this'
                   : byConfig
-                    ? 'Superadmin through INTERNAL_EMAILS in the server config — change it there'
+                    ? 'Set by INTERNAL_EMAILS'
                     : row.isYou
                       ? 'You can’t change your own access'
                       : isLastSuperadmin
