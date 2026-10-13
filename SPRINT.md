@@ -187,6 +187,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-47** Teks legal & auth: catatan draf & kotak "read first" (termasuk pernyataan Komdigi/PSE) dihapus; catatan independen jadi teks biasa di Terms §1 (EN & ID); teks persetujuan dipersingkat & hanya satu bahasa; lead daftar dihapus; login "Continue with Google" + logo G, ikon email di "Create an account"; ® dihapus dari logo; tagline footer "Connecting people with the road ahead"; baris "Last updated" kini tampil | masukan user 2026-10-12 |
 | ✅ | **OPS-1** Setup deploy maceut.hokya.dev: `web/Dockerfile` produksi (`next build`/`next start`), docker-compose.prod.yml diperbaiki (`!reset`/`!override`: tanpa mount source, port hanya 127.0.0.1, postgres/rabbitmq tanpa port publik), template `api/.env.production.example` & `web/.env.production.example`, panduan docs/operations/deploy.md | permintaan user 2026-10-12 |
 | ✅ | **BE-EMAIL-FB** Email cadangan: `EMAIL_PROVIDER=auto` (default) memakai kunci yang ada, Mailtrap dulu lalu Resend bila Mailtrap gagal; email_log mencatat provider yang benar-benar mengirim | masukan user 2026-10-13 |
+| ✅ | **FE-48** Header onboarding = header app (`AppHeader minimal`): lebar, tinggi, sticky & menu akun (avatar → email, plan, Sign out) sama; tanpa navigasi app, lonceng & link profil | masukan user 2026-10-13 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -211,6 +212,10 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-13b] FE-48 — header onboarding konsisten dengan app (fix/onboarding-header).
+  - AppHeader dapat prop `minimal`: logo ke /onboarding, tanpa nav/NotificationBell/link profil; menu akun tetap.
+  - onboarding/page.tsx memakai `<AppHeader minimal />` menggantikan header buatan sendiri (email polos + Sign out).
 
 [2026-10-13] BE-EMAIL-FB — Resend sebagai cadangan Mailtrap (feat/email-fallback-resend).
   - lib/email/fallback.provider.ts: mencoba provider berurutan, berhenti di yang pertama menerima; gagal apa pun
