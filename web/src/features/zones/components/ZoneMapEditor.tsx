@@ -1,7 +1,6 @@
 'use client'
 
-import { FormEvent, useEffect, useRef, useState } from 'react'
-import L from 'leaflet'
+import { FormEvent, useEffect, useState } from 'react'
 import { useMap, useMapEvents, CircleMarker } from 'react-leaflet'
 import type { LatLngExpression } from 'leaflet'
 import { MapCanvas } from './MapCanvas'
@@ -28,25 +27,14 @@ function FocusPlace({ place }: { place: PlaceResult | null }) {
 }
 
 /**
- * Floats on the map, beside the zoom buttons. Search runs on Enter or the button, not
- * while typing: each search is a HERE call (4,000 a month) or, past that, an
- * OpenStreetMap one, whose policy forbids type-ahead.
+ * Search runs on Enter or the button, not while typing: each search is a HERE call (4,000
+ * a month) or, past that, an OpenStreetMap one, whose policy forbids type-ahead.
  */
 function PlaceSearch({ onPick }: { onPick: (place: PlaceResult) => void }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState<PlaceResult[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [abroad, setAbroad] = useState(false)
-  const box = useRef<HTMLDivElement>(null)
-
-  // Clicks, drags and scrolls on the search box stay out of Leaflet: a click here must not
-  // add a boundary point, nor a scroll in the results zoom the map.
-  useEffect(() => {
-    if (!box.current) return
-    L.DomEvent.disableClickPropagation(box.current)
-    L.DomEvent.disableScrollPropagation(box.current)
-  }, [])
 
   async function search(e: FormEvent) {
     e.preventDefault()
@@ -64,10 +52,7 @@ function PlaceSearch({ onPick }: { onPick: (place: PlaceResult) => void }) {
   }
 
   return (
-    <div
-      ref={box}
-      className="absolute z-[1000] top-sm left-[56px] right-sm laptop:right-auto laptop:w-[380px] bg-card border border-border rounded-md shadow-elevation-3 p-sm"
-    >
+    <div className="relative">
       <form onSubmit={search} className="flex gap-sm" role="search">
         <Input
           value={q}
@@ -81,9 +66,8 @@ function PlaceSearch({ onPick }: { onPick: (place: PlaceResult) => void }) {
         </Button>
       </form>
       {error && <p className="text-caption text-danger-text mt-xs">{error}</p>}
-      {abroad && !results && <p className="text-caption text-text-muted mt-xs">Capture times run on WIB (Asia/Jakarta).</p>}
       {results && (
-        <ul className="mt-xs border-t border-divider pt-xs max-h-72 overflow-y-auto">
+        <ul className="absolute z-30 left-0 right-0 mt-xs bg-card border border-border rounded-md shadow-elevation-3 py-xs max-h-72 overflow-y-auto">
           {results.length === 0 ? (
             <li className="px-md py-sm text-caption text-text-muted">No places found.</li>
           ) : (
@@ -93,7 +77,6 @@ function PlaceSearch({ onPick }: { onPick: (place: PlaceResult) => void }) {
                   type="button"
                   onClick={() => {
                     onPick(r)
-                    setAbroad(r.countryCode !== null && r.countryCode !== 'id')
                     setResults(null)
                   }}
                   className="flex w-full items-start gap-sm px-md py-sm text-left text-body text-text-primary hover:bg-canvas-secondary"
@@ -130,8 +113,8 @@ export function ZoneMapEditor({ points, onAddPoint, onUndo, onReset }: ZoneMapEd
   const [place, setPlace] = useState<PlaceResult | null>(null)
   return (
     <div className="space-y-sm">
+      <PlaceSearch onPick={setPlace} />
       <MapCanvas polygon={points} interactive className="h-[480px] laptop:h-[640px] w-full">
-        <PlaceSearch onPick={setPlace} />
         <FocusPlace place={place} />
         <ClickCapture onClick={onAddPoint} />
         {points.map((p, i) => (
