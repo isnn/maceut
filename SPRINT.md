@@ -225,6 +225,7 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   - Batas zona: MAX_ZONE_SIDE_KM=100 + MAX_BBOX_DEGREES 0,5 → 1 (batas HERE). validateGeometry memanggil
     validateBBox → 422 saat create. Wizard: titik yang melewati batas tidak ditambahkan, InfoDialog "Zone too
     large"; caption menampilkan lebar × tinggi km. Zona lokal terbesar (JKT) ~37 × 28 km, tidak terdampak.
+  - Peta gambar tidak lagi auto-center/fit tiap titik ditambah (MapCanvas `fitToShape={false}`); pratinjau tetap fit.
   - Wizard: tombol "Next"; masuk langkah kelas jalan → roadClass = PLAN_LIMITS[plan].maxRoadClass bila kosong.
   - Biaya pratinjau: middlewares/rate-limit (in-process, per akun, staf bebas) pada /traffic/preview,
     /traffic/road-class-counts, /geocode → 429 RATE_LIMITED + Retry-After; traffic-cache membulatkan bbox ke

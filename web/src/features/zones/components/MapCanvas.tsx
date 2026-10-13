@@ -54,6 +54,11 @@ interface MapCanvasProps {
   /** Enables the drawing surface; zoom and pan are always on. */
   interactive?: boolean
   /**
+   * Fit the view to the shape whenever it changes (default). Off while drawing: each new
+   * point would otherwise re-centre the map under the cursor (owner, 2026-10-13).
+   */
+  fitToShape?: boolean
+  /**
    * Wheel zoom is off by default on read-only maps so scrolling the page past
    * one doesn't hijack the scroll.
    */
@@ -74,6 +79,7 @@ export function MapCanvas({
   trafficGeoJSON,
   slimTraffic,
   interactive = false,
+  fitToShape = true,
   scrollWheelZoom,
   center,
   zoom = 15,
@@ -107,7 +113,7 @@ export function MapCanvas({
         style={{ height: '100%', width: '100%', background: '#0a0a0a' }}
       >
         <TileLayer url={OSM_TILE_URL} attribution={OSM_ATTRIBUTION} />
-        <FitToPolygon latLngs={latLngs} />
+        {fitToShape && <FitToPolygon latLngs={latLngs} />}
         {latLngs && latLngs.length >= 3 && (
           <Polygon positions={latLngs} pathOptions={{ color: '#5A35F3', fillOpacity: 0.15, weight: 2 }} />
         )}

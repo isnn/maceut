@@ -114,7 +114,7 @@ export function ZoneMapEditor({ points, onAddPoint, onUndo, onReset }: ZoneMapEd
   return (
     <div className="space-y-sm">
       <PlaceSearch onPick={setPlace} />
-      <MapCanvas polygon={points} interactive className="h-[480px] laptop:h-[640px] w-full">
+      <MapCanvas polygon={points} interactive fitToShape={false} className="h-[480px] laptop:h-[640px] w-full">
         <FocusPlace place={place} />
         <ClickCapture onClick={onAddPoint} />
         {points.map((p, i) => (
