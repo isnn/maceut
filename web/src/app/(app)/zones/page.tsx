@@ -374,7 +374,7 @@ function ZoneLimitDialog({
               <div className="flex justify-between px-lg py-md">
                 <dt className="text-body text-text-secondary">{PLAN_LABEL[next]} allows</dt>
                 <dd className="text-body font-semibold text-text-primary">
-                  {PLAN_LIMITS[next].zonesLimit} zones · {CAPTURE_PHRASE[PLAN_LIMITS[next].captureInterval]}
+                  {PLAN_LIMITS[next].zonesLimit} zones, {CAPTURE_PHRASE[PLAN_LIMITS[next].captureInterval]}
                 </dd>
               </div>
             )}

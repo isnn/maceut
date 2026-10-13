@@ -10,7 +10,6 @@ import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { IconArrowLeft } from '@/components/ui/icons'
-import { poolResetDay } from '@/features/plan/pool'
 import { formatDate, formatNumber } from '@/lib/utils'
 import { PLAN_LIMITS } from '@/lib/constants'
 import { ApiError } from '@/types/api'
@@ -90,7 +89,7 @@ export default function InternalUserUsagePage() {
         <div className="min-w-0">
           <h1 className="text-page-title font-bold text-text-primary truncate">{user.fullName || user.email}</h1>
           <p className="text-body text-text-secondary mt-xs">
-            {user.email} · joined {formatDate(user.createdAt)}
+            {user.email}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-sm">
@@ -113,7 +112,7 @@ export default function InternalUserUsagePage() {
             label="Captures this month"
             value={usage.pool.used}
             max={usage.pool.limit}
-            note={`${formatNumber(usage.pool.remaining)} left · resets ${poolResetDay(usage.pool)}`}
+            note={`${formatNumber(usage.pool.remaining)} left`}
           />
           <StatTile label="Storage" value={usage.storageUsedGb} max={usage.storageLimitGb} unit="GB" decimals={2} />
         </div>
@@ -128,7 +127,7 @@ export default function InternalUserUsagePage() {
       </section>
 
       <section className="space-y-md">
-        <h2 className="text-section-title text-text-primary">Zones · {zones.length}</h2>
+        <h2 className="text-section-title text-text-primary">Zones</h2>
         {zones.length === 0 ? (
           <EmptyState title="No zones yet" description="This account hasn’t drawn a zone." />
         ) : (
@@ -139,7 +138,7 @@ export default function InternalUserUsagePage() {
                   <Th>Zone</Th>
                   <Th>Road class</Th>
                   <Th>Status</Th>
-                  <Th className="text-right">Captures · 7 days</Th>
+                  <Th className="text-right">Captures, 7 days</Th>
                   <Th>Created</Th>
                 </tr>
               </thead>
@@ -152,7 +151,7 @@ export default function InternalUserUsagePage() {
                     </Td>
                     <Td>
                       <StatusPill tone={z.status === 'collecting' ? 'success' : z.pausedByPlan ? 'warning' : 'neutral'}>
-                        {z.status === 'collecting' ? 'Collecting' : z.pausedByPlan ? 'Paused · plan limit' : 'Paused'}
+                        {z.status === 'collecting' ? 'Collecting' : 'Paused'}
                       </StatusPill>
                     </Td>
                     <Td className="text-right tabular-nums">{formatNumber(z.capturesLast7Days)}</Td>
@@ -166,7 +165,7 @@ export default function InternalUserUsagePage() {
       </section>
 
       <section className="space-y-md">
-        <h2 className="text-section-title text-text-primary">Capture windows · {windows.length}</h2>
+        <h2 className="text-section-title text-text-primary">Capture windows</h2>
         {windows.length === 0 ? (
           <EmptyState title="No capture windows" description="Nothing is scheduled on this account." />
         ) : (
@@ -196,7 +195,7 @@ export default function InternalUserUsagePage() {
                     <Td className="text-text-secondary">{EVERY[w.interval]}</Td>
                     <Td>
                       <StatusPill tone={w.status === 'active' ? 'success' : w.pausedByPlan ? 'warning' : 'neutral'}>
-                        {w.status === 'active' ? 'Active' : w.pausedByPlan ? 'Paused · plan limit' : 'Paused'}
+                        {w.status === 'active' ? 'Active' : 'Paused'}
                       </StatusPill>
                     </Td>
                   </tr>

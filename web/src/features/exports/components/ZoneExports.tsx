@@ -21,7 +21,7 @@ import { SectionHeader } from '@/components/shared/SectionHeader'
 import { cn, formatWibShort } from '@/lib/utils'
 import { IconDownload, IconFilm, IconRotate } from '@/components/ui/icons'
 import { isActive, removeExport, retryExport, exportErrorMessage, type ExportJob } from '../api'
-import { ExportBar, ExportPill, FORMAT_LABEL, detailFor, useZoneExports } from './ExportProgress'
+import { ExportBar, ExportPill, FORMAT_LABEL, detailFor, keptUntil, useZoneExports } from './ExportProgress'
 
 const when = formatWibShort
 
@@ -95,8 +95,9 @@ export function ZoneExports({ zoneId }: { zoneId: string }) {
                   <Td className="tabular-nums whitespace-nowrap">{when(job.createdAt)}</Td>
                   <Td className="whitespace-nowrap">
                     <span className="block text-body font-semibold text-text-primary">{FORMAT_LABEL[job.format]}</span>
+                    <span className="block text-caption text-text-muted tabular-nums">{job.frameCount} frames</span>
                     <span className="block text-caption text-text-muted tabular-nums">
-                      {job.frameCount} frames · {job.width} × {job.height}
+                      {job.width} × {job.height}
                     </span>
                   </Td>
                   <Td className="tabular-nums whitespace-nowrap text-text-secondary">{range(job)}</Td>
@@ -107,6 +108,7 @@ export function ZoneExports({ zoneId }: { zoneId: string }) {
                       <p className={cn('text-caption', job.status === 'failed' ? 'text-danger-text' : 'text-text-muted')}>
                         {detailFor(job)}
                       </p>
+                      {keptUntil(job) && <p className="text-caption text-text-muted">{keptUntil(job)}</p>}
                     </div>
                   </Td>
                   <Td className="text-right whitespace-nowrap">

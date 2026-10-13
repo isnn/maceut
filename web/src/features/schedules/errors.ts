@@ -31,7 +31,7 @@ const ZOD_FIELD: Record<string, WindowField> = {
 export const FIELD_COPY = {
   zone: 'Choose a zone.',
   label: 'Name this window.',
-  labelLong: 'Too long — 120 characters max.',
+  labelLong: '120 characters max.',
   time: 'Use a time like 07:30.',
   order: 'Ends before it starts.',
   days: 'Pick at least one day.',

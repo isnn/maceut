@@ -153,7 +153,8 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                   label="Captures this month"
                   value={usage.pool.used}
                   max={usage.pool.limit}
-                  note={`${formatNumber(usage.pool.remaining)} left · resets ${poolResetDay(usage.pool)}, 00:00 WIB`}
+                  note={`${formatNumber(usage.pool.remaining)} left`}
+                  sub={`Resets ${poolResetDay(usage.pool)}, 00:00 WIB`}
                 />
                 <UsageMeter
                   label="Scheduled a month"

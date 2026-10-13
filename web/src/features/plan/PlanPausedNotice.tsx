@@ -30,11 +30,11 @@ export function PlanPausedNotice({
       <p className="mt-xs">
         {[...zones.map((z) => z.name), ...windows.map((w) => w.label)].slice(0, 5).join(', ')}
         {zones.length + windows.length > 5 ? `, and ${zones.length + windows.length - 5} more` : ''}. Nothing was
-        deleted. They&rsquo;re over your current plan&rsquo;s limits — pause something else to make room, or{' '}
+        deleted. These are over your plan&rsquo;s limits. Pause something else to make room, or{' '}
         <Link href="/profile" className="font-semibold underline">
-          change your plan
-        </Link>{' '}
-        to resume them.
+          upgrade
+        </Link>
+        .
       </p>
     </Alert>
   )

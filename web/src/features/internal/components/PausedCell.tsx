@@ -8,7 +8,7 @@ export function PausedCell({ zones, windows }: { zones: number; windows: number 
   return (
     <span
       className="tabular-nums font-semibold text-warning-text"
-      title={`${zones} zone${zones === 1 ? '' : 's'} · ${windows} window${windows === 1 ? '' : 's'} paused by plan`}
+      title="Paused by plan"
     >
       {total}
     </span>

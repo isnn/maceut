@@ -104,7 +104,7 @@ export default function InternalOverviewPage() {
         <StatTile
           label="Estimated MRR"
           value={formatIdr(stats.mrr)}
-          note="from plan mix · excludes internal"
+          note="from plan mix"
         />
       </div>
 

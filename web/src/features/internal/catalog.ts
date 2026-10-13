@@ -80,7 +80,7 @@ export const CONFIG_VARS: ConfigVarMeta[] = [
     key: 'RENDER_BASE_URL',
     group: 'capture_engine',
     label: 'Render page base URL',
-    help: 'Where the worker opens the render page — the compose service name, not localhost.',
+    help: 'Render page address.',
     defaultValue: 'http://web:3000',
   },
 
@@ -93,7 +93,7 @@ export const CONFIG_VARS: ConfigVarMeta[] = [
     key: 'EMAIL_PROVIDER',
     group: 'email',
     label: 'Email provider',
-    help: 'console only prints codes to the API log — refused in production.',
+    help: 'Prints codes to the API log; refused in production.',
     defaultValue: 'console',
   },
   { key: 'EMAIL_FROM', group: 'email', label: 'Sender', defaultValue: 'Maceut <no-reply@maceut.id>' },

@@ -67,7 +67,7 @@ const STEPS = [
  * comes from those captures (query in SPRINT.md, FE-43); the source line says it was
  * our run, not a customer's.
  */
-const CASE_SOURCE = 'Maceut team, monitoring Yogyakarta ourselves · 23 Sep to 11 Oct 2026, every road'
+const CASE_SOURCE = 'Maceut team, Yogyakarta, 23 Sep to 11 Oct 2026'
 const USE_CASES: UseCase[] = [
   {
     tab: 'No more counting by hand',

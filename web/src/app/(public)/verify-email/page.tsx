@@ -34,11 +34,10 @@ function VerifyEmail() {
       footer={
         fromSignup ? (
           <>
-            Already have an account with this email? No code is sent for it —{' '}
+            Already have an account with this email?{' '}
             <Link href={`/login?email=${encodeURIComponent(email)}`} className={linkClass()}>
-              log in
-            </Link>{' '}
-            instead.
+              Log in
+            </Link>
           </>
         ) : (
           <Link href="/login" className={linkClass()}>

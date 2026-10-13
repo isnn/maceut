@@ -7,9 +7,6 @@ import { IconClock } from '@/components/ui/icons'
 import type { CaptureWindow } from '../types'
 import type { Zone } from '@/features/zones/types'
 
-/** The interval as a phrase, the same words as the Zones table. */
-const EVERY = { '15min': 'every 15 min', hourly: 'hourly', daily: 'daily' } as const
-
 /** "06:00" in WIB. */
 function clockWib(d: Date): string {
   return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jakarta' }).format(d)
@@ -67,7 +64,7 @@ export function NextCollectionCard({ windows, zones }: { windows: CaptureWindow[
       <Card className="p-lg space-y-md">
         {header()}
         <p className="text-body text-text-secondary">
-          {pending ? 'Being scheduled — this updates in a moment.' : 'No active capture window. Add one to start collecting.'}
+          {pending ? 'Being scheduled…' : 'No active capture window. Add one to start collecting.'}
         </p>
       </Card>
     )
@@ -93,7 +90,7 @@ export function NextCollectionCard({ windows, zones }: { windows: CaptureWindow[
           <span className="text-heading-sm font-medium text-text-muted ml-xs">WIB</span>
         </p>
         <p className="text-caption text-text-muted mt-sm">
-          {days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : 'On'} · {dayLabel}
+          {days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : dayLabel}
         </p>
       </div>
 
@@ -108,7 +105,7 @@ export function NextCollectionCard({ windows, zones }: { windows: CaptureWindow[
                 {zones.find((z) => z.id === w.zoneId)?.name ?? 'Zone'}
               </span>
               <span className="text-caption text-text-secondary whitespace-nowrap">
-                {w.label} · {EVERY[w.interval]}
+                {w.label}
               </span>
             </li>
           ))}

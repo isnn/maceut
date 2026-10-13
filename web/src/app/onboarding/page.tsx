@@ -70,8 +70,7 @@ export default function OnboardingPage() {
           You&rsquo;re set up, {user.fullName?.split(' ')[0] || 'there'}
         </h1>
         <p className="mt-xs text-body text-text-secondary">
-          Your account is on the {PLAN_LABEL.free} plan. Nothing to pay, nothing to choose &mdash; draw a zone and it
-          starts collecting.
+          Your account is on the {PLAN_LABEL.free} plan. Draw a zone to start collecting.
         </p>
 
         <section className="mt-xl bg-card border border-border rounded-lg divide-y divide-divider">
@@ -83,7 +82,7 @@ export default function OnboardingPage() {
           <IncludedRow
             label="Capture windows"
             value={`${limits.schedulesLimit} active`}
-            note="The hours a zone collects — for example weekdays, 07:00 to 09:00."
+            note="The hours a zone collects."
           />
           <IncludedRow
             label="Captures"
