@@ -187,6 +187,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-47** Teks legal & auth: catatan draf & kotak "read first" (termasuk pernyataan Komdigi/PSE) dihapus; catatan independen jadi teks biasa di Terms §1 (EN & ID); teks persetujuan dipersingkat & hanya satu bahasa; lead daftar dihapus; login "Continue with Google" + logo G, ikon email di "Create an account"; ® dihapus dari logo; tagline footer "Connecting people with the road ahead"; baris "Last updated" kini tampil | masukan user 2026-10-12 |
 | ✅ | **OPS-1** Setup deploy maceut.hokya.dev: `web/Dockerfile` produksi (`next build`/`next start`), docker-compose.prod.yml diperbaiki (`!reset`/`!override`: tanpa mount source, port hanya 127.0.0.1, postgres/rabbitmq tanpa port publik), template `api/.env.production.example` & `web/.env.production.example`, panduan docs/operations/deploy.md | permintaan user 2026-10-12 |
 | ✅ | **BE-EMAIL-FB** Email cadangan: `EMAIL_PROVIDER=auto` (default) memakai kunci yang ada, Mailtrap dulu lalu Resend bila Mailtrap gagal; email_log mencatat provider yang benar-benar mengirim | masukan user 2026-10-13 |
+| ✅ | **BE-OTP-EMAIL** Email OTP dwibahasa (ID dulu, lalu EN): sapaan nama, kode sekali dalam kotak violet, tombol yang membuka halaman kode terisi, catatan keamanan, footer tagline + bantuan; subjek menyebut OTP tanpa kode (memicu "Copy code" Gmail) | masukan user 2026-10-13 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -211,6 +212,15 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-13c] BE-OTP-EMAIL — email OTP dwibahasa + tombol isi-otomatis (feat/otp-email-bilingual).
+  - email.service otpEmail: ID lalu EN; subjek "Kode verifikasi Maceut (OTP) · Maceut verification code" (tanpa kode);
+    preheader menyebut OTP; kode tampil SATU kali (dicontoh dari email Midtrans: kata OTP/verification code + satu
+    angka sendiri = Gmail menawarkan "Copy code"); sapaan nama depan dari user.repository (gagal → "Halo,").
+  - Tombol "Verifikasi email · Verify email" → /verify-email?email&code=, "Atur ulang kata sandi" → /forgot-password
+    (langsung ke langkah kata sandi baru). Hanya mengisi kotak, user tetap menekan tombol: pemindai link tidak bisa
+    memakai kode (ADR-026 tetap). change-email/sign-in tanpa tombol.
+  - Warna email = token app sebagai hex literal (klien email tidak membaca Tailwind).
 
 [2026-10-13] BE-EMAIL-FB — Resend sebagai cadangan Mailtrap (feat/email-fallback-resend).
   - lib/email/fallback.provider.ts: mencoba provider berurutan, berhenti di yang pertama menerima; gagal apa pun

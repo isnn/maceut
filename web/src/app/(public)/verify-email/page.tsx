@@ -7,6 +7,9 @@ import { useSearchParams } from 'next/navigation'
 import { AuthShell } from '@/features/auth/components/AuthShell'
 import { VerifyEmailForm } from '@/features/auth/components/VerifyEmailForm'
 
+/** A 6-digit `?code=` from the email's button, or nothing. */
+const codeParam = (v: string | null) => (v && /^\d{6}$/.test(v) ? v : '')
+
 function VerifyEmail() {
   const params = useSearchParams()
   const email = params.get('email')?.trim() ?? ''
@@ -47,7 +50,7 @@ function VerifyEmail() {
         )
       }
     >
-      <VerifyEmailForm email={email} />
+      <VerifyEmailForm email={email} initialCode={codeParam(params.get('code'))} />
     </AuthShell>
   )
 }
