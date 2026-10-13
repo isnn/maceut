@@ -273,7 +273,7 @@ export function ZoneCaptures({ zone, refreshKey = 0 }: { zone: Zone; refreshKey?
                 // The same 44px, rounded-md, bordered surface as a secondary Button.
                 'w-11 h-11 shrink-0 rounded-md border border-border bg-canvas text-text-primary flex items-center justify-center transition-colors',
                 'hover:bg-canvas-secondary focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-                'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent',
+                'disabled:opacity-40 disabled:hover:bg-transparent',
               )}
             >
               <IconArrowLeft size={18} />
@@ -309,7 +309,7 @@ export function ZoneCaptures({ zone, refreshKey = 0 }: { zone: Zone; refreshKey?
                 // The same 44px, rounded-md, bordered surface as a secondary Button.
                 'w-11 h-11 shrink-0 rounded-md border border-border bg-canvas text-text-primary flex items-center justify-center transition-colors',
                 'hover:bg-canvas-secondary focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-                'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent',
+                'disabled:opacity-40 disabled:hover:bg-transparent',
               )}
             >
               <IconArrowRight size={18} />

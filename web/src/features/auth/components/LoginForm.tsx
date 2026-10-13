@@ -59,7 +59,6 @@ export function LoginForm() {
           id="email"
           type="email"
           required
-          placeholder="rizky@binamarga.go.id"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
