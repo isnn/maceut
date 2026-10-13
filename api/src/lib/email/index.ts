@@ -1,5 +1,6 @@
 import { config, type Config } from '../../config/env'
 import { createConsoleProvider } from './console.provider'
+import { createFallbackProvider } from './fallback.provider'
 import { createMailtrapProvider } from './mailtrap.provider'
 import { createResendProvider } from './resend.provider'
 import type { EmailProvider } from './types'
@@ -8,18 +9,24 @@ export type { EmailMessage, EmailProvider } from './types'
 export { EmailSendError } from './types'
 
 /**
- * Picks the provider EMAIL_PROVIDER names. Config validation has already guaranteed
- * the chosen provider has its credential, so the `!` below cannot be reached unset.
+ * Builds the providers config resolved from EMAIL_PROVIDER, in order. With two (auto
+ * mode, both keys set) Mailtrap sends and Resend takes over when it fails. Config
+ * validation has already guaranteed each listed provider has its credential, so the
+ * `!` below cannot be reached unset.
  */
-export function createEmailProvider(c: Pick<Config, 'emailProvider' | 'emailFrom' | 'resendApiKey' | 'mailtrapApiToken' | 'mailtrapInboxId'>): EmailProvider {
-  switch (c.emailProvider) {
-    case 'resend':
-      return createResendProvider({ apiKey: c.resendApiKey!, from: c.emailFrom })
-    case 'mailtrap':
-      return createMailtrapProvider({ apiToken: c.mailtrapApiToken!, from: c.emailFrom, inboxId: c.mailtrapInboxId })
-    case 'console':
-      return createConsoleProvider()
-  }
+export function createEmailProvider(c: Pick<Config, 'emailProviders' | 'emailFrom' | 'resendApiKey' | 'mailtrapApiToken' | 'mailtrapInboxId'>): EmailProvider {
+  return createFallbackProvider(
+    c.emailProviders.map((name) => {
+      switch (name) {
+        case 'resend':
+          return createResendProvider({ apiKey: c.resendApiKey!, from: c.emailFrom })
+        case 'mailtrap':
+          return createMailtrapProvider({ apiToken: c.mailtrapApiToken!, from: c.emailFrom, inboxId: c.mailtrapInboxId })
+        case 'console':
+          return createConsoleProvider()
+      }
+    }),
+  )
 }
 
 let provider: EmailProvider | null = null

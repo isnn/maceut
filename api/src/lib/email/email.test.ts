@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { createResendProvider } from './resend.provider'
 import { createMailtrapProvider } from './mailtrap.provider'
 import { createConsoleProvider } from './console.provider'
+import { createFallbackProvider } from './fallback.provider'
 import { createEmailProvider } from './index'
 import { EmailSendError, parseAddress, type EmailMessage } from './types'
 
@@ -108,9 +109,40 @@ describe('console provider', () => {
 
 describe('createEmailProvider', () => {
   const c = { emailFrom: 'a@b.c', resendApiKey: 're', mailtrapApiToken: 'mt', mailtrapInboxId: undefined }
-  it('builds the provider EMAIL_PROVIDER names', () => {
-    expect(createEmailProvider({ ...c, emailProvider: 'resend' }).name).toBe('resend')
-    expect(createEmailProvider({ ...c, emailProvider: 'mailtrap' }).name).toBe('mailtrap')
-    expect(createEmailProvider({ ...c, emailProvider: 'console' }).name).toBe('console')
+  it('builds the single provider config names', () => {
+    expect(createEmailProvider({ ...c, emailProviders: ['resend'] }).name).toBe('resend')
+    expect(createEmailProvider({ ...c, emailProviders: ['mailtrap'] }).name).toBe('mailtrap')
+    expect(createEmailProvider({ ...c, emailProviders: ['console'] }).name).toBe('console')
+  })
+
+  it('chains Mailtrap then Resend, named after the first', () => {
+    expect(createEmailProvider({ ...c, emailProviders: ['mailtrap', 'resend'] }).name).toBe('mailtrap')
+  })
+})
+
+describe('fallback provider', () => {
+  const ok = (name: 'mailtrap' | 'resend') => ({ name, send: vi.fn().mockResolvedValue(undefined) })
+  const failing = (name: 'mailtrap' | 'resend', reason: string) => ({
+    name,
+    send: vi.fn().mockRejectedValue(new EmailSendError(name, reason, 429)),
+  })
+
+  it('uses only the first provider when it accepts', async () => {
+    const [a, b] = [ok('mailtrap'), ok('resend')]
+    expect(await createFallbackProvider([a, b], vi.fn()).send(message)).toBe('mailtrap')
+    expect(b.send).not.toHaveBeenCalled()
+  })
+
+  it('moves to Resend when Mailtrap fails, and says so', async () => {
+    const warn = vi.fn()
+    const [a, b] = [failing('mailtrap', 'quota exceeded'), ok('resend')]
+    expect(await createFallbackProvider([a, b], warn).send(message)).toBe('resend')
+    expect(b.send).toHaveBeenCalledWith(message)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('mailtrap failed ([mailtrap] quota exceeded), trying resend'))
+  })
+
+  it('throws with every reason when all fail', async () => {
+    const p = createFallbackProvider([failing('mailtrap', 'quota exceeded'), failing('resend', 'bad key')], vi.fn())
+    await expect(p.send(message)).rejects.toThrow(/all providers failed: \[mailtrap\] quota exceeded \| \[resend\] bad key/)
   })
 })

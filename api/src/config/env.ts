@@ -155,11 +155,11 @@ const schema = z.object({
 
   /**
    * Transactional email — sign-up verification and password-reset codes (lib/email).
-   * `console` prints the message to the API log instead of sending it: the dev default,
-   * so `docker compose up` needs no account. Swapping provider is this one key plus
-   * that provider's credential; no code changes.
+   * `auto` (default) uses whichever keys are set: Mailtrap first, Resend as the backup
+   * when Mailtrap fails or runs out; with no key at all it falls to `console`, which
+   * prints the message to the API log (dev only). Naming one provider uses only that one.
    */
-  EMAIL_PROVIDER: z.enum(['console', 'resend', 'mailtrap']).default('console'),
+  EMAIL_PROVIDER: z.enum(['auto', 'console', 'resend', 'mailtrap']).default('auto'),
   EMAIL_FROM: z.string().trim().min(3).default('Maceut <no-reply@maceut.id>'),
   RESEND_API_KEY: optionalStr,
   MAILTRAP_API_TOKEN: optionalStr,
@@ -175,11 +175,11 @@ const schema = z.object({
   if (e.EMAIL_PROVIDER === 'mailtrap' && !e.MAILTRAP_API_TOKEN) {
     ctx.addIssue({ code: 'custom', path: ['MAILTRAP_API_TOKEN'], message: 'required when EMAIL_PROVIDER=mailtrap' })
   }
-  if (e.EMAIL_PROVIDER === 'console' && e.NODE_ENV === 'production') {
+  if (emailProviders(e)[0] === 'console' && e.NODE_ENV === 'production') {
     ctx.addIssue({
       code: 'custom',
       path: ['EMAIL_PROVIDER'],
-      message: 'console only logs codes — set resend or mailtrap in production',
+      message: 'console only logs codes — set MAILTRAP_API_TOKEN and/or RESEND_API_KEY in production',
     })
   }
 })
@@ -277,12 +277,25 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
     swaggerEnabled: e.SWAGGER_ENABLED,
     retentionSweeperEnabled: e.RETENTION_SWEEPER_ENABLED,
 
-    emailProvider: e.EMAIL_PROVIDER,
+    emailProviders: emailProviders(e),
     emailFrom: e.EMAIL_FROM,
     resendApiKey: e.RESEND_API_KEY,
     mailtrapApiToken: e.MAILTRAP_API_TOKEN,
     mailtrapInboxId: e.MAILTRAP_INBOX_ID,
   }
+}
+
+/** The providers to try, in order. `auto`: Mailtrap, then Resend, for each key set. */
+function emailProviders(e: {
+  EMAIL_PROVIDER: 'auto' | 'console' | 'resend' | 'mailtrap'
+  MAILTRAP_API_TOKEN?: string
+  RESEND_API_KEY?: string
+}): ('console' | 'resend' | 'mailtrap')[] {
+  if (e.EMAIL_PROVIDER !== 'auto') return [e.EMAIL_PROVIDER]
+  const chain: ('resend' | 'mailtrap')[] = []
+  if (e.MAILTRAP_API_TOKEN) chain.push('mailtrap')
+  if (e.RESEND_API_KEY) chain.push('resend')
+  return chain.length ? chain : ['console']
 }
 
 export type Config = ReturnType<typeof buildConfig>

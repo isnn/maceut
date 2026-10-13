@@ -85,14 +85,15 @@ export function otpEmail(to: string, otp: string, purpose: OtpPurpose): EmailMes
  */
 export async function sendLogged(message: EmailMessage, category: string, claimedKey?: string): Promise<boolean> {
   const provider = getEmailProvider()
-  const record = (status: 'sent' | 'failed', error?: string) =>
+  const record = (status: 'sent' | 'failed', error?: string, by: string = provider.name) =>
     (claimedKey
       ? notificationRepo.setEmailOutcome(claimedKey, status, error)
-      : notificationRepo.logEmail({ to: message.to, category, status, provider: provider.name, error })
+      : notificationRepo.logEmail({ to: message.to, category, status, provider: by, error })
     ).catch(() => undefined)
   try {
-    await provider.send(message)
-    await record('sent')
+    // A fallback chain reports which provider delivered, so the log names Resend when it took over.
+    const by = (await provider.send(message)) ?? provider.name
+    await record('sent', undefined, by)
     return true
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err)

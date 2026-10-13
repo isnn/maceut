@@ -19,8 +19,11 @@ export interface EmailMessage {
 
 export interface EmailProvider {
   readonly name: 'console' | 'resend' | 'mailtrap'
-  /** Resolves once the provider accepted the message; throws `EmailSendError` if not. */
-  send(message: EmailMessage): Promise<void>
+  /**
+   * Resolves once a provider accepted the message; throws `EmailSendError` if not.
+   * A fallback chain resolves with the name of the provider that actually delivered.
+   */
+  send(message: EmailMessage): Promise<EmailProvider['name'] | void>
 }
 
 /** A provider refused or could not be reached. `status` is the HTTP status, if any. */
