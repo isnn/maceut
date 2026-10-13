@@ -1,6 +1,7 @@
 # env files — never commit actual secrets, only *.example
 .env
 .env.local
+.env.production
 api/.env
 !*.env.example
 
