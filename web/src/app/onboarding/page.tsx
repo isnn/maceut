@@ -15,9 +15,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Logo } from '@/components/ui/Logo'
+import { AppHeader } from '@/components/shared/AppHeader'
 import { Button } from '@/components/ui/Button'
-import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
+import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import { PLAN_LABEL, PLAN_LIMITS } from '@/lib/constants'
 import { formatNumber } from '@/lib/utils'
 import { ApiError } from '@/types/api'
@@ -27,7 +27,6 @@ import { peekIntendedPlan } from '@/features/marketing/intended-plan'
 export default function OnboardingPage() {
   const { user, loading } = useCurrentUser()
   const router = useRouter()
-  const logout = useLogout()
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -63,18 +62,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-page flex flex-col">
-      <header className="border-b border-border bg-canvas">
-        <div className="mx-auto max-w-[1600px] px-xl h-16 flex items-center gap-lg">
-          <Logo href="/onboarding" />
-          <span className="ml-auto text-caption text-text-secondary">{user.email}</span>
-          <button
-            onClick={() => logout()}
-            className="text-caption text-text-secondary hover:text-text-primary transition-colors"
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
+      <AppHeader minimal />
 
       <main className="flex-1 mx-auto w-full max-w-[720px] px-xl py-section">
         <p className="text-label text-text-secondary">Step 2 of 2</p>
