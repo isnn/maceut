@@ -19,6 +19,8 @@ interface ConfirmDialogProps {
    * actions that cannot be undone, where one stray click must not be enough.
    */
   confirmPhrase?: string
+  /** Shown inside the dialog, where the person is looking, when the action failed. */
+  error?: string | null
   onConfirm: () => void
   onCancel: () => void
 }
@@ -32,6 +34,7 @@ export function ConfirmDialog({
   destructive,
   pending,
   confirmPhrase,
+  error,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -45,7 +48,10 @@ export function ConfirmDialog({
         <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[26rem] bg-card border border-border rounded-lg p-xl shadow-elevation-3">
           <DialogCloseX />
           <Dialog.Title className="pr-xl text-section-title text-text-primary mb-sm">{title}</Dialog.Title>
-          <Dialog.Description className="text-body text-text-secondary mb-lg">{description}</Dialog.Description>
+          {/* A <div>, not Base UI's default <p>: descriptions hold paragraphs of their own. */}
+          <Dialog.Description render={<div />} className="text-body text-text-secondary mb-lg">
+            {description}
+          </Dialog.Description>
           {confirmPhrase !== undefined && (
             <form
               className="mb-lg"
@@ -67,6 +73,11 @@ export function ConfirmDialog({
                 disabled={pending}
               />
             </form>
+          )}
+          {error && (
+            <p role="alert" className="text-caption text-danger-text mb-md">
+              {error}
+            </p>
           )}
           <div className="flex justify-end gap-sm">
             <Button variant="secondary" onClick={onCancel} disabled={pending}>

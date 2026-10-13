@@ -260,3 +260,16 @@ export async function downloadCapturesCsv(zoneId: string, days: CsvRange): Promi
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+
+export interface PlaceResult {
+  label: string
+  lat: number
+  lng: number
+  /** [west, south, east, north], or null for a single point. */
+  bbox: [number, number, number, number] | null
+}
+
+/** Place search for the zone map: HERE, then OpenStreetMap past the monthly allowance. */
+export function searchPlaces(q: string) {
+  return apiClient.get<{ provider: 'here' | 'osm'; results: PlaceResult[] }>(`/geocode?q=${encodeURIComponent(q)}`)
+}

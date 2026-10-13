@@ -191,6 +191,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **BE-OTP-EMAIL** Email OTP dwibahasa (blok ID dulu, lalu EN; tiap baris satu bahasa), logo wordmark web (PNG), kode sekali dalam kotak violet berlabel "Kode verifikasi", footer bahasa Inggris; subjek menyebut OTP tanpa kode. Flow tidak berubah (tanpa tombol). Internal → Users: pill Verified / Unverified dari `email_verified` | masukan user 2026-10-13 |
 | ✅ | **FE-50** Bersih-bersih teks: penjelasan setelah "—" (D1–D45) dihapus/ditulis ulang; rangkaian fakta "·" (B1–B33) dihapus atau dipecah jadi baris (dashboard StatTile `aside`/`sub`, UsageMeter `sub`, opsi export Studio dua baris + chip WebP, "Kept until" baris sendiri); import GeoJSON/SHP jadi "Coming soon" | keputusan owner 2026-10-13 |
 | ✅ | **FE-51** Placeholder email login dihapus, daftar → "rizky@maceut.com"; kursor "not-allowed" dihapus dari semua kontrol nonaktif (tetap redup, kursor biasa) | masukan user 2026-10-13 |
+| ✅ | **FE-52** Cari tempat di peta pembuatan zona (`GET /geocode`: HERE Geocoding ≤ 4.000/bulan, lalu OpenStreetMap Nominatim) + peta lebih besar (480px, 640px di laptop); halaman user staf: tombol Edit & Delete seperti di daftar; bug dialog hapus (`<p>` di dalam `<p>`) diperbaiki, error tampil di dalam dialog | masukan user 2026-10-13 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -215,6 +216,16 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-13g] FE-52 — pencarian tempat di peta zona, aksi di halaman user, bug hapus (feat/zone-search-user-actions).
+  - API `GET /geocode?q=` (login): lib/geocoder.ts (HERE geocode, Nominatim), services/geocode.service.ts. HERE selama
+    pencarian HERE bulan WIB ini < HERE_GEOCODE_MONTHLY_LIMIT (4000, free tier HERE 5000); sesudahnya, atau HERE
+    gagal/tanpa kunci → Nominatim (User-Agent Maceut, maks 1 req/detik, tanpa type-ahead). Cache 24 jam / 500 entri.
+    Dihitung di here_usage dengan source `geocode`, TIDAK masuk total/batas HERE Traffic.
+  - Web: kotak "Search a place" di atas peta gambar (Enter/tombol), hasil → map.fitBounds. Peta wizard 480px/640px.
+  - Bug: ConfirmDialog merender description di <p> sementara isinya <p> → error overlay React saat dialog hapus
+    dibuka. Description kini <div>; error hapus tampil di dalam dialog (prop `error`). DeleteUserDialog dipakai
+    bersama oleh daftar Users dan halaman user; halaman user dapat tombol Edit account / Delete account (superadmin).
 
 [2026-10-13f] FE-51 — placeholder auth & kursor tombol nonaktif (fix/auth-placeholders-cursor).
   - LoginForm: placeholder email dihapus. RegisterForm: placeholder "rizky@maceut.com".

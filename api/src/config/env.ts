@@ -130,6 +130,11 @@ const schema = z.object({
 
   HERE_API_KEY: optionalStr,
   HERE_TRAFFIC_FLOW_URL: z.string().url().default('https://data.traffic.hereapi.com/v7/flow'),
+  /**
+   * Place search on the zone map. HERE Geocoding's free tier is 5,000 a month; past this
+   * many HERE searches in a WIB month, search moves to OpenStreetMap Nominatim.
+   */
+  HERE_GEOCODE_MONTHLY_LIMIT: z.coerce.number().int().min(0).default(4000),
 
   OSM_TILE_URL: z.string().trim().default('https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
 
@@ -260,6 +265,7 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
 
     hereApiKey: e.HERE_API_KEY,
     hereTrafficFlowUrl: e.HERE_TRAFFIC_FLOW_URL,
+    hereGeocodeMonthlyLimit: e.HERE_GEOCODE_MONTHLY_LIMIT,
 
     osmTileUrl: e.OSM_TILE_URL,
 

@@ -9,7 +9,7 @@ import { StatusPill } from '@/components/ui/Badge'
 import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
 import { ActionMenu } from '@/components/ui/ActionMenu'
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { DeleteUserDialog } from '@/features/internal/components/DeleteUserDialog'
 import { PlanChangeDialog } from '@/features/plan/PlanChangeDialog'
 import { previewAccountPlanChange, type PlanImpact } from '@/features/plan/impact'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -43,7 +43,6 @@ export default function InternalUsersPage() {
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<InternalUserRow | null>(null)
   const [deleting, setDeleting] = useState<InternalUserRow | null>(null)
-  const [deletePending, setDeletePending] = useState(false)
 
   const load = useCallback(() => internalApi.getUserDirectory(), [])
   const refetch = useCallback(() => load().then(setRows), [load])
@@ -111,22 +110,6 @@ export default function InternalUsersPage() {
     }
     await internalApi.setUserPlan(row.id, plan)
     refetch()
-  }
-
-  async function confirmDelete() {
-    if (!deleting) return
-    setDeletePending(true)
-    setError(null)
-    try {
-      const res = await internalApi.deleteUser(deleting.id)
-      setDeleting(null)
-      refetch()
-      setNotice(`Deleted ${res.deleted.email}`)
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not delete the account. Please try again.')
-    } finally {
-      setDeletePending(false)
-    }
   }
 
   async function confirmDowngrade() {
@@ -441,29 +424,22 @@ export default function InternalUsersPage() {
 
       <EditUserDialog row={editing} onClose={() => setEditing(null)} onSaved={refetch} />
 
-      <ConfirmDialog
-        open={deleting !== null}
-        title={`Delete ${deleting?.fullName ?? ''}?`}
-        description={
-          <>
-            <p>
-              This permanently removes <strong>{deleting?.email}</strong> and everything belonging to the account:
-              zones, capture windows, captures, exports and notifications. It cannot be undone or restored.
-            </p>
-            {deleting && deleting.usage.zonesCount + deleting.usage.zonesPaused > 0 && (
-              <p className="mt-md">
-                Going with it: {deleting.usage.zonesCount + deleting.usage.zonesPaused} zones and{' '}
-                {deleting.usage.schedulesActiveCount + deleting.usage.schedulesPaused} capture windows.
-              </p>
-            )}
-          </>
+      <DeleteUserDialog
+        target={
+          deleting && {
+            id: deleting.id,
+            fullName: deleting.fullName,
+            email: deleting.email,
+            zones: deleting.usage.zonesCount + deleting.usage.zonesPaused,
+            windows: deleting.usage.schedulesActiveCount + deleting.usage.schedulesPaused,
+          }
         }
-        confirmLabel="Delete account"
-        confirmPhrase="delete"
-        destructive
-        pending={deletePending}
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleting(null)}
+        onClose={() => setDeleting(null)}
+        onDeleted={(email) => {
+          setDeleting(null)
+          refetch()
+          setNotice(`Deleted ${email}`)
+        }}
       />
     </div>
   )

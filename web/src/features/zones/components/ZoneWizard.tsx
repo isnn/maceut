@@ -255,7 +255,7 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
               <MapCanvas
                 polygon={geometry}
                 slimTraffic={step === 1 && withTraffic ? shownRoads : undefined}
-                className="h-96 w-full"
+                className="h-[480px] laptop:h-[640px] w-full"
               />
               {loadingTier && (
                 <p className="text-caption text-text-muted" aria-live="polite">
