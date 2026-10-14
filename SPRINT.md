@@ -51,7 +51,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | Backend: /internal/users + /internal/stats (F-21, F-22) + guard role | specs/internal/requirements.md |
 | ✅ | Konvensi DB: semua kolom waktu `timestamptz` + guard test | CLAUDE.md |
 | ✅ | docs/database/schema.dbml — ERD wajib ikut ter-update saat schema berubah | CLAUDE.md |
-| 🔴 | Produksi: ganti kredensial RabbitMQ `guest:guest` di docker-compose.prod.yml | deployment.md |
+| ✅ | Produksi: ganti kredensial RabbitMQ `guest:guest` di docker-compose.prod.yml (RABBITMQ_USER/PASS di root .env, OPS-2) | deployment.md |
 | 🔴 | Middleware: rate-limit (belum ada; /internal tanpa proteksi, Better Auth hanya melindungi route-nya sendiri) | structure.md |
 | ✅ | **BE-12** /internal/config jadi cermin read-only dari `.env` server (ADR-018) — `GET /internal/config`, secret hanya set/tidak, password di URL disamarkan | specs/internal/requirements.md |
 | ✅ | Frontend: ganti mock `features/auth/api.ts` → `/api/auth/*` + GET /me (fetch langsung, tanpa dependency baru) | auth/tasks.md Phase 3 |
@@ -193,6 +193,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-51** Placeholder email login dihapus, daftar → "rizky@maceut.com"; kursor "not-allowed" dihapus dari semua kontrol nonaktif (tetap redup, kursor biasa) | masukan user 2026-10-13 |
 | ✅ | **FE-52** Cari tempat di peta pembuatan zona (`GET /geocode`: HERE Geocoding ≤ 4.000/bulan, lalu OpenStreetMap Nominatim) + peta lebih besar (480px, 640px di laptop); halaman user staf: tombol Edit & Delete seperti di daftar; bug dialog hapus (`<p>` di dalam `<p>`) diperbaiki, error tampil di dalam dialog | masukan user 2026-10-13 |
 | ✅ | **FE-53** Peta zona: pencarian seluruh dunia (Indonesia didahulukan), kotak cari tetap di atas peta; batas zona 100 km/sisi (pop-up saat menggambar, 422 di API); tombol "Next"; kelas jalan default = tertinggi di paket; pelindung biaya pratinjau (limit per akun 30/10 mnt & 200/hari, bbox dibulatkan 0,005°, pratinjau maks 30% batas harian HERE) | masukan user 2026-10-13 |
+| ✅ | **OPS-2** Siap produksi: Next 16.4.0 (CVE kritis RCE image optimizer/next-og), port postgres/rabbitmq dev hanya loopback, kredensial RabbitMQ dari .env, IP rate-limit Better Auth dari CF-Connecting-IP, header keamanan web+API, batas memori & rotasi log di compose prod, overlay Traefik, skrip backup DB, deploy.md (maceut.com + checklist) | review deploy 2026-10-14 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -217,6 +218,16 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-14] OPS-2 — review keamanan sebelum deploy MVP.
+  - Ditemukan: RabbitMQ management (15672, guest/guest) & Postgres 5432 terbuka ke internet di server dev
+    (Docker melewati ufw) → kini 127.0.0.1. Next 16.2.12 punya RCE kritis → 16.4.0; npm audit web 0, api
+    sisa 4 moderate (esbuild via drizzle-kit, tooling).
+  - Better Auth mengembalikan IP null bila X-Forwarded-For berisi >1 alamat (CF + proxy) → semua orang satu
+    bucket rate-limit. Kini cf-connecting-ip dulu; aman hanya bila origin cuma menerima IP Cloudflare.
+  - Compose prod: mem_limit (pg 1g, mq 512m, api 512m, worker 2g/2 CPU, web 768m) + NODE_OPTIONS heap,
+    log json-file 5×10 MB. Web prod terukur ±90 MB.
+  - docker-compose.traefik.yml memakai Traefik host (network proxy, myresolver). scripts/backup-db.sh (pg_dump -Fc).
 
 [2026-10-13h] FE-53 — peta zona: cari dunia, batas 100 km, default kelas jalan, pelindung biaya pratinjau.
   - Geocode: tanpa filter negara; hasil Indonesia diurutkan dulu (rankIndonesiaFirst), countryCode di hasil.

@@ -6,8 +6,10 @@ services:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+    # Loopback only: Docker publishes past ufw, so "5432:5432" puts the database on the
+    # internet. Reach it from this host (psql, Drizzle Studio) or over an SSH tunnel.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -24,12 +26,16 @@ services:
     # discards every queued capture and the code's promise is silently untrue.
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    # Loopback only, same reason as postgres. The management UI (15672) can read, purge
+    # and publish to every queue: open it through an SSH tunnel, never publicly.
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    # From the root .env; must match the user:password in api/.env RABBITMQ_URL. Like
+    # postgres, these only take effect when the rabbitmq_data volume is first created.
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 10s
@@ -74,6 +80,8 @@ services:
     # so the restart policy never fires (2026-10-08). After changing worker code, run
     # `docker compose restart worker`.
     command: npm run worker
+    # A runaway export must not take the shared host down with it.
+    mem_limit: 2g
     # The worker touches this file every 30 s while all its consumers have a channel.
     # Older than 2 minutes means it is running but not consuming. Status only: Compose
     # does not restart an unhealthy container, so a long export is never killed by it.
@@ -100,6 +108,8 @@ services:
     depends_on:
       - api
     command: npm run dev
+    # `next dev` sits near 1.8 GB once every route has compiled.
+    mem_limit: 3g
 
 volumes:
   postgres_data:

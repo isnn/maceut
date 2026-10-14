@@ -150,6 +150,15 @@ export const auth = betterAuth({
   advanced: {
     cookiePrefix: 'maceut',
     useSecureCookies: config.cookieSecure,
+    // The rate limiter (sign-in, OTP) keys on the client IP. Behind Cloudflare and the
+    // host's proxy, X-Forwarded-For carries two or more addresses, and Better Auth then
+    // resolves no IP at all: every visitor lands in one shared bucket, so a few failed
+    // sign-ins lock everyone out. Cloudflare's CF-Connecting-IP is one address, set by
+    // Cloudflare. It is only trustworthy while the origin accepts nothing but Cloudflare
+    // (deploy.md, firewall). Without Cloudflare (dev) it is absent and the next header is used.
+    ipAddress: {
+      ipAddressHeaders: ['cf-connecting-ip', 'x-forwarded-for'],
+    },
   },
 })
 
