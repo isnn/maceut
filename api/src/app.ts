@@ -6,6 +6,7 @@ import { auth } from './lib/auth'
 import routes from './routes'
 import { mountSwagger } from './lib/swagger'
 import { errorHandler, notFoundHandler } from './middlewares/error-handler.middleware'
+import { securityHeaders } from './middlewares/security-headers.middleware'
 import { config } from './config/env'
 
 /**
@@ -17,6 +18,7 @@ import { config } from './config/env'
 export const app = express()
 
 app.disable('x-powered-by')
+app.use(securityHeaders)
 
 /**
  * CORS is deliberately a single exact origin rather than a reflected one.

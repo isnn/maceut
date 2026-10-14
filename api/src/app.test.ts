@@ -82,3 +82,15 @@ describe('swagger', () => {
     expect(res.body.paths).toHaveProperty('/health')
   })
 })
+
+describe('security headers', () => {
+  it('are set on every response, including auth and unknown routes', async () => {
+    for (const path of ['/health', '/no-such-route']) {
+      const res = await request(app).get(path)
+      expect(res.headers['x-content-type-options']).toBe('nosniff')
+      expect(res.headers['x-frame-options']).toBe('DENY')
+      expect(res.headers['content-security-policy']).toBe("frame-ancestors 'none'")
+      expect(res.headers['cross-origin-resource-policy']).toBe('same-site')
+    }
+  })
+})
