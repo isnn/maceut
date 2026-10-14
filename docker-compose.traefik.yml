@@ -5,10 +5,12 @@
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d --build
 #
 # Only web and api join `proxy`; worker, postgres and rabbitmq stay on the project's
-# own network. Guide: docs/operations/deploy.md §2.
+# own network. Traefik reaches the containers over `proxy`, so they publish no host port:
+# the prod file's 127.0.0.1:8080 would also collide with a dev stack on the same host. Guide: docs/operations/deploy.md §2.
 
 services:
   web:
+    ports: !reset []
     networks: [default, proxy]
     labels:
       traefik.enable: "true"
@@ -20,6 +22,7 @@ services:
       traefik.http.services.maceut-web.loadbalancer.server.port: "3000"
 
   api:
+    ports: !reset []
     networks: [default, proxy]
     labels:
       traefik.enable: "true"

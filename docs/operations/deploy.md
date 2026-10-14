@@ -89,9 +89,10 @@ cp web/.env.production.example web/.env.production
 ```bash
 dc up -d --build postgres rabbitmq
 
-# Migrations need drizzle-kit, which the production image does not carry: run them once
-# from the dev image against the same database.
-docker compose run --rm --no-deps api npx drizzle-kit migrate
+# Migrations need drizzle-kit, which the production image does not carry: run them from
+# the dev image against the same database. `--build` matters: both images are tagged
+# <project>-api, so without it `run` reuses the production image, which has no drizzle-kit.
+docker compose run --rm --no-deps --build api npx drizzle-kit migrate
 
 dc up -d --build
 ```
@@ -134,7 +135,7 @@ Restore steps are in the script's header. **Do one test restore before launch.**
 - A verification email arrives from the verified sender and links to `https://maceut.com`.
 
 Retention: before setting `RETENTION_SWEEPER_ENABLED=true`, run the dry run from the dev
-image the same way as migrations: `docker compose run --rm --no-deps api npm run retention:dry-run`.
+image the same way as migrations: `docker compose run --rm --no-deps --build api npm run retention:dry-run`.
 
 ## 8. Launch checklist
 
