@@ -3,9 +3,16 @@
 import { AccountPlanPill, RolePill } from '@/components/ui/Badge'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { ActionMenu } from '@/components/ui/ActionMenu'
+import { EditUserDialog } from '@/features/internal/components/EditUserDialog'
+import { DeleteUserDialog } from '@/features/internal/components/DeleteUserDialog'
+import { VerifiedPill } from '@/features/internal/components/VerifiedPill'
+import { useCurrentUser } from '@/features/auth/hooks/useAuth'
+import { accessOf } from '@/features/auth/types'
 import { Card } from '@/components/ui/Card'
 import { linkClass } from '@/components/ui/Button'
-import { Pagination, SortableTh, Table, TableWrap, Td } from '@/components/ui/Table'
+import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
 import { Input } from '@/components/ui/Input'
 import { cn, formatDate, formatNumber } from '@/lib/utils'
@@ -39,6 +46,14 @@ export default function InternalOverviewPage() {
   useEffect(() => {
     load().then(apply)
   }, [load, apply])
+  const refetch = useCallback(() => load().then(apply), [load, apply])
+
+  // The same row actions as the Users page; edit and delete are superadmin only (FE-34).
+  const router = useRouter()
+  const { user: me } = useCurrentUser()
+  const isSuperadmin = me ? accessOf(me) === 'superadmin' : false
+  const [editing, setEditing] = useState<InternalUserRow | null>(null)
+  const [deleting, setDeleting] = useState<InternalUserRow | null>(null)
 
   // Was a fixed "8 most recent" list, which could not answer any question beyond who
   // signed up last. Same three controls as every other table now, so the overview can
@@ -51,6 +66,7 @@ export default function InternalOverviewPage() {
       zones: (row) => row.usage.zonesCount,
       plan: (row) => PLAN_ORDER.indexOf(row.plan),
       role: (row) => row.role,
+      verified: (row) => (row.emailVerified ? 1 : 0),
       joined: (row) => row.createdAt,
     },
     defaultDirection: { zones: 'desc', joined: 'desc' },
@@ -187,12 +203,20 @@ export default function InternalOverviewPage() {
                   Role
                 </SortableTh>
                 <SortableTh
+                  active={table.sort?.key === 'verified'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('verified')}
+                >
+                  Verified
+                </SortableTh>
+                <SortableTh
                   active={table.sort?.key === 'joined'}
                   direction={table.sort?.direction ?? 'asc'}
                   onSort={() => table.toggleSort('joined')}
                 >
                   Joined
                 </SortableTh>
+                <Th className="text-right">Actions</Th>
               </tr>
             </thead>
             <tbody>
@@ -218,7 +242,26 @@ export default function InternalOverviewPage() {
                   <Td>
                     <RolePill role={row.role} />
                   </Td>
-                  <Td className="text-text-secondary">{formatDate(row.createdAt)}</Td>
+                  <Td>
+                    <VerifiedPill verified={row.emailVerified} />
+                  </Td>
+                  <Td className="text-text-secondary whitespace-nowrap">{formatDate(row.createdAt)}</Td>
+                  <Td className="text-right">
+                    <div className="flex justify-end">
+                      <ActionMenu
+                        label={`Actions for ${row.fullName}`}
+                        items={[
+                          { label: 'View usage', onSelect: () => router.push(`/internal/users/${encodeURIComponent(row.id)}`) },
+                          ...(isSuperadmin
+                            ? [
+                                { label: 'Edit account', onSelect: () => setEditing(row) },
+                                { label: 'Delete account', destructive: true, disabled: row.isYou, onSelect: () => setDeleting(row) },
+                              ]
+                            : []),
+                        ]}
+                      />
+                    </div>
+                  </Td>
                 </tr>
               ))}
             </tbody>
@@ -235,6 +278,24 @@ export default function InternalOverviewPage() {
           onClearSearch={table.search ? () => table.setSearch('') : undefined}
         />
       </section>
+
+      <EditUserDialog row={editing} onClose={() => setEditing(null)} onSaved={refetch} />
+      <DeleteUserDialog
+        target={
+          deleting && {
+            id: deleting.id,
+            fullName: deleting.fullName,
+            email: deleting.email,
+            zones: deleting.usage.zonesCount + deleting.usage.zonesPaused,
+            windows: deleting.usage.schedulesActiveCount + deleting.usage.schedulesPaused,
+          }
+        }
+        onClose={() => setDeleting(null)}
+        onDeleted={() => {
+          setDeleting(null)
+          refetch()
+        }}
+      />
     </div>
   )
 }

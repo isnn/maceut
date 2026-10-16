@@ -178,6 +178,31 @@ router.get('/internal/users/:id/usage', userController.usage)
 
 /**
  * @swagger
+ * /internal/users/{id}/zones/{zoneId}:
+ *   get:
+ *     summary: Satu zona milik akun, read-only, untuk staf
+ *     description: >
+ *       Zona (dengan geometri), jendela capture-nya dan capture terbaru (berhalaman),
+ *       dibaca dengan aturan kepemilikan yang sama seperti pemiliknya. Superadmin dan Admin.
+ *     tags: [Internal]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *       - { in: path, name: zoneId, required: true, schema: { type: string, format: uuid } }
+ *       - { in: query, name: page, schema: { type: integer, default: 1 } }
+ *       - { in: query, name: limit, schema: { type: integer, default: 20, maximum: 50 } }
+ *     responses:
+ *       200:
+ *         description: "{ zone, windows[], captures: { captures[], total, page, limit, totalPages } }"
+ *       401: { description: UNAUTHORIZED }
+ *       403: { description: FORBIDDEN — bukan staf, atau zona bukan milik akun ini }
+ *       404: { description: NOT_FOUND — akun atau zona }
+ *       422: { description: VALIDATION_ERROR }
+ */
+router.get('/internal/users/:id/zones/:zoneId', userController.zoneDetail)
+
+/**
+ * @swagger
  * /internal/users:
  *   post:
  *     summary: Buat akun baru untuk seseorang (F-21)
@@ -276,6 +301,7 @@ router.post('/internal/users', superadminOnly, userController.create)
  *               plan: { type: string, enum: [free, starter, standard, premium] }
  *               role: { type: string, enum: [user, internal] }
  *               password: { type: string, minLength: 8, description: Mengakhiri semua sesi akun itu }
+ *               emailVerified: { type: boolean, description: "Tandai email terverifikasi (atau batalkan). Tanpa verifikasi, akun tidak bisa login dengan password." }
  *     responses:
  *       200:
  *         description: Akun diperbarui

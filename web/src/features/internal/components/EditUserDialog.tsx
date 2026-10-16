@@ -7,25 +7,36 @@
  * server refuses a role change an admin makes to themselves, so submitting an
  * untouched role would 403 someone who was only fixing a typo in a name.
  *
- * The password field is deliberately separate from the rest and empty by default: a
- * pre-filled password box invites an accidental rotation, and rotating signs the
+ * Four sections, in the order staff reach for them: who the person is, what they can
+ * do (account type first, then the plan or staff type that depends on it), whether
+ * their address is verified, and a password reset kept apart and empty by default —
+ * a pre-filled password box invites an accidental rotation, and rotating signs the
  * account out everywhere.
  */
 
-import { FormEvent, useState } from 'react'
+import { FormEvent, ReactNode, useState } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
 import { DialogCloseX } from '@/components/ui/DialogCloseX'
 import { Button } from '@/components/ui/Button'
-import { FormLabel, Input } from '@/components/ui/Input'
+import { Checkbox, FormLabel, Input, PasswordInput } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Alert } from '@/components/ui/Alert'
+import { AccountPlanPill } from '@/components/ui/Badge'
 import { PLAN_LABEL, PLAN_ORDER } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import * as internalApi from '@/features/internal/api'
 import type { InternalUserRow } from '@/features/internal/types'
 import type { Access, Plan } from '@/features/auth/types'
+import { VerifiedPill } from './VerifiedPill'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** 16 characters without look-alikes (0/O, 1/l/I), so it can be read out loud. */
+function generatePassword(): string {
+  const alphabet = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('')
+}
 
 export function EditUserDialog({
   row,
@@ -57,12 +68,14 @@ function EditUserForm({
   const [email, setEmail] = useState(row.email)
   const [plan, setPlan] = useState<Plan>(row.plan)
   const [role, setRole] = useState<Access>(row.access)
+  const [emailVerified, setEmailVerified] = useState(row.emailVerified)
   const [password, setPassword] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const roleByConfig = row.roleLockedByConfig
+  const accessLocked = row.isYou || roleByConfig
   const emailError = submitted && !EMAIL_RE.test(email) ? 'Enter a valid email address.' : null
   const nameError = submitted && !fullName.trim() ? 'A name is required.' : null
   const passwordError = submitted && password !== '' && password.length < 8 ? 'At least 8 characters.' : null
@@ -74,16 +87,19 @@ function EditUserForm({
   if (email.trim().toLowerCase() !== row.email.toLowerCase()) changes.email = email.trim().toLowerCase()
   if (plan !== row.plan) changes.plan = plan
   if (role !== row.access) changes.role = role
+  if (emailVerified !== row.emailVerified) changes.emailVerified = emailVerified
   if (password !== '') changes.password = password
-  const nothingChanged = Object.keys(changes).length === 0
+  const changeCount = Object.keys(changes).length
 
-  const lowersPlan = PLAN_ORDER.indexOf(plan) < PLAN_ORDER.indexOf(row.plan)
+  const isStaff = role !== 'user'
+  const lowersPlan = !isStaff && PLAN_ORDER.indexOf(plan) < PLAN_ORDER.indexOf(row.plan)
+  const emailChanged = changes.email !== undefined
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     setSubmitted(true)
     setError(null)
-    if (!valid || nothingChanged) return
+    if (!valid || changeCount === 0) return
     setSaving(true)
     try {
       await internalApi.updateUser(row.id, changes)
@@ -97,121 +113,176 @@ function EditUserForm({
   }
 
   return (
-    <Dialog.Root open onOpenChange={(next) => !next && onClose()}>
+    <Dialog.Root open onOpenChange={(next) => !next && !saving && onClose()}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-black/40 z-40" />
-        <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[34rem] max-h-[90vh] overflow-y-auto bg-card border border-border rounded-lg p-xl shadow-elevation-3">
-          <DialogCloseX />
-          <form onSubmit={submit} noValidate>
-            <Dialog.Title className="pr-xl text-section-title text-text-primary">Edit account</Dialog.Title>
-            <Dialog.Description className="text-caption text-text-secondary mt-xs mb-lg">
-              {row.email}
-              
-            </Dialog.Description>
+        <Dialog.Popup className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[36rem] max-h-[90vh] flex flex-col bg-card border border-border rounded-lg shadow-elevation-3">
+          <DialogCloseX disabled={saving} />
+          <form onSubmit={submit} noValidate className="flex flex-col min-h-0">
+            <header className="px-xl pt-xl pb-lg border-b border-divider">
+              <Dialog.Title className="pr-xl text-section-title text-text-primary">Edit account</Dialog.Title>
+              <Dialog.Description render={<div />} className="mt-md flex flex-wrap items-center gap-md min-w-0">
+                <span className="w-10 h-10 rounded-full bg-primary-soft text-primary text-label font-bold flex items-center justify-center shrink-0">
+                  {row.fullName.slice(0, 2).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-body font-semibold text-text-primary truncate">{row.fullName}</span>
+                  <span className="block text-caption text-text-muted truncate">{row.email}</span>
+                </span>
+                <span className="flex items-center gap-sm shrink-0">
+                  <AccountPlanPill access={row.access} plan={row.plan} />
+                  <VerifiedPill verified={row.emailVerified} />
+                </span>
+              </Dialog.Description>
+            </header>
 
-            {error && (
-              <Alert variant="warning" className="mb-lg">
-                {error}
-              </Alert>
-            )}
+            <div className="flex-1 min-h-0 overflow-y-auto px-xl py-lg space-y-xl">
+              {error && <Alert variant="warning">{error}</Alert>}
 
-            <div className="space-y-lg">
-              <div className="space-y-xs">
-                <FormLabel htmlFor="edit-name">Full name</FormLabel>
-                <Input id="edit-name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-                {nameError && <p className="text-caption text-danger-text">{nameError}</p>}
-              </div>
-
-              <div className="space-y-xs">
-                <FormLabel htmlFor="edit-email">Email</FormLabel>
-                <Input id="edit-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                {emailError && <p className="text-caption text-danger-text">{emailError}</p>}
-                {roleByConfig && email.trim().toLowerCase() !== row.email.toLowerCase() && (
-                  <p className="text-caption text-warning-text">
-                    This address is listed in INTERNAL_EMAILS. Changing it removes that account&rsquo;s staff access.
-                  </p>
+              <Section title="Profile">
+                <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
+                  <Field id="edit-name" label="Full name" error={nameError}>
+                    <Input id="edit-name" value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="off" />
+                  </Field>
+                  <Field id="edit-email" label="Email" error={emailError}>
+                    <Input id="edit-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
+                  </Field>
+                </div>
+                {roleByConfig && emailChanged && (
+                  <Alert variant="warning">
+                    This address is in INTERNAL_EMAILS. Changing it removes the account&rsquo;s staff access.
+                  </Alert>
                 )}
-              </div>
+              </Section>
 
-              <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
-                <div className="space-y-xs">
-                  <FormLabel htmlFor="edit-plan">Plan</FormLabel>
-                  {/* Internal staff have no customer plan; their plan is their staff type (FE-34). */}
-                  {role === 'user' ? (
+              <Section title="Access">
+                <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
+                  <Field id="edit-role" label="Account type">
                     <Select
-                      value={plan}
-                      onValueChange={(v) => setPlan(v as Plan)}
-                      options={PLAN_ORDER.map((p) => ({ value: p, label: PLAN_LABEL[p] }))}
-                      aria-label="Plan"
-                    />
-                  ) : (
-                    <Select
-                      value={role}
-                      onValueChange={(v) => setRole(v as Access)}
-                      disabled={row.isYou || roleByConfig}
+                      value={isStaff ? 'internal' : 'user'}
+                      // Customer → staff starts as Admin, the lesser staff type.
+                      onValueChange={(v) => setRole(v === 'internal' ? (row.access === 'user' ? 'admin' : row.access) : 'user')}
+                      disabled={accessLocked}
                       options={[
-                      { value: 'admin', label: 'Admin' },
-                      { value: 'superadmin', label: 'Superadmin' },
-                    ]}
-                      aria-label="Staff plan"
+                        { value: 'user', label: 'Customer' },
+                        { value: 'internal', label: 'Staff' },
+                      ]}
+                      aria-label="Account type"
                     />
+                  </Field>
+                  {/* Staff have no customer plan; their access is their staff type (FE-34). */}
+                  {isStaff ? (
+                    <Field id="edit-staff-type" label="Staff type">
+                      <Select
+                        value={role}
+                        onValueChange={(v) => setRole(v as Access)}
+                        disabled={accessLocked}
+                        options={[
+                          { value: 'admin', label: 'Admin' },
+                          { value: 'superadmin', label: 'Superadmin' },
+                        ]}
+                        aria-label="Staff type"
+                      />
+                    </Field>
+                  ) : (
+                    <Field id="edit-plan" label="Plan">
+                      <Select
+                        value={plan}
+                        onValueChange={(v) => setPlan(v as Plan)}
+                        options={PLAN_ORDER.map((p) => ({ value: p, label: PLAN_LABEL[p] }))}
+                        aria-label="Plan"
+                      />
+                    </Field>
                   )}
                 </div>
-                <div className="space-y-xs">
-                  <FormLabel htmlFor="edit-role">Role</FormLabel>
-                  <Select
-                    value={role === 'user' ? 'user' : 'internal'}
-                    onValueChange={(v) => setRole(v === 'internal' ? (row.access === 'user' ? 'admin' : row.access) : 'user')}
-                    disabled={row.isYou || roleByConfig}
-                    options={[
-                      { value: 'user', label: 'Customer' },
-                      { value: 'internal', label: 'Internal' },
-                    ]}
-                    aria-label="Role"
-                  />
-                  {row.isYou && <p className="text-caption text-text-muted">You can’t change your own access.</p>}
-                  {!row.isYou && roleByConfig && (
-                    <p className="text-caption text-text-muted">Superadmin through INTERNAL_EMAILS.</p>
-                  )}
-                </div>
-              </div>
-
-              {lowersPlan && (
-                <Alert variant="warning">
-                  Moving down a plan pauses anything over the new limits.
-                </Alert>
-              )}
-
-              <div className="space-y-xs border-t border-divider pt-lg">
-                <FormLabel htmlFor="edit-password">New password</FormLabel>
-                <Input
-                  id="edit-password"
-                  type="text"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Leave blank to keep the current one"
-                  autoComplete="new-password"
-                />
-                {passwordError && <p className="text-caption text-danger-text">{passwordError}</p>}
                 <p className="text-caption text-text-muted">
-                  Setting a password signs this account out everywhere. There&rsquo;s no email delivery yet, so
-                  you&rsquo;ll need to pass it on yourself.
+                  {row.isYou
+                    ? 'You can’t change your own access.'
+                    : roleByConfig
+                      ? 'Superadmin through INTERNAL_EMAILS, so access is set by the server.'
+                      : isStaff
+                        ? role === 'admin'
+                          ? 'Admins see Overview and Users, and can change plans.'
+                          : 'Superadmins can do everything, including config, the HERE budget and staff access.'
+                        : 'Customers get the limits of their plan.'}
                 </p>
-              </div>
+                {lowersPlan && <Alert variant="warning">Moving down a plan pauses anything over the new limits.</Alert>}
+              </Section>
+
+              <Section title="Email verification">
+                <label htmlFor="edit-verified" className="flex items-start gap-md cursor-pointer">
+                  <Checkbox
+                    id="edit-verified"
+                    checked={emailVerified}
+                    onChange={(e) => setEmailVerified(e.target.checked)}
+                    className="mt-[2px] shrink-0"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-body font-semibold text-text-primary">Email address verified</span>
+                    <span className="block text-caption text-text-muted mt-xs">
+                      Unverified accounts can&rsquo;t sign in with their password. Check this when the code email never
+                      arrived and you&rsquo;ve confirmed the address another way.
+                    </span>
+                  </span>
+                </label>
+              </Section>
+
+              <Section title="Password">
+                <Field id="edit-password" label="New password" error={passwordError}>
+                  <div className="flex items-start gap-sm">
+                    <div className="flex-1 min-w-0">
+                      <PasswordInput
+                        id="edit-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Leave blank to keep the current one"
+                        autoComplete="new-password"
+                      />
+                    </div>
+                    <Button type="button" variant="secondary" onClick={() => setPassword(generatePassword())}>
+                      Generate
+                    </Button>
+                  </div>
+                </Field>
+                <p className="text-caption text-text-muted">
+                  Setting a password signs this account out everywhere. Pass it on to them yourself.
+                </p>
+              </Section>
             </div>
 
-            <div className="mt-xl flex items-center justify-end gap-md">
-              {nothingChanged && <span className="text-caption text-text-muted mr-auto">Nothing changed yet.</span>}
+            <footer className="px-xl py-lg border-t border-divider flex flex-wrap items-center justify-end gap-md">
+              <span className="text-caption text-text-muted mr-auto">
+                {changeCount === 0 ? 'Nothing changed yet.' : `${changeCount} ${changeCount === 1 ? 'change' : 'changes'}`}
+              </span>
               <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={saving || nothingChanged}>
+              <Button type="submit" disabled={saving || changeCount === 0}>
                 {saving ? 'Saving…' : 'Save changes'}
               </Button>
-            </div>
+            </footer>
           </form>
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
+  )
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-md">
+      <h3 className="text-label font-semibold text-text-primary">{title}</h3>
+      {children}
+    </section>
+  )
+}
+
+function Field({ id, label, error, children }: { id: string; label: string; error?: string | null; children: ReactNode }) {
+  return (
+    <div className="space-y-xs min-w-0">
+      <FormLabel htmlFor={id}>{label}</FormLabel>
+      {children}
+      {error && <p className="text-caption text-danger-text">{error}</p>}
+    </div>
   )
 }

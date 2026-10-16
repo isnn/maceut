@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import { EditUserDialog } from '@/features/internal/components/EditUserDialog'
 import { DeleteUserDialog } from '@/features/internal/components/DeleteUserDialog'
+import { VerifiedPill } from '@/features/internal/components/VerifiedPill'
 import type { InternalUserRow } from '@/features/internal/types'
 import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
@@ -14,9 +15,10 @@ import { AccountPlanPill, RoadClassBadge, RolePill, StatusPill } from '@/compone
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
+import { ActionMenu } from '@/components/ui/ActionMenu'
 import { IconArrowLeft } from '@/components/ui/icons'
-import { formatDate, formatNumber } from '@/lib/utils'
-import { PLAN_LIMITS } from '@/lib/constants'
+import { formatDate, formatNumber, formatWibShort } from '@/lib/utils'
+import { PLAN_LABEL, PLAN_LIMITS, PLAN_PRICE } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import { accessOf } from '@/features/auth/types'
 import { DAY_LABEL } from '@/features/schedules/types'
@@ -91,7 +93,8 @@ export default function InternalUserUsagePage() {
     )
   }
 
-  const { user, usage, zones, windows } = data
+  const { user, usage, zones, windows, billing } = data
+  const zoneHref = (zoneId: string) => `/internal/users/${encodeURIComponent(user.id)}/zones/${encodeURIComponent(zoneId)}`
   const limits = PLAN_LIMITS[user.plan]
   const paused = usage.pausedByPlan
 
@@ -109,6 +112,7 @@ export default function InternalUserUsagePage() {
         <div className="ml-auto flex flex-wrap items-center gap-sm">
           <AccountPlanPill access={accessOf(user)} plan={user.plan} />
           <RolePill role={user.role} />
+          <VerifiedPill verified={user.emailVerified ?? false} />
           {isSuperadmin && (
             <>
               <Button variant="secondary" size="sm" onClick={() => setEditing(internalApi.rowFromDetail(data, me?.id))}>
@@ -187,12 +191,17 @@ export default function InternalUserUsagePage() {
                   <Th>Status</Th>
                   <Th className="text-right">Captures, 7 days</Th>
                   <Th>Created</Th>
+                  <Th className="text-right">Actions</Th>
                 </tr>
               </thead>
               <tbody>
                 {zones.map((z) => (
-                  <tr key={z.id}>
-                    <Td className="font-semibold text-text-primary">{z.name}</Td>
+                  <tr key={z.id} className="hover:bg-canvas-secondary/60 transition-colors">
+                    <Td>
+                      <Link href={zoneHref(z.id)} className="font-semibold text-text-primary no-underline hover:text-primary transition-colors">
+                        {z.name}
+                      </Link>
+                    </Td>
                     <Td>
                       <RoadClassBadge roadClass={z.roadClass as RoadClass} />
                     </Td>
@@ -203,6 +212,11 @@ export default function InternalUserUsagePage() {
                     </Td>
                     <Td className="text-right tabular-nums">{formatNumber(z.capturesLast7Days)}</Td>
                     <Td className="text-text-secondary whitespace-nowrap">{formatDate(z.createdAt)}</Td>
+                    <Td className="text-right">
+                      <div className="flex justify-end">
+                        <ActionMenu label={`Actions for ${z.name}`} items={[{ label: 'View zone', onSelect: () => router.push(zoneHref(z.id)) }]} />
+                      </div>
+                    </Td>
                   </tr>
                 ))}
               </tbody>
@@ -226,13 +240,18 @@ export default function InternalUserUsagePage() {
                   <Th>Days</Th>
                   <Th>Interval</Th>
                   <Th>Status</Th>
+                  <Th className="text-right">Actions</Th>
                 </tr>
               </thead>
               <tbody>
                 {windows.map((w) => (
-                  <tr key={w.id}>
+                  <tr key={w.id} className="hover:bg-canvas-secondary/60 transition-colors">
                     <Td className="font-semibold text-text-primary">{w.label}</Td>
-                    <Td className="text-text-secondary">{w.zoneName}</Td>
+                    <Td>
+                      <Link href={zoneHref(w.zoneId)} className="text-text-secondary no-underline hover:text-primary transition-colors">
+                        {w.zoneName}
+                      </Link>
+                    </Td>
                     <Td className="tabular-nums whitespace-nowrap">
                       {w.start}–{w.end}
                     </Td>
@@ -245,6 +264,11 @@ export default function InternalUserUsagePage() {
                         {w.status === 'active' ? 'Active' : 'Paused'}
                       </StatusPill>
                     </Td>
+                    <Td className="text-right">
+                      <div className="flex justify-end">
+                        <ActionMenu label={`Actions for ${w.label}`} items={[{ label: 'View zone', onSelect: () => router.push(zoneHref(w.zoneId)) }]} />
+                      </div>
+                    </Td>
                   </tr>
                 ))}
               </tbody>
@@ -252,7 +276,68 @@ export default function InternalUserUsagePage() {
           </TableWrap>
         )}
       </section>
+
+      <BillingSection billing={billing} isStaff={accessOf(user) !== 'user'} />
     </div>
+  )
+}
+
+/**
+ * Billing (no payments yet): the plan and its price, since when it applies, and every
+ * change that led to it. Online payment is not open, so plans are moved by staff; the
+ * history says who.
+ */
+function BillingSection({ billing, isStaff }: { billing: internalApi.AccountUsageDetail['billing']; isStaff: boolean }) {
+  const price = PLAN_PRICE[billing.plan]
+  return (
+    <section className="space-y-md">
+      <h2 className="text-section-title text-text-primary">Billing</h2>
+      <Card className="p-lg">
+        <dl className="grid grid-cols-2 laptop:grid-cols-4 gap-lg">
+          <Fact label="Plan" value={isStaff ? `${PLAN_LABEL[billing.plan]} (staff account)` : PLAN_LABEL[billing.plan]} />
+          <Fact label="Price" value={`${price.amount} ${price.period}`} />
+          <Fact label="On this plan since" value={billing.startedAt ? formatDate(billing.startedAt) : '—'} />
+          <Fact label="Renews / expires" value={billing.expiresAt ? formatDate(billing.expiresAt) : 'No end date'} />
+        </dl>
+        <p className="text-caption text-text-muted mt-lg">Online payment isn’t open yet. Plans are changed by staff.</p>
+      </Card>
+
+      <h3 className="text-label text-text-secondary">Plan history</h3>
+      {billing.history.length === 0 ? (
+        <EmptyState title="No plan changes recorded" description="Changes are recorded from 16 Oct 2026." />
+      ) : (
+        <TableWrap>
+          <Table>
+            <thead>
+              <tr>
+                <Th>When (WIB)</Th>
+                <Th>Change</Th>
+                <Th>By</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {billing.history.map((h) => (
+                <tr key={h.id}>
+                  <Td className="tabular-nums whitespace-nowrap">{formatWibShort(h.createdAt)}</Td>
+                  <Td className="whitespace-nowrap">
+                    {h.fromPlan === null ? (
+                      <>Created on <span className="font-semibold text-text-primary">{PLAN_LABEL[h.toPlan]}</span></>
+                    ) : (
+                      <>
+                        {PLAN_LABEL[h.fromPlan]} &rarr; <span className="font-semibold text-text-primary">{PLAN_LABEL[h.toPlan]}</span>
+                      </>
+                    )}
+                  </Td>
+                  <Td className="text-text-secondary">
+                    {h.source === 'self' ? 'The customer' : (h.changedBy ?? 'Staff')}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </TableWrap>
+      )}
+    </section>
   )
 }
 

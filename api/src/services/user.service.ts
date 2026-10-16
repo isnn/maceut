@@ -20,6 +20,10 @@ import * as captureRepo from '../repositories/capture.repository'
 import * as exportRepo from '../repositories/export.repository'
 import * as renderCacheRepo from '../repositories/render-cache.repository'
 import * as usageService from './usage.service'
+import * as planChangeRepo from '../repositories/plan-change.repository'
+import * as zoneService from './zone.service'
+import * as scheduleService from './schedule.service'
+import * as captureService from './capture.service'
 
 /**
  * User records and platform administration (F-21, F-22).
@@ -156,6 +160,9 @@ export async function changeOwnPlan(userId: string, plan: Plan): Promise<PlanCha
   if (current && isUpgrade(current.plan, plan)) throw new UpgradeNotSelfServeError(plan)
 
   await userRepo.setPlan(userId, plan)
+  if (current?.plan !== plan) {
+    await planChangeRepo.record({ userId, fromPlan: current?.plan ?? null, toPlan: plan, source: 'self' })
+  }
   // Grandfather and block (ADR-020): pause what no longer fits, delete nothing.
   const impact = await planService.applyPlanChange(userId, plan)
   if (current) {
@@ -279,12 +286,16 @@ function pausedNames(impact: planService.PlanImpact): string[] {
 }
 
 /** Staff changing a customer's plan from /internal. Same grandfather rule. */
-export async function changePlan(userId: string, plan: Plan): Promise<PlanChangeResult> {
+/** Staff moving an account's plan. `actorId` is recorded in the plan history (Billing). */
+export async function changePlan(userId: string, plan: Plan, actorId?: string): Promise<PlanChangeResult> {
   const found = await userRepo.findById(userId)
   if (!found) throw new NotFoundError('User')
 
   const before = await userRepo.findByIdWithPlan(userId)
   await userRepo.setPlan(userId, plan)
+  if (before?.plan !== plan) {
+    await planChangeRepo.record({ userId, fromPlan: before?.plan ?? null, toPlan: plan, source: 'staff', changedBy: actorId })
+  }
   const impact = await planService.applyPlanChange(userId, plan)
   // Made by staff, so the customer may not know yet: this one also emails (NOTIF).
   if (before) {
@@ -435,7 +446,7 @@ export interface CreatedUser {
  *    a person, and the onboarding screen would tell someone on a granted Premium plan
  *    that they are on Free.
  */
-export async function createUser(input: CreateUserInput): Promise<CreatedUser> {
+export async function createUser(input: CreateUserInput, actorId?: string): Promise<CreatedUser> {
   // Checked before Better Auth so the answer is this API's error contract rather than
   // Better Auth's, which the internal screens do not parse.
   const existing = await userRepo.findByEmail(input.email)
@@ -455,6 +466,7 @@ export async function createUser(input: CreateUserInput): Promise<CreatedUser> {
 
   await userRepo.ensurePlan(userId, input.plan)
   await userRepo.setPlan(userId, input.plan)
+  await planChangeRepo.record({ userId, fromPlan: null, toPlan: input.plan, source: 'staff', changedBy: actorId })
   await userRepo.updateUser(userId, { ...columnsFor(input.role), onboardingDone: true })
 
   return { user: await getUser(userId), temporaryPassword: generated }
@@ -495,6 +507,8 @@ export interface UpdateUserInput {
   plan?: Plan
   role?: Access
   password?: string
+  /** Superadmin only (route-level). */
+  emailVerified?: boolean
 }
 
 /**
@@ -554,6 +568,12 @@ export async function updateUserAsStaff(
     await setPasswordAndRevokeSessions(targetUserId, input.password)
   }
 
+  // Staff vouching for an address (the code email never arrived), or taking that back.
+  // Unverified, the account can't sign in with its password (requireEmailVerification).
+  if (input.emailVerified !== undefined && input.emailVerified !== target.emailVerified) {
+    await userRepo.updateUser(targetUserId, { emailVerified: input.emailVerified })
+  }
+
   // Only when it actually moves. A dialog submits the whole object, so an unchanged
   // role would otherwise trip changeRole's no-self-edit guard and 403 an admin who was
   // only renaming themselves.
@@ -576,7 +596,7 @@ export async function updateUserAsStaff(
   // the grandfather pass for a plan that did not move is work with nothing to report.
   const currentPlan = (await userRepo.findByIdWithPlan(targetUserId))?.plan
   if (input.plan !== undefined && input.plan !== currentPlan) {
-    return changePlan(targetUserId, input.plan)
+    return changePlan(targetUserId, input.plan, actorId)
   }
 
   return { user: await getUser(targetUserId), impact: null }
@@ -655,15 +675,31 @@ export interface AccountUsageDetail {
     status: string
     pausedByPlan: boolean
   }[]
+  /** Billing is not implemented (no payments): the plan, since when, and how it got there. */
+  billing: {
+    plan: Plan
+    startedAt: string | null
+    expiresAt: string | null
+    history: {
+      id: string
+      fromPlan: Plan | null
+      toPlan: Plan
+      source: 'self' | 'staff'
+      changedBy: string | null
+      createdAt: string
+    }[]
+  }
 }
 
 export async function getAccountUsage(userId: string, now: Date = new Date()): Promise<AccountUsageDetail> {
   const user = await getUser(userId)
-  const [usage, zones, schedules, captures7d] = await Promise.all([
+  const [usage, zones, schedules, captures7d, planRow, planHistory] = await Promise.all([
     usageService.getUsage(userId),
     zoneRepo.findByUserId(userId),
     scheduleRepo.findByUserId(userId),
     captureRepo.countsByZoneSince(userId, new Date(now.getTime() - 7 * 86_400_000)),
+    userRepo.findPlanRow(userId),
+    planChangeRepo.listByUser(userId),
   ])
   const zoneName = new Map(zones.map((z) => [z.id, z.name]))
   return {
@@ -692,5 +728,37 @@ export async function getAccountUsage(userId: string, now: Date = new Date()): P
         status: s.status,
         pausedByPlan: s.pausedByPlan,
       })),
+    billing: {
+      plan: user.plan,
+      startedAt: planRow?.startedAt.toISOString() ?? null,
+      expiresAt: planRow?.expiresAt?.toISOString() ?? null,
+      history: planHistory.map((h) => ({ ...h, createdAt: h.createdAt.toISOString() })),
+    },
   }
+}
+
+/** One zone of an account, read-only, for staff (internal zone detail page). */
+export interface AccountZoneDetail {
+  zone: Awaited<ReturnType<typeof zoneService.getZone>>
+  windows: Awaited<ReturnType<typeof scheduleService.listForZone>>
+  captures: Awaited<ReturnType<typeof captureService.listForZone>>
+}
+
+/**
+ * The same reads the owner gets, scoped to the account that owns the zone: the zone
+ * services check `zone.userId === userId`, so a zone id from another account answers
+ * 404/403 exactly as it would for the customer.
+ */
+export async function getAccountZone(
+  userId: string,
+  zoneId: string,
+  params: { page: number; limit: number },
+): Promise<AccountZoneDetail> {
+  await getUser(userId)
+  const zone = await zoneService.getZone(userId, zoneId)
+  const [windows, captures] = await Promise.all([
+    scheduleService.listForZone(userId, zoneId),
+    captureService.listForZone(userId, zoneId, params),
+  ])
+  return { zone, windows, captures }
 }

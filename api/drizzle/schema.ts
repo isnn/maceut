@@ -45,6 +45,34 @@ export const userPlans = pgTable(
 
 export type UserPlanRow = typeof userPlans.$inferSelect
 
+/** Who moved a plan: the customer themselves, or staff (also an account created by staff). */
+export const planChangeSourceEnum = pgEnum('plan_change_source', ['self', 'staff'])
+
+/**
+ * Every plan change, for the Billing section of the staff user page. `user_plans` only
+ * holds the current plan, and the `plan_changed` notification is pruned after 90 days
+ * and not written for an account staff create, so neither can serve as a history.
+ * Appended only. `from_plan` is NULL for an account created on a plan.
+ */
+export const planChanges = pgTable(
+  'plan_changes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    fromPlan: planEnum('from_plan'),
+    toPlan: planEnum('to_plan').notNull(),
+    source: planChangeSourceEnum('source').notNull(),
+    /** The staff member who made it; NULL for a self-serve change or a deleted staff account. */
+    changedBy: text('changed_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('plan_changes_user_created_idx').on(t.userId, t.createdAt)],
+)
+
+export type PlanChangeRow = typeof planChanges.$inferSelect
+
 /** BR-020: chosen when the zone is created, and editable afterwards per BR-029. */
 export const roadClassEnum = pgEnum('road_class', ['nasional', 'nasional_provinsi', 'semua'])
 

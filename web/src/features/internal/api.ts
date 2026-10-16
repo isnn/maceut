@@ -18,6 +18,9 @@ import { apiClient } from '@/lib/api-client'
 import { accessOf, type Access, type Plan, type User } from '@/features/auth/types'
 import type { CapturePool } from '@/features/plan/pool'
 import type { AccountUsage, InternalUserRow, PlatformStats } from './types'
+import type { Zone } from '@/features/zones/types'
+import type { Capture } from '@/features/zones/api'
+import type { CaptureWindow } from '@/features/schedules/types'
 
 /** Rupiah per month, used for the MRR estimate on the overview. */
 const PLAN_MONTHLY_IDR: Record<Plan, number> = { free: 0, starter: 99_000, standard: 349_000, premium: 1_490_000 }
@@ -191,6 +194,8 @@ export interface UpdateUserInput {
   role?: Access
   /** Changing this signs the account out everywhere. */
   password?: string
+  /** Superadmin only. Unverified, the account can't sign in with its password. */
+  emailVerified?: boolean
 }
 
 export interface UpdatedUser {
@@ -288,8 +293,39 @@ export interface AccountUsageDetail {
     status: 'active' | 'paused'
     pausedByPlan: boolean
   }[]
+  /** No payments yet: the plan, since when, and every change that led to it. */
+  billing: {
+    plan: Plan
+    startedAt: string | null
+    expiresAt: string | null
+    history: PlanChange[]
+  }
+}
+
+export interface PlanChange {
+  id: string
+  /** Null when the account was created on `toPlan`. */
+  fromPlan: Plan | null
+  toPlan: Plan
+  source: 'self' | 'staff'
+  /** The staff member's name; null for a self-serve change. */
+  changedBy: string | null
+  createdAt: string
 }
 
 export function getAccountUsage(userId: string): Promise<AccountUsageDetail> {
   return apiClient.get<AccountUsageDetail>(`/internal/users/${encodeURIComponent(userId)}/usage`)
+}
+
+/** One of an account's zones, read-only for staff: the zone, its windows, its latest captures. */
+export interface AccountZoneDetail {
+  zone: Zone
+  windows: CaptureWindow[]
+  captures: { captures: Capture[]; total: number; page: number; limit: number; totalPages: number }
+}
+
+export function getAccountZone(userId: string, zoneId: string, page = 1, limit = 20): Promise<AccountZoneDetail> {
+  return apiClient.get<AccountZoneDetail>(
+    `/internal/users/${encodeURIComponent(userId)}/zones/${encodeURIComponent(zoneId)}?page=${page}&limit=${limit}`,
+  )
 }

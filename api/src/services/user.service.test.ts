@@ -15,6 +15,7 @@ vi.mock('../repositories/user.repository', () => ({
   countInternal: vi.fn(async () => 0),
   countSuperadmins: vi.fn(async () => 0),
 }))
+vi.mock('../repositories/plan-change.repository', () => ({ record: vi.fn(), listByUser: vi.fn(async () => []) }))
 vi.mock('../repositories/zone.repository', () => ({
   findByUserId: vi.fn(async () => []),
   update: vi.fn(),
@@ -62,6 +63,7 @@ import * as renderCacheRepo from '../repositories/render-cache.repository'
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
 import * as captureRepo from '../repositories/capture.repository'
+import * as planChangeRepo from '../repositories/plan-change.repository'
 import {
   changeOwnPlan,
   changePlan,
@@ -485,5 +487,30 @@ describe('deleteUser — removing an account (F-22)', () => {
     vi.mocked(userRepo.findById).mockResolvedValue(undefined as never)
 
     await expect(deleteUser(USER, 'nobody')).rejects.toBeInstanceOf(NotFoundError)
+  })
+})
+
+describe('plan history (Billing)', () => {
+  it('records a self-serve downgrade', async () => {
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(row({ plan: 'premium' }))
+    await changeOwnPlan(USER, 'free')
+    expect(planChangeRepo.record).toHaveBeenCalledWith({ userId: USER, fromPlan: 'premium', toPlan: 'free', source: 'self' })
+  })
+
+  it('records an account created on a plan, by the staff member who made it', async () => {
+    await createUser({ email: 'siti@example.com', fullName: 'Siti', plan: 'standard', role: 'user' }, 'staff_01')
+    expect(planChangeRepo.record).toHaveBeenCalledWith({
+      userId: USER,
+      fromPlan: null,
+      toPlan: 'standard',
+      source: 'staff',
+      changedBy: 'staff_01',
+    })
+  })
+
+  it('records nothing when the plan does not move', async () => {
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(row({ plan: 'standard' }))
+    await changePlan(USER, 'standard', 'staff_01')
+    expect(planChangeRepo.record).not.toHaveBeenCalled()
   })
 })

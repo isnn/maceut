@@ -55,7 +55,7 @@ export async function create(req: Request, res: Response, next: NextFunction) {
       plan: body.plan as Plan,
       role: body.role,
       password: body.password,
-    })
+    }, req.userId)
     return res.status(201).json(ok(created))
   } catch (err) {
     next(err)
@@ -66,6 +66,23 @@ export async function detail(req: Request, res: Response, next: NextFunction) {
   try {
     const id = userIdParam.parse(req.params.id)
     return res.status(200).json(ok(await userService.getUser(id)))
+  } catch (err) {
+    next(err)
+  }
+}
+
+const zoneDetailQuery = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(50).default(20),
+})
+
+/** GET /internal/users/:id/zones/:zoneId — one of the account's zones, read-only, for staff. */
+export async function zoneDetail(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = userIdParam.parse(req.params.id)
+    const zoneId = z.string().uuid('Id zona tidak valid.').parse(req.params.zoneId)
+    const query = zoneDetailQuery.parse(req.query)
+    return res.status(200).json(ok(await userService.getAccountZone(id, zoneId, query)))
   } catch (err) {
     next(err)
   }
@@ -85,7 +102,7 @@ export async function changePlan(req: Request, res: Response, next: NextFunction
   try {
     const id = userIdParam.parse(req.params.id)
     const { plan } = changePlanSchema.parse(req.body)
-    return res.status(200).json(ok(await userService.changePlan(id, plan as Plan)))
+    return res.status(200).json(ok(await userService.changePlan(id, plan as Plan, req.userId)))
   } catch (err) {
     next(err)
   }
@@ -132,6 +149,7 @@ export async function update(req: Request, res: Response, next: NextFunction) {
           plan: body.plan as Plan | undefined,
           role: body.role,
           password: body.password,
+          emailVerified: body.emailVerified,
         }),
       ),
     )

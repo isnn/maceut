@@ -194,6 +194,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-52** Cari tempat di peta pembuatan zona (`GET /geocode`: HERE Geocoding ≤ 4.000/bulan, lalu OpenStreetMap Nominatim) + peta lebih besar (480px, 640px di laptop); halaman user staf: tombol Edit & Delete seperti di daftar; bug dialog hapus (`<p>` di dalam `<p>`) diperbaiki, error tampil di dalam dialog | masukan user 2026-10-13 |
 | ✅ | **FE-53** Peta zona: pencarian seluruh dunia (Indonesia didahulukan), kotak cari tetap di atas peta; batas zona 100 km/sisi (pop-up saat menggambar, 422 di API); tombol "Next"; kelas jalan default = tertinggi di paket; pelindung biaya pratinjau (limit per akun 30/10 mnt & 200/hari, bbox dibulatkan 0,005°, pratinjau maks 30% batas harian HERE) | masukan user 2026-10-13 |
 | ✅ | **OPS-2** Siap produksi: Next 16.4.0 (CVE kritis RCE image optimizer/next-og), port postgres/rabbitmq dev hanya loopback, kredensial RabbitMQ dari .env, IP rate-limit Better Auth dari CF-Connecting-IP, header keamanan web+API, batas memori & rotasi log di compose prod, overlay Traefik, skrip backup DB, deploy.md (maceut.com + checklist) | review deploy 2026-10-14 |
+| ✅ | **FE-54** Internal: zona & jadwal user bisa dilihat (halaman zona read-only: peta, jendela, capture berhalaman; `GET /internal/users/:id/zones/:zoneId`), kolom Actions di Overview, kolom Verified di tabel Users & Overview, superadmin bisa ubah status verified, modal Edit user ditata ulang (Profile · Access · Email verification · Password), seksi Billing di detail user (paket, harga, sejak, riwayat perubahan dari tabel baru `plan_changes`) | masukan user 2026-10-16 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -218,6 +219,16 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-16] FE-54 — alat akun di Internal.
+  - Riwayat paket: tabel baru plan_changes (migrasi 0021), bukan notifikasi plan_changed — notifikasi dihapus
+    setelah 90 hari dan tidak ditulis untuk akun buatan staf. Dicatat di changeOwnPlan (self), changePlan dan
+    createUser (staff, dengan id staf). Riwayat mulai 2026-10-16; tidak di-backfill.
+  - Zona staf: memakai service milik pemilik dengan userId akun di path, jadi aturan kepemilikan sama. Read-only:
+    tanpa thumbnail capture (rute gambar hanya untuk pemilik).
+  - Verified: PATCH /internal/users/:id { emailVerified } (superadmin). Akun buatan staf tetap belum terverifikasi
+    sampai kodenya dimasukkan atau staf mencentangnya.
+  - Label status capture dipindah ke features/zones/capture-labels.ts (dipakai halaman zona pelanggan & staf).
 
 [2026-10-14] OPS-2 — review keamanan sebelum deploy MVP.
   - Ditemukan: RabbitMQ management (15672, guest/guest) & Postgres 5432 terbuka ke internet di server dev

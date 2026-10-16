@@ -68,6 +68,7 @@ export const updateUserSchema = z
     plan: planEnum.optional(),
     role: accessEnum.optional(),
     password: z.string().min(8, 'Password minimal 8 karakter.').max(128, 'Password terlalu panjang.').optional(),
+    emailVerified: z.boolean().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Tidak ada perubahan yang dikirim.' })
 
