@@ -18,7 +18,8 @@ import { FormEvent, ReactNode, useState } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
 import { DialogCloseX } from '@/components/ui/DialogCloseX'
 import { Button } from '@/components/ui/Button'
-import { Checkbox, FormLabel, Input, PasswordInput } from '@/components/ui/Input'
+import { FormLabel, Input, PasswordInput } from '@/components/ui/Input'
+import { Switch } from '@/components/ui/Switch'
 import { Select } from '@/components/ui/Select'
 import { Alert } from '@/components/ui/Alert'
 import { AccountPlanPill } from '@/components/ui/Badge'
@@ -76,6 +77,11 @@ function EditUserForm({
 
   const roleByConfig = row.roleLockedByConfig
   const accessLocked = row.isYou || roleByConfig
+  const lockReason = row.isYou
+    ? 'You can’t change your own access'
+    : roleByConfig
+      ? 'Set by INTERNAL_EMAILS on the server'
+      : undefined
   const emailError = submitted && !EMAIL_RE.test(email) ? 'Enter a valid email address.' : null
   const nameError = submitted && !fullName.trim() ? 'A name is required.' : null
   const passwordError = submitted && password !== '' && password.length < 8 ? 'At least 8 characters.' : null
@@ -156,13 +162,16 @@ function EditUserForm({
               </Section>
 
               <Section title="Access">
-                <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
+                <div className="grid grid-cols-1 tablet:grid-cols-2 gap-xl">
                   <Field id="edit-role" label="Account type">
                     <Select
                       value={isStaff ? 'internal' : 'user'}
                       // Customer → staff starts as Admin, the lesser staff type.
                       onValueChange={(v) => setRole(v === 'internal' ? (row.access === 'user' ? 'admin' : row.access) : 'user')}
                       disabled={accessLocked}
+                      title={lockReason}
+                      modal={false}
+                      className="w-full"
                       options={[
                         { value: 'user', label: 'Customer' },
                         { value: 'internal', label: 'Staff' },
@@ -177,6 +186,9 @@ function EditUserForm({
                         value={role}
                         onValueChange={(v) => setRole(v as Access)}
                         disabled={accessLocked}
+                        title={lockReason}
+                        modal={false}
+                        className="w-full"
                         options={[
                           { value: 'admin', label: 'Admin' },
                           { value: 'superadmin', label: 'Superadmin' },
@@ -189,42 +201,29 @@ function EditUserForm({
                       <Select
                         value={plan}
                         onValueChange={(v) => setPlan(v as Plan)}
+                        modal={false}
+                        className="w-full"
                         options={PLAN_ORDER.map((p) => ({ value: p, label: PLAN_LABEL[p] }))}
                         aria-label="Plan"
                       />
                     </Field>
                   )}
                 </div>
-                <p className="text-caption text-text-muted">
-                  {row.isYou
-                    ? 'You can’t change your own access.'
-                    : roleByConfig
-                      ? 'Superadmin through INTERNAL_EMAILS, so access is set by the server.'
-                      : isStaff
-                        ? role === 'admin'
-                          ? 'Admins see Overview and Users, and can change plans.'
-                          : 'Superadmins can do everything, including config, the HERE budget and staff access.'
-                        : 'Customers get the limits of their plan.'}
-                </p>
                 {lowersPlan && <Alert variant="warning">Moving down a plan pauses anything over the new limits.</Alert>}
               </Section>
 
               <Section title="Email verification">
-                <label htmlFor="edit-verified" className="flex items-start gap-md cursor-pointer">
-                  <Checkbox
+                <div className="flex items-center justify-between gap-lg">
+                  <label htmlFor="edit-verified" className="text-body text-text-primary cursor-pointer">
+                    Email address verified
+                  </label>
+                  <Switch
                     id="edit-verified"
                     checked={emailVerified}
-                    onChange={(e) => setEmailVerified(e.target.checked)}
-                    className="mt-[2px] shrink-0"
+                    onCheckedChange={setEmailVerified}
+                    aria-label="Email address verified"
                   />
-                  <span className="min-w-0">
-                    <span className="block text-body font-semibold text-text-primary">Email address verified</span>
-                    <span className="block text-caption text-text-muted mt-xs">
-                      Unverified accounts can&rsquo;t sign in with their password. Check this when the code email never
-                      arrived and you&rsquo;ve confirmed the address another way.
-                    </span>
-                  </span>
-                </label>
+                </div>
               </Section>
 
               <Section title="Password">
@@ -244,15 +243,12 @@ function EditUserForm({
                     </Button>
                   </div>
                 </Field>
-                <p className="text-caption text-text-muted">
-                  Setting a password signs this account out everywhere. Pass it on to them yourself.
-                </p>
               </Section>
             </div>
 
             <footer className="px-xl py-lg border-t border-divider flex flex-wrap items-center justify-end gap-md">
               <span className="text-caption text-text-muted mr-auto">
-                {changeCount === 0 ? 'Nothing changed yet.' : `${changeCount} ${changeCount === 1 ? 'change' : 'changes'}`}
+                {changeCount > 0 && `${changeCount} ${changeCount === 1 ? 'change' : 'changes'}`}
               </span>
               <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
                 Cancel

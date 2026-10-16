@@ -15,6 +15,7 @@ R2, its email delivery records, or leftover sign-in codes. Steps 4 and 5 cover t
 | `zones`, `schedules`, `captures`, `exports`, `render_cache` | Yes (cascade) |
 | `notifications`, `notification_preferences` | Yes (cascade) |
 | `platform_settings.updated_by` | Set to null, the setting stays |
+| `plan_changes` (plan history, with the account's email) | **No, kept on purpose** as a billing record; `user_id` set to null |
 | R2 `captures/{user_id}/…` (images, `.thumb.jpg`) | **No** (step 4) |
 | R2 `exports/{user_id}/…` (ZIP, MP4, WebM) | **No** (step 4) |
 | R2 `render-cache/{user_id}/…` (frames, kept 7 days) | **No** (step 4) |
@@ -36,6 +37,8 @@ R2, its email delivery records, or leftover sign-in codes. Steps 4 and 5 cover t
 The Terms keep "what the law requires us to keep". Today Maceut takes no payments, so there are
 no invoices or tax records. If billing exists by the time you run this, keep the
 billing records the law requires, separately, and note which ones in the log.
+The plan history (`plan_changes`) is kept automatically; it holds the account's email
+and plan changes, nothing else.
 
 ## 3. Delete the account
 

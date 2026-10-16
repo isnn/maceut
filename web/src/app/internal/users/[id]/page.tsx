@@ -11,7 +11,7 @@ import { VerifiedPill } from '@/features/internal/components/VerifiedPill'
 import type { InternalUserRow } from '@/features/internal/types'
 import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
-import { AccountPlanPill, RoadClassBadge, RolePill, StatusPill } from '@/components/ui/Badge'
+import { AccountPlanPill, RoadClassBadge, StatusPill } from '@/components/ui/Badge'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
@@ -105,14 +105,13 @@ export default function InternalUserUsagePage() {
       <div className="flex flex-wrap items-start gap-md">
         <div className="min-w-0">
           <h1 className="text-page-title font-bold text-text-primary truncate">{user.fullName || user.email}</h1>
-          <p className="text-body text-text-secondary mt-xs">
-            {user.email}
-          </p>
+          <p className="text-body text-text-secondary mt-xs">{user.email}</p>
+          <div className="flex flex-wrap items-center gap-sm mt-md">
+            <AccountPlanPill access={accessOf(user)} plan={user.plan} />
+            <VerifiedPill verified={user.emailVerified ?? false} />
+          </div>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-sm">
-          <AccountPlanPill access={accessOf(user)} plan={user.plan} />
-          <RolePill role={user.role} />
-          <VerifiedPill verified={user.emailVerified ?? false} />
           {isSuperadmin && (
             <>
               <Button variant="secondary" size="sm" onClick={() => setEditing(internalApi.rowFromDetail(data, me?.id))}>

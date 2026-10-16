@@ -333,7 +333,8 @@ router.patch('/internal/users/:id', superadminOnly, userController.update)
  *     summary: Hapus akun beserta seluruh isinya (F-22)
  *     description: >
  *       ⚠️ TIDAK BISA DIBATALKAN. Zona, jendela capture, dan baris paket milik akun itu
- *       ikut terhapus lewat ON DELETE CASCADE. Tidak ada undo dan tidak ada soft-delete:
+ *       ikut terhapus lewat ON DELETE CASCADE. Riwayat paket (plan_changes) tetap disimpan
+ *       sebagai catatan tagihan, tanpa tautan ke akun. Tidak ada undo dan tidak ada soft-delete:
  *       pemanggilnya staf yang bertindak sengaja, dan akun setengah terhapus yang masih
  *       memiliki zona lebih buruk daripada kedua hasilnya.
  *

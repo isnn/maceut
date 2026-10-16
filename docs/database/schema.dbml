@@ -11,7 +11,7 @@
 // Convention: every timestamp is `timestamptz`. A bare `timestamp` carries no
 // offset and means whatever the reading process assumes.
 //
-// Last updated: 2026-10-16 (migration 0021_plan_changes — plan_changes history + plan_change_source enum)
+// Last updated: 2026-10-16 (migration 0022_plan_changes_keep — plan_changes survives account deletion: user_id nullable SET NULL, user_email + changed_by_email snapshots)
 // =============================================================================
 
 Project maceut {
@@ -110,14 +110,16 @@ Table user_plans {
 
 Table plan_changes {
   id uuid [pk, default: `gen_random_uuid()`]
-  user_id text [not null]
+  user_id text [null, note: 'NULL once the account is deleted; the row is kept as a billing record']
+  user_email text [not null, note: 'Snapshot at the time of the change']
   from_plan plan [null, note: 'NULL = account created on to_plan']
   to_plan plan [not null]
   source plan_change_source [not null, note: 'self = the customer; staff = /internal (incl. account created by staff)']
-  changed_by text [null, note: 'The staff member; NULL for a self-serve change']
+  changed_by text [null, note: 'The staff member; NULL for a self-serve change or a deleted staff account']
+  changed_by_email text [null, note: 'Snapshot of the staff member\'s email']
   created_at timestamptz [not null, default: `now()`]
 
-  Note: 'Append-only plan history for the staff Billing section. user_plans holds only the current plan.'
+  Note: 'Append-only plan history for the staff Billing section. user_plans holds only the current plan. Never pruned; outlives the account.'
 
   Indexes {
     (user_id, created_at) [name: 'plan_changes_user_created_idx']
@@ -195,7 +197,7 @@ Enum zone_status {
 Ref: session.user_id > user.id [delete: cascade]
 Ref: account.user_id > user.id [delete: cascade]
 Ref: user_plans.user_id - user.id [delete: cascade]
-Ref: plan_changes.user_id > user.id [delete: cascade]
+Ref: plan_changes.user_id > user.id [delete: set null]
 Ref: plan_changes.changed_by > user.id [delete: set null]
 Ref: zones.user_id > user.id [delete: cascade]
 

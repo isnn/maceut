@@ -612,7 +612,8 @@ export interface DeleteUserResult {
  * Deletes an account and everything belonging to it (F-22).
  *
  * ⚠️ Irreversible, and it takes the account's zones, capture windows and plan row with
- * it through ON DELETE CASCADE. There is no undo and no soft-delete fallback: the
+ * it through ON DELETE CASCADE. Its plan history (plan_changes) stays, unlinked, as a
+ * billing record. There is no undo and no soft-delete fallback: the
  * caller is staff acting deliberately, and a half-deleted account that still owns
  * zones would be worse than either outcome.
  *
