@@ -1,7 +1,7 @@
 'use client'
 
 import { AccountPlanPill, RolePill } from '@/components/ui/Badge'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ActionMenu } from '@/components/ui/ActionMenu'
@@ -316,11 +316,13 @@ interface Trend {
 
 function StatTile({ label, value, note, trend }: { label: string; value: string | number; note: string; trend?: Trend }) {
   return (
-    <Card className="p-lg">
-      <p className="text-label text-text-secondary">{label}</p>
-      <p className="text-display text-text-primary mt-xs tabular-nums">{value}</p>
-      <p className="text-caption text-text-muted mt-sm">{note}</p>
-      {trend && <TrendBars trend={trend} />}
+    <Card className="p-lg flex items-end justify-between gap-lg">
+      <div className="min-w-0">
+        <p className="text-label text-text-secondary">{label}</p>
+        <p className="text-display text-text-primary mt-xs tabular-nums">{value}</p>
+        <p className="text-caption text-text-muted mt-sm">{note}</p>
+      </div>
+      {trend && <TrendArea trend={trend} />}
     </Card>
   )
 }
@@ -331,33 +333,60 @@ function dayLabel(day: string): string {
   )
 }
 
-/** What each of the last 7 WIB days added; today is the solid bar on the right. */
-function TrendBars({ trend }: { trend: Trend }) {
+// Chart box in SVG units. Stretched to the element with preserveAspectRatio="none", so
+// the line keeps a constant width (non-scaling-stroke) and the end dot is HTML.
+const W = 100
+const H = 40
+const TOP = 4
+
+/** What each of the last 7 WIB days added, as a line with a fading fill; today is the dot. */
+function TrendArea({ trend }: { trend: Trend }) {
+  const gradientId = `trend-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
   // An API from before `trend` (or a mid-deploy mismatch) must cost the chart, not the page.
-  if (!Array.isArray(trend.days) || !Array.isArray(trend.values) || trend.values.length === 0) return null
+  if (!Array.isArray(trend.days) || !Array.isArray(trend.values) || trend.values.length < 2) return null
+
   const peak = Math.max(...trend.values, 1)
-  const last = trend.days.length - 1
+  const step = W / (trend.values.length - 1)
+  const points = trend.values.map((v, i) => [i * step, H - (v / peak) * (H - TOP)] as const)
+  const line = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x},${y}`).join(' ')
+  const area = `${line} L${W},${H} L0,${H} Z`
+  const endY = points[points.length - 1]![1]
+
   return (
-    <div className="mt-md pt-md border-t border-divider">
-      <div className="h-12 flex items-end gap-xs" role="img" aria-label={`Last 7 days: ${trend.values.map(trend.unit).join(', ')}`}>
+    <div
+      className="relative w-[45%] max-w-[10rem] h-16 shrink-0 text-primary"
+      role="img"
+      aria-label={`Last 7 days: ${trend.values.map(trend.unit).join(', ')}`}
+    >
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0 w-full h-full overflow-visible">
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill={`url(#${gradientId})`} />
+        <path
+          d={line}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+        {/* One hover strip per day, for the date and value. */}
         {trend.values.map((v, i) => (
-          <div
-            key={trend.days[i]}
-            title={`${dayLabel(trend.days[i]!)}: ${trend.unit(v)}`}
-            className="flex-1 h-full flex flex-col justify-end"
-          >
-            <div
-              className={cn('rounded-t-xs', v === 0 ? 'bg-divider' : i === last ? 'bg-primary' : 'bg-primary-soft')}
-              // A zero day still gets a sliver, so seven slots always read as seven days.
-              style={{ height: v === 0 ? '2px' : `${Math.max((v / peak) * 100, 6)}%` }}
-            />
-          </div>
+          <rect key={trend.days[i]} x={i * step - step / 2} y={0} width={step} height={H} fill="transparent">
+            <title>{`${dayLabel(trend.days[i]!)}: ${trend.unit(v)}`}</title>
+          </rect>
         ))}
-      </div>
-      <div className="flex justify-between text-micro text-text-muted tabular-nums mt-xs">
-        <span>{dayLabel(trend.days[0]!)}</span>
-        <span>Today</span>
-      </div>
+      </svg>
+      <span
+        aria-hidden
+        className="absolute right-0 w-2 h-2 -mr-1 -mt-1 rounded-full bg-primary ring-2 ring-card"
+        style={{ top: `${(endY / H) * 100}%` }}
+      />
     </div>
   )
 }
