@@ -162,7 +162,8 @@ export async function getPlatformStats(): Promise<PlatformStats> {
     capturesTodayTotal: stats.capturesToday,
     storageUsedGbTotal: stats.storageUsedGb,
     mrr,
-    trend: stats.trend,
+    // Empty series hide the charts rather than break the page if the API predates them.
+    trend: stats.trend ?? { days: [], signups: [], zonesCreated: [], captures: [], storageAddedBytes: [] },
   }
 }
 

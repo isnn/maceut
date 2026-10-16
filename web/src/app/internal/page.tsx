@@ -333,6 +333,8 @@ function dayLabel(day: string): string {
 
 /** What each of the last 7 WIB days added; today is the solid bar on the right. */
 function TrendBars({ trend }: { trend: Trend }) {
+  // An API from before `trend` (or a mid-deploy mismatch) must cost the chart, not the page.
+  if (!Array.isArray(trend.days) || !Array.isArray(trend.values) || trend.values.length === 0) return null
   const peak = Math.max(...trend.values, 1)
   const last = trend.days.length - 1
   return (
