@@ -58,20 +58,14 @@ export const planChanges = pgTable(
   'plan_changes',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    /**
-     * NULL once the account is deleted. The row stays (billing records outlive the
-     * account), and `userEmail` still says whose it was.
-     */
-    userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
-    /** Snapshot at the time of the change. */
-    userEmail: text('user_email').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
     fromPlan: planEnum('from_plan'),
     toPlan: planEnum('to_plan').notNull(),
     source: planChangeSourceEnum('source').notNull(),
     /** The staff member who made it; NULL for a self-serve change or a deleted staff account. */
     changedBy: text('changed_by').references(() => user.id, { onDelete: 'set null' }),
-    /** Snapshot, so who made the change survives the staff account being deleted. */
-    changedByEmail: text('changed_by_email'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('plan_changes_user_created_idx').on(t.userId, t.createdAt)],

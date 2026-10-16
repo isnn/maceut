@@ -94,8 +94,7 @@ export async function emailTakenByOther(email: string, exceptId: string): Promis
  *
  * Every table that references `user.id` declares ON DELETE CASCADE — user_plans,
  * zones, schedules, and Better Auth's session and account rows — so one delete is the
- * whole operation and there is no order to get wrong. The exception is plan_changes
- * (ON DELETE SET NULL): billing history is kept, with the email it stored. Confirmed against the schema
+ * whole operation and there is no order to get wrong. Confirmed against the schema
  * rather than assumed; a missing cascade would leave an orphan row that blocks the
  * delete with a foreign-key error rather than silently succeeding.
  */

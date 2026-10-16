@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import { db } from '../lib/drizzle-client'
 import { planChanges, user } from '../../drizzle/schema'
@@ -17,27 +17,18 @@ export interface PlanChangeRecord {
   fromPlan: Plan | null
   toPlan: Plan
   source: 'self' | 'staff'
-  /** The staff member's name or email (kept after their account is deleted); null for a self-serve change. */
+  /** The staff member's name or email; null for a self-serve change or a deleted account. */
   changedBy: string | null
   createdAt: Date
 }
 
-/**
- * Stores the emails alongside the ids: a deleted account (customer or staff) nulls the
- * id, and the row still has to say whose plan it was and who changed it.
- */
 export async function record(input: PlanChangeInput): Promise<void> {
-  const ids = [input.userId, ...(input.changedBy ? [input.changedBy] : [])]
-  const rows = await db.select({ id: user.id, email: user.email }).from(user).where(inArray(user.id, ids))
-  const emailOf = new Map(rows.map((r) => [r.id, r.email]))
   await db.insert(planChanges).values({
     userId: input.userId,
-    userEmail: emailOf.get(input.userId) ?? '',
     fromPlan: input.fromPlan,
     toPlan: input.toPlan,
     source: input.source,
     changedBy: input.changedBy ?? null,
-    changedByEmail: input.changedBy ? (emailOf.get(input.changedBy) ?? null) : null,
   })
 }
 
@@ -53,7 +44,6 @@ export async function listByUser(userId: string, limit = 50): Promise<PlanChange
       source: planChanges.source,
       actorName: actor.name,
       actorEmail: actor.email,
-      changedByEmail: planChanges.changedByEmail,
       createdAt: planChanges.createdAt,
     })
     .from(planChanges)
@@ -66,7 +56,7 @@ export async function listByUser(userId: string, limit = 50): Promise<PlanChange
     fromPlan: r.fromPlan,
     toPlan: r.toPlan,
     source: r.source,
-    changedBy: r.actorName || r.actorEmail || r.changedByEmail || null,
+    changedBy: r.actorName || r.actorEmail || null,
     createdAt: r.createdAt,
   }))
 }
