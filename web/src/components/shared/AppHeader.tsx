@@ -9,6 +9,7 @@ import { PlanPill } from '@/components/ui/Badge'
 import { PAGE_WIDTH } from './page-width'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
+import { MobileNavPanel, MobileNavToggle, useMobileNav } from './MobileNav'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -31,15 +32,19 @@ export function AppHeader({ minimal = false }: { minimal?: boolean }) {
   const pathname = usePathname()
   const { user } = useCurrentUser()
   const logout = useLogout()
+  const menu = useMobileNav()
+  const items = NAV_ITEMS.map((item) => ({
+    ...item,
+    active: pathname === item.href || pathname.startsWith(`${item.href}/`),
+  }))
   return (
     <header className="sticky top-0 z-20 bg-canvas border-b border-border">
-      <div className={cn('mx-auto px-xl h-16 flex items-center gap-xxl', PAGE_WIDTH)}>
+      <div className={cn('mx-auto px-lg tablet:px-xl h-16 flex items-center gap-xxl', PAGE_WIDTH)}>
         <Logo href="/dashboard" />
 
         {!minimal && (
-          <nav className="flex items-center gap-xl overflow-x-auto">
-            {NAV_ITEMS.map((item) => {
-              const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
+          <nav className="hidden laptop:flex items-center gap-xl">
+            {items.map(({ active, ...item }) => {
               return (
                 <Link
                   key={item.href}
@@ -65,7 +70,7 @@ export function AppHeader({ minimal = false }: { minimal?: boolean }) {
           {user && (
             <Dropdown
               triggerLabel="Account menu"
-              triggerClassName="w-10 h-10 rounded-full bg-primary-soft text-[#5A35F3] text-label font-bold flex items-center justify-center hover:bg-primary-soft/70"
+              triggerClassName="w-10 h-10 rounded-full bg-primary-soft text-primary text-label font-bold flex items-center justify-center hover:bg-primary-soft/70"
               trigger={<>{initials(user.fullName, user.email)}</>}
             >
               {(close) => (
@@ -109,8 +114,10 @@ export function AppHeader({ minimal = false }: { minimal?: boolean }) {
               )}
             </Dropdown>
           )}
+          {!minimal && <MobileNavToggle open={menu.open} onToggle={menu.toggle} controls="app-menu" />}
         </div>
       </div>
+      {!minimal && menu.open && <MobileNavPanel id="app-menu" items={items} onPick={menu.close} />}
     </header>
   )
 }

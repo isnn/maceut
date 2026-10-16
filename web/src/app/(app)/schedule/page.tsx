@@ -139,7 +139,6 @@ export default function SchedulePage() {
       status: (w) => (w.active ? 0 : 1),
     },
     defaultDirection: { frames: 'desc' },
-    pageSize: 10,
   })
 
   // Windows of paused zones are skipped by the scheduler, so they take nothing from the pool.

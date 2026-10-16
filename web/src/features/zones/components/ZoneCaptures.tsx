@@ -21,7 +21,7 @@ import { Alert } from '@/components/ui/Alert'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { SectionHeader } from '@/components/shared/SectionHeader'
 import { Stat } from '@/components/shared/Stat'
-import { StatusPill, type PillTone } from '@/components/ui/Badge'
+import { StatusPill } from '@/components/ui/Badge'
 import { Pagination, SortableTh, Table, TableWrap, Td } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
 import { IconArrowLeft, IconArrowRight, IconCamera, IconCarFront, IconClock, IconDownload, IconRoad, IconRoute, IconZap } from '@/components/ui/icons'
@@ -31,28 +31,12 @@ import { ApiError } from '@/types/api'
 import { MapCanvas } from './MapCanvas'
 import { CaptureDay } from './CaptureDay'
 import * as zonesApi from '../api'
+import { CAPTURE_STATUS_LABEL, CAPTURE_STATUS_TONE, CAPTURE_TRIGGER_LABEL } from '../capture-labels'
 import type { Zone } from '../types'
 
-const STATUS_LABEL: Record<zonesApi.CaptureStatus, string> = {
-  pending: 'Queued',
-  processing: 'Collecting…',
-  done: 'Collected',
-  failed: 'Failed',
-  skipped_limit: 'Skipped: monthly limit',
-  missed: 'Missed',
-}
-
-const STATUS_TONE: Record<zonesApi.CaptureStatus, PillTone> = {
-  pending: 'neutral',
-  processing: 'brand',
-  done: 'success',
-  failed: 'danger',
-  skipped_limit: 'warning',
-  missed: 'warning',
-}
-
-/** One word for the trigger, everywhere on the page. */
-const TRIGGER_LABEL: Record<zonesApi.Capture['trigger'], string> = { scheduled: 'Scheduled', manual: 'Manual' }
+const STATUS_LABEL = CAPTURE_STATUS_LABEL
+const STATUS_TONE = CAPTURE_STATUS_TONE
+const TRIGGER_LABEL = CAPTURE_TRIGGER_LABEL
 
 /** The jam band a mean jam factor falls in — its colour goes beside the number. */
 function jamBand(value: number) {
@@ -187,7 +171,6 @@ export function ZoneCaptures({ zone, refreshKey = 0 }: { zone: Zone; refreshKey?
     },
     defaultDirection: { planned: 'desc', actual: 'desc', roads: 'desc', jam: 'desc' },
     initialSort: { key: 'actual', direction: 'desc' },
-    pageSize: 10,
   })
 
   const selected = cycles?.[index] ?? null

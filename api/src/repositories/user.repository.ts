@@ -53,7 +53,7 @@ export async function findByIdWithPlan(id: string): Promise<UserWithPlan | undef
 
 export async function updateUser(
   id: string,
-  patch: Partial<Pick<UserRow, 'name' | 'role' | 'staffType' | 'onboardingDone'>>,
+  patch: Partial<Pick<UserRow, 'name' | 'role' | 'staffType' | 'onboardingDone' | 'emailVerified'>>,
 ): Promise<UserRow | undefined> {
   const rows = await db
     .update(user)
@@ -116,6 +116,12 @@ export async function setPlan(userId: string, plan: Plan): Promise<UserPlanRow |
   // doing nothing and leaving the account plan-less forever.
   const created = await db.insert(userPlans).values({ userId, plan }).returning()
   return created[0]
+}
+
+/** The plan row itself (start and expiry), for the staff Billing section. */
+export async function findPlanRow(userId: string): Promise<UserPlanRow | undefined> {
+  const rows = await db.select().from(userPlans).where(eq(userPlans.userId, userId)).limit(1)
+  return rows[0]
 }
 
 /** BR-001: ensure a newly registered account has a plan row. Idempotent. */

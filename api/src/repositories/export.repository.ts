@@ -226,3 +226,14 @@ export async function fileBytesByUser(): Promise<Map<string, number>> {
     .groupBy(exports.userId)
   return new Map(rows.map((r) => [r.userId, Number(r.bytes)]))
 }
+
+/** Bytes of finished exports per WIB day from `since`, by when the export was requested. */
+export async function fileBytesByDaySince(since: Date): Promise<Map<string, number>> {
+  const day = sql<string>`to_char(${exports.createdAt} AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD')`
+  const rows = await db
+    .select({ day, bytes: sql<number>`coalesce(sum(${exports.fileSize}), 0)::bigint` })
+    .from(exports)
+    .where(and(eq(exports.status, 'done'), sql`${exports.createdAt} >= ${since}`))
+    .groupBy(day)
+  return new Map(rows.map((r) => [r.day, Number(r.bytes)]))
+}

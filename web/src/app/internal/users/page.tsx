@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Alert } from '@/components/ui/Alert'
-import { StatusPill } from '@/components/ui/Badge'
 import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
 import { ActionMenu } from '@/components/ui/ActionMenu'
@@ -24,6 +23,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import { PausedCell } from '@/features/internal/components/PausedCell'
+import { VerifiedPill } from '@/features/internal/components/VerifiedPill'
 import { accessOf, type Access, type Plan, type PlatformRole } from '@/features/auth/types'
 
 
@@ -67,6 +67,8 @@ export default function InternalUsersPage() {
     searchOn: (row) => [row.fullName, row.email],
     sortOn: {
       name: (row) => row.fullName.toLowerCase(),
+      // Unverified first when ascending: those are the accounts that need a hand.
+      verified: (row) => (row.emailVerified ? 1 : 0),
       // Staff sort after customers, Admin before Superadmin.
       plan: (row) => (row.access === 'user' ? PLAN_ORDER.indexOf(row.plan) : row.access === 'admin' ? 10 : 11),
       role: (row) => row.role,
@@ -193,6 +195,13 @@ export default function InternalUsersPage() {
                   Person
                 </SortableTh>
                 <SortableTh
+                  active={table.sort?.key === 'verified'}
+                  direction={table.sort?.direction ?? 'asc'}
+                  onSort={() => table.toggleSort('verified')}
+                >
+                  Verified
+                </SortableTh>
+                <SortableTh
                   active={table.sort?.key === 'plan'}
                   direction={table.sort?.direction ?? 'asc'}
                   onSort={() => table.toggleSort('plan')}
@@ -274,7 +283,7 @@ export default function InternalUsersPage() {
                   <tr key={row.id} className="hover:bg-canvas-secondary/60 transition-colors">
                     <Td>
                       <div className="flex items-center gap-md">
-                        <span className="w-9 h-9 rounded-full bg-primary-soft text-[#5A35F3] text-label font-bold flex items-center justify-center shrink-0">
+                        <span className="w-9 h-9 rounded-full bg-primary-soft text-primary text-label font-bold flex items-center justify-center shrink-0">
                           {row.fullName.slice(0, 2).toUpperCase()}
                         </span>
                         <div className="min-w-0">
@@ -285,18 +294,12 @@ export default function InternalUsersPage() {
                             {row.fullName}
                             {row.isYou && <span className="ml-sm text-micro text-text-muted font-normal">You</span>}
                           </Link>
-                          <p className="flex items-center gap-sm text-caption text-text-muted min-w-0">
-                            <span className="truncate">{row.email}</span>
-                            {row.emailVerified ? (
-                              <StatusPill tone="success" className="shrink-0">Verified</StatusPill>
-                            ) : (
-                              <StatusPill tone="warning" className="shrink-0" title="Hasn't entered the sign-up code yet, so can't log in">
-                                Unverified
-                              </StatusPill>
-                            )}
-                          </p>
+                          <p className="text-caption text-text-muted truncate">{row.email}</p>
                         </div>
                       </div>
+                    </Td>
+                    <Td>
+                      <VerifiedPill verified={row.emailVerified} />
                     </Td>
                     <Td>
                       {/* Internal staff have no customer plan: their plan is Admin or Superadmin (FE-34). */}

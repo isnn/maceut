@@ -72,7 +72,6 @@ export function ZoneDetail({ zoneId, plan }: { zoneId: string; plan: Plan }) {
       status: (w) => (w.active ? 0 : 1),
     },
     defaultDirection: { frames: 'desc' },
-    pageSize: 8,
   })
   const [notFound, setNotFound] = useState(false)
 

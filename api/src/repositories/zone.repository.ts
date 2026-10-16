@@ -230,6 +230,17 @@ export async function countAllCollecting(): Promise<number> {
   return rows[0]?.count ?? 0
 }
 
+/** Zones created per WIB day from `since`, whatever their status now. */
+export async function countCreatedByDaySince(since: Date): Promise<Map<string, number>> {
+  const day = sql<string>`to_char(${zones.createdAt} AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD')`
+  const rows = await db
+    .select({ day, count: sql<number>`count(*)::int` })
+    .from(zones)
+    .where(sql`${zones.createdAt} >= ${since}`)
+    .groupBy(day)
+  return new Map(rows.map((r) => [r.day, r.count]))
+}
+
 /**
  * BR-015 — name uniqueness per user, case-insensitive.
  *

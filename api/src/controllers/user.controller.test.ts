@@ -28,7 +28,13 @@ vi.mock('../repositories/user.repository', () => ({
   listWithPlans: vi.fn(),
   countInternal: vi.fn(),
   countSuperadmins: vi.fn(),
+  findPlanRow: vi.fn(),
 }))
+vi.mock('../repositories/plan-change.repository', () => ({ record: vi.fn(), listByUser: vi.fn(async () => []) }))
+// The staff zone page reuses the owner's reads; stubbed here, they are tested in their own files.
+vi.mock('../services/zone.service', async (orig) => ({ ...(await orig<object>()), getZone: vi.fn() }))
+vi.mock('../services/schedule.service', async (orig) => ({ ...(await orig<object>()), listForZone: vi.fn() }))
+vi.mock('../services/capture.service', async (orig) => ({ ...(await orig<object>()), listForZone: vi.fn() }))
 // changePlan now runs the grandfather-and-block pass (ADR-020), which reads the
 // account's zones and schedules to work out what would exceed the new plan.
 // The directory and the overview also count zones and windows per account, in one
@@ -38,6 +44,7 @@ vi.mock('../repositories/zone.repository', () => ({
   update: vi.fn(),
   countsByUser: vi.fn(async () => new Map()),
   countAllCollecting: vi.fn(async () => 0),
+  countCreatedByDaySince: vi.fn(async () => new Map()),
 }))
 vi.mock('../repositories/schedule.repository', () => ({
   findByUserId: vi.fn(() => []),
@@ -46,14 +53,22 @@ vi.mock('../repositories/schedule.repository', () => ({
   countAllActive: vi.fn(async () => 0),
 }))
 vi.mock('../services/usage.service', () => ({ getUsage: vi.fn() }))
-vi.mock('../repositories/export.repository', () => ({ fileBytesByUser: vi.fn(async () => new Map()) }))
-vi.mock('../repositories/render-cache.repository', () => ({ bytesByUser: vi.fn(async () => new Map()) }))
+vi.mock('../repositories/export.repository', () => ({
+  fileBytesByUser: vi.fn(async () => new Map()),
+  fileBytesByDaySince: vi.fn(async () => new Map()),
+}))
+vi.mock('../repositories/render-cache.repository', () => ({
+  bytesByUser: vi.fn(async () => new Map()),
+  bytesByDaySince: vi.fn(async () => new Map()),
+}))
 vi.mock('../repositories/capture.repository', () => ({
   imageBytesByUser: vi.fn(async () => new Map()),
   countsByZoneSince: vi.fn(async () => new Map()),
   countsToday: vi.fn(async () => new Map()),
   countsInRange: vi.fn(async () => new Map()),
   countAllToday: vi.fn(async () => 0),
+  countByDaySince: vi.fn(async () => new Map()),
+  imageBytesByDaySince: vi.fn(async () => new Map()),
 }))
 vi.mock('../lib/internal-access', () => {
   const isInternalByConfig = vi.fn((_email: string) => false)
@@ -73,6 +88,11 @@ vi.mock('../lib/internal-access', () => {
 })
 
 import { app } from '../app'
+import type { Plan } from '../types/plan'
+import * as planChangeRepo from '../repositories/plan-change.repository'
+import * as zoneService from '../services/zone.service'
+import * as scheduleService from '../services/schedule.service'
+import * as captureService from '../services/capture.service'
 import * as userRepo from '../repositories/user.repository'
 import * as zoneRepoMock from '../repositories/zone.repository'
 import * as captureRepoMock from '../repositories/capture.repository'
@@ -250,8 +270,15 @@ describe('PATCH /internal/users/:id/plan', () => {
   it('changes the plan', async () => {
     signedInAs(STAFF_ID)
     staffLookups()
-    vi.mocked(userRepo.setPlan).mockResolvedValue(undefined)
-    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(row({ plan: 'premium' }))
+    // The account is on Free until setPlan runs, then on Premium.
+    let current: Plan = 'free'
+    vi.mocked(userRepo.setPlan).mockImplementation(async (_id, plan) => {
+      current = plan
+      return undefined
+    })
+    vi.mocked(userRepo.findByIdWithPlan).mockImplementation(async (id: string) =>
+      id === STAFF_ID ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal', staffType: 'superadmin' }) : row({ plan: current }),
+    )
 
     const res = await request(app).patch(`/internal/users/${TARGET_ID}/plan`).send({ plan: 'premium' })
 
@@ -261,6 +288,14 @@ describe('PATCH /internal/users/:id/plan', () => {
     expect(res.body.data.user.plan).toBe('premium')
     expect(res.body.data.impact.clean).toBe(true)
     expect(userRepo.setPlan).toHaveBeenCalledWith(TARGET_ID, 'premium')
+    // Billing history: who moved it, from what.
+    expect(planChangeRepo.record).toHaveBeenCalledWith({
+      userId: TARGET_ID,
+      fromPlan: 'free',
+      toPlan: 'premium',
+      source: 'staff',
+      changedBy: STAFF_ID,
+    })
   })
 
   it('rejects an unknown plan', async () => {
@@ -372,6 +407,7 @@ describe('GET /internal/stats', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.data.totalUsers).toBe(3)
+    expect(res.body.data.trend.days).toHaveLength(7)
     expect(res.body.data.internalUsers).toBe(2)
     expect(res.body.data.planMix).toEqual({ free: 1, starter: 0, standard: 0, premium: 2 })
   })
@@ -502,5 +538,106 @@ describe('GET /internal/users/:id/usage (FE-34)', () => {
       id === STAFF_ID ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal', staffType: 'superadmin' }) : undefined,
     )
     expect((await request(app).get(`/internal/users/nobody/usage`)).status).toBe(404)
+  })
+})
+
+describe('GET /internal/users/:id/usage — billing', () => {
+  it('carries the plan row and the plan history', async () => {
+    signedInAs(STAFF_ID)
+    staffLookups()
+    vi.mocked(usageServiceMock.getUsage).mockResolvedValue({} as never)
+    vi.mocked(zoneRepoMock.findByUserId).mockResolvedValue([])
+    vi.mocked(captureRepoMock.countsByZoneSince).mockResolvedValue(new Map())
+    vi.mocked(userRepo.findPlanRow).mockResolvedValue({
+      startedAt: new Date('2026-10-01T00:00:00Z'),
+      expiresAt: null,
+    } as never)
+    vi.mocked(planChangeRepo.listByUser).mockResolvedValue([
+      { id: 'pc1', fromPlan: 'free', toPlan: 'standard', source: 'staff', changedBy: 'Ops', createdAt: new Date('2026-10-01T00:00:00Z') },
+    ])
+
+    const res = await request(app).get(`/internal/users/${TARGET_ID}/usage`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.billing).toEqual({
+      plan: 'free',
+      startedAt: '2026-10-01T00:00:00.000Z',
+      expiresAt: null,
+      history: [
+        { id: 'pc1', fromPlan: 'free', toPlan: 'standard', source: 'staff', changedBy: 'Ops', createdAt: '2026-10-01T00:00:00.000Z' },
+      ],
+    })
+  })
+})
+
+describe('PATCH /internal/users/:id — email verified', () => {
+  it('lets a superadmin mark the address verified', async () => {
+    signedInAs(STAFF_ID)
+    staffLookups()
+    vi.mocked(userRepo.findById).mockImplementation(async (id: string) =>
+      id === STAFF_ID
+        ? row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal', staffType: 'superadmin' })
+        : row({ emailVerified: false }),
+    )
+
+    const res = await request(app).patch(`/internal/users/${TARGET_ID}`).send({ emailVerified: true })
+
+    expect(res.status).toBe(200)
+    expect(userRepo.updateUser).toHaveBeenCalledWith(TARGET_ID, { emailVerified: true })
+  })
+
+  it('writes nothing when the value does not move', async () => {
+    signedInAs(STAFF_ID)
+    staffLookups()
+
+    const res = await request(app).patch(`/internal/users/${TARGET_ID}`).send({ emailVerified: true })
+
+    expect(res.status).toBe(200)
+    expect(userRepo.updateUser).not.toHaveBeenCalledWith(TARGET_ID, { emailVerified: true })
+  })
+
+  it('is refused to an admin', async () => {
+    signedInAs(STAFF_ID)
+    const admin = row({ id: STAFF_ID, email: 'ops@maceut.id', role: 'internal', staffType: 'admin' })
+    vi.mocked(userRepo.findById).mockImplementation(async (id: string) => (id === STAFF_ID ? admin : row()))
+    vi.mocked(userRepo.findByIdWithPlan).mockImplementation(async (id: string) => (id === STAFF_ID ? admin : row()))
+
+    const res = await request(app).patch(`/internal/users/${TARGET_ID}`).send({ emailVerified: true })
+
+    expect(res.status).toBe(403)
+    expect(userRepo.updateUser).not.toHaveBeenCalled()
+  })
+})
+
+describe('GET /internal/users/:id/zones/:zoneId', () => {
+  const ZONE = '3f8a1c2e-1111-4111-8111-111111111111'
+
+  it('reads the zone as its owner, with windows and captures', async () => {
+    signedInAs(STAFF_ID)
+    staffLookups()
+    vi.mocked(zoneService.getZone).mockResolvedValue({ id: ZONE, name: 'YOG' } as never)
+    vi.mocked(scheduleService.listForZone).mockResolvedValue([{ id: 'w1' }] as never)
+    vi.mocked(captureService.listForZone).mockResolvedValue({ captures: [], total: 0, page: 2, limit: 10, totalPages: 1 })
+
+    const res = await request(app).get(`/internal/users/${TARGET_ID}/zones/${ZONE}?page=2&limit=10`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.zone.name).toBe('YOG')
+    expect(res.body.data.windows).toHaveLength(1)
+    // Scoped to the account in the path, so a zone of another account is refused as it is for its owner.
+    expect(zoneService.getZone).toHaveBeenCalledWith(TARGET_ID, ZONE)
+    expect(captureService.listForZone).toHaveBeenCalledWith(TARGET_ID, ZONE, { page: 2, limit: 10 })
+  })
+
+  it('rejects a zone id that is not a uuid', async () => {
+    signedInAs(STAFF_ID)
+    staffLookups()
+    expect((await request(app).get(`/internal/users/${TARGET_ID}/zones/nope`)).status).toBe(422)
+  })
+
+  it('is refused to customers', async () => {
+    signedInAs(TARGET_ID)
+    staffLookups()
+    expect((await request(app).get(`/internal/users/${TARGET_ID}/zones/${ZONE}`)).status).toBe(403)
   })
 })

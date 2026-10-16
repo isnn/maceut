@@ -391,6 +391,17 @@ export async function countAllToday(): Promise<number> {
   return rows[0]?.count ?? 0
 }
 
+/** Captures per WIB day from `since`, counted like `countAllToday`. Keyed "YYYY-MM-DD"; empty days absent. */
+export async function countByDaySince(since: Date): Promise<Map<string, number>> {
+  const day = sql<string>`to_char(${captures.capturedAt} AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD')`
+  const rows = await db
+    .select({ day, count: sql<number>`count(*)::int` })
+    .from(captures)
+    .where(and(gte(captures.capturedAt, since), sql`${captures.status} NOT IN ('skipped_limit', 'missed')`))
+    .groupBy(day)
+  return new Map(rows.map((r) => [r.day, r.count]))
+}
+
 /**
  * A user's most recent cycles across every collecting zone they own, shared fairly
  * between zones.
@@ -527,6 +538,17 @@ export async function imageBytesByUser(): Promise<Map<string, number>> {
     .where(sql`${captures.filePath} IS NOT NULL`)
     .groupBy(captures.userId)
   return new Map(rows.map((r) => [r.userId, Number(r.bytes)]))
+}
+
+/** Image bytes written per WIB day from `since`, by capture time. */
+export async function imageBytesByDaySince(since: Date): Promise<Map<string, number>> {
+  const day = sql<string>`to_char(${captures.capturedAt} AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD')`
+  const rows = await db
+    .select({ day, bytes: sql<number>`coalesce(sum(${captures.fileSize}), 0)::bigint` })
+    .from(captures)
+    .where(and(gte(captures.capturedAt, since), sql`${captures.filePath} IS NOT NULL`))
+    .groupBy(day)
+  return new Map(rows.map((r) => [r.day, Number(r.bytes)]))
 }
 
 // --- retention (H1, ADR-035) -------------------------------------------------------

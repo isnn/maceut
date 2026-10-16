@@ -196,7 +196,8 @@ export interface UsageSummary {
 
 const HISTORY_DAYS = 30
 
-function shiftDay(day: string, by: number): string {
+/** `day` ("YYYY-MM-DD") moved by `by` calendar days. */
+export function shiftDay(day: string, by: number): string {
   const d = new Date(`${day}T00:00:00Z`)
   d.setUTCDate(d.getUTCDate() + by)
   return d.toISOString().slice(0, 10)
