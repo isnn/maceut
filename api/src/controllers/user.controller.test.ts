@@ -44,6 +44,7 @@ vi.mock('../repositories/zone.repository', () => ({
   update: vi.fn(),
   countsByUser: vi.fn(async () => new Map()),
   countAllCollecting: vi.fn(async () => 0),
+  countCreatedByDaySince: vi.fn(async () => new Map()),
 }))
 vi.mock('../repositories/schedule.repository', () => ({
   findByUserId: vi.fn(() => []),
@@ -52,14 +53,22 @@ vi.mock('../repositories/schedule.repository', () => ({
   countAllActive: vi.fn(async () => 0),
 }))
 vi.mock('../services/usage.service', () => ({ getUsage: vi.fn() }))
-vi.mock('../repositories/export.repository', () => ({ fileBytesByUser: vi.fn(async () => new Map()) }))
-vi.mock('../repositories/render-cache.repository', () => ({ bytesByUser: vi.fn(async () => new Map()) }))
+vi.mock('../repositories/export.repository', () => ({
+  fileBytesByUser: vi.fn(async () => new Map()),
+  fileBytesByDaySince: vi.fn(async () => new Map()),
+}))
+vi.mock('../repositories/render-cache.repository', () => ({
+  bytesByUser: vi.fn(async () => new Map()),
+  bytesByDaySince: vi.fn(async () => new Map()),
+}))
 vi.mock('../repositories/capture.repository', () => ({
   imageBytesByUser: vi.fn(async () => new Map()),
   countsByZoneSince: vi.fn(async () => new Map()),
   countsToday: vi.fn(async () => new Map()),
   countsInRange: vi.fn(async () => new Map()),
   countAllToday: vi.fn(async () => 0),
+  countByDaySince: vi.fn(async () => new Map()),
+  imageBytesByDaySince: vi.fn(async () => new Map()),
 }))
 vi.mock('../lib/internal-access', () => {
   const isInternalByConfig = vi.fn((_email: string) => false)
@@ -398,6 +407,7 @@ describe('GET /internal/stats', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.data.totalUsers).toBe(3)
+    expect(res.body.data.trend.days).toHaveLength(7)
     expect(res.body.data.internalUsers).toBe(2)
     expect(res.body.data.planMix).toEqual({ free: 1, starter: 0, standard: 0, premium: 2 })
   })

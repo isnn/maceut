@@ -46,3 +46,14 @@ export async function bytesByUser(): Promise<Map<string, number>> {
     .groupBy(renderCache.userId)
   return new Map(rows.map((r) => [r.userId, Number(r.bytes)]))
 }
+
+/** Cached-frame bytes per WIB day from `since`. */
+export async function bytesByDaySince(since: Date): Promise<Map<string, number>> {
+  const day = sql<string>`to_char(${renderCache.createdAt} AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD')`
+  const rows = await db
+    .select({ day, bytes: sql<number>`coalesce(sum(${renderCache.size}), 0)::bigint` })
+    .from(renderCache)
+    .where(sql`${renderCache.createdAt} >= ${since}`)
+    .groupBy(day)
+  return new Map(rows.map((r) => [r.day, Number(r.bytes)]))
+}

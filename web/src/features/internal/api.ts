@@ -17,7 +17,7 @@ import { PLAN_LIMITS, PLAN_PRICE } from '@/lib/constants'
 import { apiClient } from '@/lib/api-client'
 import { accessOf, type Access, type Plan, type User } from '@/features/auth/types'
 import type { CapturePool } from '@/features/plan/pool'
-import type { AccountUsage, InternalUserRow, PlatformStats } from './types'
+import type { AccountUsage, InternalUserRow, PlatformStats, PlatformTrend } from './types'
 import type { Zone } from '@/features/zones/types'
 import type { Capture } from '@/features/zones/api'
 import type { CaptureWindow } from '@/features/schedules/types'
@@ -139,6 +139,7 @@ export async function getPlatformStats(): Promise<PlatformStats> {
       schedulesActive: number
       capturesToday: number | null
       storageUsedGb: number | null
+      trend: PlatformTrend
     }>('/internal/stats'),
     getUserDirectory(),
   ])
@@ -161,6 +162,7 @@ export async function getPlatformStats(): Promise<PlatformStats> {
     capturesTodayTotal: stats.capturesToday,
     storageUsedGbTotal: stats.storageUsedGb,
     mrr,
+    trend: stats.trend,
   }
 }
 

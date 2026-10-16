@@ -21,6 +21,7 @@ vi.mock('../repositories/zone.repository', () => ({
   update: vi.fn(),
   countsByUser: vi.fn(async () => new Map()),
   countAllCollecting: vi.fn(async () => 0),
+  countCreatedByDaySince: vi.fn(async () => new Map()),
 }))
 vi.mock('../repositories/schedule.repository', () => ({
   findByUserId: vi.fn(async () => []),
@@ -28,13 +29,21 @@ vi.mock('../repositories/schedule.repository', () => ({
   countsByUser: vi.fn(async () => new Map()),
   countAllActive: vi.fn(async () => 0),
 }))
-vi.mock('../repositories/export.repository', () => ({ fileBytesByUser: vi.fn(async () => new Map()) }))
-vi.mock('../repositories/render-cache.repository', () => ({ bytesByUser: vi.fn(async () => new Map()) }))
+vi.mock('../repositories/export.repository', () => ({
+  fileBytesByUser: vi.fn(async () => new Map()),
+  fileBytesByDaySince: vi.fn(async () => new Map()),
+}))
+vi.mock('../repositories/render-cache.repository', () => ({
+  bytesByUser: vi.fn(async () => new Map()),
+  bytesByDaySince: vi.fn(async () => new Map()),
+}))
 vi.mock('../repositories/capture.repository', () => ({
   imageBytesByUser: vi.fn(async () => new Map()),
   countsToday: vi.fn(async () => new Map()),
   countsInRange: vi.fn(async () => new Map()),
   countAllToday: vi.fn(async () => 0),
+  countByDaySince: vi.fn(async () => new Map()),
+  imageBytesByDaySince: vi.fn(async () => new Map()),
 }))
 vi.mock('../lib/auth', () => ({
   auth: { api: { signUpEmail: vi.fn() } },
@@ -262,6 +271,41 @@ describe('getPlatformStats', () => {
     vi.mocked(exportRepo.fileBytesByUser).mockResolvedValue(new Map([['a', 0.5 * GB]]))
     vi.mocked(renderCacheRepo.bytesByUser).mockResolvedValue(new Map())
     expect((await getPlatformStats()).storageUsedGb).toBe(3.5)
+  })
+
+  it('charts the last 7 WIB days, oldest first, with empty days as 0', async () => {
+    // 2026-10-16 01:00 WIB is still 2026-10-15 in UTC: the days must follow WIB.
+    const now = new Date('2026-10-15T18:00:00Z')
+    vi.mocked(userRepo.listWithPlans).mockResolvedValue({
+      rows: [
+        { createdAt: new Date('2026-10-15T17:30:00Z'), plan: 'free' }, // 16 Oct WIB
+        { createdAt: new Date('2026-10-14T10:00:00Z'), plan: 'free' }, // 14 Oct
+        { createdAt: new Date('2026-10-01T10:00:00Z'), plan: 'free' }, // outside the window
+      ],
+      total: 3,
+    } as never)
+    vi.mocked(captureRepo.countByDaySince).mockResolvedValue(new Map([['2026-10-12', 40]]))
+    vi.mocked(zoneRepo.countCreatedByDaySince).mockResolvedValue(new Map([['2026-10-16', 2]]))
+
+    const { trend } = await getPlatformStats(now)
+
+    expect(trend.days).toEqual(['2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16'])
+    expect(trend.signups).toEqual([0, 0, 0, 0, 1, 0, 1])
+    expect(trend.captures).toEqual([0, 0, 40, 0, 0, 0, 0])
+    expect(trend.zonesCreated).toEqual([0, 0, 0, 0, 0, 0, 2])
+    // From the start of the first WIB day.
+    expect(captureRepo.countByDaySince).toHaveBeenCalledWith(new Date('2026-10-09T17:00:00Z'))
+  })
+
+  it('adds images, exports and cached frames into storage per day', async () => {
+    vi.mocked(userRepo.listWithPlans).mockResolvedValue({ rows: [], total: 0 } as never)
+    vi.mocked(captureRepo.imageBytesByDaySince).mockResolvedValue(new Map([['2026-10-16', 300]]))
+    vi.mocked(exportRepo.fileBytesByDaySince).mockResolvedValue(new Map([['2026-10-16', 200]]))
+    vi.mocked(renderCacheRepo.bytesByDaySince).mockResolvedValue(new Map([['2026-10-15', 50]]))
+
+    const { trend } = await getPlatformStats(new Date('2026-10-16T05:00:00Z'))
+
+    expect(trend.storageAddedBytes.slice(-2)).toEqual([50, 500])
   })
 
   it('excludes internal accounts from the customer count', async () => {

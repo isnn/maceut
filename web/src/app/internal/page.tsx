@@ -15,7 +15,7 @@ import { linkClass } from '@/components/ui/Button'
 import { Pagination, SortableTh, Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { useTableControls } from '@/components/ui/useTableControls'
 import { Input } from '@/components/ui/Input'
-import { cn, formatDate, formatNumber } from '@/lib/utils'
+import { cn, formatDate, formatFileSize, formatNumber } from '@/lib/utils'
 import { PLAN_LABEL, PLAN_ORDER } from '@/lib/constants'
 import * as internalApi from '@/features/internal/api'
 import { formatIdr } from '@/features/internal/api'
@@ -71,7 +71,6 @@ export default function InternalOverviewPage() {
     },
     defaultDirection: { zones: 'desc', joined: 'desc' },
     initialSort: { key: 'joined', direction: 'desc' },
-    pageSize: 8,
   })
 
   if (!stats) {
@@ -96,7 +95,12 @@ export default function InternalOverviewPage() {
       </div>
 
       <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-3 gap-lg">
-        <StatTile label="Total accounts" value={stats.totalAccounts} note={`${stats.signupsLast7d} new in 7 days`} />
+        <StatTile
+          label="Total accounts"
+          value={stats.totalAccounts}
+          note={`${stats.signupsLast7d} new in 7 days`}
+          trend={{ days: stats.trend.days, values: stats.trend.signups, unit: (n) => `${n} ${n === 1 ? 'sign-up' : 'sign-ups'}` }}
+        />
         <StatTile
           label="Internal users"
           value={stats.internalUsers}
@@ -106,16 +110,19 @@ export default function InternalOverviewPage() {
           label="Zones collecting"
           value={stats.zonesTotal}
           note={`${stats.schedulesActiveTotal} active capture ${stats.schedulesActiveTotal === 1 ? 'window' : 'windows'}`}
+          trend={{ days: stats.trend.days, values: stats.trend.zonesCreated, unit: (n) => `${n} new ${n === 1 ? 'zone' : 'zones'}` }}
         />
         <StatTile
           label="Captures today"
           value={formatNumber(stats.capturesTodayTotal ?? 0)}
           note="across every account, WIB day"
+          trend={{ days: stats.trend.days, values: stats.trend.captures, unit: (n) => `${formatNumber(n)} captures` }}
         />
         <StatTile
           label="Storage used"
           value={`${formatNumber(stats.storageUsedGbTotal ?? 0, 2)} GB`}
           note="capture images, exports and cached frames"
+          trend={{ days: stats.trend.days, values: stats.trend.storageAddedBytes, unit: (n) => `${formatFileSize(n)} added` }}
         />
         <StatTile
           label="Estimated MRR"
@@ -300,12 +307,55 @@ export default function InternalOverviewPage() {
   )
 }
 
-function StatTile({ label, value, note }: { label: string; value: string | number; note: string }) {
+interface Trend {
+  days: string[]
+  values: number[]
+  /** One day's value in words, for the bar's tooltip. */
+  unit: (n: number) => string
+}
+
+function StatTile({ label, value, note, trend }: { label: string; value: string | number; note: string; trend?: Trend }) {
   return (
     <Card className="p-lg">
       <p className="text-label text-text-secondary">{label}</p>
       <p className="text-display text-text-primary mt-xs tabular-nums">{value}</p>
       <p className="text-caption text-text-muted mt-sm">{note}</p>
+      {trend && <TrendBars trend={trend} />}
     </Card>
+  )
+}
+
+function dayLabel(day: string): string {
+  return new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
+    new Date(`${day}T00:00:00Z`),
+  )
+}
+
+/** What each of the last 7 WIB days added; today is the solid bar on the right. */
+function TrendBars({ trend }: { trend: Trend }) {
+  const peak = Math.max(...trend.values, 1)
+  const last = trend.days.length - 1
+  return (
+    <div className="mt-md pt-md border-t border-divider">
+      <div className="h-12 flex items-end gap-xs" role="img" aria-label={`Last 7 days: ${trend.values.map(trend.unit).join(', ')}`}>
+        {trend.values.map((v, i) => (
+          <div
+            key={trend.days[i]}
+            title={`${dayLabel(trend.days[i]!)}: ${trend.unit(v)}`}
+            className="flex-1 h-full flex flex-col justify-end"
+          >
+            <div
+              className={cn('rounded-t-xs', v === 0 ? 'bg-divider' : i === last ? 'bg-primary' : 'bg-primary-soft')}
+              // A zero day still gets a sliver, so seven slots always read as seven days.
+              style={{ height: v === 0 ? '2px' : `${Math.max((v / peak) * 100, 6)}%` }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-between text-micro text-text-muted tabular-nums mt-xs">
+        <span>{dayLabel(trend.days[0]!)}</span>
+        <span>Today</span>
+      </div>
+    </div>
   )
 }

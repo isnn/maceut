@@ -36,6 +36,17 @@ router.use('/internal', authMiddleware, internalOnly)
  *                         free: { type: integer }
  *                         standard: { type: integer }
  *                         premium: { type: integer }
+ *                     trend:
+ *                       type: object
+ *                       description: >
+ *                         7 hari WIB terakhir (terlama dulu, hari ini terakhir). Tiap array sejajar
+ *                         dengan `days`. Hanya yang bertambah per hari — total harian tidak disimpan.
+ *                       properties:
+ *                         days: { type: array, items: { type: string, example: '2026-10-16' } }
+ *                         signups: { type: array, items: { type: integer }, description: Akun customer baru }
+ *                         zonesCreated: { type: array, items: { type: integer } }
+ *                         captures: { type: array, items: { type: integer }, description: Tanpa skipped_limit/missed }
+ *                         storageAddedBytes: { type: array, items: { type: integer }, description: Gambar, export selesai, cache frame }
  *       401: { description: UNAUTHORIZED }
  *       403: { description: FORBIDDEN — bukan akun internal }
  */

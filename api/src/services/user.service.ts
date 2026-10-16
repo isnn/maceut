@@ -21,6 +21,7 @@ import * as exportRepo from '../repositories/export.repository'
 import * as renderCacheRepo from '../repositories/render-cache.repository'
 import * as usageService from './usage.service'
 import * as planChangeRepo from '../repositories/plan-change.repository'
+import { shiftDay, wibDay } from './here-usage.service'
 import * as zoneService from './zone.service'
 import * as scheduleService from './schedule.service'
 import * as captureService from './capture.service'
@@ -344,7 +345,52 @@ export async function changeRole(actorId: string, targetUserId: string, access: 
 }
 
 /** Aggregate figures for the /internal overview (F-21). */
-export async function getPlatformStats(): Promise<{
+/** How many WIB days the Overview charts cover, today included. */
+export const TREND_DAYS = 7
+
+export interface PlatformTrend {
+  /** "YYYY-MM-DD" WIB days, oldest first, today last. Every array below lines up with it. */
+  days: string[]
+  signups: number[]
+  zonesCreated: number[]
+  captures: number[]
+  /** Bytes written that day (images, finished exports, cached frames). Not net of deletions. */
+  storageAddedBytes: number[]
+}
+
+/**
+ * Per-day counts for the Overview charts. Only what each day added: no daily snapshot
+ * of totals is stored, so "accounts on Tuesday" cannot be read back, but "sign-ups on
+ * Tuesday" can.
+ */
+async function platformTrend(customerCreatedAt: Date[], now: Date): Promise<PlatformTrend> {
+  const today = wibDay(now)
+  const days = Array.from({ length: TREND_DAYS }, (_, i) => shiftDay(today, i - (TREND_DAYS - 1)))
+  const since = new Date(`${days[0]}T00:00:00+07:00`)
+
+  const [zones, captures, images, exportFiles, cache] = await Promise.all([
+    zoneRepo.countCreatedByDaySince(since),
+    captureRepo.countByDaySince(since),
+    captureRepo.imageBytesByDaySince(since),
+    exportRepo.fileBytesByDaySince(since),
+    renderCacheRepo.bytesByDaySince(since),
+  ])
+  const signups = new Map<string, number>()
+  for (const at of customerCreatedAt) {
+    const day = wibDay(at)
+    signups.set(day, (signups.get(day) ?? 0) + 1)
+  }
+
+  return {
+    days,
+    signups: days.map((d) => signups.get(d) ?? 0),
+    zonesCreated: days.map((d) => zones.get(d) ?? 0),
+    captures: days.map((d) => captures.get(d) ?? 0),
+    storageAddedBytes: days.map((d) => (images.get(d) ?? 0) + (exportFiles.get(d) ?? 0) + (cache.get(d) ?? 0)),
+  }
+}
+
+export async function getPlatformStats(now: Date = new Date()): Promise<{
   totalUsers: number
   internalUsers: number
   /** How many addresses INTERNAL_EMAILS grants — the overview's "granted by config". */
@@ -356,6 +402,7 @@ export async function getPlatformStats(): Promise<{
   schedulesActive: number
   capturesToday: number | null
   storageUsedGb: number
+  trend: PlatformTrend
 }> {
   // One page large enough to aggregate over. Fine at this scale; when it stops being
   // fine the answer is a SQL GROUP BY in the repository, not a bigger page.
@@ -382,7 +429,14 @@ export async function getPlatformStats(): Promise<{
     zoneRepo.countAllCollecting(),
     scheduleRepo.countAllActive(),
   ])
-  const [capturesToday, storage] = await Promise.all([captureRepo.countAllToday(), storageBytesByUser()])
+  const [capturesToday, storage, trend] = await Promise.all([
+    captureRepo.countAllToday(),
+    storageBytesByUser(),
+    platformTrend(
+      rows.map((r) => r.createdAt),
+      now,
+    ),
+  ])
   let storageBytes = 0
   for (const bytes of storage.values()) storageBytes += bytes
 
@@ -396,6 +450,7 @@ export async function getPlatformStats(): Promise<{
     schedulesActive,
     capturesToday,
     storageUsedGb: toGb(storageBytes),
+    trend,
   }
 }
 

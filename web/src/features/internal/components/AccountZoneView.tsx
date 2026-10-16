@@ -23,7 +23,7 @@ import { ApiError } from '@/types/api'
 import * as internalApi from '../api'
 
 const EVERY = { '15min': 'Every 15 min', hourly: 'Hourly', daily: 'Daily' } as const
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 
 export function AccountZoneView({ userId, zoneId }: { userId: string; zoneId: string }) {
   const [page, setPage] = useState(1)

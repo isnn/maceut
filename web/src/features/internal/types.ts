@@ -56,4 +56,17 @@ export interface PlatformStats {
   storageUsedGbTotal: number | null
   /** Estimated monthly recurring revenue, in rupiah, derived from the plan mix. */
   mrr: number
+  trend: PlatformTrend
+}
+
+/**
+ * The last 7 WIB days, oldest first; every array lines up with `days`. What each day
+ * added, not running totals — the server keeps no daily snapshot of those.
+ */
+export interface PlatformTrend {
+  days: string[]
+  signups: number[]
+  zonesCreated: number[]
+  captures: number[]
+  storageAddedBytes: number[]
 }

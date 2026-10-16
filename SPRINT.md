@@ -195,6 +195,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **FE-53** Peta zona: pencarian seluruh dunia (Indonesia didahulukan), kotak cari tetap di atas peta; batas zona 100 km/sisi (pop-up saat menggambar, 422 di API); tombol "Next"; kelas jalan default = tertinggi di paket; pelindung biaya pratinjau (limit per akun 30/10 mnt & 200/hari, bbox dibulatkan 0,005°, pratinjau maks 30% batas harian HERE) | masukan user 2026-10-13 |
 | ✅ | **OPS-2** Siap produksi: Next 16.4.0 (CVE kritis RCE image optimizer/next-og), port postgres/rabbitmq dev hanya loopback, kredensial RabbitMQ dari .env, IP rate-limit Better Auth dari CF-Connecting-IP, header keamanan web+API, batas memori & rotasi log di compose prod, overlay Traefik, skrip backup DB, deploy.md (maceut.com + checklist) | review deploy 2026-10-14 |
 | ✅ | **FE-54** Internal: zona & jadwal user bisa dilihat (halaman zona read-only: peta, jendela, capture berhalaman; `GET /internal/users/:id/zones/:zoneId`), kolom Actions di Overview, kolom Verified di tabel Users & Overview, superadmin bisa ubah status verified, modal Edit user ditata ulang (Profile · Access · Email verification · Password), seksi Billing di detail user (paket, harga, sejak, riwayat perubahan dari tabel baru `plan_changes`) | masukan user 2026-10-16 |
+| ✅ | **FE-55** Overview Internal: grafik 7 hari di kartu Total accounts, Zones collecting, Captures today, Storage used (`trend` di `GET /internal/stats`); semua tabel default 10 baris per halaman; menu ☰ di mobile untuk header Internal & app | masukan user 2026-10-16 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -219,6 +220,13 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-16] FE-55 — grafik Overview, pagination 10, navbar mobile.
+  - Grafik = yang bertambah per hari WIB (sign-up, zona dibuat, capture, byte tersimpan), bukan total harian:
+    tidak ada snapshot harian. Storage tidak dikurangi file yang terhapus. Internal users & MRR tanpa grafik.
+  - Pagination: satu konstanta DEFAULT_PAGE_SIZE = 10 di useTableControls; override 8/20 dihapus.
+  - Navbar: di bawah laptop (992px) nav jadi ☰ di pojok kanan (components/shared/MobileNav.tsx), pola PublicHeader.
+  - Hex #5A35F3 di header diganti token text-primary.
 
 [2026-10-16] FE-54 — alat akun di Internal.
   - Riwayat paket: tabel baru plan_changes (migrasi 0021), bukan notifikasi plan_changed — notifikasi dihapus

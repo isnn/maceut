@@ -171,7 +171,6 @@ export function ZoneCaptures({ zone, refreshKey = 0 }: { zone: Zone; refreshKey?
     },
     defaultDirection: { planned: 'desc', actual: 'desc', roads: 'desc', jam: 'desc' },
     initialSort: { key: 'actual', direction: 'desc' },
-    pageSize: 10,
   })
 
   const selected = cycles?.[index] ?? null
