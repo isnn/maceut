@@ -1,8 +1,10 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { IconCheck } from '@/components/ui/icons'
-import { Button } from '@/components/ui/Button'
+import { IconArrowRight, IconCheck } from '@/components/ui/icons'
+import Link from 'next/link'
+import { publicPlanLink } from '../plan-links'
+import { Button, buttonClass } from '@/components/ui/Button'
 import { PLAN_HIGHLIGHTS, PLAN_LABEL, PLAN_ORDER, PLAN_PRICE } from '@/lib/constants'
 import type { Plan } from '@/features/auth/types'
 
@@ -13,12 +15,25 @@ interface PlanCardsProps {
   /** Label template for the card action; omit to render read-only cards. */
   actionLabel?: (plan: Plan) => string
   pendingPlan?: Plan | null
+  /**
+   * Plans this viewer cannot move to themselves — upgrades, while billing does not
+   * exist. The card still renders in full: hiding a plan would remove the very thing
+   * someone is deciding whether to ask for.
+   */
+  disabledPlan?: (plan: Plan) => boolean
+  /**
+   * Public pages (FE-37): each card links to sign-up (paid plans carry `?plan=`). A flag,
+   * not a function, so server pages can pass it to this client component.
+   */
+  publicLinks?: boolean
   className?: string
 }
 
-export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, className }: PlanCardsProps) {
+const PUBLIC_VARIANT = { free: 'secondary', starter: 'tint', standard: 'primary', premium: 'ink' } as const satisfies Record<Plan, Parameters<typeof buttonClass>[0]>
+
+export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabledPlan, publicLinks, className }: PlanCardsProps) {
   return (
-    <div className={cn('grid grid-cols-1 tablet:grid-cols-3 gap-lg items-start', className)}>
+    <div className={cn('grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-lg items-start', className)}>
       {PLAN_ORDER.map((plan) => {
         const isSelected = selected === plan
         const recommended = plan === 'standard'
@@ -31,15 +46,17 @@ export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, classN
             )}
           >
             {recommended && (
-              <span className="absolute -top-2.5 left-xl bg-primary text-on-primary text-micro font-semibold rounded-xs px-sm py-[3px] uppercase tracking-wide">
-                Most popular
+              // Not a popularity claim (FE-36, FE-42): nothing measures popularity. Standard
+              // is the lowest price per capture of the paid plans (Rp 175 vs Rp 220 / Rp 497).
+              <span className="absolute -top-2.5 left-xl bg-primary text-on-primary text-micro font-semibold rounded-xs px-sm py-[3px]">
+                Best price
               </span>
             )}
             <div>
               <p className="text-heading-sm text-text-primary">{PLAN_LABEL[plan]}</p>
               <p className="mt-sm flex items-baseline gap-xs">
                 <span className="text-page-title font-bold text-text-primary">{PLAN_PRICE[plan].amount}</span>
-                <span className="text-caption text-text-muted">{PLAN_PRICE[plan].period}</span>
+                <span className="text-caption text-text-secondary">{PLAN_PRICE[plan].period}</span>
               </p>
             </div>
             <ul className="space-y-sm flex-1">
@@ -50,11 +67,19 @@ export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, classN
                 </li>
               ))}
             </ul>
+            {publicLinks && (
+              // One weight per plan (FE-42): soft for Free, the brand colour for the
+              // recommended plan, ink for the top one. Never two of the same.
+              <Link href={publicPlanLink(plan).href} className={cn(buttonClass(PUBLIC_VARIANT[plan]), 'group w-full')}>
+                {publicPlanLink(plan).label}
+                <IconArrowRight size={16} className="transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
+              </Link>
+            )}
             {actionLabel && onSelect && (
               <Button
                 variant={recommended || isSelected ? 'primary' : 'secondary'}
                 onClick={() => onSelect(plan)}
-                disabled={pendingPlan != null}
+                disabled={pendingPlan != null || isSelected || disabledPlan?.(plan) === true}
               >
                 {pendingPlan === plan ? 'Saving…' : actionLabel(plan)}
               </Button>

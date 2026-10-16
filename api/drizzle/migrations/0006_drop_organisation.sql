@@ -1,0 +1,21 @@
+-- Drop `organisation` from the user table.
+--
+-- It was a free-text label on the account ("Dinas Bina Marga"), collected at sign-up
+-- and shown in the profile and the internal directory. It is not the multi-tenant
+-- workspace that ADR-020's rewrite removed — but it read like one at registration,
+-- where it sat beside full name as if joining an organisation were part of creating an
+-- account. A Maceut account is one person with one plan; nothing in the product ever
+-- branched on this value.
+--
+-- ⚠️ DESTRUCTIVE. Any organisation names already entered are gone with the column, and
+-- nothing else stores them. That is the intended outcome, not a side effect: keeping a
+-- column nobody reads is how a schema accumulates fields whose purpose no one can
+-- reconstruct a year later. If these names turn out to matter for support or billing
+-- contact, they belong in a customer-record table that says so, not in a text field
+-- inherited from a paradigm we removed.
+--
+-- Written by hand rather than generated: drizzle-kit emits the same ALTER, but the
+-- reasoning above does not survive a regeneration and the loss of data deserves a note
+-- in the migration itself.
+
+ALTER TABLE "user" DROP COLUMN IF EXISTS "organisation";

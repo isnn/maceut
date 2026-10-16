@@ -12,8 +12,12 @@ export interface CaptureWindow {
   /** 0 = Monday … 6 = Sunday. */
   days: number[]
   active: boolean
-  /** Frames already collected by this window, shown when editing (3l). */
+  /** Paused by a plan change (ADR-020), not by the user. */
+  pausedByPlan: boolean
+  /** Frames this window has collected, shown when editing (3l). */
   capturedFrames: number
+  /** When the scheduler fires it next (ISO). Null when paused or not yet seeded. */
+  nextFireAt: string | null
   createdAt: string
 }
 
@@ -32,7 +36,7 @@ export const INTERVAL_LABEL: Record<CaptureInterval, string> = {
   daily: 'Daily',
 }
 
-/** Frames a window yields per day — drives the "frame per hari" budget. */
+/** Frames a window yields on a day it runs; ×days×52÷12 gives its month (framesPerMonth). */
 export const INTERVAL_PER_HOUR: Record<CaptureInterval, number> = {
   '15min': 4,
   hourly: 1,
@@ -42,10 +46,27 @@ export const INTERVAL_PER_HOUR: Record<CaptureInterval, number> = {
 export const DAY_LABEL = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 export const DAY_NAME = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
+/**
+ * Frames a window takes from the monthly pool in an average month: a week's frames × 52
+ * ÷ 12 (delivery doc F6). Must match `framesPerMonth` in api/src/types/schedule.ts.
+ */
+export function framesPerMonth(window: Pick<CaptureWindow, 'start' | 'end' | 'interval' | 'days'>): number {
+  return Math.round((framesPerDay(window) * window.days.length * 52) / 12)
+}
+
 export function framesPerDay(window: Pick<CaptureWindow, 'start' | 'end' | 'interval'>): number {
   if (window.interval === 'daily') return 1
-  const [startH] = window.start.split(':').map(Number)
-  const [endH] = window.end.split(':').map(Number)
-  const hours = Math.max(endH - startH, 0)
-  return hours * INTERVAL_PER_HOUR[window.interval]
+
+  // Must match api/src/types/schedule.ts exactly: it feeds the monthly projection shown
+  // against the pool, and if the two disagree the board's warning and the server part.
+  //
+  // It previously read only the HOUR digits, so 07:30–09:00 counted as two full hours
+  // and any window inside a single hour counted as zero — the second of which made
+  // short windows look free against BR-006.
+  const [sh = 0, sm = 0] = window.start.split(':').map(Number)
+  const [eh = 0, em = 0] = window.end.split(':').map(Number)
+  const minutes = eh * 60 + em - (sh * 60 + sm)
+
+  const step = window.interval === '15min' ? 15 : 60
+  return Math.max(Math.ceil(minutes / step), 0)
 }

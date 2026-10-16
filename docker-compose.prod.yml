@@ -1,37 +1,86 @@
-version: '3.9'
+# Production: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Setup and domain routing: docs/operations/deploy.md.
+#
+# `!reset` drops what docker-compose.yml sets for local development (source mounts, dev
+# commands, public ports) instead of merging with it. A plain `volumes: []` merges, so the
+# dev bind mount would stay and the container would run the source tree, not the build.
+#
+# Memory: the host is shared, so every service has a ceiling (memswap = mem: no swap
+# thrash). An OOM-killed container restarts (`restart: always`); an export resumes from
+# the frames already written. Node's heap is capped at ~70% of the container so V8
+# collects before the kernel kills. Sum of limits ≈ 4.8 GB; typical use ≈ 1.5 GB.
 
-# Gunakan bersama docker-compose.yml:
-# docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+x-logging: &logging
+  # Docker keeps container logs forever by default. 5 × 10 MB per service.
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
 
 services:
   api:
     build:
       context: ./api
       dockerfile: Dockerfile
-    volumes: []          # tidak mount source code di production
-    command: node dist/server.js
+    volumes: !reset []
+    command: node dist/src/server.js
+    # Only the reverse proxy on this host reaches it (api host → 127.0.0.1:8080).
+    ports: !override
+      - "127.0.0.1:8080:8080"
+    environment:
+      NODE_OPTIONS: --max-old-space-size=384
+    mem_limit: 512m
+    memswap_limit: 512m
+    logging: *logging
     restart: always
 
   worker:
     build:
       context: ./api
       dockerfile: Dockerfile
-    volumes: []
-    command: node dist/workers/index.js
+    volumes: !reset []
+    command: node dist/src/workers/index.js
+    environment:
+      NODE_OPTIONS: --max-old-space-size=512
+    # Chromium + ffmpeg live here, outside Node's heap: hence the gap between the two.
+    mem_limit: 2g
+    memswap_limit: 2g
+    # Half the host's 4 cores, so an export never starves the API.
+    cpus: 2
+    logging: *logging
     restart: always
 
   web:
     build:
       context: ./web
       dockerfile: Dockerfile
-    volumes: []
+    volumes: !reset []
+    env_file: !override
+      - ./web/.env.production
+    command: !reset null
+    # web host → 127.0.0.1:3000
+    ports: !override
+      - "127.0.0.1:3000:3000"
+    environment:
+      NODE_OPTIONS: --max-old-space-size=512
+    mem_limit: 768m
+    memswap_limit: 768m
+    logging: *logging
     restart: always
 
-  # postgres & rabbitmq: rekomendasi gunakan managed service di production
-  # (misal: Neon/Supabase untuk Postgres, CloudAMQP untuk RabbitMQ).
-  # Jika tetap self-host, tambahkan strategi backup volume secara terpisah.
+  # Not published to the internet: api and worker reach them on the compose network.
+  # Managed services (Neon/Supabase, CloudAMQP) are fine too; then drop these two.
   postgres:
+    ports: !reset []
+    mem_limit: 1g
+    memswap_limit: 1g
+    logging: *logging
     restart: always
 
   rabbitmq:
+    ports: !reset []
+    # RabbitMQ reads the cgroup limit and blocks publishers at 40% of it.
+    mem_limit: 512m
+    memswap_limit: 512m
+    logging: *logging
     restart: always

@@ -1,0 +1,35 @@
+import { Logo } from '@/components/ui/Logo'
+
+const LINKS = [
+  { href: '/#product', label: 'Product' },
+  { href: '/pricing', label: 'Pricing' },
+  { href: '/terms', label: 'Terms of Service' },
+  { href: '/privacy', label: 'Privacy Policy' },
+]
+
+/** Footer for the public pages (FE-37): only pages that exist. */
+export function PublicFooter() {
+  return (
+    <footer className="border-t border-border">
+      <div className="mx-auto max-w-[1600px] px-lg tablet:px-xl py-xl flex flex-wrap items-center justify-between gap-lg">
+        <div className="flex flex-wrap items-baseline gap-x-md gap-y-xs">
+          <Logo />
+          <p className="text-body text-text-secondary">Connecting people with the road ahead</p>
+        </div>
+        <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-xl gap-y-sm">
+          {LINKS.map((l) => (
+            <a key={l.href} href={l.href} className="inline-flex items-center min-h-11 text-body text-text-secondary no-underline hover:text-text-primary transition-colors">
+              {l.label}
+            </a>
+          ))}
+        </nav>
+        <p className="w-full text-caption text-text-secondary">
+          © 2026 Maceut by{' '}
+          <a href="https://hokya.dev" className="text-text-secondary underline-offset-2 hover:text-text-primary hover:underline">
+            hokya.dev
+          </a>
+        </p>
+      </div>
+    </footer>
+  )
+}

@@ -8,10 +8,10 @@ interface LogoProps {
   className?: string
 }
 
-/** The `maceut®` wordmark, set in Bricolage Grotesque. */
+/** The `maceut` wordmark, set in Bricolage Grotesque. */
 export function Logo({ href = '/', tone = 'default', className }: LogoProps) {
   return (
-    <Link href={href} className={cn('inline-flex items-baseline gap-[2px] no-underline', className)}>
+    <Link href={href} className={cn('inline-flex items-baseline no-underline', className)}>
       <span
         className={cn(
           'font-brand text-[20px] font-extrabold tracking-tight',
@@ -20,7 +20,6 @@ export function Logo({ href = '/', tone = 'default', className }: LogoProps) {
       >
         maceut
       </span>
-      <span className={cn('font-brand text-micro', tone === 'on-dark' ? 'text-white/60' : 'text-text-muted')}>®</span>
     </Link>
   )
 }

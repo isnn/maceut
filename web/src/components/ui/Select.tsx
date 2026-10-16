@@ -70,8 +70,8 @@ export function Select({
         className={cn(
           'inline-flex items-center justify-between gap-sm rounded-sm border border-border bg-canvas text-text-primary',
           'hover:bg-canvas-secondary data-[popup-open]:border-primary transition-colors',
-          'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-          'disabled:opacity-60 disabled:cursor-not-allowed',
+          'focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+          'disabled:opacity-60',
           TRIGGER_SIZE[size],
           className
         )}
@@ -117,7 +117,7 @@ export function Select({
                       'text-body text-text-secondary transition-colors',
                       state.highlighted && 'bg-canvas-secondary text-text-primary',
                       state.selected && 'text-text-primary font-medium',
-                      state.disabled && 'opacity-50 cursor-not-allowed'
+                      state.disabled && 'opacity-50'
                     )
                   }
                 >

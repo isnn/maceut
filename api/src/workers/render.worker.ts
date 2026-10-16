@@ -1,0 +1,154 @@
+import type { Channel, ConsumeMessage } from 'amqplib'
+import type { Browser } from 'playwright-core'
+import { config, isR2Configured } from '../config/env'
+import * as captureRepo from '../repositories/capture.repository'
+import * as zoneRepo from '../repositories/zone.repository'
+import { slimFor } from '../services/capture.service'
+import { RENDER_VERSION } from '../services/render-cache.service'
+import { capturePath, thumbnailPath, upload } from '../lib/r2-client'
+import { launchBrowser, renderWithPage, RenderStalledError, type RenderPageJob } from '../lib/render-page'
+import { registerIdleBrowser, withBrowserSlot } from '../lib/browser-slot'
+import { safeAck } from '../lib/rabbitmq-client'
+
+/**
+ * Renders one PNG per collected capture and stores it in R2 (CAP-02, BR-009, BR-011).
+ *
+ * A separate queue from the capture itself, on purpose:
+ *
+ * - **Memory.** Captures run four at a time; four headless browsers at once is how
+ *   this host OOM-kills processes. Renders run one at a time, on ONE shared
+ *   Chromium that opens a page per image and closes a minute after the last one.
+ * - **Failure isolation.** The traffic data is the capture; the image is a view of it.
+ *   A render that fails leaves the capture `done` with no image, never `failed` — the
+ *   zone page and Studio redraw from the stored traffic either way.
+ *
+ * The image is drawn by Studio's own renderer (via the web app's render page), in the
+ * default capture style: the Dark theme, BR-017's congestion colours, the zone name and
+ * WIB timestamp (BR-018) and the legend (BR-019), at PLAYWRIGHT_SCREENSHOT_WIDTH ×
+ * HEIGHT. The style is stored on the capture as `style_used` (BR-023).
+ */
+
+interface RenderJob {
+  captureId: string
+}
+
+/** The style every automatic capture image is drawn in (BR-018, BR-019, BR-023). */
+export function captureImageSpec(): RenderPageJob['spec'] {
+  return {
+    themeId: 'dark',
+    congestionId: 'standard',
+    overlay: {
+      effect: 'vignette',
+      title: '',
+      textSize: 'medium',
+      text: { x: 0.95, y: 0.84, align: 'right' },
+      legend: true, // BR-019: the legend is required on every capture image
+      boundary: false,
+    },
+    view: { zoomOffset: 0, panX: 0, panY: 0 },
+    width: config.playwrightScreenshotWidth,
+    height: config.playwrightScreenshotHeight,
+    holdMs: 1000,
+  }
+}
+
+/** How long the browser outlives its last image — a capture burst reuses it, a quiet hour doesn't pay for it. */
+const BROWSER_IDLE_MS = 60_000
+
+let browser: Browser | null = null
+let idleTimer: NodeJS.Timeout | null = null
+
+/** The worker's single browser, launched on first use and relaunched if it died. */
+async function sharedBrowser(): Promise<Browser> {
+  if (idleTimer) clearTimeout(idleTimer)
+  idleTimer = null
+  if (browser?.isConnected()) return browser
+  const launched = await launchBrowser()
+  launched.on('disconnected', () => {
+    if (browser === launched) browser = null
+  })
+  browser = launched
+  return launched
+}
+
+/** Closes the kept-warm browser now — an export is about to take the slot. */
+async function closeIdleBrowser(): Promise<void> {
+  if (idleTimer) clearTimeout(idleTimer)
+  idleTimer = null
+  const b = browser
+  browser = null
+  await b?.close().catch(() => undefined)
+}
+registerIdleBrowser(closeIdleBrowser)
+
+function releaseBrowser(): void {
+  if (idleTimer) clearTimeout(idleTimer)
+  idleTimer = setTimeout(() => {
+    const b = browser
+    browser = null
+    idleTimer = null
+    void b?.close().catch(() => undefined)
+  }, BROWSER_IDLE_MS)
+}
+
+export async function renderCaptureImage(captureId: string): Promise<void> {
+  const capture = await captureRepo.findLiteById(captureId)
+  if (!capture || capture.status !== 'done') return
+  if (capture.filePath) return // already rendered — a duplicate delivery
+  const zone = await zoneRepo.findById(capture.zoneId)
+  if (!zone) return
+
+  const spec = captureImageSpec()
+  // Only one Chromium per worker: this waits while an export renders (EXP-A1, #67).
+  const job = { format: 'png' as const, spec, frameCount: 1, zoneName: zone.name, ring: zone.geometry.coordinates[0] as [number, number][] }
+  const bridge = {
+    frame: async () => ({
+      capturedAt: capture.capturedAt.toISOString(),
+      traffic: await slimFor(capture),
+    }),
+  }
+  // Only one Chromium per worker: this waits while an export renders (EXP-A1, #67).
+  const { pngs } = await withBrowserSlot(async () => renderWithPage(await sharedBrowser(), job, bridge, `capture ${captureId}`))
+  const png = pngs[0]?.data
+  if (!png || png.length === 0) throw new Error('render produced no image')
+
+  const path = capturePath(capture.userId, capture.id, capture.capturedAt, 'png')
+  await upload(path, png, 'image/png')
+  // The small JPEG for lists (dashboard). Optional: a capture without one still has its
+  // image, and lists fall back to a plain tile.
+  const thumb = pngs.find((p) => p.name === 'thumb.jpg')?.data
+  if (thumb?.length) await upload(thumbnailPath(path), thumb, 'image/jpeg')
+  // file_size counts both, so storage figures match what R2 actually holds.
+  // The renderer version is recorded so an export can tell this image is exactly what
+  // it would draw today (render-cache.service), and reuse it.
+  await captureRepo.setImage(capture.id, path, png.length + (thumb?.length ?? 0), { ...spec, renderVersion: RENDER_VERSION })
+  console.log(`[render] capture ${captureId} image — ${png.length} bytes, thumbnail ${thumb?.length ?? 0} bytes`)
+}
+
+export async function registerRenderConsumer(ch: Channel): Promise<void> {
+  if (!isR2Configured()) {
+    console.warn('[render] R2 not configured — capture images are not rendered')
+    return
+  }
+  await ch.prefetch(1)
+  await ch.consume(config.rabbitmqQueueRender, (msg: ConsumeMessage | null) => {
+    if (!msg) return
+    void (async () => {
+      try {
+        const job = JSON.parse(msg.content.toString()) as RenderJob
+        if (!job?.captureId) throw new Error('job tanpa captureId')
+        await renderCaptureImage(job.captureId)
+      } catch (err) {
+        // Logged and dropped: the capture itself is already complete and displayable
+        // from its traffic. Retrying a render forever would only hold the queue.
+        console.error('[render] failed:', err instanceof Error ? err.message : err)
+        // A page that stopped answering may mean a Chromium that has: start the next
+        // image on a fresh one rather than reuse it.
+        if (err instanceof RenderStalledError) await closeIdleBrowser()
+      }
+      releaseBrowser()
+      safeAck(ch, msg)
+    })()
+  })
+  console.log(`[worker] consuming ${config.rabbitmqQueueRender} (prefetch 1, one shared browser)`)
+}

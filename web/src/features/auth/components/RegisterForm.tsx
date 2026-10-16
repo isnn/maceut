@@ -1,12 +1,14 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Checkbox, FormLabel, Input, PasswordInput } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
 import { ApiError } from '@/types/api'
 import * as authApi from '../api'
+import { CONSENT_TEXT } from '@/features/legal/texts'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -22,10 +24,21 @@ function passwordScore(value: string): number {
 
 const STRENGTH_LABEL = ['Too short', 'Weak', 'Fair', 'Strong']
 
+/** The consent sentence with its two document names turned into links (new tab, so the form keeps its input). */
+function withLinks(text: string, terms: string, privacy: string, query: string) {
+  const link = (label: string, href: string) => (
+    <Link key={label} href={`${href}${query}`} target="_blank" className="font-semibold text-primary hover:underline">
+      {label}
+    </Link>
+  )
+  const [before, rest = ''] = text.split(terms)
+  const [middle, after = ''] = rest.split(privacy)
+  return [before, link(terms, '/terms'), middle, link(privacy, '/privacy'), after]
+}
+
 export function RegisterForm() {
   const router = useRouter()
   const [fullName, setFullName] = useState('')
-  const [organisation, setOrganisation] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [agreed, setAgreed] = useState(false)
@@ -37,7 +50,7 @@ export function RegisterForm() {
   const nameError = submitted && !fullName.trim() ? 'Full name is required.' : null
   const emailError = submitted && !EMAIL_RE.test(email) ? 'Enter a valid email address.' : null
   const passwordError = submitted && password.length < 8 ? 'Password must be at least 8 characters.' : null
-  const agreedError = submitted && !agreed ? 'You need to accept the terms of service.' : null
+  const agreedError = submitted && !agreed ? 'Check the box to accept the Terms of Service and Privacy Policy.' : null
   const clientValid = fullName.trim() !== '' && EMAIL_RE.test(email) && password.length >= 8 && agreed
 
   async function handleSubmit(e: FormEvent) {
@@ -47,8 +60,9 @@ export function RegisterForm() {
     if (!clientValid) return
     setLoading(true)
     try {
-      await authApi.register({ fullName, organisation, email, password })
-      router.push('/onboarding')
+      await authApi.register({ fullName, email, password, acceptTerms: agreed })
+      // No session yet — the account is signed in once the emailed code is entered.
+      router.push(`/verify-email?email=${encodeURIComponent(email.trim())}&from=signup`)
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
       setLoading(false)
@@ -57,26 +71,15 @@ export function RegisterForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-lg" noValidate>
-      <div className="grid grid-cols-1 tablet:grid-cols-2 gap-lg">
-        <div className="space-y-xs">
-          <FormLabel htmlFor="fullName">Full name</FormLabel>
-          <Input id="fullName" placeholder="Rizky Zulkarnain" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-          {nameError && <p className="text-caption text-danger-text">{nameError}</p>}
-        </div>
-        <div className="space-y-xs">
-          <FormLabel htmlFor="organisation">Organisation</FormLabel>
-          <Input
-            id="organisation"
-            placeholder="Dinas Bina Marga"
-            value={organisation}
-            onChange={(e) => setOrganisation(e.target.value)}
-          />
-        </div>
+      <div className="space-y-xs">
+        <FormLabel htmlFor="fullName">Full name</FormLabel>
+        <Input id="fullName" placeholder="Rizky Zulkarnain" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        {nameError && <p className="text-caption text-danger-text">{nameError}</p>}
       </div>
 
       <div className="space-y-xs">
-        <FormLabel htmlFor="email">Work email</FormLabel>
-        <Input id="email" type="email" placeholder="rizky@binamarga.go.id" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <FormLabel htmlFor="email">Email</FormLabel>
+        <Input id="email" type="email" placeholder="rizky@maceut.com" value={email} onChange={(e) => setEmail(e.target.value)} />
         {emailError && <p className="text-caption text-danger-text">{emailError}</p>}
         {serverError && <p className="text-caption text-danger-text">{serverError}</p>}
       </div>
@@ -102,17 +105,20 @@ export function RegisterForm() {
       </div>
 
 
+      {/* H4 — the owner's consent text (features/legal/texts.ts), with the two documents linked. */}
       <label className="flex items-start gap-sm text-body text-text-secondary">
-        <Checkbox checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-[2px] shrink-0" />
-        <span>
-          I agree to the <span className="text-info">Terms of Service</span> and to traffic data being collected within
-          the zones I define.
-        </span>
+        <Checkbox
+          checked={agreed}
+          onChange={(e) => setAgreed(e.target.checked)}
+          aria-invalid={agreedError ? true : undefined}
+          className="mt-[2px] shrink-0"
+        />
+        <span>{withLinks(CONSENT_TEXT.en, 'Terms of Service', 'Privacy Policy', '')}</span>
       </label>
       {agreedError && <p className="text-caption text-danger-text">{agreedError}</p>}
 
       <Button type="submit" disabled={loading} className="w-full">
-        {loading ? 'Creating account…' : 'Continue to plan'}
+        {loading ? 'Creating account…' : 'Create account'}
       </Button>
     </form>
   )
