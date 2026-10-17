@@ -11,7 +11,7 @@
 // Convention: every timestamp is `timestamptz`. A bare `timestamp` carries no
 // offset and means whatever the reading process assumes.
 //
-// Last updated: 2026-10-17 (migration 0023_plan_expiry — user_plans.reminded_at; notification_type gains plan_expiring, plan_expired, payment_failed)
+// Last updated: 2026-10-17 (migration 0024_auto_renew — user_plans.auto_renew + midtrans_subscription_id; payments.auto_renew_setup + subscription_id; notification_type gains auto_renew_failed)
 // =============================================================================
 
 Project maceut {
@@ -102,6 +102,8 @@ Table user_plans {
   started_at timestamptz [not null, default: `now()`]
   expires_at timestamptz [null, note: 'End of a paid period (FE-56). NULL = does not expire (Free, or set by staff). Past it, the next read of the plan moves the account to Free']
   reminded_at timestamptz [null, note: 'The 3-day reminder for this period went out; cleared whenever the plan is set']
+  auto_renew boolean [not null, default: false, note: 'FE-56: a Midtrans card Subscription renews this plan monthly. Off by default']
+  midtrans_subscription_id text [null, note: 'Midtrans Subscription id while auto-renew is on']
   created_at timestamptz [not null, default: `now()`]
 
   Indexes {
@@ -186,6 +188,8 @@ Table payments {
   payment_type text [null]
   transaction_id text [null]
   paid_at timestamptz [null]
+  auto_renew_setup boolean [not null, default: false, note: 'Card payment that also turns auto-renew on']
+  subscription_id text [null, note: 'Set on a charge made by a Midtrans Subscription']
   period_end timestamptz [null, note: 'End of the 30 days this payment bought']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
@@ -437,6 +441,7 @@ Enum notification_type {
   plan_expiring [note: 'FE-56: paid period ends in 3 days (bell + email)']
   plan_expired [note: 'FE-56: paid period ended, moved to Free (bell + email)']
   payment_failed [note: 'FE-56: a payment attempt failed or expired (bell)']
+  auto_renew_failed [note: 'FE-56: an auto-renew card charge failed, or the subscription stopped (bell + email)']
 }
 
 Enum notification_tone {

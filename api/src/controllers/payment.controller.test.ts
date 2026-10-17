@@ -12,6 +12,12 @@ vi.mock('better-auth/node', () => ({
   fromNodeHeaders: (h: unknown) => h,
 }))
 vi.mock('../repositories/user.repository', () => ({ findById: vi.fn(), findByIdWithPlan: vi.fn() }))
+const flags = vi.hoisted(() => ({ autoRenew: false }))
+vi.mock('../services/auto-renew.service', () => ({
+  isAutoRenewEnabled: () => flags.autoRenew,
+  stop: vi.fn(),
+  handleSubscriptionNotification: vi.fn(async () => 'applied'),
+}))
 vi.mock('../services/payment.service', () => ({
   prices: vi.fn(() => ({ enabled: true, prices: { free: 0, starter: 99000, standard: 349000, premium: 1490000 }, periodDays: 30 })),
   checkout: vi.fn(),
@@ -24,6 +30,7 @@ vi.mock('../services/payment.service', () => ({
 import { app } from '../app'
 import * as userRepo from '../repositories/user.repository'
 import * as paymentService from '../services/payment.service'
+import * as autoRenew from '../services/auto-renew.service'
 import { auth } from '../lib/auth'
 import { ForbiddenError, NotFoundError, ValidationError } from '../errors'
 
@@ -37,6 +44,7 @@ function signedIn() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  flags.autoRenew = false
   vi.mocked(auth.api.getSession).mockResolvedValue(null as never)
 })
 
@@ -46,6 +54,8 @@ describe('T26: customer payment routes need a session', () => {
     ['post', '/payments/checkout'],
     ['get', '/payments/pending'],
     ['get', '/payments/history'],
+    ['post', '/payments/auto-renew'],
+    ['delete', '/payments/auto-renew'],
     ['get', '/payments/MCT-abc-1'],
   ] as const)('%s %s → 401', async (method, path) => {
     const res = await request(app)[method](path).send({ plan: 'starter' })
@@ -113,7 +123,36 @@ describe('GET /payments/:orderId', () => {
   })
 })
 
+describe('/payments/auto-renew', () => {
+  it('A6: 404 while MIDTRANS_AUTO_RENEW_ENABLED is off', async () => {
+    signedIn()
+    expect((await request(app).post('/payments/auto-renew').send({ plan: 'starter' })).status).toBe(404)
+    expect((await request(app).delete('/payments/auto-renew')).status).toBe(404)
+    expect(paymentService.checkout).not.toHaveBeenCalled()
+  })
+
+  it('turns on through a card-saving checkout, and off through stop()', async () => {
+    signedIn()
+    flags.autoRenew = true
+    vi.mocked(paymentService.checkout).mockResolvedValue({ orderId: 'MCT-1', token: 't', redirectUrl: 'r', amount: 99000, plan: 'starter', reused: false })
+
+    expect((await request(app).post('/payments/auto-renew').send({ plan: 'starter' })).status).toBe(201)
+    expect(paymentService.checkout).toHaveBeenCalledWith(USER_ID, 'starter', expect.any(Date), { autoRenewSetup: true })
+
+    expect((await request(app).delete('/payments/auto-renew')).status).toBe(200)
+    expect(autoRenew.stop).toHaveBeenCalledWith(USER_ID)
+  })
+})
+
 describe('POST /payments/midtrans/notification', () => {
+  it('routes subscription charges (no signature) to the auto-renew handler', async () => {
+    const body = { event_name: 'subscription.charge', subscription: { id: 'sub1' }, transaction: { transaction_id: 'tx' } }
+    const res = await request(app).post('/payments/midtrans/notification').send(body)
+    expect(res.status).toBe(200)
+    expect(autoRenew.handleSubscriptionNotification).toHaveBeenCalledWith(body)
+    expect(paymentService.handleNotification).not.toHaveBeenCalled()
+  })
+
   const body = { order_id: 'MCT-abc-1', status_code: '200', gross_amount: '99000.00', transaction_status: 'settlement', signature_key: 'x' }
 
   it('needs no session, and answers 200 once accepted', async () => {

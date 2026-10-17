@@ -68,10 +68,10 @@ export function usePayPlan() {
   )
 
   const pay = useCallback(
-    async (plan: Plan) => {
+    async (plan: Plan, opts: { autoRenew?: boolean } = {}) => {
       setState({ kind: 'starting', plan })
       try {
-        const c = await billingApi.checkout(plan)
+        const c = opts.autoRenew ? await billingApi.enableAutoRenew(plan) : await billingApi.checkout(plan)
         open(c.orderId, c.plan, c.token, c.redirectUrl)
       } catch (err) {
         setState({

@@ -102,6 +102,13 @@ In the Midtrans dashboard (sandbox and production each have their own):
 - Settings → Payment → **Notification URL**: `https://<API_HOST>/payments/midtrans/notification`.
 - Settings → Snap Preference: turn on the methods to offer (QRIS needs GoPay or ShopeePay QRIS).
 
+**Auto-renew (optional, off):** `MIDTRANS_AUTO_RENEW_ENABLED=true` shows an Auto-renew switch
+on Profile → Billing. Only after Midtrans has activated recurring card payments on the account
+(ask the Midtrans PIC for production), and the dashboard's **Recurring Notification URL** is set
+to the same `/payments/midtrans/notification`. Midtrans then charges the saved card monthly;
+the app never charges a card itself. Those notifications are unsigned, so the API reads the
+subscription and the charge back from Midtrans before extending a plan.
+
 ## 5. Build, migrate, start
 
 ```bash

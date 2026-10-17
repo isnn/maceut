@@ -9,7 +9,7 @@ vi.mock('../config/env', () => ({
   isMidtransConfigured: () => Boolean(cfg.midtransServerKey),
 }))
 
-import { amountMatches, createSnapTransaction, getStatus, hosts, outcomeOf, verifySignature } from './midtrans-client'
+import { amountMatches, createSnapTransaction, getStatus, hosts, outcomeOf, subscriptionTime, verifySignature } from './midtrans-client'
 import { PaymentProviderError, PaymentsNotConfiguredError } from '../errors'
 
 const fetchMock = vi.fn()
@@ -82,6 +82,13 @@ describe('amountMatches', () => {
     expect(amountMatches('99000', 99_000)).toBe(true)
     expect(amountMatches('9900.00', 99_000)).toBe(false)
     expect(amountMatches('abc', 99_000)).toBe(false)
+  })
+})
+
+describe('subscriptionTime', () => {
+  it('writes the Subscription API format in WIB', () => {
+    expect(subscriptionTime(new Date('2026-11-20T03:04:05Z'))).toBe('2026-11-20 10:04:05 +0700')
+    expect(subscriptionTime(new Date('2026-12-31T18:00:00Z'))).toBe('2027-01-01 01:00:00 +0700')
   })
 })
 

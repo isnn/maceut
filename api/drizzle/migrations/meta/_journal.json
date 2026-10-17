@@ -169,6 +169,13 @@
       "when": 1792242836131,
       "tag": "0023_plan_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792243238531,
+      "tag": "0024_auto_renew",
+      "breakpoints": true
     }
   ]
 }

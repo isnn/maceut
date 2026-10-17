@@ -58,6 +58,8 @@ function payment(over: Partial<PaymentRow> = {}): PaymentRow {
     paymentType: null,
     transactionId: null,
     paidAt: null,
+    autoRenewSetup: false,
+    subscriptionId: null,
     periodEnd: null,
     createdAt: NOW,
     updatedAt: NOW,

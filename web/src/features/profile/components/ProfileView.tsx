@@ -29,6 +29,7 @@ import * as billingApi from '@/features/billing/api'
 import { formatRupiah, paymentTypeLabel, type Payment, type PaymentStatus, type Prices } from '@/features/billing/api'
 import { usePayPlan } from '@/features/billing/usePayPlan'
 import { PaymentBanner } from '@/features/billing/PaymentBanner'
+import { AutoRenewCard } from '@/features/billing/AutoRenewCard'
 
 const PAYMENT_STATUS: Record<PaymentStatus, { label: string; tone: PillTone }> = {
   creating: { label: 'Starting', tone: 'neutral' },
@@ -345,6 +346,17 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                 {payEnabled ? 'Chosen at each payment: QRIS, bank transfer, e-wallet or card.' : 'No card on file'}
               </p>
             </Card>
+
+            {prices?.autoRenewAvailable && usage.plan !== 'free' && (user.autoRenew || renewable) && (
+              <AutoRenewCard
+                plan={usage.plan}
+                on={user.autoRenew === true}
+                periodEnd={user.planExpiresAt ?? null}
+                price={priceOf(usage.plan)}
+                busy={busy}
+                onEnable={() => void payment.pay(usage.plan, { autoRenew: true })}
+              />
+            )}
 
             <Card className="p-lg space-y-md">
               <h2 className="text-heading-sm text-text-primary">Billing contact</h2>
