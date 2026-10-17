@@ -36,6 +36,12 @@ export const userPlans = pgTable(
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     /** When the "ends in 3 days" reminder went out for this period; cleared whenever the plan is set. */
     remindedAt: timestamp('reminded_at', { withTimezone: true }),
+    /**
+     * FE-56 auto-renew (off by default): a Midtrans card Subscription charges this
+     * account monthly. Midtrans owns the schedule; this app never charges a saved card.
+     */
+    autoRenew: boolean('auto_renew').notNull().default(false),
+    midtransSubscriptionId: text('midtrans_subscription_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -113,6 +119,10 @@ export const payments = pgTable(
     paymentType: text('payment_type'),
     transactionId: text('transaction_id'),
     paidAt: timestamp('paid_at', { withTimezone: true }),
+    /** A card payment that also turns auto-renew on: the saved card starts a Midtrans Subscription. */
+    autoRenewSetup: boolean('auto_renew_setup').notNull().default(false),
+    /** Set on a charge made by a Midtrans Subscription (auto-renew), not by the customer. */
+    subscriptionId: text('subscription_id'),
     /** End of the 30 days this payment bought; set when it is activated. */
     periodEnd: timestamp('period_end', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -494,6 +504,8 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'plan_expiring',
   'plan_expired',
   'payment_failed',
+  // FE-56 auto-renew: a card charge failed / the subscription stopped.
+  'auto_renew_failed',
 ])
 
 export const notificationToneEnum = pgEnum('notification_tone', ['warning', 'success', 'info'])

@@ -14,7 +14,10 @@ const router = Router()
  *       gross_amount + server key). Status lalu dibaca ulang lewat Get Status API dan
  *       hanya jawaban itu yang mengubah baris. Idempoten: notifikasi ganda atau
  *       `expire` yang telat tidak mengubah pembayaran yang sudah final. Pasang URL ini
- *       di dashboard Midtrans → Settings → Payment → Notification URL.
+ *       di dashboard Midtrans → Settings → Payment → Notification URL — dan juga sebagai
+ *       Recurring Notification URL: notifikasi `event_name: subscription.charge` (auto-renew)
+ *       tidak bertanda tangan, jadi subscription dibaca ulang lewat GET /v1/subscriptions/{id}
+ *       dan tagihannya lewat Get Status sebelum apa pun berubah.
  *     tags: [Payments]
  *     requestBody:
  *       required: true
@@ -40,7 +43,10 @@ router.post('/payments/midtrans/notification', paymentController.notification)
 // is authenticated by its signature. Every other payment path needs a signed-in
 // account, and each is listed — '/payments/:orderId' as a mount path would also match
 // '/payments/midtrans/…' if the notification route came after it.
-router.use(['/payments/prices', '/payments/checkout', '/payments/pending', '/payments/history', '/payments/:orderId'], authMiddleware)
+router.use(
+  ['/payments/prices', '/payments/checkout', '/payments/pending', '/payments/history', '/payments/auto-renew', '/payments/:orderId'],
+  authMiddleware,
+)
 
 /**
  * @swagger
@@ -138,6 +144,50 @@ router.post('/payments/checkout', paymentController.checkout)
  *       401: { description: UNAUTHORIZED }
  */
 router.get('/payments/pending', paymentController.pending)
+
+/**
+ * @swagger
+ * /payments/auto-renew:
+ *   post:
+ *     summary: Nyalakan auto-renew (kartu, Midtrans Subscription) — FE-56 fase 5
+ *     description: >
+ *       404 bila MIDTRANS_AUTO_RENEW_ENABLED=false. Membuat pembayaran Snap khusus kartu
+ *       dengan `save_card` untuk paket saat ini (perpanjang) atau paket lebih tinggi.
+ *       Setelah pembayaran terkonfirmasi, server membuat Subscription bulanan dari kartu
+ *       tersimpan, tagihan pertama 1 hari sebelum periode berakhir. Midtrans yang
+ *       menjadwalkan; aplikasi tidak pernah menagih kartu sendiri.
+ *     tags: [Payments]
+ *     security: [{ cookieAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [plan]
+ *             properties:
+ *               plan: { type: string, enum: [starter, standard, premium] }
+ *     responses:
+ *       201: { description: Token Snap (sama seperti /payments/checkout) }
+ *       401: { description: UNAUTHORIZED }
+ *       404: { description: NOT_FOUND — auto-renew tidak diaktifkan di server }
+ *       422: { description: VALIDATION_ERROR — sudah aktif, Free, atau paket lebih rendah }
+ *   delete:
+ *     summary: Matikan auto-renew (membatalkan Subscription di Midtrans)
+ *     description: >
+ *       Pembatalan di Midtrans dulu; bila gagal, error dikembalikan (502) supaya tidak ada
+ *       yang mengira tagihan sudah berhenti. Ganti paket, turun paket, kedaluwarsa, dan
+ *       hapus akun juga membatalkannya.
+ *     tags: [Payments]
+ *     security: [{ cookieAuth: [] }]
+ *     responses:
+ *       200: { description: '{ autoRenew: false }' }
+ *       401: { description: UNAUTHORIZED }
+ *       404: { description: NOT_FOUND — auto-renew tidak diaktifkan di server }
+ *       502: { description: PAYMENT_PROVIDER_ERROR — Midtrans gagal membatalkan }
+ */
+router.post('/payments/auto-renew', paymentController.enableAutoRenew)
+router.delete('/payments/auto-renew', paymentController.disableAutoRenew)
 
 /**
  * @swagger

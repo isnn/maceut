@@ -19,6 +19,7 @@ const router = Router()
  *         role: { type: string, enum: [user, internal], description: Platform role, ditentukan INTERNAL_EMAILS (BR-027) }
  *         onboardingDone: { type: boolean }
  *         planExpiresAt: { type: string, format: date-time, nullable: true, description: "Akhir periode berbayar (FE-56); null = tidak kedaluwarsa" }
+ *         autoRenew: { type: boolean, description: "Diperpanjang otomatis dengan kartu (FE-56 fase 5)" }
  *         emailVerified: { type: boolean, description: Alamat sudah dikonfirmasi dengan kode OTP }
  *         createdAt: { type: string, format: date-time }
  */

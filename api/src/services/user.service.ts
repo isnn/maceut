@@ -22,6 +22,7 @@ import * as renderCacheRepo from '../repositories/render-cache.repository'
 import * as usageService from './usage.service'
 import * as planChangeRepo from '../repositories/plan-change.repository'
 import * as planExpiry from './plan-expiry.service'
+import * as autoRenew from './auto-renew.service'
 import { shiftDay, wibDay } from './here-usage.service'
 import * as zoneService from './zone.service'
 import * as scheduleService from './schedule.service'
@@ -55,6 +56,8 @@ export interface PublicUser {
   onboardingDone: boolean
   /** End of the paid period (FE-56), or null when the plan does not expire. */
   planExpiresAt: string | null
+  /** A Midtrans card Subscription renews the plan (FE-56 phase 5). */
+  autoRenew: boolean
   /** The address was confirmed with its sign-up code (Better Auth's `email_verified`). */
   emailVerified: boolean
   createdAt: string
@@ -77,6 +80,7 @@ export function toPublic(row: userRepo.UserWithPlan): PublicUser {
     roleLockedByConfig: isInternalByConfig(row.email),
     onboardingDone: row.onboardingDone ?? false,
     planExpiresAt: row.planExpiresAt?.toISOString() ?? null,
+    autoRenew: row.autoRenew ?? false,
     emailVerified: row.emailVerified,
     createdAt: row.createdAt.toISOString(),
   }
@@ -162,12 +166,21 @@ export async function changeOwnPlan(userId: string, plan: Plan): Promise<PlanCha
   const found = await userRepo.findById(userId)
   if (!found) throw new NotFoundError('User')
 
-  const current = await userRepo.findByIdWithPlan(userId)
+  const current = await planExpiry.findSettled(userId)
   if (current && isUpgrade(current.plan, plan)) throw new UpgradeNotSelfServeError(plan)
+  // Choosing the plan you are on changes nothing. It used to rewrite the plan row,
+  // which wiped a paid period's end date and made it never expire (FE-56).
+  if (current && current.plan === plan) {
+    return { user: await getUser(userId), impact: { plan, zonesToPause: [], schedulesToPause: [], clean: true } }
+  }
 
-  await userRepo.setPlan(userId, plan)
+  // Moving down within a paid period keeps that period's end date: a month of Premium
+  // must not become Starter forever. Free has no end date.
+  await userRepo.setPlan(userId, plan, { expiresAt: plan === 'free' ? null : (current?.planExpiresAt ?? null) })
   if (current?.plan !== plan) {
     await planChangeRepo.record({ userId, fromPlan: current?.plan ?? null, toPlan: plan, source: 'self' })
+    // Auto-renew was renewing the old plan; it would bill the wrong amount now.
+    if (current?.autoRenew) await autoRenew.stopQuietly(userId)
   }
   // Grandfather and block (ADR-020): pause what no longer fits, delete nothing.
   const impact = await planService.applyPlanChange(userId, plan)
@@ -298,10 +311,13 @@ export async function changePlan(userId: string, plan: Plan, actorId?: string): 
   if (!found) throw new NotFoundError('User')
 
   const before = await userRepo.findByIdWithPlan(userId)
+  // Staff set plans with no end date: the plan holds until someone changes it.
   await userRepo.setPlan(userId, plan)
   if (before?.plan !== plan) {
     await planChangeRepo.record({ userId, fromPlan: before?.plan ?? null, toPlan: plan, source: 'staff', changedBy: actorId })
   }
+  // Midtrans would keep charging for the old plan.
+  if (before?.autoRenew) await autoRenew.stopQuietly(userId)
   const impact = await planService.applyPlanChange(userId, plan)
   // Made by staff, so the customer may not know yet: this one also emails (NOTIF).
   if (before) {
@@ -699,6 +715,9 @@ export async function deleteUser(actorId: string, targetUserId: string): Promise
   const z = zoneCounts.get(targetUserId)
   const sc = scheduleCounts.get(targetUserId)
 
+  // Cancel any Midtrans Subscription first: deleting the row would orphan it, and
+  // Midtrans would go on charging a card for an account that no longer exists.
+  await autoRenew.stopQuietly(targetUserId)
   await userRepo.deleteById(targetUserId)
 
   return {
