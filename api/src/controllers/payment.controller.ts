@@ -36,6 +36,15 @@ export async function pending(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+export async function history(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) throw new UnauthorizedError()
+    return res.status(200).json(ok(await paymentService.history(req.userId)))
+  } catch (err) {
+    next(err)
+  }
+}
+
 export async function show(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.userId) throw new UnauthorizedError()

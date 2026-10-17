@@ -15,6 +15,8 @@ export type UserRow = typeof user.$inferSelect
 
 export interface UserWithPlan extends UserRow {
   plan: Plan
+  /** End of a paid period (FE-56); NULL/absent = the plan does not expire. */
+  planExpiresAt?: Date | null
 }
 
 /**
@@ -38,7 +40,7 @@ export async function findById(id: string): Promise<UserRow | undefined> {
 
 export async function findByIdWithPlan(id: string): Promise<UserWithPlan | undefined> {
   const rows = await db
-    .select({ u: user, plan: userPlans.plan })
+    .select({ u: user, plan: userPlans.plan, planExpiresAt: userPlans.expiresAt })
     .from(user)
     .leftJoin(userPlans, eq(userPlans.userId, user.id))
     .where(eq(user.id, id))
@@ -48,7 +50,7 @@ export async function findByIdWithPlan(id: string): Promise<UserWithPlan | undef
   if (!row) return undefined
   // A user with no plan row falls back to free (BR-001) rather than erroring — an
   // empty join is a data problem, not a reason to lock someone out of their account.
-  return { ...row.u, plan: (row.plan ?? 'free') as Plan }
+  return { ...row.u, plan: (row.plan ?? 'free') as Plan, planExpiresAt: row.planExpiresAt ?? null }
 }
 
 export async function updateUser(

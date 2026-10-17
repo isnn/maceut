@@ -33,6 +33,8 @@ export interface User {
   staffType?: StaffType | null
   /** Cleared once the user finishes the onboarding wizard (3p). */
   onboardingDone: boolean
+  /** End of a paid period (FE-56); null when the plan does not expire. */
+  planExpiresAt?: string | null
   /** Confirmed with the sign-up code. */
   emailVerified?: boolean
   /** Staff by INTERNAL_EMAILS, so its role can't be changed in the app (BR-027). */

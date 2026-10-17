@@ -40,7 +40,7 @@ router.post('/payments/midtrans/notification', paymentController.notification)
 // is authenticated by its signature. Every other payment path needs a signed-in
 // account, and each is listed — '/payments/:orderId' as a mount path would also match
 // '/payments/midtrans/…' if the notification route came after it.
-router.use(['/payments/prices', '/payments/checkout', '/payments/pending', '/payments/:orderId'], authMiddleware)
+router.use(['/payments/prices', '/payments/checkout', '/payments/pending', '/payments/history', '/payments/:orderId'], authMiddleware)
 
 /**
  * @swagger
@@ -138,6 +138,20 @@ router.post('/payments/checkout', paymentController.checkout)
  *       401: { description: UNAUTHORIZED }
  */
 router.get('/payments/pending', paymentController.pending)
+
+/**
+ * @swagger
+ * /payments/history:
+ *   get:
+ *     summary: Riwayat pembayaran akun (tab Billing)
+ *     tags: [Payments]
+ *     security: [{ cookieAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: 'Pembayaran terbaru dulu (maks. 50): orderId, plan, amount, status, paymentType, paidAt, periodEnd, createdAt'
+ *       401: { description: UNAUTHORIZED }
+ */
+router.get('/payments/history', paymentController.history)
 
 /**
  * @swagger

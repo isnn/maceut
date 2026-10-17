@@ -21,6 +21,8 @@ interface PlanCardsProps {
    * someone is deciding whether to ask for.
    */
   disabledPlan?: (plan: Plan) => boolean
+  /** The selected card stays clickable — renewing the current paid plan (FE-56). */
+  reselectable?: boolean
   /**
    * Public pages (FE-37): each card links to sign-up (paid plans carry `?plan=`). A flag,
    * not a function, so server pages can pass it to this client component.
@@ -31,7 +33,7 @@ interface PlanCardsProps {
 
 const PUBLIC_VARIANT = { free: 'secondary', starter: 'tint', standard: 'primary', premium: 'ink' } as const satisfies Record<Plan, Parameters<typeof buttonClass>[0]>
 
-export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabledPlan, publicLinks, className }: PlanCardsProps) {
+export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabledPlan, reselectable, publicLinks, className }: PlanCardsProps) {
   return (
     <div className={cn('grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-lg items-start', className)}>
       {PLAN_ORDER.map((plan) => {
@@ -79,7 +81,7 @@ export function PlanCards({ selected, onSelect, actionLabel, pendingPlan, disabl
               <Button
                 variant={recommended || isSelected ? 'primary' : 'secondary'}
                 onClick={() => onSelect(plan)}
-                disabled={pendingPlan != null || isSelected || disabledPlan?.(plan) === true}
+                disabled={pendingPlan != null || (isSelected && !reselectable) || disabledPlan?.(plan) === true}
               >
                 {pendingPlan === plan ? 'Saving…' : actionLabel(plan)}
               </Button>

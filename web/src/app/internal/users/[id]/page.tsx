@@ -328,7 +328,7 @@ function BillingSection({ billing, isStaff }: { billing: internalApi.AccountUsag
                     )}
                   </Td>
                   <Td className="text-text-secondary">
-                    {h.source === 'self' ? 'The customer' : (h.changedBy ?? 'Staff')}
+                    {h.source === 'self' ? 'The customer' : h.source === 'payment' ? 'Paid by the customer' : h.source === 'expiry' ? 'Paid period ended' : (h.changedBy ?? 'Staff')}
                   </Td>
                 </tr>
               ))}
