@@ -3,6 +3,7 @@ import { fromNodeHeaders } from 'better-auth/node'
 import { auth } from '../lib/auth'
 import { UnauthorizedError, ForbiddenError } from '../errors'
 import * as userRepo from '../repositories/user.repository'
+import * as planExpiry from '../services/plan-expiry.service'
 import { accessOf, resolveRole } from '../lib/internal-access'
 import type { PlatformRole } from '../types/plan'
 
@@ -35,7 +36,8 @@ export async function planCheck(req: Request, _res: Response, next: NextFunction
   try {
     if (!req.userId) return next(new UnauthorizedError())
 
-    const found = await userRepo.findByIdWithPlan(req.userId)
+    // Settled: a paid period that has ended moves to Free before the plan is used (FE-56).
+    const found = await planExpiry.findSettled(req.userId)
     // A valid session for an account that no longer exists — deleted since signing in.
     if (!found) return next(new UnauthorizedError())
 

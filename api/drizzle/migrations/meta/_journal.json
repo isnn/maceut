@@ -162,6 +162,13 @@
       "when": 1792240003147,
       "tag": "0022_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792242836131,
+      "tag": "0023_plan_expiry",
+      "breakpoints": true
     }
   ]
 }

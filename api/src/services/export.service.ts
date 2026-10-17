@@ -2,7 +2,7 @@ import { exportErrorForUser } from './user-facing-errors'
 import * as exportRepo from '../repositories/export.repository'
 import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
-import * as userRepo from '../repositories/user.repository'
+import * as planExpiry from './plan-expiry.service'
 import * as r2 from '../lib/r2-client'
 import { publishExportJob } from '../lib/rabbitmq-client'
 import { isR2Configured } from '../config/env'
@@ -348,6 +348,6 @@ export function expiryFrom(now: Date, plan: Plan): Date {
  * the row, so a later upgrade or downgrade leaves existing exports' dates alone.
  */
 export async function expiryForOwner(userId: string, now: Date = new Date()): Promise<Date> {
-  const account = await userRepo.findByIdWithPlan(userId)
+  const account = await planExpiry.findSettled(userId)
   return expiryFrom(now, account?.plan ?? 'free')
 }

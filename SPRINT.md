@@ -196,7 +196,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **OPS-2** Siap produksi: Next 16.4.0 (CVE kritis RCE image optimizer/next-og), port postgres/rabbitmq dev hanya loopback, kredensial RabbitMQ dari .env, IP rate-limit Better Auth dari CF-Connecting-IP, header keamanan web+API, batas memori & rotasi log di compose prod, overlay Traefik, skrip backup DB, deploy.md (maceut.com + checklist) | review deploy 2026-10-14 |
 | ✅ | **FE-54** Internal: zona & jadwal user bisa dilihat (halaman zona read-only: peta, jendela, capture berhalaman; `GET /internal/users/:id/zones/:zoneId`), kolom Actions di Overview, kolom Verified di tabel Users & Overview, superadmin bisa ubah status verified, modal Edit user ditata ulang (Profile · Access · Email verification · Password), seksi Billing di detail user (paket, harga, sejak, riwayat perubahan dari tabel baru `plan_changes`) | masukan user 2026-10-16 |
 | ✅ | **FE-55** Overview Internal: grafik 7 hari di kartu Total accounts, Zones collecting, Captures today, Storage used (`trend` di `GET /internal/stats`); semua tabel default 10 baris per halaman; menu ☰ di mobile untuk header Internal & app | masukan user 2026-10-16 |
-| 🟡 | **FE-56** Pembayaran Midtrans Snap untuk upgrade paket (sandbox, harga asli, 30 hari per bayar). Fase 1 ✅ fondasi (tabel `payments`, config, client Midtrans, repository) · 2 ✅ checkout + webhook · 3 ✅ web · 4 kedaluwarsa + pengingat · 5 auto-renew (opsional) | masukan user 2026-10-16 |
+| 🟡 | **FE-56** Pembayaran Midtrans Snap untuk upgrade paket (sandbox, harga asli, 30 hari per bayar). Fase 1 ✅ fondasi (tabel `payments`, config, client Midtrans, repository) · 2 ✅ checkout + webhook · 3 ✅ web · 4 ✅ kedaluwarsa + pengingat · 5 auto-renew (opsional) | masukan user 2026-10-16 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -221,6 +221,15 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-17] FE-56 fase 4 — kedaluwarsa + pengingat.
+  - Tanpa job per jam (keputusan owner): plan-expiry.service settle() di titik yang memang memuat paket — /me
+    (tiap buka halaman), planCheck, usage, capture (termasuk terjadwal), export. Lewat expires_at → Free sekali
+    (UPDATE bersyarat pada expires_at yang dibaca, jadi perpanjangan yang menyela tidak dibatalkan).
+  - Pengingat 3 hari sebelum (bell + email) menumpang tick notification sweeper yang sudah ada (10 menit);
+    user_plans.reminded_at mengklaim satu periode, dikosongkan setiap setPlan.
+  - Bell untuk percobaan bayar yang gagal/kedaluwarsa (payment_failed, tanpa email).
+  - Tidak ada masa tenggang (keputusan owner).
 
 [2026-10-17] FE-56 fase 3 — web checkout.
   - snap.js dimuat di layout (app) lewat next/script afterInteractive, hanya bila NEXT_PUBLIC_MIDTRANS_CLIENT_KEY

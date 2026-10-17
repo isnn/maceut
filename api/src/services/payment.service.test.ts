@@ -26,7 +26,7 @@ vi.mock('../repositories/payment.repository', () => ({
 vi.mock('../repositories/user.repository', () => ({ findByIdWithPlan: vi.fn(), findPlanRow: vi.fn(), setPlan: vi.fn() }))
 vi.mock('../repositories/plan-change.repository', () => ({ record: vi.fn() }))
 vi.mock('./plan.service', () => ({ applyPlanChange: vi.fn(async () => ({ zonesToPause: [], schedulesToPause: [] })) }))
-vi.mock('./notification.service', () => ({ onPaymentActivated: vi.fn() }))
+vi.mock('./notification.service', () => ({ onPaymentActivated: vi.fn(), onPaymentFailed: vi.fn() }))
 
 import { activate, checkout, handleNotification, newOrderId, sync } from './payment.service'
 import * as midtrans from '../lib/midtrans-client'
@@ -245,6 +245,14 @@ describe('handleNotification', () => {
       expect(paymentRepo.transition).toHaveBeenLastCalledWith('MCT-uabc123X-1', to, expect.anything())
     }
     expect(userRepo.setPlan).not.toHaveBeenCalled()
+    expect(notificationService.onPaymentFailed).toHaveBeenLastCalledWith(USER, { orderId: 'MCT-uabc123X-1', plan: 'starter', outcome: 'expired' })
+  })
+
+  it('posts no failure bell when the row had already left pending', async () => {
+    vi.mocked(midtrans.getStatus).mockResolvedValue(status('expire'))
+    vi.mocked(paymentRepo.transition).mockResolvedValue(undefined)
+    await handleNotification(status('expire'))
+    expect(notificationService.onPaymentFailed).not.toHaveBeenCalled()
   })
 
   it('records a refund on a paid payment and leaves the plan for staff', async () => {

@@ -11,7 +11,7 @@
 // Convention: every timestamp is `timestamptz`. A bare `timestamp` carries no
 // offset and means whatever the reading process assumes.
 //
-// Last updated: 2026-10-17 (migration 0022_payments — payments table + payment_status enum; plan_change_source gains payment, expiry)
+// Last updated: 2026-10-17 (migration 0023_plan_expiry — user_plans.reminded_at; notification_type gains plan_expiring, plan_expired, payment_failed)
 // =============================================================================
 
 Project maceut {
@@ -100,7 +100,8 @@ Table user_plans {
   user_id text [not null, unique, note: '1:1 with user']
   plan plan [not null, default: 'free', note: 'BR-001: every account starts free']
   started_at timestamptz [not null, default: `now()`]
-  expires_at timestamptz [null, note: 'NULL = active indefinitely; billing not implemented']
+  expires_at timestamptz [null, note: 'End of a paid period (FE-56). NULL = does not expire (Free, or set by staff). Past it, the next read of the plan moves the account to Free']
+  reminded_at timestamptz [null, note: 'The 3-day reminder for this period went out; cleared whenever the plan is set']
   created_at timestamptz [not null, default: `now()`]
 
   Indexes {
@@ -433,6 +434,9 @@ Enum notification_type {
   plan_changed
   here_budget_warning [note: 'Staff only']
   here_budget_reached [note: 'Staff only']
+  plan_expiring [note: 'FE-56: paid period ends in 3 days (bell + email)']
+  plan_expired [note: 'FE-56: paid period ended, moved to Free (bell + email)']
+  payment_failed [note: 'FE-56: a payment attempt failed or expired (bell)']
 }
 
 Enum notification_tone {
