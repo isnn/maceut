@@ -11,7 +11,7 @@
 // Convention: every timestamp is `timestamptz`. A bare `timestamp` carries no
 // offset and means whatever the reading process assumes.
 //
-// Last updated: 2026-10-16 (migration 0021_plan_changes — plan_changes history + plan_change_source enum)
+// Last updated: 2026-10-17 (migration 0022_payments — payments table + payment_status enum; plan_change_source gains payment, expiry)
 // =============================================================================
 
 Project maceut {
@@ -158,6 +158,42 @@ Enum plan {
 Enum plan_change_source {
   self [note: 'The customer (PATCH /me/plan)']
   staff [note: 'Staff in /internal, including an account created on a plan']
+  payment [note: 'A paid Midtrans order (FE-56)']
+  expiry [note: 'A paid period ran out; moved back to Free']
+}
+
+Enum payment_status {
+  creating [note: 'Row written before the Snap call']
+  pending [note: 'Snap token issued; waiting for the customer']
+  paid
+  failed [note: 'Snap call failed, or deny/failure at Midtrans']
+  expired
+  cancelled
+  refunded [note: 'Recorded only; the plan is not changed automatically']
+}
+
+Table payments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id text [not null]
+  order_id text [not null, unique, note: 'Midtrans order_id, new per attempt']
+  plan plan [not null]
+  amount integer [not null, note: 'IDR, from the server price table']
+  status payment_status [not null, default: 'creating', note: 'Only creating/pending may change']
+  snap_token text [null]
+  redirect_url text [null]
+  provider_status text [null, note: 'Last Midtrans transaction_status, verbatim']
+  payment_type text [null]
+  transaction_id text [null]
+  paid_at timestamptz [null]
+  period_end timestamptz [null, note: 'End of the 30 days this payment bought']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Note: 'Midtrans Snap payment attempts for plan upgrades and renewals (FE-56).'
+
+  Indexes {
+    (user_id, created_at) [name: 'payments_user_created_idx']
+  }
 }
 
 Enum capture_interval {
@@ -197,6 +233,7 @@ Ref: account.user_id > user.id [delete: cascade]
 Ref: user_plans.user_id - user.id [delete: cascade]
 Ref: plan_changes.user_id > user.id [delete: cascade]
 Ref: plan_changes.changed_by > user.id [delete: set null]
+Ref: payments.user_id > user.id [delete: cascade]
 Ref: zones.user_id > user.id [delete: cascade]
 
 Table schedules {

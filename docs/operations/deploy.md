@@ -84,6 +84,24 @@ cp web/.env.production.example web/.env.production
 - `NEXT_PUBLIC_*` in `web/.env.production` are compiled into the browser bundle: change
   one, rebuild `web`.
 
+### Payments (Midtrans Snap, FE-56)
+
+Off until `MIDTRANS_SERVER_KEY` is set in `api/.env`; Profile keeps "Contact us to upgrade".
+
+| Where | Key | Sandbox | Production |
+|---|---|---|---|
+| `api/.env` | `MIDTRANS_SERVER_KEY` | `SB-Mid-server-…` | `Mid-server-…` |
+| `api/.env` | `MIDTRANS_MERCHANT_ID` | sandbox MID | production MID |
+| `api/.env` | `MIDTRANS_IS_PRODUCTION` | `false` | `true` |
+| `web/.env.*` | `NEXT_PUBLIC_MIDTRANS_CLIENT_KEY` | `SB-Mid-client-…` | `Mid-client-…` (rebuild `web`) |
+
+Key and `MIDTRANS_IS_PRODUCTION` change together: a sandbox key on production hosts is a
+401. `npm run env:check` makes one status call and says which environment accepted the key.
+
+In the Midtrans dashboard (sandbox and production each have their own):
+- Settings → Payment → **Notification URL**: `https://<API_HOST>/payments/midtrans/notification`.
+- Settings → Snap Preference: turn on the methods to offer (QRIS needs GoPay or ShopeePay QRIS).
+
 ## 5. Build, migrate, start
 
 ```bash
@@ -150,6 +168,7 @@ image the same way as migrations: `docker compose run --rm --no-deps --build api
 - [ ] `SWAGGER_ENABLED=false`, `RETENTION_SWEEPER_ENABLED=false`, `MAILTRAP_INBOX_ID` empty
 - [ ] R2 bucket private (`R2_PUBLIC_URL` empty), R2 token scoped to that bucket
 - [ ] HERE daily budget set in Internal → HERE
+- [ ] Midtrans production keys + `MIDTRANS_IS_PRODUCTION=true`; Notification URL set; methods on in Snap Preference
 - [ ] Sender domain verified in Mailtrap **and** Resend; SPF, DKIM, DMARC published
 
 **Data**
