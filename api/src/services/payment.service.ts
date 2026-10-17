@@ -189,6 +189,11 @@ export async function pending(userId: string, now: Date = new Date()): Promise<P
   return row ? toView(row) : null
 }
 
+/** The account's payments, newest first, for the Billing tab. Open ones keep their token. */
+export async function history(userId: string): Promise<PaymentView[]> {
+  return (await paymentRepo.listByUser(userId)).map(toView)
+}
+
 /** Moves the row by what Midtrans says. True when this call changed something. */
 async function apply(payment: PaymentRow, s: MidtransStatus, now: Date = new Date()): Promise<boolean> {
   const fields = {

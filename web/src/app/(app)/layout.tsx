@@ -6,6 +6,7 @@ import { AppHeader } from '@/components/shared/AppHeader'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { PAGE_WIDTH } from '@/components/shared/page-width'
+import { SnapScript } from '@/features/billing/snap'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useCurrentUser()
@@ -24,6 +25,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-page">
+      {/* Midtrans Snap (FE-56), at the layout so it is ready before any Pay button. */}
+      <SnapScript />
       <AppHeader />
       {/* Same width as the header (page-width.ts), so they always line up. */}
       <main className={cn('mx-auto px-xl py-xl', PAGE_WIDTH)}>

@@ -6,14 +6,14 @@ import { Button, buttonClass } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Dialog } from '@base-ui/react/dialog'
 import { DialogCloseX } from '@/components/ui/DialogCloseX'
-import { PlanPill } from '@/components/ui/Badge'
+import { PlanPill, StatusPill, type PillTone } from '@/components/ui/Badge'
 import { Table, TableWrap, Td, Th } from '@/components/ui/Table'
 import { UsageMeter, AttributeRow } from '@/components/ui/UsageMeter'
 import { poolOutlook, poolResetDay } from '@/features/plan/pool'
 import { Alert } from '@/components/ui/Alert'
 import { PlanCards } from '@/features/marketing/components/PlanCards'
 import { forgetIntendedPlan, planFromUrl } from '@/features/marketing/intended-plan'
-import { cn, formatNumber } from '@/lib/utils'
+import { cn, formatDate, formatNumber } from '@/lib/utils'
 import { IconCheck } from '@/components/ui/icons'
 import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER, PLAN_PRICE, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
@@ -25,6 +25,20 @@ import { ApiError } from '@/types/api'
 import { PlanChangeDialog } from '@/features/plan/PlanChangeDialog'
 import { previewOwnPlanChange, type PlanImpact } from '@/features/plan/impact'
 import { NotificationSettings } from '@/features/notifications/NotificationSettings'
+import * as billingApi from '@/features/billing/api'
+import { formatRupiah, paymentTypeLabel, type Payment, type PaymentStatus, type Prices } from '@/features/billing/api'
+import { usePayPlan } from '@/features/billing/usePayPlan'
+import { PaymentBanner } from '@/features/billing/PaymentBanner'
+
+const PAYMENT_STATUS: Record<PaymentStatus, { label: string; tone: PillTone }> = {
+  creating: { label: 'Starting', tone: 'neutral' },
+  pending: { label: 'Waiting', tone: 'warning' },
+  paid: { label: 'Paid', tone: 'success' },
+  failed: { label: 'Failed', tone: 'danger' },
+  expired: { label: 'Expired', tone: 'neutral' },
+  cancelled: { label: 'Cancelled', tone: 'neutral' },
+  refunded: { label: 'Refunded', tone: 'info' },
+}
 
 const ALL_TABS = ['Usage', 'Account', 'Billing', 'Notifications'] as const
 type Tab = (typeof ALL_TABS)[number]
@@ -48,6 +62,10 @@ const PREMIUM_UNLOCKS = [
   `${formatNumber(PREMIUM.exportFramesLimit)} frames per export`,
 ]
 
+function limitsPeriod(prices: Prices | null): string {
+  return `${prices?.periodDays ?? 30} days`
+}
+
 export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'internal' }) {
   const { user } = useCurrentUser()
   const [usage, setUsage] = useState<UsageSummary | null>(null)
@@ -67,6 +85,28 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
     if (variant === 'internal') return
     dashboardApi.getUsage().then(setUsage)
   }, [variant])
+
+  // FE-56: paying for a plan with Midtrans Snap.
+  const payment = usePayPlan()
+  const [prices, setPrices] = useState<Prices | null>(null)
+  const [openPayment, setOpenPayment] = useState<Payment | null>(null)
+  const [payments, setPayments] = useState<Payment[] | null>(null)
+  useEffect(() => {
+    if (variant === 'internal') return
+    billingApi.getPrices().then(setPrices).catch(() => setPrices(null))
+    billingApi.getPending().then(setOpenPayment).catch(() => setOpenPayment(null))
+    billingApi.getHistory().then(setPayments).catch(() => setPayments([]))
+  }, [variant])
+
+  // Back from Midtrans' hosted page (finish redirect): one status check, then a clean URL.
+  const { confirm } = payment
+  useEffect(() => {
+    if (variant === 'internal') return
+    const orderId = new URLSearchParams(window.location.search).get('payment')
+    if (!orderId) return
+    window.history.replaceState(null, '', window.location.pathname)
+    void Promise.resolve().then(() => confirm(orderId))
+  }, [variant, confirm])
 
   /**
    * Downgrades only. The server refuses an upgrade with UPGRADE_NOT_SELF_SERVE until
@@ -108,6 +148,15 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
 
   const limits = PLAN_LIMITS[usage?.plan ?? user.plan]
 
+  const currentPlan = usage?.plan ?? user.plan
+  const payEnabled = prices?.enabled === true
+  /** A paid period with an end date can be renewed; a plan staff set has none. */
+  const renewable = payEnabled && currentPlan !== 'free' && Boolean(user.planExpiresAt)
+  const isHigher = (plan: Plan) => PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(currentPlan)
+  const priceOf = (plan: Plan) => formatRupiah(prices?.prices[plan] ?? 0)
+  const activeUntil = user.planExpiresAt ? formatDate(user.planExpiresAt) : null
+  const busy = payment.state.kind === 'starting' || payment.state.kind === 'confirming'
+
   return (
     <div className="space-y-lg">
       <div className="flex flex-wrap items-center gap-lg">
@@ -141,6 +190,16 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
           </button>
         ))}
       </div>
+
+      {variant === 'tenant' && (
+        <PaymentBanner
+          state={payment.state}
+          open={openPayment}
+          onResume={payment.resume}
+          onRetry={(plan) => void payment.pay(plan)}
+          onDismiss={payment.reset}
+        />
+      )}
 
       {tab === 'Usage' && usage && (
         <div className="grid grid-cols-1 laptop:grid-cols-[1fr_320px] gap-xl items-start">
@@ -192,9 +251,15 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
               <p className="text-caption text-text-muted mt-xs">
                 {PLAN_PRICE[usage.plan].amount} {PLAN_PRICE[usage.plan].period}
               </p>
-              <Button variant="tint" className="w-full mt-lg" onClick={() => setPickerOpen(true)}>
+              {activeUntil && <p className="text-caption text-text-secondary mt-xs">Active until {activeUntil}</p>}
+              <Button variant="tint" className="w-full mt-lg" onClick={() => setPickerOpen(true)} disabled={busy}>
                 Change plan
               </Button>
+              {renewable && (
+                <Button variant="secondary" className="w-full mt-sm" onClick={() => void payment.pay(usage.plan)} disabled={busy}>
+                  Renew {limitsPeriod(prices)} · {priceOf(usage.plan)}
+                </Button>
+              )}
               {planError && !confirming && <p className="text-caption text-danger-text mt-sm">{planError}</p>}
             </Card>
 
@@ -219,7 +284,7 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
         <div className="grid grid-cols-1 laptop:grid-cols-[1fr_320px] gap-xl items-start">
           <Card className="p-lg space-y-md">
             <h2 className="text-heading-sm text-text-primary">Billing history</h2>
-            {/* No invoices are invented: until payments exist this is honestly empty. */}
+            {/* Real payments only (FE-56); nothing is invented while there are none. */}
             <TableWrap>
               <Table>
                 <thead>
@@ -227,16 +292,33 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                     <Th>Date</Th>
                     <Th>Description</Th>
                     <Th className="text-right">Amount</Th>
+                    <Th>Method</Th>
                     <Th>Status</Th>
-                    <Th className="text-right">Invoice</Th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <Td colSpan={5} className="text-center text-text-muted py-xl">
-                      No invoices yet
-                    </Td>
-                  </tr>
+                  {!payments || payments.length === 0 ? (
+                    <tr>
+                      <Td colSpan={5} className="text-center text-text-muted py-xl">
+                        {payments === null ? 'Loading…' : 'No payments yet'}
+                      </Td>
+                    </tr>
+                  ) : (
+                    payments.map((p) => (
+                      <tr key={p.orderId}>
+                        <Td className="whitespace-nowrap tabular-nums">{formatDate(p.paidAt ?? p.createdAt)}</Td>
+                        <Td>
+                          {PLAN_LABEL[p.plan]}, {prices?.periodDays ?? 30} days
+                          {p.periodEnd && <span className="block text-caption text-text-muted">Until {formatDate(p.periodEnd)}</span>}
+                        </Td>
+                        <Td className="text-right tabular-nums">{formatRupiah(p.amount)}</Td>
+                        <Td className="text-text-secondary">{paymentTypeLabel(p.paymentType)}</Td>
+                        <Td>
+                          <StatusPill tone={PAYMENT_STATUS[p.status].tone}>{PAYMENT_STATUS[p.status].label}</StatusPill>
+                        </Td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </Table>
             </TableWrap>
@@ -253,12 +335,15 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                   </dd>
                 </div>
                 <AttributeRow label="Price" value={`${PLAN_PRICE[usage.plan].amount} ${PLAN_PRICE[usage.plan].period}`} />
+                <AttributeRow label="Active until" value={activeUntil ?? (usage.plan === 'free' ? '—' : 'No end date')} />
               </dl>
             </Card>
 
             <Card className="p-lg space-y-md">
               <h2 className="text-heading-sm text-text-primary">Payment method</h2>
-              <p className="text-body text-text-muted">No card on file</p>
+              <p className="text-body text-text-muted">
+                {payEnabled ? 'Chosen at each payment: QRIS, bank transfer, e-wallet or card.' : 'No card on file'}
+              </p>
             </Card>
 
             <Card className="p-lg space-y-md">
@@ -302,24 +387,33 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                 <Dialog.Title className="pr-xl text-section-title text-text-primary">Change plan</Dialog.Title>
                 {intendedPlan && usage.plan !== intendedPlan && (
                   <Alert variant="info">
-                    You picked {PLAN_LABEL[intendedPlan]}. Payment is coming soon, and your account stays on{' '}
-                    {PLAN_LABEL[usage.plan]} until then.
+                    You picked {PLAN_LABEL[intendedPlan]}.{' '}
+                    {payEnabled
+                      ? `Pay below to switch; your account stays on ${PLAN_LABEL[usage.plan]} until the payment is confirmed.`
+                      : `Payment is coming soon, and your account stays on ${PLAN_LABEL[usage.plan]} until then.`}
                   </Alert>
                 )}
                 <PlanCards
                   selected={usage.plan}
                   onSelect={(plan) => {
                     setPickerOpen(false)
-                    changePlan(plan)
+                    // Up, or renewing a paid period: Midtrans. Down: the existing preview-and-confirm.
+                    if (isHigher(plan) || plan === usage.plan) void payment.pay(plan)
+                    else changePlan(plan)
                   }}
-                  pendingPlan={pendingPlan}
-                  // Upgrades are arranged with the team until payments exist.
-                  disabledPlan={(plan) => PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(usage.plan)}
+                  pendingPlan={pendingPlan ?? (payment.state.kind === 'starting' ? payment.state.plan : null)}
+                  // Without payments configured, upgrades are still arranged with the team.
+                  disabledPlan={(plan) => isHigher(plan) && !payEnabled}
+                  reselectable={renewable}
                   actionLabel={(plan) =>
                     plan === usage.plan
-                      ? 'Current plan'
-                      : PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(usage.plan)
-                        ? 'Contact us to upgrade'
+                      ? renewable
+                        ? `Renew · ${priceOf(plan)}`
+                        : 'Current plan'
+                      : isHigher(plan)
+                        ? payEnabled
+                          ? `Upgrade · ${priceOf(plan)}`
+                          : 'Contact us to upgrade'
                         : `Move to ${PLAN_LABEL[plan]}`
                   }
                 />
