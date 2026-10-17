@@ -196,6 +196,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **OPS-2** Siap produksi: Next 16.4.0 (CVE kritis RCE image optimizer/next-og), port postgres/rabbitmq dev hanya loopback, kredensial RabbitMQ dari .env, IP rate-limit Better Auth dari CF-Connecting-IP, header keamanan web+API, batas memori & rotasi log di compose prod, overlay Traefik, skrip backup DB, deploy.md (maceut.com + checklist) | review deploy 2026-10-14 |
 | ✅ | **FE-54** Internal: zona & jadwal user bisa dilihat (halaman zona read-only: peta, jendela, capture berhalaman; `GET /internal/users/:id/zones/:zoneId`), kolom Actions di Overview, kolom Verified di tabel Users & Overview, superadmin bisa ubah status verified, modal Edit user ditata ulang (Profile · Access · Email verification · Password), seksi Billing di detail user (paket, harga, sejak, riwayat perubahan dari tabel baru `plan_changes`) | masukan user 2026-10-16 |
 | ✅ | **FE-55** Overview Internal: grafik 7 hari di kartu Total accounts, Zones collecting, Captures today, Storage used (`trend` di `GET /internal/stats`); semua tabel default 10 baris per halaman; menu ☰ di mobile untuk header Internal & app | masukan user 2026-10-16 |
+| 🟡 | **FE-56** Pembayaran Midtrans Snap untuk upgrade paket (sandbox, harga asli, 30 hari per bayar). Fase 1 ✅ fondasi (tabel `payments`, config, client Midtrans, repository) · 2 checkout + webhook · 3 web · 4 kedaluwarsa + pengingat · 5 auto-renew (opsional) | masukan user 2026-10-16 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -205,7 +206,7 @@ Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
 Jangan implement meskipun ada di spec:
 - Capture history page + filter → Sprint 2
-- Payment gateway / billing nyata → Sprint 3 (halaman Tagihan sekarang hanya simulasi ganti paket)
+- Payment gateway / billing nyata → ~~Sprint 3~~ dimajukan: FE-56 (Midtrans Snap, sandbox)
 - Production docker-compose.prod.yml deploy nyata → setelah MVP stabil di lokal
 
 ⚠️ Diupdate 2026-09-07 — implementasi mockup turn 3/4 sudah membuat UI untuk beberapa item yang tadinya
@@ -220,6 +221,14 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-17] FE-56 fase 1 — fondasi pembayaran.
+  - Produk: Snap popup, semua metode aktif di Snap Preference (keputusan owner), bukan Core API/BI-SNAP.
+  - Tanpa SDK Midtrans (aturan library baru): client fetch tipis di lib/midtrans-client.ts (token Snap,
+    Get Status, signature SHA-512 dengan timingSafeEqual atas gross_amount mentah).
+  - Idempotensi = UPDATE bersyarat status IN (creating, pending) di payment.repository transition();
+    diuji di DB: paid kedua dan expire telat tidak mengubah apa pun.
+  - Payment Gateway dipindah maju dari "NOT This Sprint" atas permintaan owner.
 
 [2026-10-16] FE-55 — grafik Overview, pagination 10, navbar mobile.
   - Grafik = yang bertambah per hari WIB (sign-up, zona dibuat, capture, byte tersimpan), bukan total harian:

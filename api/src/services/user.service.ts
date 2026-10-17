@@ -739,7 +739,7 @@ export interface AccountUsageDetail {
       id: string
       fromPlan: Plan | null
       toPlan: Plan
-      source: 'self' | 'staff'
+      source: 'self' | 'staff' | 'payment' | 'expiry'
       changedBy: string | null
       createdAt: string
     }[]

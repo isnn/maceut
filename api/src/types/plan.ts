@@ -24,6 +24,16 @@ export function isUpgrade(from: Plan, to: Plan): boolean {
 }
 
 /** BR-020/021/022. Ordered: `nasional` < `nasional_provinsi` < `semua`. */
+/**
+ * Monthly price in IDR, what a payment is charged (FE-56). The web shows the same
+ * numbers in `PLAN_PRICE` (web/src/lib/constants.ts); change both together. The amount
+ * charged is only ever taken from here, never from the request.
+ */
+export const PLAN_PRICE_IDR: Record<Plan, number> = { free: 0, starter: 99_000, standard: 349_000, premium: 1_490_000 }
+
+/** How long one payment keeps a plan active. */
+export const PAID_PERIOD_DAYS = 30
+
 export type RoadClass = 'nasional' | 'nasional_provinsi' | 'semua'
 
 export const ROAD_CLASS_ORDER: readonly RoadClass[] = ['nasional', 'nasional_provinsi', 'semua'] as const

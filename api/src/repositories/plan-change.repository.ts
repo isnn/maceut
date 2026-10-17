@@ -1,14 +1,17 @@
 import { desc, eq } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import { db } from '../lib/drizzle-client'
-import { planChanges, user } from '../../drizzle/schema'
+import { planChanges, planChangeSourceEnum, user } from '../../drizzle/schema'
 import type { Plan } from '../types/plan'
+
+/** self = the customer, staff = /internal, payment = a paid Midtrans order, expiry = a paid period ran out. */
+export type PlanChangeSource = (typeof planChangeSourceEnum.enumValues)[number]
 
 export interface PlanChangeInput {
   userId: string
   fromPlan: Plan | null
   toPlan: Plan
-  source: 'self' | 'staff'
+  source: PlanChangeSource
   changedBy?: string | null
 }
 
@@ -16,7 +19,7 @@ export interface PlanChangeRecord {
   id: string
   fromPlan: Plan | null
   toPlan: Plan
-  source: 'self' | 'staff'
+  source: PlanChangeSource
   /** The staff member's name or email; null for a self-serve change or a deleted account. */
   changedBy: string | null
   createdAt: Date
