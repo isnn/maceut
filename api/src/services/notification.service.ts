@@ -318,6 +318,38 @@ export async function onPlanChanged(
   )
 }
 
+/**
+ * A payment was confirmed and the plan is active (FE-56). Its own wording rather than
+ * onPlanChanged's, which says nothing for a renewal (same plan) and nothing about how
+ * long the plan now runs. Deduped by order id, so a replayed notification can't post it twice.
+ */
+export async function onPaymentActivated(
+  userId: string,
+  p: { orderId: string; from: Plan; to: Plan; periodEnd: Date; paused: string[] },
+): Promise<void> {
+  const until = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' }).format(
+    p.periodEnd,
+  )
+  const renewal = p.from === p.to
+  const pausedText = p.paused.length ? ` Paused to fit: ${p.paused.join(', ')}. Nothing was deleted.` : ''
+  await write(
+    {
+      userId,
+      type: 'plan_changed',
+      tone: 'success',
+      title: renewal ? `${PLAN_NAME[p.to]} renewed until ${until}` : `Payment received: you're on ${PLAN_NAME[p.to]}`,
+      body: `${renewal ? 'Thanks for your payment.' : `Active until ${until}.`}${pausedText}`,
+      actionLabel: 'View plan',
+      actionHref: '/profile',
+      data: { from: p.from, to: p.to, paused: p.paused, orderId: p.orderId },
+      dedupeKey: `payment:${p.orderId}`,
+      emailStatus: 'none',
+      emailDueAt: null,
+    },
+    'payment_activated',
+  )
+}
+
 // --- HERE budget (staff) ----------------------------------------------------------------
 
 export interface HereBudgetAlert {
