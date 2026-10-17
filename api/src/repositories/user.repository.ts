@@ -102,10 +102,21 @@ export async function deleteById(id: string): Promise<void> {
   await db.delete(user).where(eq(user.id, id))
 }
 
-export async function setPlan(userId: string, plan: Plan): Promise<UserPlanRow | undefined> {
+/**
+ * Sets the account's plan. `expiresAt` is the end of a paid period (FE-56); every
+ * other caller — staff, a self-serve downgrade, sign-up — leaves it NULL, which means
+ * the plan does not expire. `keepStartedAt` is for a renewal of the same plan, which
+ * extends the period without restarting "on this plan since".
+ */
+export async function setPlan(
+  userId: string,
+  plan: Plan,
+  opts: { expiresAt?: Date | null; keepStartedAt?: boolean } = {},
+): Promise<UserPlanRow | undefined> {
+  const expiresAt = opts.expiresAt ?? null
   const rows = await db
     .update(userPlans)
-    .set({ plan, startedAt: new Date() })
+    .set(opts.keepStartedAt ? { plan, expiresAt } : { plan, expiresAt, startedAt: new Date() })
     .where(eq(userPlans.userId, userId))
     .returning()
 
@@ -114,7 +125,7 @@ export async function setPlan(userId: string, plan: Plan): Promise<UserPlanRow |
   // No plan row yet — every account created through Better Auth starts without one,
   // since Better Auth does not know about our tables. Create it rather than silently
   // doing nothing and leaving the account plan-less forever.
-  const created = await db.insert(userPlans).values({ userId, plan }).returning()
+  const created = await db.insert(userPlans).values({ userId, plan, expiresAt }).returning()
   return created[0]
 }
 
