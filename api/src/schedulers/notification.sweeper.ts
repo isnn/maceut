@@ -1,9 +1,10 @@
 import * as notificationService from '../services/notification.service'
 
 /**
- * Every 10 minutes, in the API process beside the capture scheduler: decides the
- * notification emails that have come due (NOTIF), and once an hour trims the bell to
- * its 90-day retention.
+ * Every 10 minutes, in the API process beside the capture scheduler: posts renewal
+ * reminders for paid plans ending within 3 days (FE-56), decides the notification
+ * emails that have come due (NOTIF), and once an hour trims the bell to its 90-day
+ * retention.
  *
  * Ten minutes because the only delayed email waits two hours — a few minutes either
  * way changes nothing, and a quiet tick costs one indexed query.
@@ -16,6 +17,10 @@ let timer: NodeJS.Timeout | null = null
 let ticks = 0
 
 export async function sweepOnce(now: Date = new Date()): Promise<void> {
+  // FE-56: "your plan ends in 3 days" — on this tick rather than a job of its own, and
+  // before the email pass so the reminder's email goes out in the same tick.
+  const reminded = await notificationService.runPlanReminders(now)
+  if (reminded) console.log(`[notify-sweeper] ${reminded} plan renewal reminder(s)`)
   const r = await notificationService.runEmailSweep(now)
   if (r.sent || r.skipped || r.failed) {
     console.log(`[notify-sweeper] emails: ${r.sent} sent, ${r.skipped} skipped, ${r.failed} failed`)

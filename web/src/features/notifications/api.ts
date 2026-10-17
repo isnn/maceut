@@ -18,6 +18,9 @@ export type NotificationType =
   | 'plan_changed'
   | 'here_budget_warning'
   | 'here_budget_reached'
+  | 'plan_expiring'
+  | 'plan_expired'
+  | 'payment_failed'
 
 export interface AppNotification {
   id: string

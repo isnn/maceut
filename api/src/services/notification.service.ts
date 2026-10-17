@@ -350,6 +350,95 @@ export async function onPaymentActivated(
   )
 }
 
+function wibDate(d: Date): string {
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' }).format(d)
+}
+
+/** FE-56: a paid period ends within 3 days. Bell + email; the button opens the plan to renew. */
+export async function onPlanExpiring(userId: string, p: { plan: Plan; expiresAt: Date }): Promise<void> {
+  await write(
+    {
+      userId,
+      type: 'plan_expiring',
+      tone: 'warning',
+      title: `Your ${PLAN_NAME[p.plan]} plan ends on ${wibDate(p.expiresAt)}`,
+      body: `Renew to keep its limits. After that date the account moves to Free; anything over the Free limits is paused, nothing is deleted.`,
+      actionLabel: 'Renew',
+      actionHref: '/profile',
+      data: { plan: p.plan, expiresAt: p.expiresAt.toISOString() },
+      dedupeKey: `plan-expiring:${p.expiresAt.toISOString()}`,
+      emailStatus: 'pending',
+      emailDueAt: new Date(),
+    },
+    'plan_expiring',
+  )
+}
+
+/** FE-56: a paid period ran out and the account is on Free. Bell + email. */
+export async function onPlanExpired(userId: string, p: { from: Plan; expiresAt: Date; paused: string[] }): Promise<void> {
+  const pausedText = p.paused.length ? ` Paused to fit: ${p.paused.join(', ')}. Nothing was deleted.` : ' Nothing was deleted.'
+  await write(
+    {
+      userId,
+      type: 'plan_expired',
+      tone: 'info',
+      title: `Your ${PLAN_NAME[p.from]} plan ended`,
+      body: `Your account is on Free now.${pausedText} Renew any time from your profile.`,
+      actionLabel: `Get ${PLAN_NAME[p.from]} again`,
+      actionHref: '/profile',
+      data: { from: p.from, to: 'free', paused: p.paused },
+      dedupeKey: `plan-expired:${p.expiresAt.toISOString()}`,
+      emailStatus: 'pending',
+      emailDueAt: new Date(),
+    },
+    'plan_expired',
+  )
+}
+
+/** FE-56: a payment attempt ended without paying (expired VA, declined card). Bell only. */
+export async function onPaymentFailed(
+  userId: string,
+  p: { orderId: string; plan: Plan; outcome: 'failed' | 'expired' | 'cancelled' },
+): Promise<void> {
+  const why = p.outcome === 'expired' ? 'The payment window closed.' : p.outcome === 'cancelled' ? 'It was cancelled.' : 'It was declined.'
+  await write(
+    {
+      userId,
+      type: 'payment_failed',
+      tone: 'warning',
+      title: `Payment for ${PLAN_NAME[p.plan]} not completed`,
+      body: `${why} Nothing was charged and your plan is unchanged.`,
+      actionLabel: 'Try again',
+      actionHref: '/profile',
+      data: { orderId: p.orderId, plan: p.plan, outcome: p.outcome },
+      dedupeKey: `payment-failed:${p.orderId}`,
+      emailStatus: 'none',
+      emailDueAt: null,
+    },
+    'payment_failed',
+  )
+}
+
+/** How far ahead the renewal reminder goes out. */
+export const PLAN_REMINDER_DAYS = 3
+
+/**
+ * Renewal reminders, from the existing notification sweeper (no job of its own): every
+ * paid period ending within 3 days that hasn't been reminded, once. The period is
+ * claimed first, so a reminder is never sent twice for the same end date; a renewal
+ * sets a new end date and clears the claim, so the next period is reminded again.
+ */
+export async function runPlanReminders(now: Date = new Date()): Promise<number> {
+  const due = await userRepo.findExpiringUnreminded(now, new Date(now.getTime() + PLAN_REMINDER_DAYS * 86_400_000))
+  let sent = 0
+  for (const row of due) {
+    if (!(await userRepo.markReminded(row.userId, row.expiresAt, now))) continue
+    await onPlanExpiring(row.userId, { plan: row.plan, expiresAt: row.expiresAt })
+    sent++
+  }
+  return sent
+}
+
 // --- HERE budget (staff) ----------------------------------------------------------------
 
 export interface HereBudgetAlert {
@@ -507,8 +596,9 @@ export async function runEmailSweep(now: Date = new Date()): Promise<EmailSweepR
         continue
       }
 
-      // Staff-made plan changes: an account notice, sent regardless of preferences.
-      for (const row of rows.filter((r) => r.type === 'plan_changed')) {
+      // Account notices, sent regardless of preferences: staff-made plan changes, and
+      // a paid period about to end / ended (FE-56).
+      for (const row of rows.filter((r) => r.type === 'plan_changed' || r.type === 'plan_expiring' || r.type === 'plan_expired')) {
         const ok = await sendLogged(planChangedEmail(account.email, { title: row.title, body: row.body }), 'plan-changed')
         if (ok) {
           await notificationRepo.markEmailSent([row.id], now)

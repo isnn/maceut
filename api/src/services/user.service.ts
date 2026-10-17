@@ -21,6 +21,7 @@ import * as exportRepo from '../repositories/export.repository'
 import * as renderCacheRepo from '../repositories/render-cache.repository'
 import * as usageService from './usage.service'
 import * as planChangeRepo from '../repositories/plan-change.repository'
+import * as planExpiry from './plan-expiry.service'
 import { shiftDay, wibDay } from './here-usage.service'
 import * as zoneService from './zone.service'
 import * as scheduleService from './schedule.service'
@@ -82,7 +83,8 @@ export function toPublic(row: userRepo.UserWithPlan): PublicUser {
 }
 
 export async function getUser(userId: string): Promise<PublicUser> {
-  const found = await userRepo.findByIdWithPlan(userId)
+  // /me runs this on every page load, so an ended paid period is settled here (FE-56).
+  const found = await planExpiry.findSettled(userId)
   if (!found) throw new NotFoundError('User')
   return toPublic(found)
 }
