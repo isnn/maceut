@@ -126,7 +126,7 @@ export function invoiceHtml(d: InvoiceData): string {
   </table>
 
   <footer>
-    ${d.status === 'refunded' ? 'This payment was refunded. ' : 'Paid in full through Midtrans. '}Dates are in WIB (UTC+7).
+    ${d.status === 'refunded' ? 'This payment was refunded. ' : 'Paid in full. '}Dates are in WIB (UTC+7).
     For questions about this invoice, contact us at ${esc(d.sellerSite)} and quote ${esc(d.number)}.
   </footer>
 </body></html>`

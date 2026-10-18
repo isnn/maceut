@@ -25,6 +25,8 @@ export interface Prices {
   autoRenewAvailable: boolean
   prices: Record<Plan, number>
   periodDays: number
+  /** A renewal may not end later than this many days from now (six periods). */
+  maxAheadDays?: number
 }
 
 export interface Checkout {

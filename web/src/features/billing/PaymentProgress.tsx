@@ -135,7 +135,7 @@ export function PaymentProgress({
     body = (
       <span className="inline-flex items-center gap-xs">
         <IconLock size={14} className="text-text-muted" />
-        Midtrans opens in a window on this page.
+        The payment window opens on this page.
       </span>
     )
     steps = ['active', 'todo', 'todo']
@@ -143,8 +143,8 @@ export function PaymentProgress({
     tone = 'brand'
     emblem = <Spinner />
     eyebrow = 'Confirming'
-    title = 'Checking your payment with Midtrans…'
-    body = 'This takes a few seconds. Your plan switches as soon as Midtrans confirms it.'
+    title = 'Checking your payment…'
+    body = 'This takes a few seconds. Your plan switches as soon as the payment is confirmed.'
     steps = ['done', 'active', 'todo']
   } else if (state.kind === 'paid') {
     const p = state.payment

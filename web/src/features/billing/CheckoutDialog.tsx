@@ -4,18 +4,17 @@ import { Dialog } from '@base-ui/react/dialog'
 import { DialogCloseX } from '@/components/ui/DialogCloseX'
 import { Button } from '@/components/ui/Button'
 import { PlanPill } from '@/components/ui/Badge'
-import { IconAlert, IconCheck, IconLock } from '@/components/ui/icons'
+import { IconAlert, IconCheck } from '@/components/ui/icons'
 import { PLAN_HIGHLIGHTS, PLAN_LABEL } from '@/lib/constants'
 import { formatDate } from '@/lib/utils'
 import type { Plan } from '@/features/auth/types'
 import { formatRupiah } from './api'
 
 const DAY_MS = 86_400_000
-const METHODS = ['QRIS', 'Bank transfer', 'E-wallet', 'Card']
 
 /**
- * "Confirm your order" (FE-56): the step between picking a plan and Midtrans' Snap
- * page, so the customer sees exactly what they pay for and when it ends before any
+ * "Confirm your order" (FE-56): the step between picking a plan and the payment
+ * window, so the customer sees exactly what they pay for and when it ends before any
  * money moves. The dates follow payment.service activate(): a renewal adds 30 days to
  * the current end; any other plan starts when the payment is confirmed, and time left
  * on the old plan does not carry over.
@@ -104,20 +103,6 @@ export function CheckoutDialog({
                   </span>
                 </p>
               )}
-
-              <div className="space-y-sm">
-                <p className="flex items-center gap-sm text-caption text-text-secondary">
-                  <IconLock size={14} className="text-text-muted" />
-                  You pay on Midtrans’ secure page. Your plan changes only once Midtrans confirms the payment.
-                </p>
-                <ul className="flex flex-wrap gap-xs" aria-label="Payment methods">
-                  {METHODS.map((m) => (
-                    <li key={m} className="px-sm py-[2px] rounded-xs border border-border text-micro text-text-secondary">
-                      {m}
-                    </li>
-                  ))}
-                </ul>
-              </div>
 
               <div className="flex flex-col-reverse tablet:flex-row tablet:justify-end gap-sm">
                 <Button variant="secondary" onClick={onCancel}>

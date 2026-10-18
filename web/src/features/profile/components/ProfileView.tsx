@@ -32,6 +32,7 @@ import { PaymentProgress } from '@/features/billing/PaymentProgress'
 import { CheckoutDialog } from '@/features/billing/CheckoutDialog'
 import { AutoRenewCard } from '@/features/billing/AutoRenewCard'
 
+const DAY_MS = 86_400_000
 const PAYMENT_STATUS: Record<PaymentStatus, { label: string; tone: PillTone }> = {
   creating: { label: 'Starting', tone: 'neutral' },
   pending: { label: 'Waiting', tone: 'warning' },
@@ -113,6 +114,8 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
   /** The plan in the "Confirm your order" step, before Snap opens. */
   const [checkout, setCheckout] = useState<{ plan: Plan; at: number } | null>(null)
   const startCheckout = (plan: Plan) => setCheckout({ plan, at: Date.now() })
+  /** When the page opened: enough to tell whether Renew is past the 6-month cap. */
+  const [openedAt] = useState(() => Date.now())
   const [invoiceBusy, setInvoiceBusy] = useState<string | null>(null)
   const [invoiceError, setInvoiceError] = useState<string | null>(null)
 
@@ -184,6 +187,14 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
   const payEnabled = prices?.enabled === true
   /** A paid period with an end date can be renewed; a plan staff set has none. */
   const renewable = payEnabled && currentPlan !== 'free' && Boolean(user.planExpiresAt)
+  /** Renewals stop at 6 months paid ahead; the date Renew opens again, if it's closed now. */
+  const renewOpensAt = (() => {
+    if (!renewable || !prices?.maxAheadDays) return null
+    const end = new Date(user.planExpiresAt!).getTime()
+    const opens = end - (prices.maxAheadDays - prices.periodDays) * DAY_MS
+    return opens > openedAt ? new Date(opens) : null
+  })()
+  const canRenew = renewable && renewOpensAt === null
   const isHigher = (plan: Plan) => PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(currentPlan)
   const priceOf = (plan: Plan) => formatRupiah(prices?.prices[plan] ?? 0)
   const activeUntil = user.planExpiresAt ? formatDate(user.planExpiresAt) : null
@@ -295,9 +306,19 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                 Change plan
               </Button>
               {renewable && (
-                <Button variant="secondary" className="w-full mt-sm" onClick={() => startCheckout(usage.plan)} disabled={busy}>
+                <Button
+                  variant="secondary"
+                  className="w-full mt-sm"
+                  onClick={() => startCheckout(usage.plan)}
+                  disabled={busy || !canRenew}
+                >
                   Renew {limitsPeriod(prices)} · {priceOf(usage.plan)}
                 </Button>
+              )}
+              {renewOpensAt && (
+                <p className="text-caption text-text-muted mt-xs">
+                  Paid up to 6 months ahead. You can renew again from {formatDate(renewOpensAt)}.
+                </p>
               )}
               {planError && !confirming && <p className="text-caption text-danger-text mt-sm">{planError}</p>}
             </Card>
@@ -500,12 +521,14 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                   pendingPlan={pendingPlan ?? (payment.state.kind === 'starting' ? payment.state.plan : null)}
                   // Without payments configured, upgrades are still arranged with the team.
                   disabledPlan={(plan) => isHigher(plan) && !payEnabled}
-                  reselectable={renewable}
+                  reselectable={canRenew}
                   actionLabel={(plan) =>
                     plan === usage.plan
-                      ? renewable
+                      ? canRenew
                         ? `Renew · ${priceOf(plan)}`
-                        : 'Current plan'
+                        : renewOpensAt
+                          ? 'Paid 6 months ahead'
+                          : 'Current plan'
                       : isHigher(plan)
                         ? payEnabled
                           ? `Upgrade · ${priceOf(plan)}`

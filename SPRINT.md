@@ -235,6 +235,11 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   Chromium yang sudah ada di image (tanpa library baru). Nomor invoice = order id; tanpa baris pajak.
 - Profil: tab "Billing" → "Payment & billing"; catatan "N left" dan "Your active windows in an
   average month" dihapus.
+- Teks pembayaran tidak lagi menyebut Midtrans (dialog konfirmasi, kartu progres, footer invoice);
+  baris "You pay on Midtrans' secure page" + chip metode dihapus dari dialog konfirmasi.
+- Batas perpanjang 6 bulan: perpanjangan ditolak bila tanggal akhir baru > now + 180 hari
+  (`MAX_PAID_AHEAD_DAYS`, cek di `checkout()` sebelum Snap; upgrade tidak terkena). Tombol Renew
+  nonaktif dengan "You can renew again from …"; `GET /payments/prices` kini juga `maxAheadDays`.
 
 [2026-10-17] FE-56 fase 5 — auto-renew (opsional, MIDTRANS_AUTO_RENEW_ENABLED=false default).
   - Hanya kartu yang bisa ditagih tanpa pelanggan; menyalakan = bayar Snap khusus kartu + save_card (user_id),

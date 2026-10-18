@@ -28,7 +28,7 @@ vi.mock('../repositories/plan-change.repository', () => ({ record: vi.fn() }))
 vi.mock('./plan.service', () => ({ applyPlanChange: vi.fn(async () => ({ zonesToPause: [], schedulesToPause: [] })) }))
 vi.mock('./notification.service', () => ({ onPaymentActivated: vi.fn(), onPaymentFailed: vi.fn() }))
 
-import { activate, changeMethod, checkout, handleNotification, newOrderId, sync } from './payment.service'
+import { activate, changeMethod, checkout, handleNotification, newOrderId, prices, sync } from './payment.service'
 import * as midtrans from '../lib/midtrans-client'
 import * as paymentRepo from '../repositories/payment.repository'
 import * as userRepo from '../repositories/user.repository'
@@ -138,6 +138,29 @@ describe('checkout', () => {
     await expect(checkout(USER, 'starter', NOW)).resolves.toMatchObject({ plan: 'starter' })
   })
 
+  it('refuses a renewal that would end more than 6 months from now, before calling Snap', async () => {
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(account('starter'))
+    vi.mocked(userRepo.findPlanRow).mockResolvedValue({ plan: 'starter', expiresAt: new Date(NOW.getTime() + 151 * DAY) } as never)
+    await expect(checkout(USER, 'starter', NOW)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: expect.stringContaining('up to 6 months ahead'),
+    })
+    expect(paymentRepo.create).not.toHaveBeenCalled()
+    expect(midtrans.createSnapTransaction).not.toHaveBeenCalled()
+  })
+
+  it('allows a renewal that ends exactly 6 months from now', async () => {
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(account('starter'))
+    vi.mocked(userRepo.findPlanRow).mockResolvedValue({ plan: 'starter', expiresAt: new Date(NOW.getTime() + 150 * DAY) } as never)
+    await expect(checkout(USER, 'starter', NOW)).resolves.toMatchObject({ plan: 'starter' })
+  })
+
+  it('does not cap an upgrade, whatever is left on the current plan', async () => {
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(account('starter'))
+    vi.mocked(userRepo.findPlanRow).mockResolvedValue({ plan: 'starter', expiresAt: new Date(NOW.getTime() + 170 * DAY) } as never)
+    await expect(checkout(USER, 'standard', NOW)).resolves.toMatchObject({ plan: 'standard' })
+  })
+
   it('refuses to "renew" a plan staff set without an end date', async () => {
     vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(account('standard'))
     vi.mocked(userRepo.findPlanRow).mockResolvedValue({ plan: 'standard', expiresAt: null } as never)
@@ -167,6 +190,12 @@ describe('checkout', () => {
   it('T9: answers PAYMENTS_NOT_CONFIGURED without a server key', async () => {
     cfg.midtransServerKey = undefined
     await expect(checkout(USER, 'starter', NOW)).rejects.toMatchObject({ code: 'PAYMENTS_NOT_CONFIGURED', statusCode: 503 })
+  })
+})
+
+describe('prices', () => {
+  it('tells the page how far ahead a plan can be paid', () => {
+    expect(prices()).toMatchObject({ periodDays: 30, maxAheadDays: 180 })
   })
 })
 

@@ -26,7 +26,7 @@ import * as planService from './plan.service'
 import * as notificationService from './notification.service'
 import * as autoRenew from './auto-renew.service'
 import { accessOf } from '../lib/internal-access'
-import { PAID_PERIOD_DAYS, PLAN_PRICE_IDR, PLANS, planRank, type Plan } from '../types/plan'
+import { MAX_PAID_AHEAD_DAYS, PAID_PERIOD_DAYS, PLAN_PRICE_IDR, PLANS, planRank, type Plan } from '../types/plan'
 import type { PaymentRow } from '../../drizzle/schema'
 
 const DAY_MS = 86_400_000
@@ -35,6 +35,8 @@ export const PAYMENT_WINDOW_HOURS = 24
 /** Reopen an existing pending payment only while it is comfortably inside that window. */
 const REUSE_WITHIN_MS = (PAYMENT_WINDOW_HOURS - 1) * 60 * 60 * 1000
 
+const wibDate = (d: Date) =>
+  new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' }).format(d)
 const PLAN_NAME: Record<Plan, string> = { free: 'Free', starter: 'Starter', standard: 'Standard', premium: 'Premium' }
 
 export interface PaymentView {
@@ -68,12 +70,19 @@ export function toView(row: PaymentRow): PaymentView {
 }
 
 /** What the Profile page needs to label its buttons. */
-export function prices(): { enabled: boolean; autoRenewAvailable: boolean; prices: Record<Plan, number>; periodDays: number } {
+export function prices(): {
+  enabled: boolean
+  autoRenewAvailable: boolean
+  prices: Record<Plan, number>
+  periodDays: number
+  maxAheadDays: number
+} {
   return {
     enabled: isMidtransConfigured(),
     autoRenewAvailable: autoRenew.isAutoRenewEnabled(),
     prices: { ...PLAN_PRICE_IDR },
     periodDays: PAID_PERIOD_DAYS,
+    maxAheadDays: MAX_PAID_AHEAD_DAYS,
   }
 }
 
@@ -121,6 +130,12 @@ export async function checkout(
     // and paying would turn it into one that runs out in 30 days.
     const planRow = await userRepo.findPlanRow(userId)
     if (!planRow?.expiresAt) throw new ValidationError(`Your ${PLAN_NAME[plan]} plan has no end date, so there is nothing to renew.`)
+    // At most six months paid ahead: the renewal would end past now + 180 days.
+    const latestStart = now.getTime() + (MAX_PAID_AHEAD_DAYS - PAID_PERIOD_DAYS) * DAY_MS
+    if (planRow.expiresAt.getTime() > latestStart) {
+      const opensAt = new Date(planRow.expiresAt.getTime() - (MAX_PAID_AHEAD_DAYS - PAID_PERIOD_DAYS) * DAY_MS)
+      throw new ValidationError(`You can pay up to 6 months ahead. You can renew again from ${wibDate(opensAt)}.`)
+    }
   }
 
   const open = await paymentRepo.findPendingSince(userId, plan, new Date(now.getTime() - REUSE_WITHIN_MS), setup)

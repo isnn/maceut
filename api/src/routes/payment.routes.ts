@@ -72,6 +72,7 @@ router.use(
  *                   properties:
  *                     enabled: { type: boolean }
  *                     periodDays: { type: integer, example: 30 }
+ *                     maxAheadDays: { type: integer, example: 180, description: 'A renewal may not end later than this many days from now' }
  *                     prices:
  *                       type: object
  *                       properties:
