@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import * as paymentService from '../services/payment.service'
 import * as autoRenew from '../services/auto-renew.service'
+import * as invoiceService from '../services/invoice.service'
 import { NotFoundError, UnauthorizedError } from '../errors'
 import { ok } from '../types/api'
 import { PLANS, type Plan } from '../types/plan'
@@ -73,6 +74,30 @@ export async function show(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.userId) throw new UnauthorizedError()
     return res.status(200).json(ok(await paymentService.sync(req.userId, String(req.params.orderId))))
+  } catch (err) {
+    next(err)
+  }
+}
+
+/** "Change payment method": cancels the chosen method at Midtrans and opens a fresh Snap page. */
+export async function changeMethod(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) throw new UnauthorizedError()
+    return res.status(200).json(ok(await paymentService.changeMethod(req.userId, String(req.params.orderId))))
+  } catch (err) {
+    next(err)
+  }
+}
+
+/** The PDF invoice of one of the account's own paid payments. */
+export async function invoice(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) throw new UnauthorizedError()
+    const { filename, pdf } = await invoiceService.invoicePdf(req.userId, String(req.params.orderId))
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.setHeader('Cache-Control', 'private, no-store')
+    return res.status(200).send(pdf)
   } catch (err) {
     next(err)
   }

@@ -27,7 +27,13 @@ export type PayState =
 
 const NOT_COMPLETED = 'Payment not completed. Nothing was charged and your plan is unchanged.'
 
-export function usePayPlan() {
+/**
+ * `onPaid` refreshes the page's data in place. It used to be a full reload, which in
+ * dev over a slow link meant seconds of blank white page right after paying.
+ */
+const NOTHING = () => undefined
+
+export function usePayPlan(onPaid: () => void = NOTHING) {
   const [state, setState] = useState<PayState>({ kind: 'idle' })
 
   /** Asks the server what happened; it checks with Midtrans. */
@@ -38,7 +44,7 @@ export function usePayPlan() {
       if (payment.status === 'paid') {
         setState({ kind: 'paid', payment })
         // Header, limits and quota readouts all pick up the new plan.
-        window.location.reload()
+        onPaid()
       } else if (payment.status === 'pending' || payment.status === 'creating') {
         setState({ kind: 'waiting', payment })
       } else {
@@ -51,7 +57,7 @@ export function usePayPlan() {
         plan,
       })
     }
-  }, [])
+  }, [onPaid])
 
   const open = useCallback(
     (orderId: string, plan: Plan, token: string, redirectUrl: string) => {
@@ -93,7 +99,27 @@ export function usePayPlan() {
     [open, confirm],
   )
 
+  /** "Change payment method": the server cancels the picked method and hands back a Snap page. */
+  const changeMethod = useCallback(
+    async (payment: Payment) => {
+      setState({ kind: 'starting', plan: payment.plan })
+      try {
+        const { checkout } = await billingApi.changeMethod(payment.orderId)
+        if (checkout) open(checkout.orderId, checkout.plan, checkout.token, checkout.redirectUrl)
+        // It finished meanwhile (paid, expired): show where it stands.
+        else void confirm(payment.orderId, payment.plan)
+      } catch (err) {
+        setState({
+          kind: 'failed',
+          message: err instanceof ApiError ? err.message : 'Couldn’t change the payment method. Please try again.',
+          plan: payment.plan,
+        })
+      }
+    },
+    [open, confirm],
+  )
+
   const reset = useCallback(() => setState({ kind: 'idle' }), [])
 
-  return { state, pay, resume, confirm, reset }
+  return { state, pay, resume, confirm, changeMethod, reset }
 }

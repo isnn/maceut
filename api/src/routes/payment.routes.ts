@@ -224,4 +224,54 @@ router.get('/payments/history', paymentController.history)
  */
 router.get('/payments/:orderId', paymentController.show)
 
+/**
+ * @swagger
+ * /payments/{orderId}/change-method:
+ *   post:
+ *     summary: Ganti metode pembayaran untuk pembayaran yang masih terbuka
+ *     description: >
+ *       Order Snap terikat pada metode yang dipilih pertama kali. Bila belum ada metode
+ *       dipilih, token yang sama dikembalikan (Snap tetap menampilkan semua metode). Bila
+ *       sudah (VA, QRIS, e-wallet), order dibatalkan di Midtrans (POST /v2/{order_id}/cancel)
+ *       lalu order baru untuk paket yang sama dibuat. Bila ternyata sudah final di Midtrans
+ *       (dibayar, kedaluwarsa), status dicatat dan `checkout` null. Hanya pemilik.
+ *     tags: [Payments]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: orderId, required: true, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: '{ payment, checkout } — checkout berisi token Snap yang dibuka, atau null'
+ *       401: { description: UNAUTHORIZED }
+ *       404: { description: NOT_FOUND — tidak ada, atau milik akun lain }
+ *       422: { description: VALIDATION_ERROR — pembayaran sudah tidak terbuka }
+ *       502: { description: PAYMENT_PROVIDER_ERROR — Midtrans gagal membatalkan }
+ *       503: { description: PAYMENTS_NOT_CONFIGURED }
+ */
+router.post('/payments/:orderId/change-method', paymentController.changeMethod)
+
+/**
+ * @swagger
+ * /payments/{orderId}/invoice:
+ *   get:
+ *     summary: Unduh invoice PDF untuk pembayaran yang sudah dibayar
+ *     description: >
+ *       Dibuat dari baris `payments` dan akun (nomor invoice = order id), dirender ke PDF
+ *       dengan Chromium yang sudah ada di image. Hanya pemilik; hanya status paid atau refunded.
+ *     tags: [Payments]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: orderId, required: true, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: File PDF (attachment)
+ *         content:
+ *           application/pdf:
+ *             schema: { type: string, format: binary }
+ *       401: { description: UNAUTHORIZED }
+ *       404: { description: NOT_FOUND — tidak ada, atau milik akun lain }
+ *       422: { description: VALIDATION_ERROR — pembayaran belum terkonfirmasi }
+ */
+router.get('/payments/:orderId/invoice', paymentController.invoice)
+
 export default router

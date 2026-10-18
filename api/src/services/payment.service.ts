@@ -204,6 +204,63 @@ export async function sync(userId: string, orderId: string, now: Date = new Date
   return toView((await paymentRepo.findByOrderId(orderId)) ?? payment)
 }
 
+export interface ChangeMethodResult {
+  /** Where the payment stands now. */
+  payment: PaymentView
+  /** The Snap page to open, or null when the payment had already finished (paid, expired). */
+  checkout: CheckoutResult | null
+}
+
+/**
+ * "Change payment method" on an open payment.
+ *
+ * A Snap order is bound to the first method the customer picks: reopening its token
+ * shows that VA number or QR again. So once a method was picked, the order is cancelled
+ * at Midtrans first — then it can't be paid by the old method — and a new order starts
+ * for the same plan. If no method was picked yet, the same Snap page still lists every
+ * method, so it is simply reopened.
+ */
+export async function changeMethod(userId: string, orderId: string, now: Date = new Date()): Promise<ChangeMethodResult> {
+  if (!isMidtransConfigured()) throw new PaymentsNotConfiguredError()
+  const payment = await paymentRepo.findByOrderId(orderId)
+  if (!payment || payment.userId !== userId) throw new NotFoundError('Payment')
+  if (payment.status !== 'pending' && payment.status !== 'creating') {
+    throw new ValidationError('This payment is no longer open, so there is no method to change.')
+  }
+
+  const status = await midtrans.getStatus(orderId)
+  if (!status && payment.snapToken && payment.redirectUrl) {
+    const reopened: CheckoutResult = {
+      orderId,
+      token: payment.snapToken,
+      redirectUrl: payment.redirectUrl,
+      amount: payment.amount,
+      plan: payment.plan,
+      reused: true,
+    }
+    return { payment: toView(payment), checkout: reopened }
+  }
+  // Already final at Midtrans (paid in the meantime, expired): record it, start nothing.
+  if (status && midtrans.outcomeOf(status.transaction_status, status.fraud_status) !== null) {
+    await apply(payment, status, now)
+    return { payment: toView((await paymentRepo.findByOrderId(orderId)) ?? payment), checkout: null }
+  }
+
+  if (status) {
+    const cancelled = await midtrans.cancelTransaction(orderId)
+    if (cancelled === 'not_cancellable') {
+      const latest = await midtrans.getStatus(orderId)
+      if (latest) await apply(payment, latest, now)
+      return { payment: toView((await paymentRepo.findByOrderId(orderId)) ?? payment), checkout: null }
+    }
+  }
+  // Closed here without the failure bell: the customer asked for this.
+  await paymentRepo.transition(orderId, 'cancelled', { providerStatus: status ? 'cancel' : 'replaced' })
+  console.log(`[payments] ${orderId}: cancelled to change method`)
+  const next = await checkout(userId, payment.plan, now, { autoRenewSetup: payment.autoRenewSetup })
+  return { payment: toView((await paymentRepo.findByOrderId(orderId)) ?? payment), checkout: next }
+}
+
 /** The account's open payment, for "Continue payment". */
 export async function pending(userId: string, now: Date = new Date()): Promise<PaymentView | null> {
   const row = await paymentRepo.findOpenSince(userId, new Date(now.getTime() - REUSE_WITHIN_MS))

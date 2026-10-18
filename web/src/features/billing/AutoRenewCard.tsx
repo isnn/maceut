@@ -23,6 +23,7 @@ export function AutoRenewCard({
   price,
   busy,
   onEnable,
+  onChanged,
 }: {
   plan: Plan
   on: boolean
@@ -30,6 +31,8 @@ export function AutoRenewCard({
   price: string
   busy: boolean
   onEnable: () => void
+  /** Re-read the account after turning it off. */
+  onChanged: () => void
 }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,9 +44,10 @@ export function AutoRenewCard({
     setSaving(true)
     try {
       await billingApi.disableAutoRenew()
-      window.location.reload()
+      onChanged()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Couldn’t turn auto-renew off. Please try again.')
+    } finally {
       setSaving(false)
     }
   }

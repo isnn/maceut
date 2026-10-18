@@ -84,7 +84,7 @@ export function AppHeader({ minimal = false }: { minimal?: boolean }) {
                     <nav className="py-xs">
                       {[
                         { href: '/profile', label: 'Profile & usage' },
-                        { href: '/profile#billing', label: 'Billing & plan' },
+                        { href: '/profile#billing', label: 'Payment & billing' },
                       ].map((item) => (
                         <Link
                           key={item.href}

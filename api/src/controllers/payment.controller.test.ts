@@ -25,12 +25,15 @@ vi.mock('../services/payment.service', () => ({
   sync: vi.fn(),
   handleNotification: vi.fn(),
   history: vi.fn(async () => []),
+  changeMethod: vi.fn(),
 }))
+vi.mock('../services/invoice.service', () => ({ invoicePdf: vi.fn() }))
 
 import { app } from '../app'
 import * as userRepo from '../repositories/user.repository'
 import * as paymentService from '../services/payment.service'
 import * as autoRenew from '../services/auto-renew.service'
+import * as invoiceService from '../services/invoice.service'
 import { auth } from '../lib/auth'
 import { ForbiddenError, NotFoundError, ValidationError } from '../errors'
 
@@ -57,6 +60,8 @@ describe('T26: customer payment routes need a session', () => {
     ['post', '/payments/auto-renew'],
     ['delete', '/payments/auto-renew'],
     ['get', '/payments/MCT-abc-1'],
+    ['post', '/payments/MCT-abc-1/change-method'],
+    ['get', '/payments/MCT-abc-1/invoice'],
   ] as const)('%s %s → 401', async (method, path) => {
     const res = await request(app)[method](path).send({ plan: 'starter' })
     expect(res.status).toBe(401)
@@ -180,5 +185,45 @@ describe('POST /payments/midtrans/notification', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.mocked(paymentService.handleNotification).mockRejectedValue(new Error('connection lost'))
     expect((await request(app).post('/payments/midtrans/notification').send(body)).status).toBe(500)
+  })
+})
+
+describe('POST /payments/:orderId/change-method', () => {
+  it('returns the Snap page to open for the signed-in owner', async () => {
+    signedIn()
+    vi.mocked(paymentService.changeMethod).mockResolvedValue({ payment: { orderId: 'MCT-abc-1' }, checkout: { orderId: 'MCT-abc-2', token: 't2' } } as never)
+
+    const res = await request(app).post('/payments/MCT-abc-1/change-method')
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.checkout.token).toBe('t2')
+    expect(paymentService.changeMethod).toHaveBeenCalledWith(USER_ID, 'MCT-abc-1')
+  })
+
+  it("404 for someone else's payment", async () => {
+    signedIn()
+    vi.mocked(paymentService.changeMethod).mockRejectedValue(new NotFoundError('Payment'))
+    expect((await request(app).post('/payments/MCT-abc-1/change-method')).status).toBe(404)
+  })
+})
+
+describe('GET /payments/:orderId/invoice', () => {
+  it('sends the PDF as a download', async () => {
+    signedIn()
+    vi.mocked(invoiceService.invoicePdf).mockResolvedValue({ filename: 'maceut-invoice-MCT-abc-1.pdf', pdf: Buffer.from('%PDF-1.4 x') })
+
+    const res = await request(app).get('/payments/MCT-abc-1/invoice')
+
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('application/pdf')
+    expect(res.headers['content-disposition']).toBe('attachment; filename="maceut-invoice-MCT-abc-1.pdf"')
+    expect(res.headers['cache-control']).toBe('private, no-store')
+    expect(invoiceService.invoicePdf).toHaveBeenCalledWith(USER_ID, 'MCT-abc-1')
+  })
+
+  it('422 while the payment is not confirmed', async () => {
+    signedIn()
+    vi.mocked(invoiceService.invoicePdf).mockRejectedValue(new ValidationError('An invoice is available once the payment is confirmed.'))
+    expect((await request(app).get('/payments/MCT-abc-1/invoice')).status).toBe(422)
   })
 })

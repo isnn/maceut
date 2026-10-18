@@ -133,6 +133,40 @@ export async function getStatus(orderId: string): Promise<MidtransStatus | null>
   return data as MidtransStatus
 }
 
+/**
+ * POST /v2/{order_id}/cancel — stops a pending payment (a VA, QRIS, e-wallet or store
+ * code the customer chose) so it can no longer be paid. Used when the customer wants
+ * another method: a Snap order is tied to the method picked first.
+ *
+ * `cancelled`: done. `no_transaction`: no method was picked yet, nothing to stop.
+ * `not_cancellable` (412): it is already final at Midtrans — paid, expired — so the
+ * caller re-reads the status instead.
+ */
+export type CancelResult = 'cancelled' | 'no_transaction' | 'not_cancellable'
+
+export async function cancelTransaction(orderId: string): Promise<CancelResult> {
+  const auth = headers()
+  let res: Response
+  try {
+    res = await fetch(`${hosts().core}/v2/${encodeURIComponent(orderId)}/cancel`, {
+      method: 'POST',
+      headers: auth,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+  } catch (err) {
+    console.error(`[midtrans] cancel ${orderId}: request failed:`, err instanceof Error ? err.message : err)
+    throw new PaymentProviderError()
+  }
+  // Core API puts the real answer in the body's status_code, sometimes under HTTP 200.
+  const data = (await res.json().catch(() => ({}))) as { status_code?: string }
+  const code = Number(data.status_code ?? res.status)
+  if (code === 200) return 'cancelled'
+  if (code === 404) return 'no_transaction'
+  if (code === 412) return 'not_cancellable'
+  console.error(`[midtrans] cancel ${orderId}: status ${code}`)
+  throw new PaymentProviderError(code)
+}
+
 // --- Notifications --------------------------------------------------------------------
 
 /**

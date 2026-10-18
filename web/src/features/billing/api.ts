@@ -44,6 +44,27 @@ export const getPending = () => apiClient.get<Payment | null>('/payments/pending
 export const getHistory = () => apiClient.get<Payment[]>('/payments/history')
 /** Card-only checkout that saves the card; once paid, Midtrans renews monthly. */
 export const enableAutoRenew = (plan: Plan) => apiClient.post<Checkout>('/payments/auto-renew', { plan })
+/**
+ * "Change payment method" on an open payment. `checkout` is the Snap page to open — the
+ * same one when no method was picked yet, otherwise a new order (the old method is
+ * cancelled at Midtrans first). Null when the payment had already finished.
+ */
+export const changeMethod = (orderId: string) =>
+  apiClient.post<{ payment: Payment; checkout: Checkout | null }>(`/payments/${encodeURIComponent(orderId)}/change-method`)
+
+/** Saves the PDF invoice of a paid payment. */
+export async function downloadInvoice(orderId: string): Promise<void> {
+  const { blob, filename } = await apiClient.download(`/payments/${encodeURIComponent(orderId)}/invoice`)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename ?? `maceut-invoice-${orderId}.pdf`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 export const disableAutoRenew = () => apiClient.delete<{ autoRenew: false }>('/payments/auto-renew')
 
 /** "Rp 99,000" — the same separator convention as formatNumber. */
