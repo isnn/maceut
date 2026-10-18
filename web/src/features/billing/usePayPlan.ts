@@ -20,7 +20,7 @@ import { openSnap, type SnapResult } from './snap'
 export type PayState =
   | { kind: 'idle' }
   | { kind: 'starting'; plan: Plan }
-  | { kind: 'confirming'; orderId: string }
+  | { kind: 'confirming'; orderId: string; plan: Plan | null }
   | { kind: 'waiting'; payment: Payment }
   | { kind: 'paid'; payment: Payment }
   | { kind: 'failed'; message: string; plan: Plan | null }
@@ -38,7 +38,7 @@ export function usePayPlan(onPaid: () => void = NOTHING) {
 
   /** Asks the server what happened; it checks with Midtrans. */
   const confirm = useCallback(async (orderId: string, plan: Plan | null = null) => {
-    setState({ kind: 'confirming', orderId })
+    setState({ kind: 'confirming', orderId, plan })
     try {
       const payment = await billingApi.getPayment(orderId)
       if (payment.status === 'paid') {

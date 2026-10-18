@@ -28,7 +28,8 @@ import { NotificationSettings } from '@/features/notifications/NotificationSetti
 import * as billingApi from '@/features/billing/api'
 import { formatRupiah, paymentTypeLabel, type Payment, type PaymentStatus, type Prices } from '@/features/billing/api'
 import { usePayPlan } from '@/features/billing/usePayPlan'
-import { PaymentBanner } from '@/features/billing/PaymentBanner'
+import { PaymentProgress } from '@/features/billing/PaymentProgress'
+import { CheckoutDialog } from '@/features/billing/CheckoutDialog'
 import { AutoRenewCard } from '@/features/billing/AutoRenewCard'
 
 const PAYMENT_STATUS: Record<PaymentStatus, { label: string; tone: PillTone }> = {
@@ -109,6 +110,9 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
     billingApi.getHistory().then(setPayments).catch(() => undefined)
   }, [])
   const payment = usePayPlan(refresh)
+  /** The plan in the "Confirm your order" step, before Snap opens. */
+  const [checkout, setCheckout] = useState<{ plan: Plan; at: number } | null>(null)
+  const startCheckout = (plan: Plan) => setCheckout({ plan, at: Date.now() })
   const [invoiceBusy, setInvoiceBusy] = useState<string | null>(null)
   const [invoiceError, setInvoiceError] = useState<string | null>(null)
 
@@ -222,10 +226,12 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
       </div>
 
       {variant === 'tenant' && (
-        <PaymentBanner
+        <PaymentProgress
           state={payment.state}
           open={openPayment}
           onResume={payment.resume}
+          onCheck={(p) => void payment.confirm(p.orderId, p.plan)}
+          onInvoice={(orderId) => void saveInvoice(orderId)}
           onRetry={(plan) => void payment.pay(plan)}
           onChangeMethod={(p) => {
             setOpenPayment(null)
@@ -289,7 +295,7 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                 Change plan
               </Button>
               {renewable && (
-                <Button variant="secondary" className="w-full mt-sm" onClick={() => void payment.pay(usage.plan)} disabled={busy}>
+                <Button variant="secondary" className="w-full mt-sm" onClick={() => startCheckout(usage.plan)} disabled={busy}>
                   Renew {limitsPeriod(prices)} · {priceOf(usage.plan)}
                 </Button>
               )}
@@ -488,7 +494,7 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                   onSelect={(plan) => {
                     setPickerOpen(false)
                     // Up, or renewing a paid period: Midtrans. Down: the existing preview-and-confirm.
-                    if (isHigher(plan) || plan === usage.plan) void payment.pay(plan)
+                    if (isHigher(plan) || plan === usage.plan) startCheckout(plan)
                     else changePlan(plan)
                   }}
                   pendingPlan={pendingPlan ?? (payment.state.kind === 'starting' ? payment.state.plan : null)}
@@ -513,6 +519,21 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
               </Dialog.Popup>
             </Dialog.Portal>
           </Dialog.Root>
+
+          <CheckoutDialog
+            open={checkout !== null}
+            plan={checkout?.plan ?? null}
+            openedAt={checkout?.at ?? 0}
+            currentPlan={usage.plan}
+            currentEnd={user.planExpiresAt ?? null}
+            price={checkout ? (prices?.prices[checkout.plan] ?? 0) : 0}
+            periodDays={prices?.periodDays ?? 30}
+            onConfirm={(plan) => {
+              setCheckout(null)
+              void payment.pay(plan)
+            }}
+            onCancel={() => setCheckout(null)}
+          />
 
           <PlanChangeDialog
             open={confirming !== null}
