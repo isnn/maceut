@@ -45,8 +45,11 @@ export const userPlans = pgTable(
 
 export type UserPlanRow = typeof userPlans.$inferSelect
 
-/** Who moved a plan: the customer themselves, or staff (also an account created by staff). */
-export const planChangeSourceEnum = pgEnum('plan_change_source', ['self', 'staff'])
+/**
+ * Who moved a plan: the customer themselves, staff (also an account created by staff),
+ * a paid Midtrans order (`payment`, FE-56), or a paid period running out (`expiry`).
+ */
+export const planChangeSourceEnum = pgEnum('plan_change_source', ['self', 'staff', 'payment', 'expiry'])
 
 /**
  * Every plan change, for the Billing section of the staff user page. `user_plans` only
@@ -72,6 +75,52 @@ export const planChanges = pgTable(
 )
 
 export type PlanChangeRow = typeof planChanges.$inferSelect
+
+/**
+ * One Midtrans payment attempt (FE-56). `creating` is written BEFORE the Snap call, so a
+ * provider failure still leaves a row to explain it. Only `creating`/`pending` may move;
+ * every final status is final (see payment.repository `transition`).
+ */
+export const paymentStatusEnum = pgEnum('payment_status', [
+  'creating',
+  'pending',
+  'paid',
+  'failed',
+  'expired',
+  'cancelled',
+  'refunded',
+])
+
+export const payments = pgTable(
+  'payments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** Midtrans `order_id`: new for every attempt, never reused. */
+    orderId: text('order_id').notNull(),
+    plan: planEnum('plan').notNull(),
+    /** IDR, set by the server from PLAN_PRICE_IDR, never from the browser. */
+    amount: integer('amount').notNull(),
+    status: paymentStatusEnum('status').notNull().default('creating'),
+    snapToken: text('snap_token'),
+    redirectUrl: text('redirect_url'),
+    /** Midtrans' last `transaction_status`, verbatim, for support. */
+    providerStatus: text('provider_status'),
+    paymentType: text('payment_type'),
+    transactionId: text('transaction_id'),
+    paidAt: timestamp('paid_at', { withTimezone: true }),
+    /** End of the 30 days this payment bought; set when it is activated. */
+    periodEnd: timestamp('period_end', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('payments_order_id_unique').on(t.orderId), index('payments_user_created_idx').on(t.userId, t.createdAt)],
+)
+
+export type PaymentRow = typeof payments.$inferSelect
+export type PaymentStatus = (typeof paymentStatusEnum.enumValues)[number]
 
 /** BR-020: chosen when the zone is created, and editable afterwards per BR-029. */
 export const roadClassEnum = pgEnum('road_class', ['nasional', 'nasional_provinsi', 'semua'])

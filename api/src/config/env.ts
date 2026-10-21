@@ -178,6 +178,18 @@ const schema = z.object({
   MAILTRAP_API_TOKEN: optionalStr,
   /** Set to send into a Mailtrap *sandbox* inbox (testing) instead of real delivery. */
   MAILTRAP_INBOX_ID: optionalStr,
+
+  /**
+   * Midtrans Snap payments for plan upgrades (FE-56). Optional at boot like R2/HERE:
+   * without the server key the payment routes answer PAYMENTS_NOT_CONFIGURED and the
+   * Profile page keeps "Contact us to upgrade". The server key never leaves the API;
+   * the client key is the web app's (NEXT_PUBLIC_MIDTRANS_CLIENT_KEY).
+   */
+  MIDTRANS_SERVER_KEY: optionalStr,
+  /** When set, a notification for any other merchant is refused. */
+  MIDTRANS_MERCHANT_ID: optionalStr,
+  /** false = sandbox hosts. Must match the key: a sandbox key on production hosts is a 401. */
+  MIDTRANS_IS_PRODUCTION: boolFromEnv(false),
 }).superRefine((e, ctx) => {
   // Unlike R2 and HERE (rule 2), a chosen email provider without its credential fails
   // at boot: sign-up is blocked until the address is verified, so a provider that can't
@@ -299,6 +311,10 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
     resendApiKey: e.RESEND_API_KEY,
     mailtrapApiToken: e.MAILTRAP_API_TOKEN,
     mailtrapInboxId: e.MAILTRAP_INBOX_ID,
+
+    midtransServerKey: e.MIDTRANS_SERVER_KEY,
+    midtransMerchantId: e.MIDTRANS_MERCHANT_ID,
+    midtransIsProduction: e.MIDTRANS_IS_PRODUCTION,
   }
 }
 
@@ -327,6 +343,11 @@ export function isR2Configured(c: Config = config): boolean {
 /** True when the HERE Traffic client can be used. */
 export function isHereConfigured(c: Config = config): boolean {
   return Boolean(c.hereApiKey)
+}
+
+/** True when payments can be taken (FE-56). */
+export function isMidtransConfigured(c: Config = config): boolean {
+  return Boolean(c.midtransServerKey)
 }
 
 /** Names of the env keys each integration is still missing — for env:check and boot warnings. */

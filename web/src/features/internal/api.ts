@@ -310,7 +310,7 @@ export interface PlanChange {
   /** Null when the account was created on `toPlan`. */
   fromPlan: Plan | null
   toPlan: Plan
-  source: 'self' | 'staff'
+  source: 'self' | 'staff' | 'payment' | 'expiry'
   /** The staff member's name; null for a self-serve change. */
   changedBy: string | null
   createdAt: string

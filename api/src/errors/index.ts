@@ -27,6 +27,8 @@ export type ErrorCode =
   | 'EXPORT_BUDGET_EXCEEDED'
   | 'TRAFFIC_UNAVAILABLE'
   | 'UPSTREAM_ERROR'
+  | 'PAYMENTS_NOT_CONFIGURED'
+  | 'PAYMENT_PROVIDER_ERROR'
   | 'RATE_LIMITED'
   | 'INTERNAL_ERROR'
 
@@ -211,6 +213,22 @@ export class RateLimitedError extends AppError {
     const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60))
     super('RATE_LIMITED', 429, `Too many previews. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`, {
       retryAfterSeconds,
+    })
+  }
+}
+
+/** FE-56: no MIDTRANS_SERVER_KEY, so plans can't be paid for yet. */
+export class PaymentsNotConfiguredError extends AppError {
+  constructor() {
+    super('PAYMENTS_NOT_CONFIGURED', 503, 'Payments are not available yet. Contact the Maceut team to upgrade.')
+  }
+}
+
+/** Midtrans refused or could not be reached. The message stays generic; details go to the log. */
+export class PaymentProviderError extends AppError {
+  constructor(readonly providerStatus?: number) {
+    super('PAYMENT_PROVIDER_ERROR', 502, 'The payment provider did not respond. Please try again.', {
+      providerStatus: providerStatus ?? null,
     })
   }
 }

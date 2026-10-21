@@ -42,6 +42,7 @@ async function checkConfig() {
     `JWT_SECRET ${mask(config.jwtSecret)}`,
     `HERE_API_KEY ${mask(config.hereApiKey)}`,
     `R2_ACCESS_KEY_SECRET ${mask(config.r2AccessKeySecret)}`,
+    `MIDTRANS_SERVER_KEY ${mask(config.midtransServerKey)}`,
   ].join(', ')
   add('Config', 'PASS', `valid · ${summary}`)
 
@@ -229,6 +230,26 @@ async function checkHere() {
   add('HERE', 'PASS', `${all.features.length} segments · states: ${[...states].join(', ')}`, fcNote)
 }
 
+/**
+ * One status lookup for an order that cannot exist. 404 means the key was accepted by
+ * the environment MIDTRANS_IS_PRODUCTION points at; 401 means key and environment
+ * don't match (a sandbox key on production hosts, or a typo).
+ */
+async function checkMidtrans() {
+  if (!config.midtransServerKey) {
+    add('Midtrans', 'SKIP', 'not configured — missing MIDTRANS_SERVER_KEY')
+    return
+  }
+  const midtrans = await import('../src/lib/midtrans-client')
+  const env = config.midtransIsProduction ? 'production' : 'sandbox'
+  try {
+    const status = await midtrans.getStatus(`env-check-${Date.now()}`)
+    add('Midtrans', 'PASS', `${env} key accepted${status ? '' : ' (test order not found, as expected)'}`)
+  } catch (err) {
+    add('Midtrans', 'FAIL', `${env}: ${msg(err)}`, 'Check MIDTRANS_SERVER_KEY and MIDTRANS_IS_PRODUCTION match.')
+  }
+}
+
 function msg(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
@@ -243,6 +264,7 @@ async function main() {
   await checkRabbit()
   await checkR2()
   await checkHere()
+  await checkMidtrans()
 
   const width = Math.max(...lines.map((l) => l.name.length))
   console.log('')
