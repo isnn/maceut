@@ -150,6 +150,7 @@ describe('email provider config', () => {
     const c = buildConfig(base)
     expect(c.emailProviders).toEqual(['console'])
     expect(c.emailFrom).toBe('Maceut <no-reply@maceut.id>')
+    expect(c.emailSupport).toBe('support.maceut@hokya.dev')
   })
 
   it('auto: Mailtrap first, Resend as backup, for each key that is set', () => {

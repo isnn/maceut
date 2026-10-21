@@ -6,7 +6,13 @@ const RESEND_URL = 'https://api.resend.com/emails'
  * Resend's REST API, over plain fetch — one POST does not justify their SDK.
  * https://resend.com/docs/api-reference/emails/send-email
  */
-export function createResendProvider(opts: { apiKey: string; from: string; fetch?: typeof fetch }): EmailProvider {
+export function createResendProvider(opts: {
+  apiKey: string
+  from: string
+  /** Replies go here, not to the no-reply sender. */
+  replyTo?: string
+  fetch?: typeof fetch
+}): EmailProvider {
   const doFetch = opts.fetch ?? fetch
   return {
     name: 'resend',
@@ -19,6 +25,7 @@ export function createResendProvider(opts: { apiKey: string; from: string; fetch
           body: JSON.stringify({
             from: opts.from,
             to: [message.to],
+            ...(opts.replyTo ? { reply_to: opts.replyTo } : {}),
             subject: message.subject,
             html: message.html,
             text: message.text,

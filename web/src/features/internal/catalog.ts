@@ -97,6 +97,7 @@ export const CONFIG_VARS: ConfigVarMeta[] = [
     defaultValue: 'console',
   },
   { key: 'EMAIL_FROM', group: 'email', label: 'Sender', defaultValue: 'Maceut <no-reply@maceut.id>' },
+  { key: 'EMAIL_SUPPORT', group: 'email', label: 'Support / reply-to', defaultValue: 'support.maceut@hokya.dev' },
   { key: 'RESEND_API_KEY', group: 'email', label: 'Resend API key', help: 'Needed when the provider is resend.' },
   { key: 'MAILTRAP_API_TOKEN', group: 'email', label: 'Mailtrap API token', help: 'Needed when the provider is mailtrap.' },
   {

@@ -10,6 +10,8 @@ import { EmailSendError, parseAddress, type EmailMessage, type EmailProvider } f
 export function createMailtrapProvider(opts: {
   apiToken: string
   from: string
+  /** Replies go here, not to the no-reply sender. */
+  replyTo?: string
   inboxId?: string
   fetch?: typeof fetch
 }): EmailProvider {
@@ -30,6 +32,7 @@ export function createMailtrapProvider(opts: {
           body: JSON.stringify({
             from,
             to: [{ email: message.to }],
+            ...(opts.replyTo ? { reply_to: { email: opts.replyTo } } : {}),
             subject: message.subject,
             html: message.html,
             text: message.text,

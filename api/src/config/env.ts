@@ -174,6 +174,11 @@ const schema = z.object({
    */
   EMAIL_PROVIDER: z.enum(['auto', 'console', 'resend', 'mailtrap']).default('auto'),
   EMAIL_FROM: z.string().trim().min(3).default('Maceut <no-reply@maceut.id>'),
+  /**
+   * Where people reach a human. EMAIL_FROM is a no-reply sender for automatic mail; this
+   * address is every email's Reply-To and the "Need help?" contact in footers and invoices.
+   */
+  EMAIL_SUPPORT: z.string().trim().email().default('support.maceut@hokya.dev'),
   RESEND_API_KEY: optionalStr,
   MAILTRAP_API_TOKEN: optionalStr,
   /** Set to send into a Mailtrap *sandbox* inbox (testing) instead of real delivery. */
@@ -314,6 +319,7 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
 
     emailProviders: emailProviders(e),
     emailFrom: e.EMAIL_FROM,
+    emailSupport: e.EMAIL_SUPPORT,
     resendApiKey: e.RESEND_API_KEY,
     mailtrapApiToken: e.MAILTRAP_API_TOKEN,
     mailtrapInboxId: e.MAILTRAP_INBOX_ID,
