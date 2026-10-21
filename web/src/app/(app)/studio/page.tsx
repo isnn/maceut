@@ -1716,7 +1716,7 @@ function ExportDialog({
                   const blocked = item.format !== 'PNG' && busy
                   return (
                     <button
-                      key={item.label}
+                      key={item.format}
                       type="button"
                       disabled={item.disabled || blocked || starting}
                       onClick={item.onSelect}
