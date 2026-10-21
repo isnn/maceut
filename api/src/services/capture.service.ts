@@ -1,7 +1,7 @@
 import { captureErrorForUser } from './user-facing-errors'
 import * as captureRepo from '../repositories/capture.repository'
 import * as zoneRepo from '../repositories/zone.repository'
-import * as userRepo from '../repositories/user.repository'
+import * as planExpiry from './plan-expiry.service'
 import { publishCaptureJob } from '../lib/rabbitmq-client'
 import * as r2 from '../lib/r2-client'
 import { wibMonth } from '../lib/capture-pool'
@@ -109,7 +109,7 @@ export async function enqueueCapture(
   if (!zone) throw new NotFoundError('Zone')
   if (zone.userId !== userId) throw new ForbiddenError('Zona ini bukan milik Anda.')
 
-  const account = await userRepo.findByIdWithPlan(userId)
+  const account = await planExpiry.findSettled(userId)
   if (!account) throw new NotFoundError('User')
   const plan: Plan = account.plan
 
@@ -328,7 +328,7 @@ export async function recordMissed(
   const zone = await zoneRepo.findById(zoneId)
   if (!zone) throw new NotFoundError('Zone')
 
-  const account = await userRepo.findByIdWithPlan(userId)
+  const account = await planExpiry.findSettled(userId)
   const roadClass = effectiveRoadClass(zone.roadClass as RoadClass, account?.plan ?? 'free')
 
   const minutes = Math.round(input.lateBySeconds / 60)

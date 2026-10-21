@@ -32,8 +32,10 @@ export const userPlans = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     plan: planEnum('plan').notNull().default('free'),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
-    /** NULL = active indefinitely. Billing is not implemented; plans are assigned manually. */
+    /** End of a paid period (FE-56). NULL = does not expire (Free, or a plan staff set). */
     expiresAt: timestamp('expires_at', { withTimezone: true }),
+    /** When the "ends in 3 days" reminder went out for this period; cleared whenever the plan is set. */
+    remindedAt: timestamp('reminded_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -488,6 +490,10 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'plan_changed',
   'here_budget_warning',
   'here_budget_reached',
+  // FE-56: a paid period ends in 3 days / has ended; a payment attempt failed.
+  'plan_expiring',
+  'plan_expired',
+  'payment_failed',
 ])
 
 export const notificationToneEnum = pgEnum('notification_tone', ['warning', 'success', 'info'])

@@ -118,7 +118,7 @@ export async function setPlan(
   const expiresAt = opts.expiresAt ?? null
   const rows = await db
     .update(userPlans)
-    .set(opts.keepStartedAt ? { plan, expiresAt } : { plan, expiresAt, startedAt: new Date() })
+    .set(opts.keepStartedAt ? { plan, expiresAt, remindedAt: null } : { plan, expiresAt, remindedAt: null, startedAt: new Date() })
     .where(eq(userPlans.userId, userId))
     .returning()
 
@@ -132,6 +132,49 @@ export async function setPlan(
 }
 
 /** The plan row itself (start and expiry), for the staff Billing section. */
+/**
+ * A paid period has ended: back to Free, once. Conditional on the exact end date it
+ * read, so two requests noticing the expiry together move it once — and a renewal that
+ * landed in between (new end date) is not undone.
+ */
+export async function expireToFree(userId: string, expiresAt: Date): Promise<UserPlanRow | undefined> {
+  const [row] = await db
+    .update(userPlans)
+    .set({ plan: 'free', expiresAt: null, remindedAt: null, startedAt: new Date() })
+    .where(and(eq(userPlans.userId, userId), eq(userPlans.expiresAt, expiresAt), ne(userPlans.plan, 'free')))
+    .returning()
+  return row
+}
+
+/** Paid periods ending in (from, to] whose reminder hasn't gone out. */
+export async function findExpiringUnreminded(
+  from: Date,
+  to: Date,
+): Promise<{ userId: string; plan: Plan; expiresAt: Date }[]> {
+  const rows = await db
+    .select({ userId: userPlans.userId, plan: userPlans.plan, expiresAt: userPlans.expiresAt })
+    .from(userPlans)
+    .where(
+      and(
+        ne(userPlans.plan, 'free'),
+        sql`${userPlans.expiresAt} > ${from}`,
+        sql`${userPlans.expiresAt} <= ${to}`,
+        sql`${userPlans.remindedAt} IS NULL`,
+      ),
+    )
+  return rows.map((r) => ({ userId: r.userId, plan: r.plan as Plan, expiresAt: r.expiresAt! }))
+}
+
+/** Marks this period's reminder sent — only if the period is still the one reminded about. */
+export async function markReminded(userId: string, expiresAt: Date, at: Date): Promise<boolean> {
+  const rows = await db
+    .update(userPlans)
+    .set({ remindedAt: at })
+    .where(and(eq(userPlans.userId, userId), eq(userPlans.expiresAt, expiresAt), sql`${userPlans.remindedAt} IS NULL`))
+    .returning({ id: userPlans.id })
+  return rows.length > 0
+}
+
 export async function findPlanRow(userId: string): Promise<UserPlanRow | undefined> {
   const rows = await db.select().from(userPlans).where(eq(userPlans.userId, userId)).limit(1)
   return rows[0]

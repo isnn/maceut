@@ -1,6 +1,6 @@
 import * as zoneRepo from '../repositories/zone.repository'
 import * as scheduleRepo from '../repositories/schedule.repository'
-import * as userRepo from '../repositories/user.repository'
+import * as planExpiry from './plan-expiry.service'
 import * as captureRepo from '../repositories/capture.repository'
 import * as exportRepo from '../repositories/export.repository'
 import * as renderCacheRepo from '../repositories/render-cache.repository'
@@ -96,7 +96,7 @@ function formatHHMM(minutes: number): string {
 }
 
 export async function getUsage(userId: string): Promise<UsageSummary> {
-  const user = await userRepo.findByIdWithPlan(userId)
+  const user = await planExpiry.findSettled(userId)
   if (!user) throw new NotFoundError('User')
 
   const limits = PLAN_LIMITS[user.plan]

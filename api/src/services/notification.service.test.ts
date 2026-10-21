@@ -18,6 +18,8 @@ vi.mock('../repositories/zone.repository', () => ({ findById: vi.fn() }))
 vi.mock('../repositories/user.repository', () => ({
   findById: vi.fn(async () => ({ id: 'u1', email: 'budi@example.com' })),
   listInternalIds: vi.fn(async () => ['staff1', 'staff2']),
+  findExpiringUnreminded: vi.fn(async () => []),
+  markReminded: vi.fn(async () => true),
 }))
 vi.mock('./email.service', () => ({
   sendLogged: vi.fn(async () => true),
@@ -32,6 +34,7 @@ import * as notificationRepo from '../repositories/notification.repository'
 import * as captureRepo from '../repositories/capture.repository'
 import * as exportRepo from '../repositories/export.repository'
 import * as email from './email.service'
+import * as userRepo from '../repositories/user.repository'
 
 const at = new Date('2026-09-28T00:00:00Z') // 07:00 WIB
 const failedCapture = { id: 'c2', userId: 'u1', zoneId: 'z1', trigger: 'scheduled', capturedAt: at, error: 'HERE 503' }
@@ -186,6 +189,53 @@ describe('onPlanChanged', () => {
     vi.mocked(notificationRepo.insertOnce).mockClear()
     await svc.onPlanChanged('u1', { from: 'standard', to: 'free', paused: [], byStaff: false }, at)
     expect(vi.mocked(notificationRepo.insertOnce).mock.calls[0]![0]).toMatchObject({ emailStatus: 'none' })
+  })
+})
+
+describe('plan renewal reminders (FE-56)', () => {
+  const end = new Date('2026-09-30T05:00:00Z')
+
+  it('reminds each paid period ending within 3 days, once, with bell + email', async () => {
+    vi.mocked(userRepo.findExpiringUnreminded).mockResolvedValue([{ userId: 'u1', plan: 'starter', expiresAt: end }])
+
+    expect(await svc.runPlanReminders(at)).toBe(1)
+
+    expect(userRepo.findExpiringUnreminded).toHaveBeenCalledWith(at, new Date(at.getTime() + 3 * 86_400_000))
+    expect(userRepo.markReminded).toHaveBeenCalledWith('u1', end, at)
+    expect(vi.mocked(notificationRepo.insertOnce).mock.calls[0]![0]).toMatchObject({
+      userId: 'u1',
+      type: 'plan_expiring',
+      tone: 'warning',
+      title: 'Your Starter plan ends on 30 Sept 2026',
+      actionLabel: 'Renew',
+      emailStatus: 'pending',
+    })
+  })
+
+  it('does not post a reminder another tick already claimed', async () => {
+    vi.mocked(userRepo.findExpiringUnreminded).mockResolvedValue([{ userId: 'u1', plan: 'starter', expiresAt: end }])
+    vi.mocked(userRepo.markReminded).mockResolvedValueOnce(false)
+    expect(await svc.runPlanReminders(at)).toBe(0)
+    expect(notificationRepo.insertOnce).not.toHaveBeenCalled()
+  })
+
+  it('emails the expiring and expired notices as account notices', async () => {
+    vi.mocked(notificationRepo.findDueEmails).mockResolvedValue([
+      pendingFailing({ id: 'e1', type: 'plan_expiring', title: 'Your Starter plan ends on 30 Sept 2026', data: {} }),
+      pendingFailing({ id: 'e2', type: 'plan_expired', title: 'Your Starter plan ended', data: {} }),
+    ])
+    const r = await svc.runEmailSweep(at)
+    expect(r.sent).toBe(2)
+    expect(email.planChangedEmail).toHaveBeenCalledWith('budi@example.com', expect.objectContaining({ title: 'Your Starter plan ended' }))
+  })
+
+  it('words the payment bells', async () => {
+    await svc.onPlanExpired('u1', { from: 'standard', expiresAt: end, paused: ['Sudirman'] })
+    await svc.onPaymentFailed('u1', { orderId: 'MCT-1', plan: 'starter', outcome: 'expired' })
+    const [expired, failed] = vi.mocked(notificationRepo.insertOnce).mock.calls.map((c) => c[0])
+    expect(expired).toMatchObject({ type: 'plan_expired', emailStatus: 'pending' })
+    expect(expired!.body).toContain('Paused to fit: Sudirman')
+    expect(failed).toMatchObject({ type: 'payment_failed', actionLabel: 'Try again', emailStatus: 'none', dedupeKey: 'payment-failed:MCT-1' })
   })
 })
 

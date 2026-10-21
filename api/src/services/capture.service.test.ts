@@ -9,7 +9,13 @@ vi.mock('../repositories/capture.repository', () => ({
   listByZone: vi.fn(),
 }))
 vi.mock('../repositories/zone.repository', () => ({ findById: vi.fn() }))
-vi.mock('../repositories/user.repository', () => ({ findByIdWithPlan: vi.fn() }))
+vi.mock('../repositories/user.repository', () => ({ findByIdWithPlan: vi.fn(), expireToFree: vi.fn() }))
+vi.mock('../repositories/plan-change.repository', () => ({ record: vi.fn() }))
+vi.mock('./plan.service', () => ({ applyPlanChange: vi.fn(async () => ({ zonesToPause: [], schedulesToPause: [] })) }))
+vi.mock('./notification.service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./notification.service')>()),
+  onPlanExpired: vi.fn(),
+}))
 vi.mock('../lib/rabbitmq-client', () => ({ publishCaptureJob: vi.fn() }))
 
 import * as captureRepo from '../repositories/capture.repository'
@@ -111,6 +117,19 @@ describe('enqueueCapture — BR-006 monthly pool (delivery doc F5)', () => {
       vi.mocked(captureRepo.countInRange).mockResolvedValue(pool)
       expect((await enqueueCapture(USER, ZONE)).queued, plan).toBe(false)
     }
+  })
+
+  it('T25: an ended paid period is settled to Free before the pool is checked', async () => {
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue({
+      id: USER,
+      plan: 'premium',
+      planExpiresAt: new Date(Date.now() - 60_000),
+    } as never)
+    vi.mocked(userRepo.expireToFree).mockResolvedValue({ plan: 'free' } as never)
+    vi.mocked(captureRepo.countInRange).mockResolvedValue(45) // Premium has room; Free does not
+
+    expect((await enqueueCapture(USER, ZONE)).queued).toBe(false)
+    expect(userRepo.expireToFree).toHaveBeenCalledOnce()
   })
 
   it('counts the current WIB month', async () => {

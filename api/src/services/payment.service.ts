@@ -226,7 +226,11 @@ async function apply(payment: PaymentRow, s: MidtransStatus, now: Date = new Dat
     return Boolean(moved)
   }
 
-  return Boolean(await paymentRepo.transition(payment.orderId, outcome, fields))
+  const moved = await paymentRepo.transition(payment.orderId, outcome, fields)
+  // A late failure (a bank transfer that expired after 24 h, a declined card) happens
+  // when nobody is watching the page; the bell says so, with Try again.
+  if (moved) await notificationService.onPaymentFailed(moved.userId, { orderId: moved.orderId, plan: moved.plan, outcome })
+  return Boolean(moved)
 }
 
 /**
