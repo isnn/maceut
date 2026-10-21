@@ -52,6 +52,8 @@ export interface PublicUser {
    */
   roleLockedByConfig: boolean
   onboardingDone: boolean
+  /** End of the paid period (FE-56), or null when the plan does not expire. */
+  planExpiresAt: string | null
   /** The address was confirmed with its sign-up code (Better Auth's `email_verified`). */
   emailVerified: boolean
   createdAt: string
@@ -73,6 +75,7 @@ export function toPublic(row: userRepo.UserWithPlan): PublicUser {
     staffType: resolveStaffType(row.email, (row.role ?? 'user') as PlatformRole, row.staffType ?? null),
     roleLockedByConfig: isInternalByConfig(row.email),
     onboardingDone: row.onboardingDone ?? false,
+    planExpiresAt: row.planExpiresAt?.toISOString() ?? null,
     emailVerified: row.emailVerified,
     createdAt: row.createdAt.toISOString(),
   }

@@ -18,6 +18,7 @@ vi.mock('../services/payment.service', () => ({
   pending: vi.fn(),
   sync: vi.fn(),
   handleNotification: vi.fn(),
+  history: vi.fn(async () => []),
 }))
 
 import { app } from '../app'
@@ -44,6 +45,7 @@ describe('T26: customer payment routes need a session', () => {
     ['get', '/payments/prices'],
     ['post', '/payments/checkout'],
     ['get', '/payments/pending'],
+    ['get', '/payments/history'],
     ['get', '/payments/MCT-abc-1'],
   ] as const)('%s %s → 401', async (method, path) => {
     const res = await request(app)[method](path).send({ plan: 'starter' })
@@ -82,6 +84,16 @@ describe('POST /payments/checkout', () => {
     vi.mocked(paymentService.checkout).mockRejectedValue(new ValidationError('Choose a paid plan.'))
     const res = await request(app).post('/payments/checkout').send({ plan: 'free' })
     expect(res.status).toBe(422)
+  })
+})
+
+describe('GET /payments/history', () => {
+  it('lists the account’s own payments and is not mistaken for an order id', async () => {
+    signedIn()
+    const res = await request(app).get('/payments/history')
+    expect(res.status).toBe(200)
+    expect(paymentService.history).toHaveBeenCalledWith(USER_ID)
+    expect(paymentService.sync).not.toHaveBeenCalled()
   })
 })
 
