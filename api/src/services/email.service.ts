@@ -88,7 +88,7 @@ const LOGO: InlineImage = {
   content: readFileSync(resolve(process.cwd(), 'assets/email/maceut-logo.png')).toString('base64'),
 }
 
-const SUPPORT_EMAIL = 'support.maceut@hokya.dev'
+const SUPPORT_EMAIL = config.emailSupport
 const TAGLINE = 'Connecting people with the road ahead'
 
 const escapeHtml = (v: string) =>

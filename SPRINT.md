@@ -230,6 +230,10 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   (3) Zone detail: grafik "Congestion through the day" punya min 3px+2px per bar → 288 capture
   (5 menit) ≈1.400px, HP men-zoom-out seluruh halaman; kini bar berbagi lebar. (4) Profil: baris
   tab bisa digeser sendiri (4 tab ≈410px), email panjang terbungkus, tracker pembayaran wrap.
+[2026-10-21] Email: dua alamat. `EMAIL_FROM` = pengirim no-reply untuk semua email otomatis
+  (OTP, pengingat, pembayaran, broadcast) — dev: `noreply.maceut@hokya.dev`. `EMAIL_SUPPORT` (baru,
+  default `support.maceut@hokya.dev`) = Reply-To setiap email (Mailtrap `reply_to`, Resend `reply_to`)
+  + kontak "Need help?" di footer email + kontak di invoice PDF (sebelumnya hardcode / URL situs).
 
 [2026-10-18] FE-56 fase 5 — perbaikan dari uji sandbox user (masuk PR fase 5).
 - Halaman putih setelah bayar/perpanjang: layout app merender `null` selama /me dimuat dan
