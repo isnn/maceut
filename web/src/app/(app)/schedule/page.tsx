@@ -183,9 +183,10 @@ export default function SchedulePage() {
             />
           ) : (
             <>
-              {/* Hour ruler */}
-              <div className="grid grid-cols-[160px_1fr] gap-md items-end">
-                <span className="text-micro uppercase tracking-wide text-text-muted">Zone</span>
+              {/* Hour ruler. On phones the zone name sits above its bars, so the bars get
+                  the full width: beside a 160px name column, 17 hours would get ~9px each. */}
+              <div className="grid grid-cols-1 tablet:grid-cols-[160px_1fr] gap-md items-end">
+                <span className="hidden tablet:block text-micro uppercase tracking-wide text-text-muted">Zone</span>
                 <div>
                   {/* A schedule board can't be read without knowing which clock it's on. */}
                   <p className="text-micro text-text-muted text-right mb-xs">Asia/Jakarta · GMT+7</p>
@@ -203,7 +204,7 @@ export default function SchedulePage() {
                 {zones.map((zone) => {
                   const zoneWindows = windows.filter((w) => w.zoneId === zone.id)
                   return (
-                    <li key={zone.id} className="grid grid-cols-[160px_1fr] gap-md items-start">
+                    <li key={zone.id} className="grid grid-cols-1 tablet:grid-cols-[160px_1fr] gap-xs tablet:gap-md items-start">
                       <div className="min-w-0">
                         <p className="text-label font-semibold text-text-primary truncate">{zone.name}</p>
                         <p className="text-micro text-text-muted mt-xs">

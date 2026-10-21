@@ -205,12 +205,12 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
   return (
     <div className="space-y-lg">
       <div className="flex flex-wrap items-center gap-lg">
-        <span className="w-14 h-14 rounded-full bg-primary-soft text-[#5A35F3] text-section-title font-bold flex items-center justify-center">
+        <span className="w-14 h-14 rounded-full shrink-0 bg-primary-soft text-primary text-section-title font-bold flex items-center justify-center">
           {(user.fullName || user.email).slice(0, 2).toUpperCase()}
         </span>
-        <div>
-          <h1 className="text-page-title font-bold text-text-primary">{user.fullName || user.email}</h1>
-          <p className="text-body text-text-secondary mt-xs">
+        <div className="min-w-0">
+          <h1 className="text-page-title font-bold text-text-primary break-words">{user.fullName || user.email}</h1>
+          <p className="text-body text-text-secondary mt-xs break-all">
             {user.email}
           </p>
         </div>
@@ -219,15 +219,16 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
         </Button>
       </div>
 
-      <div className="flex gap-lg border-b border-border">
+      {/* Four tabs need ~410px; on a phone the row scrolls on its own instead of widening the page. */}
+      <div className="flex gap-lg border-b border-border overflow-x-auto [scrollbar-width:none]">
         {tabs.map((item) => (
           <button
             key={item}
             onClick={() => setTab(item)}
             className={cn(
-              'relative pb-md text-body transition-colors',
+              'relative shrink-0 whitespace-nowrap pb-md text-body transition-colors',
               tab === item
-                ? 'text-text-primary font-semibold after:absolute after:left-0 after:right-0 after:-bottom-px after:h-0.5 after:bg-primary'
+                ? 'text-text-primary font-semibold after:absolute after:left-0 after:right-0 after:bottom-0 after:h-0.5 after:bg-primary'
                 : 'text-text-secondary hover:text-text-primary'
             )}
           >

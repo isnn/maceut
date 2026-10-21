@@ -222,6 +222,15 @@ Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
+[2026-10-21] Mobile (laporan user): (1) menu ☰ app/internal/publik kini satu hook — tutup saat
+  halaman berganti, tap di luar, atau Escape (sebelumnya hanya saat link-nya sendiri diklik; Log in /
+  Create account di header publik tak menutupnya). (2) Schedule: di HP nama zona di atas bar
+  (kolom 160px menyisakan ~9px/jam → angka jam bertumpuk); label window di "Next collection"
+  dipotong "…" (dulu nowrap → keluar kartu); tombol hari berbagi baris (7×40px > lebar dialog).
+  (3) Zone detail: grafik "Congestion through the day" punya min 3px+2px per bar → 288 capture
+  (5 menit) ≈1.400px, HP men-zoom-out seluruh halaman; kini bar berbagi lebar. (4) Profil: baris
+  tab bisa digeser sendiri (4 tab ≈410px), email panjang terbungkus, tracker pembayaran wrap.
+
 [2026-10-21] Email: dua alamat. `EMAIL_FROM` = pengirim no-reply untuk semua email otomatis
   (OTP, pengingat, pembayaran, broadcast) — dev: `noreply.maceut@hokya.dev`. `EMAIL_SUPPORT` (baru,
   default `support.maceut@hokya.dev`) = Reply-To setiap email (Mailtrap `reply_to`, Resend `reply_to`)

@@ -101,10 +101,11 @@ export function NextCollectionCard({ windows, zones }: { windows: CaptureWindow[
         <ul className="space-y-sm">
           {together.slice(0, 3).map(({ w }) => (
             <li key={w.id} className="flex items-baseline justify-between gap-md min-w-0">
-              <span className="text-label font-semibold text-text-primary truncate">
+              <span className="min-w-0 text-label font-semibold text-text-primary truncate">
                 {zones.find((z) => z.id === w.zoneId)?.name ?? 'Zone'}
               </span>
-              <span className="text-caption text-text-secondary whitespace-nowrap">
+              {/* A label is whatever the user typed: it shortens with … rather than push the card wider. */}
+              <span className="min-w-0 max-w-[60%] text-caption text-text-secondary truncate" title={w.label}>
                 {w.label}
               </span>
             </li>
