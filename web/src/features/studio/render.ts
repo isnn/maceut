@@ -1069,8 +1069,7 @@ export async function renderCapture(canvas: HTMLCanvasElement, input: RenderInpu
 export async function renderMap(canvas: HTMLCanvasElement, input: RenderInput): Promise<void> {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
-  canvas.width = input.width
-  canvas.height = input.height
+  fitCanvas(canvas, ctx, input)
   await drawMap(ctx, input)
 }
 
@@ -1078,9 +1077,26 @@ export async function renderMap(canvas: HTMLCanvasElement, input: RenderInput): 
 export function renderOverlays(canvas: HTMLCanvasElement, input: RenderInput) {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
-  canvas.width = input.width
-  canvas.height = input.height
+  fitCanvas(canvas, ctx, input)
   drawOverlays(ctx, input)
+}
+
+/**
+ * Sizes a reused canvas to the input and leaves it blank, as a fresh one would be.
+ * Assigning `width` reallocates the backing store even when the value is unchanged, so
+ * the preview — which redraws these two canvases every frame — only resizes when the
+ * output size changed.
+ */
+function fitCanvas(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, input: RenderInput) {
+  if (canvas.width !== input.width || canvas.height !== input.height) {
+    canvas.width = input.width
+    canvas.height = input.height
+    return
+  }
+  // reset() clears the pixels AND the drawing state (alpha, filter, shadow, transform),
+  // which is what the width assignment did; older browsers without it take that path.
+  if (typeof ctx.reset === 'function') ctx.reset()
+  else canvas.width = input.width
 }
 
 function drawOverlays(ctx: CanvasRenderingContext2D, input: RenderInput) {

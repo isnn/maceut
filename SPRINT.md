@@ -222,6 +222,14 @@ Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
+[2026-10-21] Studio: Next/Play lambat (laporan user). (1) Preview menggambar ulang frame yang sama
+  setiap kali traffic frame tetangga selesai di-prefetch (effect bergantung pada seluruh cache) — kini
+  hanya traffic frame aktif. (2) Prefetch 1 frame → jendela 2 di belakang + 5 di depan (melingkar,
+  karena playback loop). (3) Frame tidak digambar sebelum traffic-nya datang (dulu peta kosong dulu,
+  lalu render kedua), caption mengikuti frame yang tampil, dan tick playback berikutnya baru mulai
+  setelah frame tergambar. (4) Satu canvas scratch dipakai ulang + canvas preview/overlay hanya
+  di-resize saat ukuran berubah (`ctx.reset()`), bukan alokasi ~6 MB per frame.
+
 [2026-10-21] Mobile (laporan user): (1) menu ☰ app/internal/publik kini satu hook — tutup saat
   halaman berganti, tap di luar, atau Escape (sebelumnya hanya saat link-nya sendiri diklik; Log in /
   Create account di header publik tak menutupnya). (2) Schedule: di HP nama zona di atas bar

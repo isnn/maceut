@@ -98,6 +98,10 @@ import {
 import type { Zone } from '@/features/zones/types'
 
 /** Playback speeds, as milliseconds between frames. */
+/** Frames fetched around the current one: enough ahead for a few seconds of 4× playback. */
+const PREFETCH_AHEAD = 5
+const PREFETCH_BEHIND = 2
+
 const SPEEDS = [
   { label: '0.5×', ms: 2000 },
   { label: '1×', ms: 1000 },
@@ -359,21 +363,33 @@ export default function StudioPage() {
     setTraffics((prev) => (id in prev ? prev : { ...prev, [id]: traffic }))
   }, [])
 
-  // The current frame, and the next one so playback does not stall at each step.
+  // The current frame first, then a window around it, so Next, Previous and playback
+  // find their frame already loaded instead of waiting on a request each step. Wraps
+  // past the end, because playback loops back to the start of the range.
   useEffect(() => {
     if (!frame) return
     if (!(frame.id in traffics)) void ensureLoaded(frame.id)
-    const next = frames[current + 1]
-    if (next && !(next.id in traffics)) void ensureLoaded(next.id)
+    for (let offset = -PREFETCH_BEHIND; offset <= PREFETCH_AHEAD; offset++) {
+      if (offset === 0 || Math.abs(offset) >= frames.length) continue
+      const near = frames[(current + offset + frames.length) % frames.length]
+      if (near && !(near.id in traffics)) void ensureLoaded(near.id)
+    }
   }, [frame, frames, current, traffics, ensureLoaded])
 
+  /** The frame whose map is on screen — set once its render is blitted. */
+  const [shownId, setShownId] = useState<string | null>(null)
+
+  // The next tick starts only once the current frame is actually drawn. A fixed timer
+  // stepped on regardless, so a slow request showed a frame with no traffic, then
+  // redrew it, then moved on — the stutter.
+  const frameShown = frame !== null && shownId === frame.id
   useEffect(() => {
-    if (!playing || frames.length === 0) return
+    if (!playing || frames.length === 0 || !frameShown) return
     const timer = setTimeout(() => {
       setCurrent((i) => (i + 1 >= frames.length ? 0 : i + 1))
     }, SPEEDS[speed]!.ms)
     return () => clearTimeout(timer)
-  }, [playing, current, frames.length, speed])
+  }, [playing, current, frames.length, speed, frameShown])
 
   const previewCanvas = useRef<HTMLCanvasElement | null>(null)
   const [previewBusy, setPreviewBusy] = useState(false)
@@ -472,26 +488,43 @@ export default function StudioPage() {
     })()
   }, [])
 
+  /**
+   * One scratch canvas for every preview render. The queue runs one render at a time
+   * and blits it before the next starts, so reusing it never shows a half-drawn map —
+   * and playback no longer allocates a full-size canvas (~6 MB at 1600×1000) per frame.
+   */
+  const scratchCanvas = useRef<HTMLCanvasElement | null>(null)
+
+  // Only the current frame's own traffic: depending on the whole cache redrew the
+  // frame on screen, unchanged, every time a prefetched neighbour arrived.
+  const frameTraffic = frame ? traffics[frame.id] : undefined
+  const frameLoaded = frame !== null && frame.id in traffics
+
   useEffect(() => {
-    if (!frame) return
+    // Not drawn until its traffic is here (or failed, as null): drawing the bare map
+    // first and the traffic a moment later is a flash, and costs a second render.
+    if (!frame || !frameLoaded) return
     // The preview renders at the output size's own aspect ratio, so what's on screen
     // is what will export.
     const dims = previewDims(outputSize)
-    const input = renderInputFor(frame, traffics[frame.id] ?? null, dims.width, dims.height)
+    const input = renderInputFor(frame, frameTraffic ?? null, dims.width, dims.height)
+    const id = frame.id
     schedulePreview(async () => {
-      const offscreen = document.createElement('canvas')
-      await renderMap(offscreen, input)
+      const scratch = (scratchCanvas.current ??= document.createElement('canvas'))
+      await renderMap(scratch, input)
       const canvas = previewCanvas.current
       if (!canvas || !mounted.current) return
-      canvas.width = offscreen.width
-      canvas.height = offscreen.height
-      canvas.getContext('2d')?.drawImage(offscreen, 0, 0)
+      // Resizing a canvas clears and reallocates it, so only when the size changed.
+      if (canvas.width !== scratch.width) canvas.width = scratch.width
+      if (canvas.height !== scratch.height) canvas.height = scratch.height
+      canvas.getContext('2d')?.drawImage(scratch, 0, 0)
+      setShownId(id)
       if (slideTarget.current === input.view) {
         slideTarget.current = null
         setSlide(null)
       }
     })
-  }, [frame, traffics, renderInputFor, outputSize, schedulePreview])
+  }, [frame, frameLoaded, frameTraffic, renderInputFor, outputSize, schedulePreview])
 
   // The overlay layer — caption, legend, credit — redrawn straight away on its own
   // canvas. It's cheap and synchronous, so a caption drag or a title keystroke never
@@ -510,12 +543,15 @@ export default function StudioPage() {
       cancelled = true
     }
   }, [])
+  // The caption names the frame whose map is on screen, so while the next one loads
+  // the time never runs ahead of the traffic under it.
+  const overlayFrame = frames.find((f) => f.id === shownId) ?? frame
   useEffect(() => {
     const canvas = overlayCanvas.current
-    if (!canvas || !frame) return
+    if (!canvas || !overlayFrame) return
     const dims = previewDims(outputSize)
-    renderOverlays(canvas, renderInputFor(frame, null, dims.width, dims.height))
-  }, [frame, renderInputFor, outputSize, fontsReady])
+    renderOverlays(canvas, renderInputFor(overlayFrame, null, dims.width, dims.height))
+  }, [overlayFrame, renderInputFor, outputSize, fontsReady])
 
   // The slider's real range for this zone and size — past the basemap's deepest zoom
   // the image stops changing, so offering those steps would be a dead slider.
