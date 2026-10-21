@@ -109,7 +109,10 @@ export function CaptureDay({
         <div className="mb-md">
           <CardTitle>Congestion through the day</CardTitle>
         </div>
-        <div className="flex items-end gap-[2px] h-24">
+        {/* Bars share the width, however many captures the day has: a fixed minimum per
+            bar made a 5-minute zone's 288 bars ~1,400px wide, and phones zoomed the whole
+            page out to fit it. Past 60 bars the gaps go too, or they'd be all that's left. */}
+        <div className={cn('flex items-end h-24 min-w-0', dayCaptures.length > 60 ? 'gap-0' : 'gap-[2px]')}>
           {dayCaptures.map((c) => {
             const jam = c.jamFactorAvg ?? 0
             const active = c.id === selectedId
@@ -122,7 +125,7 @@ export function CaptureDay({
                 aria-label={`Show the ${wibClock(c.capturedAt)} capture`}
                 aria-pressed={active}
                 className={cn(
-                  'flex-1 min-w-[3px] rounded-t-xs transition-opacity',
+                  'flex-1 min-w-0 rounded-t-xs transition-opacity',
                   active ? 'opacity-100' : 'opacity-45 hover:opacity-80',
                 )}
                 style={{

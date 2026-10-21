@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Logo } from '@/components/ui/Logo'
 import { buttonClass } from '@/components/ui/Button'
 import { IconMenu, IconX } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
+import { useMobileNav } from './MobileNav'
 
 /**
  * Only sections that exist on the landing page (FE-36). Docs, Support and a language
@@ -19,14 +19,8 @@ const NAV = [
 
 /** Logged-out header (4a/4b/4c). `minimal` drops the nav for the auth pages. */
 export function PublicHeader({ minimal, trailing }: { minimal?: boolean; trailing?: React.ReactNode }) {
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open])
+  // Same rules as the app headers: Escape, a tap outside, or a page change closes it.
+  const { open, toggle, close } = useMobileNav()
 
   const linkClass = 'text-body text-text-secondary no-underline hover:text-text-primary transition-colors'
 
@@ -64,7 +58,8 @@ export function PublicHeader({ minimal, trailing }: { minimal?: boolean; trailin
               aria-expanded={open}
               aria-controls="public-menu"
               aria-label={open ? 'Close menu' : 'Open menu'}
-              onClick={() => setOpen((o) => !o)}
+              data-mobile-nav
+              onClick={toggle}
               className="laptop:hidden inline-flex items-center justify-center w-11 h-11 rounded-md text-text-primary hover:bg-canvas-secondary focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               {open ? <IconX size={20} /> : <IconMenu size={20} />}
@@ -74,13 +69,13 @@ export function PublicHeader({ minimal, trailing }: { minimal?: boolean; trailin
       </div>
 
       {!minimal && !trailing && open && (
-        <nav id="public-menu" aria-label="Main" className="laptop:hidden border-t border-border bg-canvas px-lg pb-lg">
+        <nav id="public-menu" aria-label="Main" data-mobile-nav className="laptop:hidden border-t border-border bg-canvas px-lg pb-lg">
           <ul className="flex flex-col">
             {NAV.map((item) => (
               <li key={item.href}>
                 <a
                   href={item.href}
-                  onClick={() => setOpen(false)}
+                  onClick={close}
                   className="flex items-center h-11 text-body text-text-primary no-underline"
                 >
                   {item.label}
@@ -88,12 +83,12 @@ export function PublicHeader({ minimal, trailing }: { minimal?: boolean; trailin
               </li>
             ))}
             <li>
-              <Link href="/login" className="flex items-center h-11 text-body text-text-primary no-underline">
+              <Link href="/login" onClick={close} className="flex items-center h-11 text-body text-text-primary no-underline">
                 Log in
               </Link>
             </li>
           </ul>
-          <Link href="/register" className={cn(buttonClass(), 'w-full mt-sm')}>
+          <Link href="/register" onClick={close} className={cn(buttonClass(), 'w-full mt-sm')}>
             Create free account
           </Link>
         </nav>

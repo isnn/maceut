@@ -386,7 +386,8 @@ export function WindowDialog({
                       touch('days')()
                     }}
                     className={cn(
-                      'w-10 h-10 rounded-md text-label font-semibold transition-colors',
+                      // Seven fixed 40px buttons are wider than a phone's dialog; they share the row instead.
+                      'flex-1 min-w-0 max-w-10 h-10 rounded-md text-label font-semibold transition-colors',
                       days.includes(index)
                         ? 'bg-primary text-on-primary'
                         : 'bg-canvas border border-border text-text-secondary hover:bg-canvas-secondary',

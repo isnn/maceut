@@ -55,7 +55,7 @@ function timeLeft(ms: number): string {
 function Tracker({ steps }: { steps: [Step, Step, Step] }) {
   const labels = ['Order', 'Payment', 'Plan active']
   return (
-    <ol className="flex items-center gap-sm" aria-label="Payment progress">
+    <ol className="flex flex-wrap items-center gap-x-sm gap-y-xs" aria-label="Payment progress">
       {steps.map((step, i) => (
         <li key={labels[i]} className="flex items-center gap-sm min-w-0">
           <span
