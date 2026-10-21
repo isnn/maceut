@@ -14,14 +14,24 @@ export { EmailSendError } from './types'
  * validation has already guaranteed each listed provider has its credential, so the
  * `!` below cannot be reached unset.
  */
-export function createEmailProvider(c: Pick<Config, 'emailProviders' | 'emailFrom' | 'resendApiKey' | 'mailtrapApiToken' | 'mailtrapInboxId'>): EmailProvider {
+export function createEmailProvider(
+  c: Pick<
+    Config,
+    'emailProviders' | 'emailFrom' | 'emailSupport' | 'resendApiKey' | 'mailtrapApiToken' | 'mailtrapInboxId'
+  >,
+): EmailProvider {
   return createFallbackProvider(
     c.emailProviders.map((name) => {
       switch (name) {
         case 'resend':
-          return createResendProvider({ apiKey: c.resendApiKey!, from: c.emailFrom })
+          return createResendProvider({ apiKey: c.resendApiKey!, from: c.emailFrom, replyTo: c.emailSupport })
         case 'mailtrap':
-          return createMailtrapProvider({ apiToken: c.mailtrapApiToken!, from: c.emailFrom, inboxId: c.mailtrapInboxId })
+          return createMailtrapProvider({
+            apiToken: c.mailtrapApiToken!,
+            from: c.emailFrom,
+            replyTo: c.emailSupport,
+            inboxId: c.mailtrapInboxId,
+          })
         case 'console':
           return createConsoleProvider()
       }

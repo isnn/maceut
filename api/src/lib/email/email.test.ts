@@ -49,6 +49,12 @@ describe('resend provider', () => {
     })
   })
 
+  it('sets reply_to to the support address', async () => {
+    const f = fakeFetch(200, { id: 'e1' })
+    await createResendProvider({ apiKey: 'k', from: 'a@b.c', replyTo: 'support@b.c', fetch: f }).send(message)
+    expect(sent(f).body.reply_to).toBe('support@b.c')
+  })
+
   it("throws EmailSendError with Resend's message when refused", async () => {
     const f = fakeFetch(403, { statusCode: 403, message: 'The maceut.id domain is not verified' })
     const send = createResendProvider({ apiKey: 'k', from: 'a@b.c', fetch: f }).send(message)
@@ -82,6 +88,12 @@ describe('mailtrap provider', () => {
       text: '123456',
       category: 'email-verification',
     })
+  })
+
+  it('sets Reply-To to the support address, so replies reach a person', async () => {
+    const f = fakeFetch(200, { success: true })
+    await createMailtrapProvider({ apiToken: 'tok', from: 'a@b.c', replyTo: 'support@b.c', fetch: f }).send(message)
+    expect(sent(f).body.reply_to).toEqual({ email: 'support@b.c' })
   })
 
   it('sends to the sandbox inbox when MAILTRAP_INBOX_ID is set', async () => {
@@ -131,7 +143,7 @@ describe('inline images', () => {
 })
 
 describe('createEmailProvider', () => {
-  const c = { emailFrom: 'a@b.c', resendApiKey: 're', mailtrapApiToken: 'mt', mailtrapInboxId: undefined }
+  const c = { emailFrom: 'a@b.c', emailSupport: 'support@b.c', resendApiKey: 're', mailtrapApiToken: 'mt', mailtrapInboxId: undefined }
   it('builds the single provider config names', () => {
     expect(createEmailProvider({ ...c, emailProviders: ['resend'] }).name).toBe('resend')
     expect(createEmailProvider({ ...c, emailProviders: ['mailtrap'] }).name).toBe('mailtrap')

@@ -43,6 +43,7 @@ export interface InvoiceData {
   method: string | null
   transactionId: string | null
   sellerSite: string
+  supportEmail: string
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
@@ -127,7 +128,7 @@ export function invoiceHtml(d: InvoiceData): string {
 
   <footer>
     ${d.status === 'refunded' ? 'This payment was refunded. ' : 'Paid in full. '}Dates are in WIB (UTC+7).
-    For questions about this invoice, contact us at ${esc(d.sellerSite)} and quote ${esc(d.number)}.
+    For questions about this invoice, email ${esc(d.supportEmail)} and quote ${esc(d.number)}.
   </footer>
 </body></html>`
 }
@@ -155,6 +156,7 @@ export async function invoiceFor(userId: string, orderId: string): Promise<{ fil
     method: payment.paymentType,
     transactionId: payment.transactionId,
     sellerSite: new URL(config.frontendUrl).host,
+    supportEmail: config.emailSupport,
   }
   return { filename: `maceut-invoice-${payment.orderId}.pdf`, data }
 }

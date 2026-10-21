@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('../config/env', () => ({ config: { frontendUrl: 'https://maceut.hokya.dev' } }))
+vi.mock('../config/env', () => ({ config: { frontendUrl: 'https://maceut.hokya.dev', emailSupport: 'support.maceut@hokya.dev' } }))
 vi.mock('../lib/drizzle-client', () => ({ db: {}, pool: {} }))
 vi.mock('../lib/pdf', () => ({ htmlToPdf: vi.fn(async () => Buffer.from('%PDF')) }))
 vi.mock('../repositories/payment.repository', () => ({ findByOrderId: vi.fn() }))
@@ -43,7 +43,7 @@ describe('invoiceFor', () => {
     const { filename, data } = await invoiceFor(USER, 'MCT-u1-1')
 
     expect(filename).toBe('maceut-invoice-MCT-u1-1.pdf')
-    expect(data).toMatchObject({ number: 'MCT-u1-1', amount: 349_000, plan: 'standard', method: 'qris', transactionId: 'trx-9', sellerSite: 'maceut.hokya.dev' })
+    expect(data).toMatchObject({ number: 'MCT-u1-1', amount: 349_000, plan: 'standard', method: 'qris', transactionId: 'trx-9', sellerSite: 'maceut.hokya.dev', supportEmail: 'support.maceut@hokya.dev' })
     // The period is the 30 days that end at period_end — for a renewal, after the old end.
     expect(data.periodStart).toEqual(new Date('2026-11-17T06:12:18Z'))
   })
@@ -74,6 +74,7 @@ describe('invoiceHtml', () => {
     expect(html).toContain('Paid')
     expect(html).toContain('Budi &lt;Admin&gt;')
     expect(html).not.toContain('<Admin>')
+    expect(html).toContain('email support.maceut@hokya.dev and quote MCT-u1-1')
   })
 
   it('marks a refunded payment as refunded', async () => {

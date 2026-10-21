@@ -222,6 +222,11 @@ Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
+[2026-10-21] Email: dua alamat. `EMAIL_FROM` = pengirim no-reply untuk semua email otomatis
+  (OTP, pengingat, pembayaran, broadcast) — dev: `noreply.maceut@hokya.dev`. `EMAIL_SUPPORT` (baru,
+  default `support.maceut@hokya.dev`) = Reply-To setiap email (Mailtrap `reply_to`, Resend `reply_to`)
+  + kontak "Need help?" di footer email + kontak di invoice PDF (sebelumnya hardcode / URL situs).
+
 [2026-10-18] FE-56 fase 5 — perbaikan dari uji sandbox user (masuk PR fase 5).
 - Halaman putih setelah bayar/perpanjang: layout app merender `null` selama /me dimuat dan
   `useCurrentUser` tak punya jalur error — satu /me gagal (sering tepat setelah reload penuh di

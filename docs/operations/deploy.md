@@ -198,6 +198,6 @@ image the same way as migrations: `docker compose run --rm --no-deps --build api
 ## Moving domains
 
 Change `APP_BASE_URL`, `FRONTEND_URL`, `COOKIE_DOMAIN` in `api/.env`, both URLs in
-`web/.env.production`, `WEB_HOST`/`API_HOST` in `.env`, and `EMAIL_FROM` if the sender
+`web/.env.production`, `WEB_HOST`/`API_HOST` in `.env`, and `EMAIL_FROM` / `EMAIL_SUPPORT` if the sender
 domain changes (verify it first); rebuild. Existing sessions end (the cookie belongs to
 the old API host); users log in again. Keep the old hosts redirecting to the new ones.
