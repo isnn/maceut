@@ -8,6 +8,7 @@ import exportRoutes from './export.routes'
 import hereUsageRoutes from './here-usage.routes'
 import notificationRoutes from './notification.routes'
 import geocodeRoutes from './geocode.routes'
+import paymentRoutes from './payment.routes'
 
 // Note: sign-up, sign-in and sign-out are NOT here. Better Auth serves them under
 // /api/auth/* and is mounted directly in app.ts, ahead of the body parser (ADR-009).
@@ -22,5 +23,6 @@ router.use(exportRoutes)
 router.use(hereUsageRoutes)
 router.use(notificationRoutes)
 router.use(geocodeRoutes)
+router.use(paymentRoutes)
 
 export default router
