@@ -9,7 +9,7 @@ vi.mock('../config/env', () => ({
   isMidtransConfigured: () => Boolean(cfg.midtransServerKey),
 }))
 
-import { amountMatches, createSnapTransaction, getStatus, hosts, outcomeOf, verifySignature } from './midtrans-client'
+import { amountMatches, cancelTransaction, createSnapTransaction, getStatus, hosts, outcomeOf, subscriptionTime, verifySignature } from './midtrans-client'
 import { PaymentProviderError, PaymentsNotConfiguredError } from '../errors'
 
 const fetchMock = vi.fn()
@@ -85,6 +85,13 @@ describe('amountMatches', () => {
   })
 })
 
+describe('subscriptionTime', () => {
+  it('writes the Subscription API format in WIB', () => {
+    expect(subscriptionTime(new Date('2026-11-20T03:04:05Z'))).toBe('2026-11-20 10:04:05 +0700')
+    expect(subscriptionTime(new Date('2026-12-31T18:00:00Z'))).toBe('2027-01-01 01:00:00 +0700')
+  })
+})
+
 describe('hosts', () => {
   it('keeps Snap (app.*) and Core (api.*) apart, sandbox unless production', () => {
     expect(hosts(false)).toEqual({ snap: 'https://app.sandbox.midtrans.com', core: 'https://api.sandbox.midtrans.com' })
@@ -152,5 +159,29 @@ describe('getStatus', () => {
     await expect(getStatus('MCT-1')).rejects.toBeInstanceOf(PaymentProviderError)
     fetchMock.mockResolvedValueOnce(json(200, { status_code: '401' }))
     await expect(getStatus('MCT-1')).rejects.toBeInstanceOf(PaymentProviderError)
+  })
+})
+
+describe('cancelTransaction', () => {
+  it('posts to the Core cancel endpoint', async () => {
+    fetchMock.mockResolvedValue(json(200, { status_code: '200', transaction_status: 'cancel' }))
+    expect(await cancelTransaction('MCT-1')).toBe('cancelled')
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(url).toBe('https://api.sandbox.midtrans.com/v2/MCT-1/cancel')
+    expect(init.method).toBe('POST')
+  })
+
+  it('reads the answer from the body status_code, as Core API reports it', async () => {
+    fetchMock.mockResolvedValueOnce(json(200, { status_code: '412' }))
+    expect(await cancelTransaction('MCT-1')).toBe('not_cancellable')
+    fetchMock.mockResolvedValueOnce(json(404, { status_code: '404' }))
+    expect(await cancelTransaction('MCT-1')).toBe('no_transaction')
+  })
+
+  it('throws on anything else', async () => {
+    fetchMock.mockResolvedValueOnce(json(500, {}))
+    await expect(cancelTransaction('MCT-1')).rejects.toBeInstanceOf(PaymentProviderError)
+    fetchMock.mockRejectedValueOnce(new Error('ECONNRESET'))
+    await expect(cancelTransaction('MCT-1')).rejects.toBeInstanceOf(PaymentProviderError)
   })
 })

@@ -160,15 +160,24 @@ describe('changeOwnPlan — self-serve upgrades are closed until billing', () =>
 
     await changeOwnPlan(USER, 'free')
 
-    expect(userRepo.setPlan).toHaveBeenCalledWith(USER, 'free')
+    expect(userRepo.setPlan).toHaveBeenCalledWith(USER, 'free', { expiresAt: null })
   })
 
-  it('allows staying on the same plan', async () => {
-    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(row({ plan: 'standard' }))
+  it('staying on the same plan changes nothing — it must not wipe a paid end date (FE-56)', async () => {
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(row({ plan: 'standard', planExpiresAt: new Date(Date.now() + 86_400_000) }))
 
     await changeOwnPlan(USER, 'standard')
 
-    expect(userRepo.setPlan).toHaveBeenCalledWith(USER, 'standard')
+    expect(userRepo.setPlan).not.toHaveBeenCalled()
+  })
+
+  it('moving down within a paid period keeps its end date: a month of Premium is not Starter forever', async () => {
+    const end = new Date(Date.now() + 10 * 86_400_000)
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(row({ plan: 'premium', planExpiresAt: end }))
+
+    await changeOwnPlan(USER, 'starter')
+
+    expect(userRepo.setPlan).toHaveBeenCalledWith(USER, 'starter', { expiresAt: end })
   })
 
   it('still lets staff grant a paid plan', async () => {

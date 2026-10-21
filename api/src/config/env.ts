@@ -190,6 +190,12 @@ const schema = z.object({
   MIDTRANS_MERCHANT_ID: optionalStr,
   /** false = sandbox hosts. Must match the key: a sandbox key on production hosts is a 401. */
   MIDTRANS_IS_PRODUCTION: boolFromEnv(false),
+  /**
+   * FE-56 phase 5: the Auto-renew switch (card + Midtrans Subscription API). Off until
+   * recurring card payments are activated on the Midtrans account and the dashboard's
+   * Recurring Notification URL points at /payments/midtrans/notification.
+   */
+  MIDTRANS_AUTO_RENEW_ENABLED: boolFromEnv(false),
 }).superRefine((e, ctx) => {
   // Unlike R2 and HERE (rule 2), a chosen email provider without its credential fails
   // at boot: sign-up is blocked until the address is verified, so a provider that can't
@@ -315,6 +321,7 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
     midtransServerKey: e.MIDTRANS_SERVER_KEY,
     midtransMerchantId: e.MIDTRANS_MERCHANT_ID,
     midtransIsProduction: e.MIDTRANS_IS_PRODUCTION,
+    midtransAutoRenewEnabled: e.MIDTRANS_AUTO_RENEW_ENABLED,
   }
 }
 

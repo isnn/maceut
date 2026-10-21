@@ -6,7 +6,13 @@ import type { Plan } from '../types/plan'
 /** The only statuses a payment can leave. Everything else is final. */
 const OPEN: PaymentStatus[] = ['creating', 'pending']
 
-export async function create(input: { userId: string; orderId: string; plan: Plan; amount: number }): Promise<PaymentRow> {
+export async function create(input: {
+  userId: string
+  orderId: string
+  plan: Plan
+  amount: number
+  autoRenewSetup?: boolean
+}): Promise<PaymentRow> {
   const [row] = await db.insert(payments).values({ ...input, status: 'creating' }).returning()
   return row!
 }
@@ -17,11 +23,24 @@ export async function findByOrderId(orderId: string): Promise<PaymentRow | undef
 }
 
 /** The account's newest `pending` payment for `plan` created after `since`, to reopen instead of starting another. */
-export async function findPendingSince(userId: string, plan: Plan, since: Date): Promise<PaymentRow | undefined> {
+export async function findPendingSince(
+  userId: string,
+  plan: Plan,
+  since: Date,
+  autoRenewSetup = false,
+): Promise<PaymentRow | undefined> {
   const [row] = await db
     .select()
     .from(payments)
-    .where(and(eq(payments.userId, userId), eq(payments.plan, plan), eq(payments.status, 'pending'), gt(payments.createdAt, since)))
+    .where(
+      and(
+        eq(payments.userId, userId),
+        eq(payments.plan, plan),
+        eq(payments.status, 'pending'),
+        eq(payments.autoRenewSetup, autoRenewSetup),
+        gt(payments.createdAt, since),
+      ),
+    )
     .orderBy(desc(payments.createdAt))
     .limit(1)
   return row
@@ -95,6 +114,28 @@ export async function noteProviderStatus(orderId: string, fields: ProviderFields
 /** The period end of an activated payment, written once the plan is moved. */
 export async function setPeriodEnd(id: string, periodEnd: Date): Promise<void> {
   await db.update(payments).set({ periodEnd, updatedAt: new Date() }).where(eq(payments.id, id))
+}
+
+/**
+ * One charge a Midtrans Subscription made, recorded as paid. Keyed by Midtrans' own
+ * order_id for that charge, so a repeated notification inserts nothing and returns
+ * `undefined` — exactly one caller extends the plan.
+ */
+export async function insertSubscriptionCharge(input: {
+  userId: string
+  orderId: string
+  plan: Plan
+  amount: number
+  subscriptionId: string
+  paidAt: Date
+  periodEnd: Date
+} & ProviderFields): Promise<PaymentRow | undefined> {
+  const [row] = await db
+    .insert(payments)
+    .values({ ...input, status: 'paid' })
+    .onConflictDoNothing({ target: payments.orderId })
+    .returning()
+  return row
 }
 
 /** Newest first, for the account's billing history. */

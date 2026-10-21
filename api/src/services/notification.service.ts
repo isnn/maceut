@@ -419,6 +419,34 @@ export async function onPaymentFailed(
   )
 }
 
+/**
+ * FE-56 auto-renew: a card charge was declined, or the subscription gave up after its
+ * retries (`stopped`). Bell + email — it is about money and the plan running out.
+ */
+export async function onAutoRenewFailed(
+  userId: string,
+  p: { plan: Plan; stopped: boolean; dedupe: string },
+): Promise<void> {
+  await write(
+    {
+      userId,
+      type: 'auto_renew_failed',
+      tone: 'warning',
+      title: p.stopped ? `Auto-renew for ${PLAN_NAME[p.plan]} stopped` : `Card payment for ${PLAN_NAME[p.plan]} failed`,
+      body: p.stopped
+        ? 'Midtrans couldn’t charge your card, so auto-renew is off. Renew from your profile to keep the plan.'
+        : 'Midtrans will try your card again tomorrow. To avoid a gap, renew from your profile with another method.',
+      actionLabel: 'Renew',
+      actionHref: '/profile',
+      data: { plan: p.plan, stopped: p.stopped },
+      dedupeKey: `auto-renew-failed:${p.dedupe}`,
+      emailStatus: 'pending',
+      emailDueAt: new Date(),
+    },
+    'auto_renew_failed',
+  )
+}
+
 /** How far ahead the renewal reminder goes out. */
 export const PLAN_REMINDER_DAYS = 3
 
@@ -598,7 +626,8 @@ export async function runEmailSweep(now: Date = new Date()): Promise<EmailSweepR
 
       // Account notices, sent regardless of preferences: staff-made plan changes, and
       // a paid period about to end / ended (FE-56).
-      for (const row of rows.filter((r) => r.type === 'plan_changed' || r.type === 'plan_expiring' || r.type === 'plan_expired')) {
+      const ACCOUNT_NOTICES = ['plan_changed', 'plan_expiring', 'plan_expired', 'auto_renew_failed']
+      for (const row of rows.filter((r) => ACCOUNT_NOTICES.includes(r.type))) {
         const ok = await sendLogged(planChangedEmail(account.email, { title: row.title, body: row.body }), 'plan-changed')
         if (ok) {
           await notificationRepo.markEmailSent([row.id], now)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -16,7 +16,7 @@ import { forgetIntendedPlan, planFromUrl } from '@/features/marketing/intended-p
 import { cn, formatDate, formatNumber } from '@/lib/utils'
 import { IconCheck } from '@/components/ui/icons'
 import { PLAN_LABEL, PLAN_LIMITS, PLAN_ORDER, PLAN_PRICE, ROAD_CLASS_LABEL } from '@/lib/constants'
-import { useCurrentUser } from '@/features/auth/hooks/useAuth'
+import { refreshCurrentUser, useCurrentUser } from '@/features/auth/hooks/useAuth'
 import * as authApi from '@/features/auth/api'
 import * as dashboardApi from '@/features/dashboard/api'
 import type { UsageSummary } from '@/features/dashboard/api'
@@ -28,8 +28,11 @@ import { NotificationSettings } from '@/features/notifications/NotificationSetti
 import * as billingApi from '@/features/billing/api'
 import { formatRupiah, paymentTypeLabel, type Payment, type PaymentStatus, type Prices } from '@/features/billing/api'
 import { usePayPlan } from '@/features/billing/usePayPlan'
-import { PaymentBanner } from '@/features/billing/PaymentBanner'
+import { PaymentProgress } from '@/features/billing/PaymentProgress'
+import { CheckoutDialog } from '@/features/billing/CheckoutDialog'
+import { AutoRenewCard } from '@/features/billing/AutoRenewCard'
 
+const DAY_MS = 86_400_000
 const PAYMENT_STATUS: Record<PaymentStatus, { label: string; tone: PillTone }> = {
   creating: { label: 'Starting', tone: 'neutral' },
   pending: { label: 'Waiting', tone: 'warning' },
@@ -40,7 +43,7 @@ const PAYMENT_STATUS: Record<PaymentStatus, { label: string; tone: PillTone }> =
   refunded: { label: 'Refunded', tone: 'info' },
 }
 
-const ALL_TABS = ['Usage', 'Account', 'Billing', 'Notifications'] as const
+const ALL_TABS = ['Usage', 'Account', 'Payment & billing', 'Notifications'] as const
 type Tab = (typeof ALL_TABS)[number]
 
 /**
@@ -87,7 +90,6 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
   }, [variant])
 
   // FE-56: paying for a plan with Midtrans Snap.
-  const payment = usePayPlan()
   const [prices, setPrices] = useState<Prices | null>(null)
   const [openPayment, setOpenPayment] = useState<Payment | null>(null)
   const [payments, setPayments] = useState<Payment[] | null>(null)
@@ -97,6 +99,37 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
     billingApi.getPending().then(setOpenPayment).catch(() => setOpenPayment(null))
     billingApi.getHistory().then(setPayments).catch(() => setPayments([]))
   }, [variant])
+
+  /**
+   * After a payment or plan change: re-read the account, usage and payments in place,
+   * so the header, limits and Billing tab update without a full reload.
+   */
+  const refresh = useCallback(() => {
+    refreshCurrentUser()
+    dashboardApi.getUsage().then(setUsage).catch(() => undefined)
+    billingApi.getPending().then(setOpenPayment).catch(() => undefined)
+    billingApi.getHistory().then(setPayments).catch(() => undefined)
+  }, [])
+  const payment = usePayPlan(refresh)
+  /** The plan in the "Confirm your order" step, before Snap opens. */
+  const [checkout, setCheckout] = useState<{ plan: Plan; at: number } | null>(null)
+  const startCheckout = (plan: Plan) => setCheckout({ plan, at: Date.now() })
+  /** When the page opened: enough to tell whether Renew is past the 6-month cap. */
+  const [openedAt] = useState(() => Date.now())
+  const [invoiceBusy, setInvoiceBusy] = useState<string | null>(null)
+  const [invoiceError, setInvoiceError] = useState<string | null>(null)
+
+  async function saveInvoice(orderId: string) {
+    setInvoiceBusy(orderId)
+    setInvoiceError(null)
+    try {
+      await billingApi.downloadInvoice(orderId)
+    } catch (err) {
+      setInvoiceError(err instanceof ApiError ? err.message : 'Couldn’t download the invoice. Please try again.')
+    } finally {
+      setInvoiceBusy(null)
+    }
+  }
 
   // Back from Midtrans' hosted page (finish redirect): one status check, then a clean URL.
   const { confirm } = payment
@@ -136,8 +169,10 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
     setPlanError(null)
     try {
       await authApi.updatePlan(plan)
-      // Reload so the header, limits and quota readouts all pick up the new plan.
-      window.location.reload()
+      // The header, limits and quota readouts all pick up the new plan.
+      setConfirming(null)
+      setPendingPlan(null)
+      refresh()
     } catch (err) {
       setPlanError(err instanceof ApiError ? err.message : 'Could not change the plan. Please try again.')
       setPendingPlan(null)
@@ -152,10 +187,20 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
   const payEnabled = prices?.enabled === true
   /** A paid period with an end date can be renewed; a plan staff set has none. */
   const renewable = payEnabled && currentPlan !== 'free' && Boolean(user.planExpiresAt)
+  /** Renewals stop at 6 months paid ahead; the date Renew opens again, if it's closed now. */
+  const renewOpensAt = (() => {
+    if (!renewable || !prices?.maxAheadDays) return null
+    const end = new Date(user.planExpiresAt!).getTime()
+    const opens = end - (prices.maxAheadDays - prices.periodDays) * DAY_MS
+    return opens > openedAt ? new Date(opens) : null
+  })()
+  const canRenew = renewable && renewOpensAt === null
   const isHigher = (plan: Plan) => PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(currentPlan)
   const priceOf = (plan: Plan) => formatRupiah(prices?.prices[plan] ?? 0)
   const activeUntil = user.planExpiresAt ? formatDate(user.planExpiresAt) : null
   const busy = payment.state.kind === 'starting' || payment.state.kind === 'confirming'
+  const lastPaid = payments?.find((p) => p.status === 'paid') ?? null
+  const waitingPayment = payment.state.kind === 'waiting' ? payment.state.payment : openPayment
 
   return (
     <div className="space-y-lg">
@@ -192,11 +237,17 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
       </div>
 
       {variant === 'tenant' && (
-        <PaymentBanner
+        <PaymentProgress
           state={payment.state}
           open={openPayment}
           onResume={payment.resume}
+          onCheck={(p) => void payment.confirm(p.orderId, p.plan)}
+          onInvoice={(orderId) => void saveInvoice(orderId)}
           onRetry={(plan) => void payment.pay(plan)}
+          onChangeMethod={(p) => {
+            setOpenPayment(null)
+            void payment.changeMethod(p)
+          }}
           onDismiss={payment.reset}
         />
       )}
@@ -212,7 +263,6 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                   label="Captures this month"
                   value={usage.pool.used}
                   max={usage.pool.limit}
-                  note={`${formatNumber(usage.pool.remaining)} left`}
                   sub={`Resets ${poolResetDay(usage.pool)}, 00:00 WIB`}
                 />
                 <UsageMeter
@@ -224,7 +274,7 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                       ? `More than the ${formatNumber(usage.pool.remaining)} left before ${poolResetDay(usage.pool)}: captures past that are skipped`
                       : poolOutlook(usage.framesPerMonth, usage.pool).kind === 'over_plan'
                         ? `More than your plan’s ${formatNumber(usage.pool.limit)} a month: captures past that are skipped`
-                        : 'Your active windows in an average month'
+                        : undefined
                   }
                 />
                 <UsageMeter label="Active windows" value={usage.schedulesActiveCount} max={usage.schedulesLimit} />
@@ -256,9 +306,19 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                 Change plan
               </Button>
               {renewable && (
-                <Button variant="secondary" className="w-full mt-sm" onClick={() => void payment.pay(usage.plan)} disabled={busy}>
+                <Button
+                  variant="secondary"
+                  className="w-full mt-sm"
+                  onClick={() => startCheckout(usage.plan)}
+                  disabled={busy || !canRenew}
+                >
                   Renew {limitsPeriod(prices)} · {priceOf(usage.plan)}
                 </Button>
+              )}
+              {renewOpensAt && (
+                <p className="text-caption text-text-muted mt-xs">
+                  Paid up to 6 months ahead. You can renew again from {formatDate(renewOpensAt)}.
+                </p>
               )}
               {planError && !confirming && <p className="text-caption text-danger-text mt-sm">{planError}</p>}
             </Card>
@@ -280,7 +340,7 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
         </div>
       )}
 
-      {tab === 'Billing' && usage && (
+      {tab === 'Payment & billing' && usage && (
         <div className="grid grid-cols-1 laptop:grid-cols-[1fr_320px] gap-xl items-start">
           <Card className="p-lg space-y-md">
             <h2 className="text-heading-sm text-text-primary">Billing history</h2>
@@ -294,12 +354,13 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                     <Th className="text-right">Amount</Th>
                     <Th>Method</Th>
                     <Th>Status</Th>
+                    <Th className="text-right">Invoice</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {!payments || payments.length === 0 ? (
                     <tr>
-                      <Td colSpan={5} className="text-center text-text-muted py-xl">
+                      <Td colSpan={6} className="text-center text-text-muted py-xl">
                         {payments === null ? 'Loading…' : 'No payments yet'}
                       </Td>
                     </tr>
@@ -316,12 +377,28 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                         <Td>
                           <StatusPill tone={PAYMENT_STATUS[p.status].tone}>{PAYMENT_STATUS[p.status].label}</StatusPill>
                         </Td>
+                        <Td className="text-right">
+                          {p.status === 'paid' || p.status === 'refunded' ? (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void saveInvoice(p.orderId)}
+                              disabled={invoiceBusy !== null}
+                              aria-label={`Download invoice ${p.orderId}`}
+                            >
+                              {invoiceBusy === p.orderId ? 'Preparing…' : 'Download'}
+                            </Button>
+                          ) : (
+                            <span className="text-text-muted">—</span>
+                          )}
+                        </Td>
                       </tr>
                     ))
                   )}
                 </tbody>
               </Table>
             </TableWrap>
+            {invoiceError && <p className="text-caption text-danger-text">{invoiceError}</p>}
           </Card>
 
           <div className="space-y-lg">
@@ -341,10 +418,50 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
 
             <Card className="p-lg space-y-md">
               <h2 className="text-heading-sm text-text-primary">Payment method</h2>
-              <p className="text-body text-text-muted">
-                {payEnabled ? 'Chosen at each payment: QRIS, bank transfer, e-wallet or card.' : 'No card on file'}
-              </p>
+              {!payEnabled ? (
+                <p className="text-body text-text-muted">No card on file</p>
+              ) : (
+                <>
+                  <p className="text-body text-text-secondary">
+                    You choose the method each time you pay: QRIS, bank transfer, e-wallet or card.
+                  </p>
+                  {lastPaid?.paymentType && (
+                    <AttributeRow label="Last paid with" value={paymentTypeLabel(lastPaid.paymentType)} />
+                  )}
+                  {waitingPayment && (
+                    <div className="space-y-sm">
+                      <p className="text-caption text-text-muted">
+                        Waiting for {formatRupiah(waitingPayment.amount)}
+                        {waitingPayment.paymentType ? ` by ${paymentTypeLabel(waitingPayment.paymentType)}` : ''}.
+                      </p>
+                      <Button
+                        variant="secondary"
+                        className="w-full"
+                        disabled={busy}
+                        onClick={() => {
+                          setOpenPayment(null)
+                          void payment.changeMethod(waitingPayment)
+                        }}
+                      >
+                        Change payment method
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
             </Card>
+
+            {prices?.autoRenewAvailable && usage.plan !== 'free' && (user.autoRenew || renewable) && (
+              <AutoRenewCard
+                plan={usage.plan}
+                on={user.autoRenew === true}
+                periodEnd={user.planExpiresAt ?? null}
+                price={priceOf(usage.plan)}
+                busy={busy}
+                onEnable={() => void payment.pay(usage.plan, { autoRenew: true })}
+                onChanged={refresh}
+              />
+            )}
 
             <Card className="p-lg space-y-md">
               <h2 className="text-heading-sm text-text-primary">Billing contact</h2>
@@ -398,18 +515,20 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                   onSelect={(plan) => {
                     setPickerOpen(false)
                     // Up, or renewing a paid period: Midtrans. Down: the existing preview-and-confirm.
-                    if (isHigher(plan) || plan === usage.plan) void payment.pay(plan)
+                    if (isHigher(plan) || plan === usage.plan) startCheckout(plan)
                     else changePlan(plan)
                   }}
                   pendingPlan={pendingPlan ?? (payment.state.kind === 'starting' ? payment.state.plan : null)}
                   // Without payments configured, upgrades are still arranged with the team.
                   disabledPlan={(plan) => isHigher(plan) && !payEnabled}
-                  reselectable={renewable}
+                  reselectable={canRenew}
                   actionLabel={(plan) =>
                     plan === usage.plan
-                      ? renewable
+                      ? canRenew
                         ? `Renew · ${priceOf(plan)}`
-                        : 'Current plan'
+                        : renewOpensAt
+                          ? 'Paid 6 months ahead'
+                          : 'Current plan'
                       : isHigher(plan)
                         ? payEnabled
                           ? `Upgrade · ${priceOf(plan)}`
@@ -423,6 +542,21 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
               </Dialog.Popup>
             </Dialog.Portal>
           </Dialog.Root>
+
+          <CheckoutDialog
+            open={checkout !== null}
+            plan={checkout?.plan ?? null}
+            openedAt={checkout?.at ?? 0}
+            currentPlan={usage.plan}
+            currentEnd={user.planExpiresAt ?? null}
+            price={checkout ? (prices?.prices[checkout.plan] ?? 0) : 0}
+            periodDays={prices?.periodDays ?? 30}
+            onConfirm={(plan) => {
+              setCheckout(null)
+              void payment.pay(plan)
+            }}
+            onCancel={() => setCheckout(null)}
+          />
 
           <PlanChangeDialog
             open={confirming !== null}

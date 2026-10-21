@@ -21,8 +21,12 @@ export interface Payment {
 export interface Prices {
   /** False until the server has a Midtrans key: the page keeps "Contact us to upgrade". */
   enabled: boolean
+  /** The Auto-renew switch is offered (card + Midtrans Subscription; off on the server by default). */
+  autoRenewAvailable: boolean
   prices: Record<Plan, number>
   periodDays: number
+  /** A renewal may not end later than this many days from now (six periods). */
+  maxAheadDays?: number
 }
 
 export interface Checkout {
@@ -40,6 +44,30 @@ export const checkout = (plan: Plan) => apiClient.post<Checkout>('/payments/chec
 export const getPayment = (orderId: string) => apiClient.get<Payment>(`/payments/${encodeURIComponent(orderId)}`)
 export const getPending = () => apiClient.get<Payment | null>('/payments/pending')
 export const getHistory = () => apiClient.get<Payment[]>('/payments/history')
+/** Card-only checkout that saves the card; once paid, Midtrans renews monthly. */
+export const enableAutoRenew = (plan: Plan) => apiClient.post<Checkout>('/payments/auto-renew', { plan })
+/**
+ * "Change payment method" on an open payment. `checkout` is the Snap page to open — the
+ * same one when no method was picked yet, otherwise a new order (the old method is
+ * cancelled at Midtrans first). Null when the payment had already finished.
+ */
+export const changeMethod = (orderId: string) =>
+  apiClient.post<{ payment: Payment; checkout: Checkout | null }>(`/payments/${encodeURIComponent(orderId)}/change-method`)
+
+/** Saves the PDF invoice of a paid payment. */
+export async function downloadInvoice(orderId: string): Promise<void> {
+  const { blob, filename } = await apiClient.download(`/payments/${encodeURIComponent(orderId)}/invoice`)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename ?? `maceut-invoice-${orderId}.pdf`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+export const disableAutoRenew = () => apiClient.delete<{ autoRenew: false }>('/payments/auto-renew')
 
 /** "Rp 99,000" — the same separator convention as formatNumber. */
 export function formatRupiah(amount: number): string {

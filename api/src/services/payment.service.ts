@@ -24,8 +24,9 @@ import * as userRepo from '../repositories/user.repository'
 import * as planChangeRepo from '../repositories/plan-change.repository'
 import * as planService from './plan.service'
 import * as notificationService from './notification.service'
+import * as autoRenew from './auto-renew.service'
 import { accessOf } from '../lib/internal-access'
-import { PAID_PERIOD_DAYS, PLAN_PRICE_IDR, PLANS, planRank, type Plan } from '../types/plan'
+import { MAX_PAID_AHEAD_DAYS, PAID_PERIOD_DAYS, PLAN_PRICE_IDR, PLANS, planRank, type Plan } from '../types/plan'
 import type { PaymentRow } from '../../drizzle/schema'
 
 const DAY_MS = 86_400_000
@@ -34,6 +35,8 @@ export const PAYMENT_WINDOW_HOURS = 24
 /** Reopen an existing pending payment only while it is comfortably inside that window. */
 const REUSE_WITHIN_MS = (PAYMENT_WINDOW_HOURS - 1) * 60 * 60 * 1000
 
+const wibDate = (d: Date) =>
+  new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' }).format(d)
 const PLAN_NAME: Record<Plan, string> = { free: 'Free', starter: 'Starter', standard: 'Standard', premium: 'Premium' }
 
 export interface PaymentView {
@@ -67,8 +70,20 @@ export function toView(row: PaymentRow): PaymentView {
 }
 
 /** What the Profile page needs to label its buttons. */
-export function prices(): { enabled: boolean; prices: Record<Plan, number>; periodDays: number } {
-  return { enabled: isMidtransConfigured(), prices: { ...PLAN_PRICE_IDR }, periodDays: PAID_PERIOD_DAYS }
+export function prices(): {
+  enabled: boolean
+  autoRenewAvailable: boolean
+  prices: Record<Plan, number>
+  periodDays: number
+  maxAheadDays: number
+} {
+  return {
+    enabled: isMidtransConfigured(),
+    autoRenewAvailable: autoRenew.isAutoRenewEnabled(),
+    prices: { ...PLAN_PRICE_IDR },
+    periodDays: PAID_PERIOD_DAYS,
+    maxAheadDays: MAX_PAID_AHEAD_DAYS,
+  }
 }
 
 /** Midtrans allows 50 characters of letters, digits, `-`, `_`, `~` and `.`. */
@@ -87,8 +102,19 @@ export interface CheckoutResult {
   reused: boolean
 }
 
-export async function checkout(userId: string, plan: Plan, now: Date = new Date()): Promise<CheckoutResult> {
+/**
+ * `autoRenewSetup` (phase 5): the same payment, card only and with the card saved, so a
+ * Midtrans Subscription can renew the plan afterwards.
+ */
+export async function checkout(
+  userId: string,
+  plan: Plan,
+  now: Date = new Date(),
+  opts: { autoRenewSetup?: boolean } = {},
+): Promise<CheckoutResult> {
   if (!isMidtransConfigured()) throw new PaymentsNotConfiguredError()
+  const setup = opts.autoRenewSetup === true
+  if (setup && !autoRenew.isAutoRenewEnabled()) throw new NotFoundError('Auto-renew')
   if (!PLANS.includes(plan) || plan === 'free') throw new ValidationError('Choose a paid plan.')
 
   const account = await userRepo.findByIdWithPlan(userId)
@@ -98,14 +124,21 @@ export async function checkout(userId: string, plan: Plan, now: Date = new Date(
   if (planRank(plan) < planRank(account.plan)) {
     throw new ValidationError(`To move down to ${PLAN_NAME[plan]}, use Change plan — there is nothing to pay.`)
   }
+  if (setup && account.autoRenew) throw new ValidationError('Auto-renew is already on.')
   if (plan === account.plan) {
     // A renewal only makes sense for a paid period. A plan staff set has no end date,
     // and paying would turn it into one that runs out in 30 days.
     const planRow = await userRepo.findPlanRow(userId)
     if (!planRow?.expiresAt) throw new ValidationError(`Your ${PLAN_NAME[plan]} plan has no end date, so there is nothing to renew.`)
+    // At most six months paid ahead: the renewal would end past now + 180 days.
+    const latestStart = now.getTime() + (MAX_PAID_AHEAD_DAYS - PAID_PERIOD_DAYS) * DAY_MS
+    if (planRow.expiresAt.getTime() > latestStart) {
+      const opensAt = new Date(planRow.expiresAt.getTime() - (MAX_PAID_AHEAD_DAYS - PAID_PERIOD_DAYS) * DAY_MS)
+      throw new ValidationError(`You can pay up to 6 months ahead. You can renew again from ${wibDate(opensAt)}.`)
+    }
   }
 
-  const open = await paymentRepo.findPendingSince(userId, plan, new Date(now.getTime() - REUSE_WITHIN_MS))
+  const open = await paymentRepo.findPendingSince(userId, plan, new Date(now.getTime() - REUSE_WITHIN_MS), setup)
   if (open?.snapToken && open.redirectUrl) {
     return { orderId: open.orderId, token: open.snapToken, redirectUrl: open.redirectUrl, amount: open.amount, plan, reused: true }
   }
@@ -113,7 +146,7 @@ export async function checkout(userId: string, plan: Plan, now: Date = new Date(
   const amount = PLAN_PRICE_IDR[plan]
   const orderId = newOrderId(userId, now)
   // Recorded before Midtrans is called: if the call fails, the row still says so.
-  await paymentRepo.create({ userId, orderId, plan, amount })
+  await paymentRepo.create({ userId, orderId, plan, amount, autoRenewSetup: setup })
 
   let snap: midtrans.SnapTransaction
   try {
@@ -122,8 +155,11 @@ export async function checkout(userId: string, plan: Plan, now: Date = new Date(
       item_details: [{ id: plan, price: amount, quantity: 1, name: `Maceut ${PLAN_NAME[plan]}, ${PAID_PERIOD_DAYS} days` }],
       customer_details: { first_name: account.name || undefined, email: account.email },
       // No enabled_payments: Snap offers every method active in the dashboard's Snap
-      // Preference. Cards always go through 3-D Secure.
-      credit_card: { secure: true },
+      // Preference. Cards always go through 3-D Secure. Auto-renew setup is card only,
+      // with the card saved (Snap needs user_id for that) for the Subscription.
+      ...(setup
+        ? { enabled_payments: ['credit_card'], credit_card: { secure: true, save_card: true }, user_id: userId }
+        : { credit_card: { secure: true } }),
       expiry: { duration: PAYMENT_WINDOW_HOURS, unit: 'hours' },
       callbacks: { finish: `${config.frontendUrl}/profile?payment=${encodeURIComponent(orderId)}` },
     })
@@ -181,6 +217,63 @@ export async function sync(userId: string, orderId: string, now: Date = new Date
   const status = await midtrans.getStatus(orderId)
   if (status) await apply(payment, status, now)
   return toView((await paymentRepo.findByOrderId(orderId)) ?? payment)
+}
+
+export interface ChangeMethodResult {
+  /** Where the payment stands now. */
+  payment: PaymentView
+  /** The Snap page to open, or null when the payment had already finished (paid, expired). */
+  checkout: CheckoutResult | null
+}
+
+/**
+ * "Change payment method" on an open payment.
+ *
+ * A Snap order is bound to the first method the customer picks: reopening its token
+ * shows that VA number or QR again. So once a method was picked, the order is cancelled
+ * at Midtrans first — then it can't be paid by the old method — and a new order starts
+ * for the same plan. If no method was picked yet, the same Snap page still lists every
+ * method, so it is simply reopened.
+ */
+export async function changeMethod(userId: string, orderId: string, now: Date = new Date()): Promise<ChangeMethodResult> {
+  if (!isMidtransConfigured()) throw new PaymentsNotConfiguredError()
+  const payment = await paymentRepo.findByOrderId(orderId)
+  if (!payment || payment.userId !== userId) throw new NotFoundError('Payment')
+  if (payment.status !== 'pending' && payment.status !== 'creating') {
+    throw new ValidationError('This payment is no longer open, so there is no method to change.')
+  }
+
+  const status = await midtrans.getStatus(orderId)
+  if (!status && payment.snapToken && payment.redirectUrl) {
+    const reopened: CheckoutResult = {
+      orderId,
+      token: payment.snapToken,
+      redirectUrl: payment.redirectUrl,
+      amount: payment.amount,
+      plan: payment.plan,
+      reused: true,
+    }
+    return { payment: toView(payment), checkout: reopened }
+  }
+  // Already final at Midtrans (paid in the meantime, expired): record it, start nothing.
+  if (status && midtrans.outcomeOf(status.transaction_status, status.fraud_status) !== null) {
+    await apply(payment, status, now)
+    return { payment: toView((await paymentRepo.findByOrderId(orderId)) ?? payment), checkout: null }
+  }
+
+  if (status) {
+    const cancelled = await midtrans.cancelTransaction(orderId)
+    if (cancelled === 'not_cancellable') {
+      const latest = await midtrans.getStatus(orderId)
+      if (latest) await apply(payment, latest, now)
+      return { payment: toView((await paymentRepo.findByOrderId(orderId)) ?? payment), checkout: null }
+    }
+  }
+  // Closed here without the failure bell: the customer asked for this.
+  await paymentRepo.transition(orderId, 'cancelled', { providerStatus: status ? 'cancel' : 'replaced' })
+  console.log(`[payments] ${orderId}: cancelled to change method`)
+  const next = await checkout(userId, payment.plan, now, { autoRenewSetup: payment.autoRenewSetup })
+  return { payment: toView((await paymentRepo.findByOrderId(orderId)) ?? payment), checkout: next }
 }
 
 /** The account's open payment, for "Continue payment". */
@@ -250,6 +343,9 @@ export async function activate(payment: PaymentRow, now: Date = new Date()): Pro
   const base = renewal ? planRow!.expiresAt! : now
   const periodEnd = new Date(base.getTime() + PAID_PERIOD_DAYS * DAY_MS)
 
+  // A different plan replaces whatever auto-renew was renewing.
+  if (from !== payment.plan && account?.autoRenew) await autoRenew.stopQuietly(payment.userId)
+
   await userRepo.setPlan(payment.userId, payment.plan, { expiresAt: periodEnd, keepStartedAt: renewal })
   await paymentRepo.setPeriodEnd(payment.id, periodEnd)
   const impact = await planService.applyPlanChange(payment.userId, payment.plan)
@@ -261,6 +357,7 @@ export async function activate(payment: PaymentRow, now: Date = new Date()): Pro
     periodEnd,
     paused: [...impact.zonesToPause, ...impact.schedulesToPause].map((i) => i.name),
   })
+  if (payment.autoRenewSetup) await autoRenew.startSubscription(payment, periodEnd)
   console.log(`[payments] ${payment.orderId}: ${payment.plan} active until ${periodEnd.toISOString()}`)
   return periodEnd
 }

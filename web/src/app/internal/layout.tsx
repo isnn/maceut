@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { accessOf } from '@/features/auth/types'
 import { PAGE_WIDTH } from '@/components/shared/page-width'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
+import { AccountUnavailable } from '@/components/shared/AccountUnavailable'
 
 /**
  * Gate for the staff area. This is UI gating, not authorization — anyone can
@@ -14,16 +15,17 @@ import { useCurrentUser } from '@/features/auth/hooks/useAuth'
  * middleware once api/ exists, and every /internal endpoint must re-check.
  */
 export default function InternalLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useCurrentUser()
+  const { user, loading, error: accountError, retry } = useCurrentUser()
   const router = useRouter()
   const pathname = usePathname()
 
   useEffect(() => {
-    if (loading) return
+    if (loading || accountError) return
     if (!user) router.replace(`/login?redirect=${encodeURIComponent(pathname)}`)
     else if (user.role !== 'internal') router.replace('/dashboard')
-  }, [loading, user, router, pathname])
+  }, [loading, accountError, user, router, pathname])
 
+  if (accountError) return <AccountUnavailable message={accountError} onRetry={retry} />
   if (loading || !user || user.role !== 'internal') return null
 
   return (

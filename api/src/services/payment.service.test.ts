@@ -10,7 +10,7 @@ vi.mock('../lib/drizzle-client', () => ({ db: {}, pool: {} }))
 vi.mock('../lib/internal-access', () => ({ accessOf: (row: { role?: string }) => (row.role === 'internal' ? 'admin' : 'user') }))
 vi.mock('../lib/midtrans-client', async (importOriginal) => {
   const real = await importOriginal<typeof import('../lib/midtrans-client')>()
-  return { ...real, createSnapTransaction: vi.fn(), getStatus: vi.fn(), verifySignature: vi.fn(() => true) }
+  return { ...real, createSnapTransaction: vi.fn(), getStatus: vi.fn(), cancelTransaction: vi.fn(), verifySignature: vi.fn(() => true) }
 })
 vi.mock('../repositories/payment.repository', () => ({
   create: vi.fn(),
@@ -28,7 +28,7 @@ vi.mock('../repositories/plan-change.repository', () => ({ record: vi.fn() }))
 vi.mock('./plan.service', () => ({ applyPlanChange: vi.fn(async () => ({ zonesToPause: [], schedulesToPause: [] })) }))
 vi.mock('./notification.service', () => ({ onPaymentActivated: vi.fn(), onPaymentFailed: vi.fn() }))
 
-import { activate, checkout, handleNotification, newOrderId, sync } from './payment.service'
+import { activate, changeMethod, checkout, handleNotification, newOrderId, prices, sync } from './payment.service'
 import * as midtrans from '../lib/midtrans-client'
 import * as paymentRepo from '../repositories/payment.repository'
 import * as userRepo from '../repositories/user.repository'
@@ -58,6 +58,8 @@ function payment(over: Partial<PaymentRow> = {}): PaymentRow {
     paymentType: null,
     transactionId: null,
     paidAt: null,
+    autoRenewSetup: false,
+    subscriptionId: null,
     periodEnd: null,
     createdAt: NOW,
     updatedAt: NOW,
@@ -136,6 +138,29 @@ describe('checkout', () => {
     await expect(checkout(USER, 'starter', NOW)).resolves.toMatchObject({ plan: 'starter' })
   })
 
+  it('refuses a renewal that would end more than 6 months from now, before calling Snap', async () => {
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(account('starter'))
+    vi.mocked(userRepo.findPlanRow).mockResolvedValue({ plan: 'starter', expiresAt: new Date(NOW.getTime() + 151 * DAY) } as never)
+    await expect(checkout(USER, 'starter', NOW)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: expect.stringContaining('up to 6 months ahead'),
+    })
+    expect(paymentRepo.create).not.toHaveBeenCalled()
+    expect(midtrans.createSnapTransaction).not.toHaveBeenCalled()
+  })
+
+  it('allows a renewal that ends exactly 6 months from now', async () => {
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(account('starter'))
+    vi.mocked(userRepo.findPlanRow).mockResolvedValue({ plan: 'starter', expiresAt: new Date(NOW.getTime() + 150 * DAY) } as never)
+    await expect(checkout(USER, 'starter', NOW)).resolves.toMatchObject({ plan: 'starter' })
+  })
+
+  it('does not cap an upgrade, whatever is left on the current plan', async () => {
+    vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(account('starter'))
+    vi.mocked(userRepo.findPlanRow).mockResolvedValue({ plan: 'starter', expiresAt: new Date(NOW.getTime() + 170 * DAY) } as never)
+    await expect(checkout(USER, 'standard', NOW)).resolves.toMatchObject({ plan: 'standard' })
+  })
+
   it('refuses to "renew" a plan staff set without an end date', async () => {
     vi.mocked(userRepo.findByIdWithPlan).mockResolvedValue(account('standard'))
     vi.mocked(userRepo.findPlanRow).mockResolvedValue({ plan: 'standard', expiresAt: null } as never)
@@ -165,6 +190,12 @@ describe('checkout', () => {
   it('T9: answers PAYMENTS_NOT_CONFIGURED without a server key', async () => {
     cfg.midtransServerKey = undefined
     await expect(checkout(USER, 'starter', NOW)).rejects.toMatchObject({ code: 'PAYMENTS_NOT_CONFIGURED', statusCode: 503 })
+  })
+})
+
+describe('prices', () => {
+  it('tells the page how far ahead a plan can be paid', () => {
+    expect(prices()).toMatchObject({ periodDays: 30, maxAheadDays: 180 })
   })
 })
 
@@ -333,5 +364,75 @@ describe('activate', () => {
     vi.mocked(userRepo.findPlanRow).mockResolvedValue({ plan: 'starter', expiresAt: new Date(NOW.getTime() - DAY) } as never)
 
     expect(await activate(payment({ status: 'paid' }), NOW)).toEqual(new Date(NOW.getTime() + 30 * DAY))
+  })
+})
+
+describe('changeMethod', () => {
+  it('reopens the same Snap page when no method was picked yet', async () => {
+    vi.mocked(paymentRepo.findByOrderId).mockResolvedValue(payment())
+    vi.mocked(midtrans.getStatus).mockResolvedValue(null)
+
+    const r = await changeMethod(USER, 'MCT-uabc123X-1', NOW)
+
+    expect(r.checkout).toMatchObject({ orderId: 'MCT-uabc123X-1', token: 'tok', reused: true })
+    expect(midtrans.cancelTransaction).not.toHaveBeenCalled()
+    expect(paymentRepo.transition).not.toHaveBeenCalled()
+    expect(midtrans.createSnapTransaction).not.toHaveBeenCalled()
+  })
+
+  it('cancels a picked method at Midtrans, then starts a new order for the same plan', async () => {
+    vi.mocked(paymentRepo.findByOrderId).mockResolvedValue(payment({ paymentType: 'bank_transfer' }))
+    vi.mocked(midtrans.getStatus).mockResolvedValue(status('pending', { payment_type: 'bank_transfer' }) as never)
+    vi.mocked(midtrans.cancelTransaction).mockResolvedValue('cancelled')
+    vi.mocked(midtrans.createSnapTransaction).mockResolvedValue({ token: 'tok2', redirect_url: 'https://app.sandbox.midtrans.com/snap/v4/y' })
+
+    const r = await changeMethod(USER, 'MCT-uabc123X-1', NOW)
+
+    expect(midtrans.cancelTransaction).toHaveBeenCalledWith('MCT-uabc123X-1')
+    expect(paymentRepo.transition).toHaveBeenCalledWith('MCT-uabc123X-1', 'cancelled', { providerStatus: 'cancel' })
+    // Cancelled before the new order exists, so the old VA can't also be paid.
+    expect(vi.mocked(midtrans.cancelTransaction).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(midtrans.createSnapTransaction).mock.invocationCallOrder[0]!,
+    )
+    expect(r.checkout).toMatchObject({ plan: 'starter', token: 'tok2', reused: false })
+    expect(r.checkout!.orderId).not.toBe('MCT-uabc123X-1')
+    // The customer asked for this: no "payment failed" bell.
+    expect(notificationService.onPaymentFailed).not.toHaveBeenCalled()
+  })
+
+  it('records a payment that was already paid instead of starting another', async () => {
+    vi.mocked(paymentRepo.findByOrderId).mockResolvedValue(payment())
+    vi.mocked(midtrans.getStatus).mockResolvedValue(status('settlement') as never)
+    vi.mocked(paymentRepo.transition).mockResolvedValue(payment({ status: 'paid' }))
+
+    const r = await changeMethod(USER, 'MCT-uabc123X-1', NOW)
+
+    expect(r.checkout).toBeNull()
+    expect(paymentRepo.transition).toHaveBeenCalledWith('MCT-uabc123X-1', 'paid', expect.anything())
+    expect(midtrans.cancelTransaction).not.toHaveBeenCalled()
+    expect(midtrans.createSnapTransaction).not.toHaveBeenCalled()
+  })
+
+  it('re-reads the status when Midtrans refuses the cancel (paid meanwhile)', async () => {
+    vi.mocked(paymentRepo.findByOrderId).mockResolvedValue(payment())
+    vi.mocked(midtrans.getStatus)
+      .mockResolvedValueOnce(status('pending') as never)
+      .mockResolvedValueOnce(status('settlement') as never)
+    vi.mocked(midtrans.cancelTransaction).mockResolvedValue('not_cancellable')
+    vi.mocked(paymentRepo.transition).mockResolvedValue(payment({ status: 'paid' }))
+
+    const r = await changeMethod(USER, 'MCT-uabc123X-1', NOW)
+
+    expect(r.checkout).toBeNull()
+    expect(paymentRepo.transition).not.toHaveBeenCalledWith('MCT-uabc123X-1', 'cancelled', expect.anything())
+    expect(midtrans.createSnapTransaction).not.toHaveBeenCalled()
+  })
+
+  it("refuses another account's payment, and one that is no longer open", async () => {
+    vi.mocked(paymentRepo.findByOrderId).mockResolvedValueOnce(payment({ userId: 'someone-else' }))
+    await expect(changeMethod(USER, 'MCT-uabc123X-1', NOW)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    vi.mocked(paymentRepo.findByOrderId).mockResolvedValueOnce(payment({ status: 'paid' }))
+    await expect(changeMethod(USER, 'MCT-uabc123X-1', NOW)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' })
+    expect(midtrans.getStatus).not.toHaveBeenCalled()
   })
 })

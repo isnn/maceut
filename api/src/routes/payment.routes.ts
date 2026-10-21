@@ -14,7 +14,10 @@ const router = Router()
  *       gross_amount + server key). Status lalu dibaca ulang lewat Get Status API dan
  *       hanya jawaban itu yang mengubah baris. Idempoten: notifikasi ganda atau
  *       `expire` yang telat tidak mengubah pembayaran yang sudah final. Pasang URL ini
- *       di dashboard Midtrans → Settings → Payment → Notification URL.
+ *       di dashboard Midtrans → Settings → Payment → Notification URL — dan juga sebagai
+ *       Recurring Notification URL: notifikasi `event_name: subscription.charge` (auto-renew)
+ *       tidak bertanda tangan, jadi subscription dibaca ulang lewat GET /v1/subscriptions/{id}
+ *       dan tagihannya lewat Get Status sebelum apa pun berubah.
  *     tags: [Payments]
  *     requestBody:
  *       required: true
@@ -40,7 +43,10 @@ router.post('/payments/midtrans/notification', paymentController.notification)
 // is authenticated by its signature. Every other payment path needs a signed-in
 // account, and each is listed — '/payments/:orderId' as a mount path would also match
 // '/payments/midtrans/…' if the notification route came after it.
-router.use(['/payments/prices', '/payments/checkout', '/payments/pending', '/payments/history', '/payments/:orderId'], authMiddleware)
+router.use(
+  ['/payments/prices', '/payments/checkout', '/payments/pending', '/payments/history', '/payments/auto-renew', '/payments/:orderId'],
+  authMiddleware,
+)
 
 /**
  * @swagger
@@ -66,6 +72,7 @@ router.use(['/payments/prices', '/payments/checkout', '/payments/pending', '/pay
  *                   properties:
  *                     enabled: { type: boolean }
  *                     periodDays: { type: integer, example: 30 }
+ *                     maxAheadDays: { type: integer, example: 180, description: 'A renewal may not end later than this many days from now' }
  *                     prices:
  *                       type: object
  *                       properties:
@@ -141,6 +148,50 @@ router.get('/payments/pending', paymentController.pending)
 
 /**
  * @swagger
+ * /payments/auto-renew:
+ *   post:
+ *     summary: Nyalakan auto-renew (kartu, Midtrans Subscription) — FE-56 fase 5
+ *     description: >
+ *       404 bila MIDTRANS_AUTO_RENEW_ENABLED=false. Membuat pembayaran Snap khusus kartu
+ *       dengan `save_card` untuk paket saat ini (perpanjang) atau paket lebih tinggi.
+ *       Setelah pembayaran terkonfirmasi, server membuat Subscription bulanan dari kartu
+ *       tersimpan, tagihan pertama 1 hari sebelum periode berakhir. Midtrans yang
+ *       menjadwalkan; aplikasi tidak pernah menagih kartu sendiri.
+ *     tags: [Payments]
+ *     security: [{ cookieAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [plan]
+ *             properties:
+ *               plan: { type: string, enum: [starter, standard, premium] }
+ *     responses:
+ *       201: { description: Token Snap (sama seperti /payments/checkout) }
+ *       401: { description: UNAUTHORIZED }
+ *       404: { description: NOT_FOUND — auto-renew tidak diaktifkan di server }
+ *       422: { description: VALIDATION_ERROR — sudah aktif, Free, atau paket lebih rendah }
+ *   delete:
+ *     summary: Matikan auto-renew (membatalkan Subscription di Midtrans)
+ *     description: >
+ *       Pembatalan di Midtrans dulu; bila gagal, error dikembalikan (502) supaya tidak ada
+ *       yang mengira tagihan sudah berhenti. Ganti paket, turun paket, kedaluwarsa, dan
+ *       hapus akun juga membatalkannya.
+ *     tags: [Payments]
+ *     security: [{ cookieAuth: [] }]
+ *     responses:
+ *       200: { description: '{ autoRenew: false }' }
+ *       401: { description: UNAUTHORIZED }
+ *       404: { description: NOT_FOUND — auto-renew tidak diaktifkan di server }
+ *       502: { description: PAYMENT_PROVIDER_ERROR — Midtrans gagal membatalkan }
+ */
+router.post('/payments/auto-renew', paymentController.enableAutoRenew)
+router.delete('/payments/auto-renew', paymentController.disableAutoRenew)
+
+/**
+ * @swagger
  * /payments/history:
  *   get:
  *     summary: Riwayat pembayaran akun (tab Billing)
@@ -173,5 +224,55 @@ router.get('/payments/history', paymentController.history)
  *       404: { description: NOT_FOUND — tidak ada, atau milik akun lain }
  */
 router.get('/payments/:orderId', paymentController.show)
+
+/**
+ * @swagger
+ * /payments/{orderId}/change-method:
+ *   post:
+ *     summary: Ganti metode pembayaran untuk pembayaran yang masih terbuka
+ *     description: >
+ *       Order Snap terikat pada metode yang dipilih pertama kali. Bila belum ada metode
+ *       dipilih, token yang sama dikembalikan (Snap tetap menampilkan semua metode). Bila
+ *       sudah (VA, QRIS, e-wallet), order dibatalkan di Midtrans (POST /v2/{order_id}/cancel)
+ *       lalu order baru untuk paket yang sama dibuat. Bila ternyata sudah final di Midtrans
+ *       (dibayar, kedaluwarsa), status dicatat dan `checkout` null. Hanya pemilik.
+ *     tags: [Payments]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: orderId, required: true, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: '{ payment, checkout } — checkout berisi token Snap yang dibuka, atau null'
+ *       401: { description: UNAUTHORIZED }
+ *       404: { description: NOT_FOUND — tidak ada, atau milik akun lain }
+ *       422: { description: VALIDATION_ERROR — pembayaran sudah tidak terbuka }
+ *       502: { description: PAYMENT_PROVIDER_ERROR — Midtrans gagal membatalkan }
+ *       503: { description: PAYMENTS_NOT_CONFIGURED }
+ */
+router.post('/payments/:orderId/change-method', paymentController.changeMethod)
+
+/**
+ * @swagger
+ * /payments/{orderId}/invoice:
+ *   get:
+ *     summary: Unduh invoice PDF untuk pembayaran yang sudah dibayar
+ *     description: >
+ *       Dibuat dari baris `payments` dan akun (nomor invoice = order id), dirender ke PDF
+ *       dengan Chromium yang sudah ada di image. Hanya pemilik; hanya status paid atau refunded.
+ *     tags: [Payments]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: orderId, required: true, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: File PDF (attachment)
+ *         content:
+ *           application/pdf:
+ *             schema: { type: string, format: binary }
+ *       401: { description: UNAUTHORIZED }
+ *       404: { description: NOT_FOUND — tidak ada, atau milik akun lain }
+ *       422: { description: VALIDATION_ERROR — pembayaran belum terkonfirmasi }
+ */
+router.get('/payments/:orderId/invoice', paymentController.invoice)
 
 export default router

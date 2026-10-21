@@ -7,12 +7,14 @@ vi.mock('./plan.service', () => ({
   applyPlanChange: vi.fn(async () => ({ zonesToPause: [{ id: 'z1', name: 'Malioboro' }], schedulesToPause: [] })),
 }))
 vi.mock('./notification.service', () => ({ onPlanExpired: vi.fn() }))
+vi.mock('./auto-renew.service', () => ({ RETRY_DAYS: 3, stopQuietly: vi.fn() }))
 
 import { findSettled, settle } from './plan-expiry.service'
 import * as userRepo from '../repositories/user.repository'
 import * as planChangeRepo from '../repositories/plan-change.repository'
 import * as planService from './plan.service'
 import * as notificationService from './notification.service'
+import * as autoRenew from './auto-renew.service'
 
 const NOW = new Date('2026-11-16T05:00:00Z')
 const PAST = new Date(NOW.getTime() - 60_000)
@@ -64,6 +66,21 @@ describe('settle', () => {
       expect(await settle(a, NOW)).toBe(a)
     }
     expect(userRepo.expireToFree).not.toHaveBeenCalled()
+  })
+})
+
+describe('settle with auto-renew on', () => {
+  it('waits out Midtrans’ 3 retry days before moving to Free, then cancels the subscription', async () => {
+    const twoDaysAgo = new Date(NOW.getTime() - 2 * 86_400_000)
+    const on = (end: Date) => ({ ...account('starter', end), autoRenew: true }) as never as userRepo.UserWithPlan
+
+    expect((await settle(on(twoDaysAgo), NOW)).plan).toBe('starter')
+    expect(userRepo.expireToFree).not.toHaveBeenCalled()
+
+    vi.mocked(userRepo.expireToFree).mockResolvedValue({ plan: 'free' } as never)
+    const fourDaysAgo = new Date(NOW.getTime() - 4 * 86_400_000)
+    expect((await settle(on(fourDaysAgo), NOW)).plan).toBe('free')
+    expect(autoRenew.stopQuietly).toHaveBeenCalledWith('u1')
   })
 })
 

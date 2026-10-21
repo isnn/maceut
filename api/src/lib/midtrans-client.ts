@@ -40,6 +40,8 @@ function headers(): Record<string, string> {
 
 export interface SnapTransactionRequest {
   transaction_details: { order_id: string; gross_amount: number }
+  /** Required by Snap to save a card (`credit_card.save_card`). */
+  user_id?: string
   item_details: { id: string; price: number; quantity: number; name: string }[]
   customer_details?: { first_name?: string; email?: string }
   enabled_payments?: string[]
@@ -95,6 +97,9 @@ export interface MidtransStatus {
   transaction_id?: string
   merchant_id?: string
   signature_key?: string
+  /** Card payments made with `save_card`: the token a Subscription charges. */
+  saved_token_id?: string
+  saved_token_id_expired_at?: string
 }
 
 /**
@@ -126,6 +131,40 @@ export async function getStatus(orderId: string): Promise<MidtransStatus | null>
     throw new PaymentProviderError(401)
   }
   return data as MidtransStatus
+}
+
+/**
+ * POST /v2/{order_id}/cancel — stops a pending payment (a VA, QRIS, e-wallet or store
+ * code the customer chose) so it can no longer be paid. Used when the customer wants
+ * another method: a Snap order is tied to the method picked first.
+ *
+ * `cancelled`: done. `no_transaction`: no method was picked yet, nothing to stop.
+ * `not_cancellable` (412): it is already final at Midtrans — paid, expired — so the
+ * caller re-reads the status instead.
+ */
+export type CancelResult = 'cancelled' | 'no_transaction' | 'not_cancellable'
+
+export async function cancelTransaction(orderId: string): Promise<CancelResult> {
+  const auth = headers()
+  let res: Response
+  try {
+    res = await fetch(`${hosts().core}/v2/${encodeURIComponent(orderId)}/cancel`, {
+      method: 'POST',
+      headers: auth,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+  } catch (err) {
+    console.error(`[midtrans] cancel ${orderId}: request failed:`, err instanceof Error ? err.message : err)
+    throw new PaymentProviderError()
+  }
+  // Core API puts the real answer in the body's status_code, sometimes under HTTP 200.
+  const data = (await res.json().catch(() => ({}))) as { status_code?: string }
+  const code = Number(data.status_code ?? res.status)
+  if (code === 200) return 'cancelled'
+  if (code === 404) return 'no_transaction'
+  if (code === 412) return 'not_cancellable'
+  console.error(`[midtrans] cancel ${orderId}: status ${code}`)
+  throw new PaymentProviderError(code)
 }
 
 // --- Notifications --------------------------------------------------------------------
@@ -183,4 +222,82 @@ export function outcomeOf(transactionStatus: string, fraudStatus?: string): Paym
 export function amountMatches(grossAmount: string, amount: number): boolean {
   const n = Number(grossAmount)
   return Number.isFinite(n) && Math.round(n * 100) === amount * 100
+}
+
+// --- Subscriptions (auto-renew, FE-56 phase 5) ------------------------------------------
+
+export interface MidtransSubscription {
+  id: string
+  name: string
+  amount: string
+  status: 'active' | 'inactive' | string
+  token?: string
+  merchant_id?: string
+  schedule?: { next_execution_at?: string; current_interval?: number }
+}
+
+/** "2026-11-16 10:00:00 +0700" — the only time format the Subscription API accepts. */
+export function subscriptionTime(d: Date): string {
+  const wib = new Date(d.getTime() + 7 * 3_600_000)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${wib.getUTCFullYear()}-${p(wib.getUTCMonth() + 1)}-${p(wib.getUTCDate())} ${p(wib.getUTCHours())}:${p(wib.getUTCMinutes())}:${p(wib.getUTCSeconds())} +0700`
+}
+
+async function subscriptionCall<T>(path: string, init: RequestInit, label: string): Promise<T> {
+  const auth = headers()
+  let res: Response
+  try {
+    res = await fetch(`${hosts().core}${path}`, { ...init, headers: auth, signal: AbortSignal.timeout(TIMEOUT_MS) })
+  } catch (err) {
+    console.error(`[midtrans] ${label}: request failed:`, err instanceof Error ? err.message : err)
+    throw new PaymentProviderError()
+  }
+  if (!res.ok) {
+    console.error(`[midtrans] ${label}: HTTP ${res.status}`)
+    throw new PaymentProviderError(res.status)
+  }
+  return (await res.json()) as T
+}
+
+/**
+ * POST /v1/subscriptions — Midtrans then charges the saved card on its own schedule.
+ * `amount` is a string here (unlike Snap's integer). `name` must be unique per merchant.
+ */
+export async function createSubscription(input: {
+  name: string
+  amount: number
+  token: string
+  startAt: Date
+  customer: { first_name?: string; email: string }
+  metadata: Record<string, string>
+}): Promise<MidtransSubscription> {
+  return subscriptionCall<MidtransSubscription>(
+    '/v1/subscriptions',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        name: input.name,
+        amount: String(input.amount),
+        currency: 'IDR',
+        payment_type: 'credit_card',
+        token: input.token,
+        schedule: { interval: 1, interval_unit: 'month', start_time: subscriptionTime(input.startAt) },
+        // A declined renewal is retried daily for 3 days before the subscription gives up.
+        retry_schedule: { interval: 1, interval_unit: 'day', max_interval: 3 },
+        metadata: input.metadata,
+        customer_details: input.customer,
+      }),
+    },
+    `subscription create ${input.name}`,
+  )
+}
+
+/** GET /v1/subscriptions/{id}. Also how a subscription notification is authenticated: it carries no signature. */
+export async function getSubscription(id: string): Promise<MidtransSubscription> {
+  return subscriptionCall<MidtransSubscription>(`/v1/subscriptions/${encodeURIComponent(id)}`, { method: 'GET' }, `subscription get ${id}`)
+}
+
+/** POST /v1/subscriptions/{id}/cancel — final; turning auto-renew on again creates a new one. */
+export async function cancelSubscription(id: string): Promise<void> {
+  await subscriptionCall<unknown>(`/v1/subscriptions/${encodeURIComponent(id)}/cancel`, { method: 'POST' }, `subscription cancel ${id}`)
 }

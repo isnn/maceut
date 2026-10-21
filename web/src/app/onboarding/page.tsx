@@ -18,6 +18,7 @@ import { useRouter } from 'next/navigation'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { Button } from '@/components/ui/Button'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
+import { AccountUnavailable } from '@/components/shared/AccountUnavailable'
 import { PLAN_LABEL, PLAN_LIMITS } from '@/lib/constants'
 import { formatNumber } from '@/lib/utils'
 import { ApiError } from '@/types/api'
@@ -25,18 +26,19 @@ import * as authApi from '@/features/auth/api'
 import { peekIntendedPlan } from '@/features/marketing/intended-plan'
 
 export default function OnboardingPage() {
-  const { user, loading } = useCurrentUser()
+  const { user, loading, error: accountError, retry } = useCurrentUser()
   const router = useRouter()
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (loading) return
+    if (loading || accountError) return
     if (!user) router.replace('/login')
     // Staff accounts aren't customers — there's no plan for them to start on.
     else if (user.role === 'internal') router.replace('/internal')
-  }, [loading, user, router])
+  }, [loading, accountError, user, router])
 
+  if (accountError) return <AccountUnavailable message={accountError} onRetry={retry} />
   if (loading || !user || user.role === 'internal') return null
 
   const limits = PLAN_LIMITS.free

@@ -21,6 +21,7 @@ export type NotificationType =
   | 'plan_expiring'
   | 'plan_expired'
   | 'payment_failed'
+  | 'auto_renew_failed'
 
 export interface AppNotification {
   id: string

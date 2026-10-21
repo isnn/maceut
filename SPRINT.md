@@ -196,7 +196,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 | ✅ | **OPS-2** Siap produksi: Next 16.4.0 (CVE kritis RCE image optimizer/next-og), port postgres/rabbitmq dev hanya loopback, kredensial RabbitMQ dari .env, IP rate-limit Better Auth dari CF-Connecting-IP, header keamanan web+API, batas memori & rotasi log di compose prod, overlay Traefik, skrip backup DB, deploy.md (maceut.com + checklist) | review deploy 2026-10-14 |
 | ✅ | **FE-54** Internal: zona & jadwal user bisa dilihat (halaman zona read-only: peta, jendela, capture berhalaman; `GET /internal/users/:id/zones/:zoneId`), kolom Actions di Overview, kolom Verified di tabel Users & Overview, superadmin bisa ubah status verified, modal Edit user ditata ulang (Profile · Access · Email verification · Password), seksi Billing di detail user (paket, harga, sejak, riwayat perubahan dari tabel baru `plan_changes`) | masukan user 2026-10-16 |
 | ✅ | **FE-55** Overview Internal: grafik 7 hari di kartu Total accounts, Zones collecting, Captures today, Storage used (`trend` di `GET /internal/stats`); semua tabel default 10 baris per halaman; menu ☰ di mobile untuk header Internal & app | masukan user 2026-10-16 |
-| 🟡 | **FE-56** Pembayaran Midtrans Snap untuk upgrade paket (sandbox, harga asli, 30 hari per bayar). Fase 1 ✅ fondasi (tabel `payments`, config, client Midtrans, repository) · 2 ✅ checkout + webhook · 3 ✅ web · 4 ✅ kedaluwarsa + pengingat · 5 auto-renew (opsional) | masukan user 2026-10-16 |
+| ✅ | **FE-56** Pembayaran Midtrans Snap untuk upgrade paket (sandbox, harga asli, 30 hari per bayar). Fase 1 ✅ fondasi (tabel `payments`, config, client Midtrans, repository) · 2 ✅ checkout + webhook · 3 ✅ web · 4 ✅ kedaluwarsa + pengingat · 5 ✅ auto-renew (opsional, mati default) · perbaikan uji user: halaman putih setelah bayar, ganti metode, unduh invoice | masukan user 2026-10-16 |
 
 Status: 🔴 Not started · 🟡 In progress · ✅ Done
 
@@ -221,6 +221,38 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-18] FE-56 fase 5 — perbaikan dari uji sandbox user (masuk PR fase 5).
+- Halaman putih setelah bayar/perpanjang: layout app merender `null` selama /me dimuat dan
+  `useCurrentUser` tak punya jalur error — satu /me gagal (sering tepat setelah reload penuh di
+  dev lewat tunnel) = putih selamanya + "Could not reach the server". Sekarang /me dicoba ulang
+  2× lalu menampilkan "Couldn't load your account · Try again" (app, internal, onboarding), dan
+  pembayaran/ganti paket tidak lagi reload: data dibaca ulang di tempat (`refreshCurrentUser`).
+- Ganti metode pembayaran: POST /payments/:orderId/change-method. Belum pilih metode → token
+  Snap yang sama; sudah (VA/QRIS/e-wallet) → cancel di Midtrans (POST /v2/{id}/cancel) dulu, lalu
+  order baru untuk paket yang sama; sudah final → status dicatat, tidak membuat order baru.
+- Invoice PDF: GET /payments/:orderId/invoice (paid/refunded, pemilik saja), dirender dengan
+  Chromium yang sudah ada di image (tanpa library baru). Nomor invoice = order id; tanpa baris pajak.
+- Profil: tab "Billing" → "Payment & billing"; catatan "N left" dan "Your active windows in an
+  average month" dihapus.
+- Teks pembayaran tidak lagi menyebut Midtrans (dialog konfirmasi, kartu progres, footer invoice);
+  baris "You pay on Midtrans' secure page" + chip metode dihapus dari dialog konfirmasi.
+- Batas perpanjang 6 bulan: perpanjangan ditolak bila tanggal akhir baru > now + 180 hari
+  (`MAX_PAID_AHEAD_DAYS`, cek di `checkout()` sebelum Snap; upgrade tidak terkena). Tombol Renew
+  nonaktif dengan "You can renew again from …"; `GET /payments/prices` kini juga `maxAheadDays`.
+
+[2026-10-17] FE-56 fase 5 — auto-renew (opsional, MIDTRANS_AUTO_RENEW_ENABLED=false default).
+  - Hanya kartu yang bisa ditagih tanpa pelanggan; menyalakan = bayar Snap khusus kartu + save_card (user_id),
+    setelah lunas server membaca saved_token_id lewat Get Status dan membuat Subscription bulanan (tagihan pertama
+    1 hari sebelum periode habis). Midtrans yang menjadwalkan; aplikasi tidak pernah menagih kartu sendiri.
+  - Notifikasi subscription.charge TIDAK bertanda tangan → dibaca ulang GET /v1/subscriptions/{id} + Get Status;
+    satu tagihan = satu baris payments (order_id unik), jadi notifikasi ganda tidak memperpanjang dua kali.
+  - Saat auto-renew aktif, settle() memberi 3 hari (masa retry Midtrans) sebelum turun ke Free; pengingat 3 hari
+    tidak dikirim untuk akun auto-renew.
+  - Dibatalkan otomatis saat: ganti paket (staf/sendiri/upgrade), kedaluwarsa, hapus akun.
+  - Bug ditemukan & diperbaiki di fase ini: PATCH /me/plan ke paket yang sama menghapus expires_at (paket
+    berbayar jadi permanen), dan turun dari Premium berbayar ke Starter membuat Starter tanpa akhir. Sekarang
+    paket sama = tidak berubah, turun paket mempertahankan tanggal akhir periode berbayar.
 
 [2026-10-17] FE-56 fase 4 — kedaluwarsa + pengingat.
   - Tanpa job per jam (keputusan owner): plan-expiry.service settle() di titik yang memang memuat paket — /me

@@ -18,13 +18,18 @@ import * as userRepo from '../repositories/user.repository'
 import * as planChangeRepo from '../repositories/plan-change.repository'
 import * as planService from './plan.service'
 import * as notificationService from './notification.service'
+import { RETRY_DAYS, stopQuietly } from './auto-renew.service'
 
 export async function settle<T extends userRepo.UserWithPlan>(account: T, now: Date = new Date()): Promise<T> {
   const end = account.planExpiresAt
-  if (!end || account.plan === 'free' || end > now) return account
+  if (!end || account.plan === 'free') return account
+  // With auto-renew on, Midtrans may still be retrying a declined card for a few days.
+  const graceMs = account.autoRenew ? RETRY_DAYS * 86_400_000 : 0
+  if (end.getTime() + graceMs > now.getTime()) return account
 
   const moved = await userRepo.expireToFree(account.id, end)
   if (moved) {
+    if (account.autoRenew) await stopQuietly(account.id)
     const impact = await planService.applyPlanChange(account.id, 'free')
     await planChangeRepo.record({ userId: account.id, fromPlan: account.plan, toPlan: 'free', source: 'expiry' })
     await notificationService.onPlanExpired(account.id, {

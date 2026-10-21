@@ -33,6 +33,8 @@ export const PLAN_PRICE_IDR: Record<Plan, number> = { free: 0, starter: 99_000, 
 
 /** How long one payment keeps a plan active. */
 export const PAID_PERIOD_DAYS = 30
+/** Renewals stack, but never past this many days from now: six paid periods. */
+export const MAX_PAID_AHEAD_DAYS = 180
 
 export type RoadClass = 'nasional' | 'nasional_provinsi' | 'semua'
 

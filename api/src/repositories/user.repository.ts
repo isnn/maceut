@@ -17,6 +17,9 @@ export interface UserWithPlan extends UserRow {
   plan: Plan
   /** End of a paid period (FE-56); NULL/absent = the plan does not expire. */
   planExpiresAt?: Date | null
+  /** A Midtrans card Subscription renews the plan (FE-56 phase 5). */
+  autoRenew?: boolean
+  midtransSubscriptionId?: string | null
 }
 
 /**
@@ -40,7 +43,13 @@ export async function findById(id: string): Promise<UserRow | undefined> {
 
 export async function findByIdWithPlan(id: string): Promise<UserWithPlan | undefined> {
   const rows = await db
-    .select({ u: user, plan: userPlans.plan, planExpiresAt: userPlans.expiresAt })
+    .select({
+      u: user,
+      plan: userPlans.plan,
+      planExpiresAt: userPlans.expiresAt,
+      autoRenew: userPlans.autoRenew,
+      midtransSubscriptionId: userPlans.midtransSubscriptionId,
+    })
     .from(user)
     .leftJoin(userPlans, eq(userPlans.userId, user.id))
     .where(eq(user.id, id))
@@ -50,7 +59,13 @@ export async function findByIdWithPlan(id: string): Promise<UserWithPlan | undef
   if (!row) return undefined
   // A user with no plan row falls back to free (BR-001) rather than erroring — an
   // empty join is a data problem, not a reason to lock someone out of their account.
-  return { ...row.u, plan: (row.plan ?? 'free') as Plan, planExpiresAt: row.planExpiresAt ?? null }
+  return {
+    ...row.u,
+    plan: (row.plan ?? 'free') as Plan,
+    planExpiresAt: row.planExpiresAt ?? null,
+    autoRenew: row.autoRenew ?? false,
+    midtransSubscriptionId: row.midtransSubscriptionId ?? null,
+  }
 }
 
 export async function updateUser(
@@ -160,6 +175,8 @@ export async function findExpiringUnreminded(
         sql`${userPlans.expiresAt} > ${from}`,
         sql`${userPlans.expiresAt} <= ${to}`,
         sql`${userPlans.remindedAt} IS NULL`,
+        // Auto-renew accounts are charged, not reminded.
+        eq(userPlans.autoRenew, false),
       ),
     )
   return rows.map((r) => ({ userId: r.userId, plan: r.plan as Plan, expiresAt: r.expiresAt! }))
@@ -173,6 +190,31 @@ export async function markReminded(userId: string, expiresAt: Date, at: Date): P
     .where(and(eq(userPlans.userId, userId), eq(userPlans.expiresAt, expiresAt), sql`${userPlans.remindedAt} IS NULL`))
     .returning({ id: userPlans.id })
   return rows.length > 0
+}
+
+/** Turns auto-renew on (with its subscription) or off. */
+export async function setAutoRenew(userId: string, subscriptionId: string | null): Promise<void> {
+  await db
+    .update(userPlans)
+    .set({ autoRenew: subscriptionId !== null, midtransSubscriptionId: subscriptionId })
+    .where(eq(userPlans.userId, userId))
+}
+
+/** The account a Midtrans Subscription belongs to. */
+export async function findBySubscriptionId(
+  subscriptionId: string,
+): Promise<{ userId: string; plan: Plan; expiresAt: Date | null } | undefined> {
+  const [row] = await db
+    .select({ userId: userPlans.userId, plan: userPlans.plan, expiresAt: userPlans.expiresAt })
+    .from(userPlans)
+    .where(eq(userPlans.midtransSubscriptionId, subscriptionId))
+    .limit(1)
+  return row ? { userId: row.userId, plan: row.plan as Plan, expiresAt: row.expiresAt } : undefined
+}
+
+/** A renewal charge landed: same plan, new end date, and a fresh reminder slot. */
+export async function extendPaidPeriod(userId: string, expiresAt: Date): Promise<void> {
+  await db.update(userPlans).set({ expiresAt, remindedAt: null }).where(eq(userPlans.userId, userId))
 }
 
 export async function findPlanRow(userId: string): Promise<UserPlanRow | undefined> {
