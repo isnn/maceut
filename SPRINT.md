@@ -228,7 +228,11 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   belakang; melingkar ke awal range hanya saat Play (playback loop). (3) Frame tidak digambar sebelum traffic-nya datang (dulu peta kosong dulu,
   lalu render kedua), caption mengikuti frame yang tampil, dan tick playback berikutnya baru mulai
   setelah frame tergambar. (4) Satu canvas scratch dipakai ulang + canvas preview/overlay hanya
-  di-resize saat ukuran berubah (`ctx.reset()`), bukan alokasi ~6 MB per frame.
+  di-resize saat ukuran berubah (`ctx.reset()`), bukan alokasi ~6 MB per frame. (5) Akar "Next selalu
+  fetch ulang": viewport dibingkai dari ring + traffic, dan traffic tiap capture menjorok keluar zona
+  berbeda-beda (clipToPolygon menyimpan ruas yang menyentuh zona secara utuh) → viewport beda tiap
+  frame → cache basemap tak pernah kena, basemap digambar ulang + tile di-fetch ulang. Kini dibingkai
+  dari ring saja (traffic hanya jika tak ada ring); `RENDER_VERSION` 2 → 3 karena framing export berubah.
 
 [2026-10-21] Mobile (laporan user): (1) menu ☰ app/internal/publik kini satu hook — tutup saat
   halaman berganti, tap di luar, atau Escape (sebelumnya hanya saat link-nya sendiri diklik; Log in /

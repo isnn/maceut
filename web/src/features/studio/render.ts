@@ -572,10 +572,19 @@ function project(lng: number, lat: number, v: Viewport): [number, number] {
   return [lngToWorldX(lng, v.scale) - v.originX, latToWorldY(lat, v.scale) - v.originY]
 }
 
+/**
+ * What the map is framed on: the zone's ring, and the traffic only when there is no ring.
+ *
+ * Framing on the ring plus the traffic made every frame's viewport different. The API
+ * keeps any road that touches the zone whole (clipToPolygon), so each capture overhangs
+ * the ring by a different amount — the map shifted a little from frame to frame, the
+ * basemap cache below never hit, and every Next redrew the basemap and, when the zoom
+ * moved, fetched its tiles again. The ring is the same for every frame of a zone.
+ */
 function boundsOf(input: RenderInput): Bounds {
   const points: [number, number][] = []
-  if (input.ring) points.push(...input.ring)
-  for (const f of input.traffic?.features ?? []) points.push(...f.c)
+  if (input.ring && input.ring.length >= 3) points.push(...input.ring)
+  else for (const f of input.traffic?.features ?? []) points.push(...f.c)
 
   if (points.length === 0) return { west: 106.7, south: -6.3, east: 106.9, north: -6.1 }
 
@@ -636,9 +645,8 @@ function satelliteTileUrl(z: number, x: number, y: number): string {
  * drawing it is the expensive part: thousands of vector road segments, or every
  * satellite tile run through a CSS filter. At export resolution the filtered version
  * measured ~700 ms per frame: far over the 250 ms a frame gets at 4×
- * playback. Traffic is clipped to the zone polygon, so the viewport (fitted to the
- * ring) is identical for every frame of a zone, and this cache hits for the whole of
- * playback. Small, because each entry is a full-size canvas.
+ * playback. The viewport is fitted to the ring alone (see boundsOf), so it is identical
+ * for every frame of a zone, and this cache hits for the whole of playback. Small, because each entry is a full-size canvas.
  */
 const basemapLayers = new Map<string, HTMLCanvasElement>()
 const BASEMAP_LAYER_LIMIT = 4
