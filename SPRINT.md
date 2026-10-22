@@ -233,6 +233,12 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   berbeda-beda (clipToPolygon menyimpan ruas yang menyentuh zona secara utuh) → viewport beda tiap
   frame → cache basemap tak pernah kena, basemap digambar ulang + tile di-fetch ulang. Kini dibingkai
   dari ring saja (traffic hanya jika tak ada ring); `RENDER_VERSION` 2 → 3 karena framing export berubah.
+  (6) Akar lag utama (diukur di headless Chrome): `wibDate()` membuat `Intl.DateTimeFormat` baru per
+  panggilan, dan `framesOn()` memfilter SEMUA capture 3× per render → zona YOG (2.308 capture) ≈420 ms
+  main thread per render; satu Next = beberapa render (≈2 s). Kini formatter dibuat sekali (8 ms untuk
+  jumlah yang sama), `Frame.day` dihitung sekali saat load, dan capture dikelompokkan per hari di memo.
+  Render peta sendiri hanya 3–13 ms/frame. Sisa: tiap frame slim ±625 KB JSON (Cloudflare kompres br)
+  dan 857 capture YOG belum punya `traffic_slim` (dibuat saat pertama dibuka).
 
 [2026-10-21] Mobile (laporan user): (1) menu ☰ app/internal/publik kini satu hook — tutup saat
   halaman berganti, tap di luar, atau Escape (sebelumnya hanya saat link-nya sendiri diklik; Log in /

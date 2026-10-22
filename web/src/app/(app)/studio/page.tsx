@@ -175,13 +175,17 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 
+const DAY_LABEL = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short',
+  day: '2-digit',
+  month: 'short',
+  timeZone: 'Asia/Jakarta',
+})
+
+const NO_FRAMES: Frame[] = []
+
 function formatDay(day: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-    timeZone: 'Asia/Jakarta',
-  }).format(new Date(`${day}T00:00:00+07:00`))
+  return DAY_LABEL.format(new Date(`${day}T00:00:00+07:00`))
 }
 
 /** The zone last opened in Studio, per browser. A convenience: unavailable storage just means the first zone. */
@@ -274,7 +278,18 @@ export default function StudioPage() {
 
   const days = useMemo(() => (allFrames ? studioApi.daysWithFrames(allFrames) : []), [allFrames])
   const ordered = useMemo(() => allFrames ?? [], [allFrames])
-  const framesOn = useCallback((d: string) => ordered.filter((f) => studioApi.wibDate(f.capturedAt) === d), [ordered])
+  // Grouped once per frame list. Filtering every capture on each call ran three times a
+  // render (both day pickers and the "Last 7 days" preset) — thousands of frames per render.
+  const byDay = useMemo(() => {
+    const map = new Map<string, Frame[]>()
+    for (const f of ordered) {
+      const list = map.get(f.day)
+      if (list) list.push(f)
+      else map.set(f.day, [f])
+    }
+    return map
+  }, [ordered])
+  const framesOn = useCallback((d: string) => byDay.get(d) ?? NO_FRAMES, [byDay])
 
   /**
    * The playback/export range: two capture ids anywhere in the zone's history, so a
@@ -337,8 +352,8 @@ export default function StudioPage() {
 
   const startFrame = ordered[rangeStartIdx] ?? null
   const endFrame = ordered[rangeEndIdx] ?? null
-  const startDay = startFrame ? studioApi.wibDate(startFrame.capturedAt) : ''
-  const endDay = endFrame ? studioApi.wibDate(endFrame.capturedAt) : ''
+  const startDay = startFrame?.day ?? ''
+  const endDay = endFrame?.day ?? ''
 
   /**
    * What actually plays and exports. Every export (single PNG, image set, animation)
@@ -945,7 +960,7 @@ export default function StudioPage() {
                   {frame && (
                     <>
                       <span aria-hidden className="text-text-muted"> · </span>
-                      {formatDay(studioApi.wibDate(frame.capturedAt))}
+                      {formatDay(frame.day)}
                       <span aria-hidden className="text-text-muted"> · </span>
                       {frame.time} WIB
                     </>
