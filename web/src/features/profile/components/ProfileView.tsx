@@ -78,7 +78,9 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
   const [planError, setPlanError] = useState<string | null>(null)
   /** `?plan=` from the pricing page after sign-up (FE-37): open the picker on that plan. */
   const [intendedPlan] = useState(() => (variant === 'internal' ? null : planFromUrl()))
-  const [pickerOpen, setPickerOpen] = useState(intendedPlan !== null)
+  /** The shared demo account: plan changes and payments are off for it (the API refuses them too). */
+  const demo = user?.isDemo === true
+  const [pickerOpen, setPickerOpen] = useState(intendedPlan !== null && !demo)
   // Shown once: the intent has done its job when the picker opens on it.
   useEffect(() => {
     if (intendedPlan) forgetIntendedPlan()
@@ -186,7 +188,7 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
   const currentPlan = usage?.plan ?? user.plan
   const payEnabled = prices?.enabled === true
   /** A paid period with an end date can be renewed; a plan staff set has none. */
-  const renewable = payEnabled && currentPlan !== 'free' && Boolean(user.planExpiresAt)
+  const renewable = !demo && payEnabled && currentPlan !== 'free' && Boolean(user.planExpiresAt)
   /** Renewals stop at 6 months paid ahead; the date Renew opens again, if it's closed now. */
   const renewOpensAt = (() => {
     if (!renewable || !prices?.maxAheadDays) return null
@@ -303,9 +305,10 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
                 {PLAN_PRICE[usage.plan].amount} {PLAN_PRICE[usage.plan].period}
               </p>
               {activeUntil && <p className="text-caption text-text-secondary mt-xs">Active until {activeUntil}</p>}
-              <Button variant="tint" className="w-full mt-lg" onClick={() => setPickerOpen(true)} disabled={busy}>
+              <Button variant="tint" className="w-full mt-lg" onClick={() => setPickerOpen(true)} disabled={busy || demo}>
                 Change plan
               </Button>
+              {demo && <p className="text-caption text-text-muted mt-xs">Plan changes are turned off on the demo account.</p>}
               {renewable && (
                 <Button
                   variant="secondary"
@@ -452,7 +455,7 @@ export function ProfileView({ variant = 'tenant' }: { variant?: 'tenant' | 'inte
               )}
             </Card>
 
-            {prices?.autoRenewAvailable && usage.plan !== 'free' && (user.autoRenew || renewable) && (
+            {!demo && prices?.autoRenewAvailable && usage.plan !== 'free' && (user.autoRenew || renewable) && (
               <AutoRenewCard
                 plan={usage.plan}
                 on={user.autoRenew === true}

@@ -237,3 +237,12 @@ export async function fileBytesByDaySince(since: Date): Promise<Map<string, numb
     .groupBy(day)
   return new Map(rows.map((r) => [r.day, Number(r.bytes)]))
 }
+
+/** Every export file path an account still holds in R2 — what the demo reset removes. */
+export async function filePathsForUser(userId: string): Promise<string[]> {
+  const rows = await db
+    .select({ filePath: exports.filePath })
+    .from(exports)
+    .where(and(eq(exports.userId, userId), sql`${exports.filePath} IS NOT NULL`))
+  return rows.map((r) => r.filePath!)
+}

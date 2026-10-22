@@ -39,6 +39,10 @@ export const CONFIG_KEYS = [
   'RABBITMQ_QUEUE_DEAD_LETTER',
   'CAPTURE_CONCURRENCY',
   'RETENTION_SWEEPER_ENABLED',
+  'DEMO_ENABLED',
+  'DEMO_EMAIL',
+  'DEMO_PASSWORD',
+  'DEMO_SOURCE_ZONE_ID',
   'HERE_API_KEY',
   'HERE_TRAFFIC_FLOW_URL',
   'OSM_TILE_URL',
@@ -65,7 +69,7 @@ export const CONFIG_KEYS = [
 ] as const
 
 /** Never returned, in any form. */
-const SECRET_KEYS = new Set<string>(['DB_PASSWORD', 'JWT_SECRET', 'HERE_API_KEY', 'R2_ACCESS_KEY_ID', 'R2_ACCESS_KEY_SECRET', 'RESEND_API_KEY', 'MAILTRAP_API_TOKEN'])
+const SECRET_KEYS = new Set<string>(['DB_PASSWORD', 'JWT_SECRET', 'HERE_API_KEY', 'R2_ACCESS_KEY_ID', 'R2_ACCESS_KEY_SECRET', 'RESEND_API_KEY', 'MAILTRAP_API_TOKEN', 'DEMO_PASSWORD'])
 /** URLs that can carry a password in their userinfo. */
 const CREDENTIAL_URL_KEYS = new Set<string>(['DATABASE_URL', 'RABBITMQ_URL'])
 

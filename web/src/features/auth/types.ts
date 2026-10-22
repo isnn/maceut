@@ -39,6 +39,8 @@ export interface User {
   autoRenew?: boolean
   /** Confirmed with the sign-up code. */
   emailVerified?: boolean
+  /** The shared demo account: plan changes and payments are turned off for it. */
+  isDemo?: boolean
   /** Staff by INTERNAL_EMAILS, so its role can't be changed in the app (BR-027). */
   roleLockedByConfig?: boolean
   createdAt: string
