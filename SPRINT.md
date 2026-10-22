@@ -222,6 +222,28 @@ Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
+[2026-10-21] Studio: Next/Play lambat (laporan user). (1) Preview menggambar ulang frame yang sama
+  setiap kali traffic frame tetangga selesai di-prefetch (effect bergantung pada seluruh cache) — kini
+  hanya traffic frame aktif. (2) Prefetch 1 frame → 5 frame berikutnya yang ada (terdekat dulu) + 2 di
+  belakang; melingkar ke awal range hanya saat Play (playback loop). (3) Frame tidak digambar sebelum traffic-nya datang (dulu peta kosong dulu,
+  lalu render kedua), caption mengikuti frame yang tampil, dan tick playback berikutnya baru mulai
+  setelah frame tergambar. (4) Satu canvas scratch dipakai ulang + canvas preview/overlay hanya
+  di-resize saat ukuran berubah (`ctx.reset()`), bukan alokasi ~6 MB per frame. (5) Akar "Next selalu
+  fetch ulang": viewport dibingkai dari ring + traffic, dan traffic tiap capture menjorok keluar zona
+  berbeda-beda (clipToPolygon menyimpan ruas yang menyentuh zona secara utuh) → viewport beda tiap
+  frame → cache basemap tak pernah kena, basemap digambar ulang + tile di-fetch ulang. Kini dibingkai
+  dari ring saja (traffic hanya jika tak ada ring); `RENDER_VERSION` 2 → 3 karena framing export berubah.
+  (6) Akar lag utama (diukur di headless Chrome): `wibDate()` membuat `Intl.DateTimeFormat` baru per
+  panggilan, dan `framesOn()` memfilter SEMUA capture 3× per render → zona YOG (2.308 capture) ≈420 ms
+  main thread per render; satu Next = beberapa render (≈2 s). Kini formatter dibuat sekali (8 ms untuk
+  jumlah yang sama), `Frame.day` dihitung sekali saat load, dan capture dikelompokkan per hari di memo.
+  Render peta sendiri hanya 3–13 ms/frame. Sisa: tiap frame slim ±625 KB JSON (Cloudflare kompres br)
+  dan 857 capture YOG belum punya `traffic_slim` (dibuat saat pertama dibuka).
+  (7) YOG vs JKT (laporan user: JKT lebih cepat): server sama cepat (DB 16–58 ms YOG vs ~30 ms JKT),
+  bedanya jumlah frame — JKT 4 frame termuat semua sekaligus; di YOG frame aktif berebut koneksi
+  dengan 5 prefetch. Kini frame aktif diunduh sendirian dulu, tetangga setelahnya; cache dibatasi
+  48 frame (±1,25 MB heap per frame terukur → ±60 MB), di luar jendela aktif dibuang.
+
 [2026-10-21] Mobile (laporan user): (1) menu ☰ app/internal/publik kini satu hook — tutup saat
   halaman berganti, tap di luar, atau Escape (sebelumnya hanya saat link-nya sendiri diklik; Log in /
   Create account di header publik tak menutupnya). (2) Schedule: di HP nama zona di atas bar

@@ -98,6 +98,12 @@ import {
 import type { Zone } from '@/features/zones/types'
 
 /** Playback speeds, as milliseconds between frames. */
+/** Frames fetched ahead of the current one (when they exist), and behind it for Previous. */
+const PREFETCH_AHEAD = 5
+const PREFETCH_BEHIND = 2
+/** Frames kept in memory at most (~1.25 MB each): about 60 MB. */
+const TRAFFIC_CACHE_LIMIT = 48
+
 const SPEEDS = [
   { label: '0.5×', ms: 2000 },
   { label: '1×', ms: 1000 },
@@ -171,13 +177,17 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 
+const DAY_LABEL = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short',
+  day: '2-digit',
+  month: 'short',
+  timeZone: 'Asia/Jakarta',
+})
+
+const NO_FRAMES: Frame[] = []
+
 function formatDay(day: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-    timeZone: 'Asia/Jakarta',
-  }).format(new Date(`${day}T00:00:00+07:00`))
+  return DAY_LABEL.format(new Date(`${day}T00:00:00+07:00`))
 }
 
 /** The zone last opened in Studio, per browser. A convenience: unavailable storage just means the first zone. */
@@ -270,7 +280,18 @@ export default function StudioPage() {
 
   const days = useMemo(() => (allFrames ? studioApi.daysWithFrames(allFrames) : []), [allFrames])
   const ordered = useMemo(() => allFrames ?? [], [allFrames])
-  const framesOn = useCallback((d: string) => ordered.filter((f) => studioApi.wibDate(f.capturedAt) === d), [ordered])
+  // Grouped once per frame list. Filtering every capture on each call ran three times a
+  // render (both day pickers and the "Last 7 days" preset) — thousands of frames per render.
+  const byDay = useMemo(() => {
+    const map = new Map<string, Frame[]>()
+    for (const f of ordered) {
+      const list = map.get(f.day)
+      if (list) list.push(f)
+      else map.set(f.day, [f])
+    }
+    return map
+  }, [ordered])
+  const framesOn = useCallback((d: string) => byDay.get(d) ?? NO_FRAMES, [byDay])
 
   /**
    * The playback/export range: two capture ids anywhere in the zone's history, so a
@@ -333,8 +354,8 @@ export default function StudioPage() {
 
   const startFrame = ordered[rangeStartIdx] ?? null
   const endFrame = ordered[rangeEndIdx] ?? null
-  const startDay = startFrame ? studioApi.wibDate(startFrame.capturedAt) : ''
-  const endDay = endFrame ? studioApi.wibDate(endFrame.capturedAt) : ''
+  const startDay = startFrame?.day ?? ''
+  const endDay = endFrame?.day ?? ''
 
   /**
    * What actually plays and exports. Every export (single PNG, image set, animation)
@@ -351,29 +372,76 @@ export default function StudioPage() {
 
   const frame = frames[current] ?? null
 
-  /** Loads a frame's geometry into the cache, once. */
+  /** The frames around the current one — never evicted from the cache. */
+  const keepIds = useRef(new Set<string>())
+
+  /**
+   * Loads a frame's geometry into the cache, once. A parsed frame holds ~1.25 MB of JS
+   * heap (measured, YOG), so the cache is capped: past TRAFFIC_CACHE_LIMIT frames,
+   * everything outside the current window is dropped and fetched again if revisited.
+   * A range of a few dozen frames stays fully cached, so looping it stays free.
+   */
   const ensureLoaded = useCallback(async (id: string) => {
     if (inFlight.current.has(id)) return
     inFlight.current.add(id)
     const traffic = await studioApi.getFrameTraffic(id).catch(() => null)
-    setTraffics((prev) => (id in prev ? prev : { ...prev, [id]: traffic }))
+    setTraffics((prev) => {
+      if (id in prev) return prev
+      const next = { ...prev, [id]: traffic }
+      const ids = Object.keys(next)
+      if (ids.length <= TRAFFIC_CACHE_LIMIT) return next
+      for (const old of ids) {
+        if (old === id || keepIds.current.has(old)) continue
+        delete next[old]
+        inFlight.current.delete(old)
+      }
+      return next
+    })
   }, [])
 
-  // The current frame, and the next one so playback does not stall at each step.
+  // The current frame first, then the next PREFETCH_AHEAD frames that exist, nearest
+  // first, then a couple behind for Previous — so a step finds its frame already loaded
+  // instead of waiting on a request. Only while playing does "ahead" wrap past the end
+  // to the start of the range, because only playback loops; paused on the last frames,
+  // there is simply less ahead to fetch.
+  //
+  // The current frame goes alone: started together with its neighbours, it shared the
+  // connection with five other ~625 KB downloads and arrived last as often as first.
+  // The neighbours start once it is in (this effect re-runs when the cache changes).
   useEffect(() => {
     if (!frame) return
-    if (!(frame.id in traffics)) void ensureLoaded(frame.id)
-    const next = frames[current + 1]
-    if (next && !(next.id in traffics)) void ensureLoaded(next.id)
-  }, [frame, frames, current, traffics, ensureLoaded])
+    const wanted: Frame[] = [frame]
+    for (let k = 1; k <= PREFETCH_AHEAD; k++) {
+      const i = current + k
+      const f = i < frames.length ? frames[i] : playing && i - frames.length < current ? frames[i - frames.length] : undefined
+      if (f) wanted.push(f)
+    }
+    for (let k = 1; k <= PREFETCH_BEHIND; k++) {
+      const f = frames[current - k]
+      if (f) wanted.push(f)
+    }
+    keepIds.current = new Set(wanted.map((f) => f.id))
+    if (!(frame.id in traffics)) {
+      void ensureLoaded(frame.id)
+      return
+    }
+    for (const f of wanted) if (!(f.id in traffics)) void ensureLoaded(f.id)
+  }, [frame, frames, current, playing, traffics, ensureLoaded])
 
+  /** The frame whose map is on screen — set once its render is blitted. */
+  const [shownId, setShownId] = useState<string | null>(null)
+
+  // The next tick starts only once the current frame is actually drawn. A fixed timer
+  // stepped on regardless, so a slow request showed a frame with no traffic, then
+  // redrew it, then moved on — the stutter.
+  const frameShown = frame !== null && shownId === frame.id
   useEffect(() => {
-    if (!playing || frames.length === 0) return
+    if (!playing || frames.length === 0 || !frameShown) return
     const timer = setTimeout(() => {
       setCurrent((i) => (i + 1 >= frames.length ? 0 : i + 1))
     }, SPEEDS[speed]!.ms)
     return () => clearTimeout(timer)
-  }, [playing, current, frames.length, speed])
+  }, [playing, current, frames.length, speed, frameShown])
 
   const previewCanvas = useRef<HTMLCanvasElement | null>(null)
   const [previewBusy, setPreviewBusy] = useState(false)
@@ -472,26 +540,43 @@ export default function StudioPage() {
     })()
   }, [])
 
+  /**
+   * One scratch canvas for every preview render. The queue runs one render at a time
+   * and blits it before the next starts, so reusing it never shows a half-drawn map —
+   * and playback no longer allocates a full-size canvas (~6 MB at 1600×1000) per frame.
+   */
+  const scratchCanvas = useRef<HTMLCanvasElement | null>(null)
+
+  // Only the current frame's own traffic: depending on the whole cache redrew the
+  // frame on screen, unchanged, every time a prefetched neighbour arrived.
+  const frameTraffic = frame ? traffics[frame.id] : undefined
+  const frameLoaded = frame !== null && frame.id in traffics
+
   useEffect(() => {
-    if (!frame) return
+    // Not drawn until its traffic is here (or failed, as null): drawing the bare map
+    // first and the traffic a moment later is a flash, and costs a second render.
+    if (!frame || !frameLoaded) return
     // The preview renders at the output size's own aspect ratio, so what's on screen
     // is what will export.
     const dims = previewDims(outputSize)
-    const input = renderInputFor(frame, traffics[frame.id] ?? null, dims.width, dims.height)
+    const input = renderInputFor(frame, frameTraffic ?? null, dims.width, dims.height)
+    const id = frame.id
     schedulePreview(async () => {
-      const offscreen = document.createElement('canvas')
-      await renderMap(offscreen, input)
+      const scratch = (scratchCanvas.current ??= document.createElement('canvas'))
+      await renderMap(scratch, input)
       const canvas = previewCanvas.current
       if (!canvas || !mounted.current) return
-      canvas.width = offscreen.width
-      canvas.height = offscreen.height
-      canvas.getContext('2d')?.drawImage(offscreen, 0, 0)
+      // Resizing a canvas clears and reallocates it, so only when the size changed.
+      if (canvas.width !== scratch.width) canvas.width = scratch.width
+      if (canvas.height !== scratch.height) canvas.height = scratch.height
+      canvas.getContext('2d')?.drawImage(scratch, 0, 0)
+      setShownId(id)
       if (slideTarget.current === input.view) {
         slideTarget.current = null
         setSlide(null)
       }
     })
-  }, [frame, traffics, renderInputFor, outputSize, schedulePreview])
+  }, [frame, frameLoaded, frameTraffic, renderInputFor, outputSize, schedulePreview])
 
   // The overlay layer — caption, legend, credit — redrawn straight away on its own
   // canvas. It's cheap and synchronous, so a caption drag or a title keystroke never
@@ -510,12 +595,15 @@ export default function StudioPage() {
       cancelled = true
     }
   }, [])
+  // The caption names the frame whose map is on screen, so while the next one loads
+  // the time never runs ahead of the traffic under it.
+  const overlayFrame = frames.find((f) => f.id === shownId) ?? frame
   useEffect(() => {
     const canvas = overlayCanvas.current
-    if (!canvas || !frame) return
+    if (!canvas || !overlayFrame) return
     const dims = previewDims(outputSize)
-    renderOverlays(canvas, renderInputFor(frame, null, dims.width, dims.height))
-  }, [frame, renderInputFor, outputSize, fontsReady])
+    renderOverlays(canvas, renderInputFor(overlayFrame, null, dims.width, dims.height))
+  }, [overlayFrame, renderInputFor, outputSize, fontsReady])
 
   // The slider's real range for this zone and size — past the basemap's deepest zoom
   // the image stops changing, so offering those steps would be a dead slider.
@@ -905,7 +993,7 @@ export default function StudioPage() {
                   {frame && (
                     <>
                       <span aria-hidden className="text-text-muted"> · </span>
-                      {formatDay(studioApi.wibDate(frame.capturedAt))}
+                      {formatDay(frame.day)}
                       <span aria-hidden className="text-text-muted"> · </span>
                       {frame.time} WIB
                     </>

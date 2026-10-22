@@ -22,21 +22,34 @@ export interface Frame {
   zoneId: string
   /** "HH:mm" in Asia/Jakarta. */
   time: string
+  /** "YYYY-MM-DD" in Asia/Jakarta — worked out once, because the day pickers group by it. */
+  day: string
   capturedAt: string
   /** Mean jam factor, 0–10. Null when the cycle collected nothing. */
   jamFactorAvg: number | null
   roadsCount: number | null
 }
 
+/*
+ * One formatter each, built once. Constructing an Intl.DateTimeFormat costs ~60 µs, and
+ * Studio formats every capture of a zone: built per call, a 2,300-capture zone spent
+ * ~420 ms of every page render here — and pressing Next renders the page several times.
+ */
+const CLOCK = new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })
+const STAMP = new Intl.DateTimeFormat('en-CA', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+  timeZone: 'Asia/Jakarta',
+})
+const DATE = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Jakarta' })
+
 /** "HH:mm" in Jakarta, which is the clock every capture window is written against. */
 function wibClock(iso: string): string {
-  return new Intl.DateTimeFormat('id-ID', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Asia/Jakarta',
-  })
-    .format(new Date(iso))
-    .replace('.', ':')
+  return CLOCK.format(new Date(iso)).replace('.', ':')
 }
 
 /**
@@ -47,15 +60,7 @@ function wibClock(iso: string): string {
  * "…-23-00", and after 17:00 WIB under the previous day's date.
  */
 export function wibStamp(iso: string): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'Asia/Jakarta',
-  }).formatToParts(new Date(iso))
+  const parts = STAMP.formatToParts(new Date(iso))
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '00'
   // en-CA can report midnight as "24"; the calendar date already rolled over.
   const hour = get('hour') === '24' ? '00' : get('hour')
@@ -64,12 +69,7 @@ export function wibStamp(iso: string): string {
 
 /** The Jakarta calendar date of an instant, as "YYYY-MM-DD". */
 export function wibDate(iso: string): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    timeZone: 'Asia/Jakarta',
-  }).format(new Date(iso))
+  return DATE.format(new Date(iso))
 }
 
 /**
@@ -88,14 +88,14 @@ export async function getFrames(zoneId: string): Promise<{ frames: Frame[]; hist
   }>(`/zones/${zoneId}/frames`)
   return {
     historyDays: res.historyDays,
-    frames: res.frames.map((f) => ({ ...f, zoneId, time: wibClock(f.capturedAt) })),
+    frames: res.frames.map((f) => ({ ...f, zoneId, time: wibClock(f.capturedAt), day: wibDate(f.capturedAt) })),
   }
 }
 
 
 /** The days this zone has frames for, newest day first. */
 export function daysWithFrames(frames: Frame[]): string[] {
-  return [...new Set(frames.map((f) => wibDate(f.capturedAt)))].sort().reverse()
+  return [...new Set(frames.map((f) => f.day))].sort().reverse()
 }
 
 /** One frame's geometry. Cached by the caller — the same frame is replayed constantly. */

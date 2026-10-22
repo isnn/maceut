@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto'
  * web renderer's output changes** (`web/src/features/studio/render.ts`) — otherwise
  * frames drawn by the old renderer would be served as if they were current.
  */
-export const RENDER_VERSION = 2
+export const RENDER_VERSION = 3
 
 /**
  * How long cached frames are kept. Independent of export retention (PKG-F9): a finished
