@@ -31,6 +31,7 @@ Jangan pindah ke task berikutnya sebelum task aktif sudah ✅ dan test pass.
 
 | Status | Task | Spec Reference |
 |--------|------|---------------|
+| ✅ | **DEMO-01** Akun demo bersama `DEMO_EMAIL` (Premium): dihapus & dibuat ulang tiap 00:00 WIB dengan zona contoh + capture 1 hari; ganti paket/bayar/akun ditolak | permintaan user |
 | ✅ | Setup docker-compose.yml (postgres, rabbitmq, api, worker, web) | deployment.md |
 | ✅ | Setup root .env dari .env.example | .env.example |
 | ✅ | Setup api/: init TypeScript + Express + package.json + tsconfig.json | structure.md |
@@ -221,6 +222,17 @@ Layar Studio dan Tim bahkan belum punya spec sama sekali — lihat Decisions Thi
 Catat setiap task yang selesai.
 
 Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
+
+[2026-10-22] DEMO-01 akun demo: `DEMO_ENABLED/EMAIL/PASSWORD/SOURCE_ZONE_ID` (password rahasia dari env,
+  min. 8 — `demo123` ditolak aturan sign-up, user memilih `demo1234`). `demo.sweeper` cek tiap menit:
+  reset bila akun tak ada atau dibuat sebelum hari WIB ini (restart siang tidak menendang pengunjung,
+  restart lewat tengah malam tetap reset). Reset: hapus file R2 (gambar+thumb, export, render cache) →
+  hapus user (cascade, termasuk session) → `createUser` Premium + verified (tanpa email OTP) → salin zona
+  sumber + capture hari penuh terakhir (INSERT…SELECT di Postgres, gambar disalin ke path demo sendiri).
+  Ditolak 403 `DEMO_ACCOUNT_LOCKED`: checkout, auto-renew, change-method, PATCH /me/plan, dan endpoint
+  Better Auth ganti password/email, hapus akun, revoke sessions, reset password, kirim OTP. Web: `isDemo`
+  di /me; tombol Change plan nonaktif + keterangan, kartu auto-renew disembunyikan. Diuji di dev: 96
+  capture + 96 gambar tersalin, semua guard 403, reset manual menghapus 192 file & session lama → 401.
 
 [2026-10-21] Studio: Next/Play lambat (laporan user). (1) Preview menggambar ulang frame yang sama
   setiap kali traffic frame tetangga selesai di-prefetch (effect bergantung pada seluruh cache) — kini

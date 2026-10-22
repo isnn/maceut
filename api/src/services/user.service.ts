@@ -25,6 +25,7 @@ import * as planExpiry from './plan-expiry.service'
 import * as autoRenew from './auto-renew.service'
 import { shiftDay, wibDay } from './here-usage.service'
 import * as zoneService from './zone.service'
+import { isDemoUser } from '../lib/demo'
 import * as scheduleService from './schedule.service'
 import * as captureService from './capture.service'
 
@@ -60,6 +61,8 @@ export interface PublicUser {
   autoRenew: boolean
   /** The address was confirmed with its sign-up code (Better Auth's `email_verified`). */
   emailVerified: boolean
+  /** The shared demo account (lib/demo): the app disables plan changes and payments for it. */
+  isDemo: boolean
   createdAt: string
 }
 
@@ -82,6 +85,7 @@ export function toPublic(row: userRepo.UserWithPlan): PublicUser {
     planExpiresAt: row.planExpiresAt?.toISOString() ?? null,
     autoRenew: row.autoRenew ?? false,
     emailVerified: row.emailVerified,
+    isDemo: isDemoUser(row.email),
     createdAt: row.createdAt.toISOString(),
   }
 }

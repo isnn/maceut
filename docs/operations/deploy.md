@@ -109,6 +109,20 @@ to the same `/payments/midtrans/notification`. Midtrans then charges the saved c
 the app never charges a card itself. Those notifications are unsigned, so the API reads the
 subscription and the charge back from Midtrans before extending a plan.
 
+### Demo account (optional, off)
+
+`DEMO_ENABLED=true` keeps one shared account, `DEMO_EMAIL` (default `demo@hokya.dev`), with
+the password in `DEMO_PASSWORD` (a secret, 8+ characters; the app shows it nowhere). Every day
+at 00:00 WIB the API **deletes the account and everything in it** — zones, schedules, captures,
+exports, their R2 files — signs out everyone using it, and creates it again: Premium, verified,
+holding a copy of `DEMO_SOURCE_ZONE_ID` with that zone's latest complete day of captures.
+
+For the demo, plan changes, payments, auto-renew, password/email changes, password resets and
+signing out other sessions are refused (403 `DEMO_ACCOUNT_LOCKED`); everything else works,
+including schedules, which spend HERE quota like any Premium account. Reset by hand with
+`docker compose exec api npm run demo:reset`. To stop it, set `DEMO_ENABLED=false` and delete
+the account from the internal Users page.
+
 ## 5. Build, migrate, start
 
 ```bash

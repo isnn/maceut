@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import * as paymentController from '../controllers/payment.controller'
 import { authMiddleware } from '../middlewares/auth.middleware'
+import { demoGuard } from '../middlewares/demo.middleware'
 
 const router = Router()
 
@@ -125,12 +126,12 @@ router.get('/payments/prices', paymentController.prices)
  *                     plan: { type: string }
  *                     reused: { type: boolean }
  *       401: { description: UNAUTHORIZED }
- *       403: { description: FORBIDDEN — akun staf tidak punya paket pelanggan }
+ *       403: { description: FORBIDDEN — akun staf tidak punya paket pelanggan · DEMO_ACCOUNT_LOCKED — akun demo bersama }
  *       422: { description: VALIDATION_ERROR — Free, paket lebih rendah, atau perpanjang paket tanpa tanggal akhir }
  *       502: { description: PAYMENT_PROVIDER_ERROR — Midtrans menolak / tidak terjangkau }
  *       503: { description: PAYMENTS_NOT_CONFIGURED }
  */
-router.post('/payments/checkout', paymentController.checkout)
+router.post('/payments/checkout', demoGuard, paymentController.checkout)
 
 /**
  * @swagger
@@ -171,6 +172,7 @@ router.get('/payments/pending', paymentController.pending)
  *     responses:
  *       201: { description: Token Snap (sama seperti /payments/checkout) }
  *       401: { description: UNAUTHORIZED }
+ *       403: { description: DEMO_ACCOUNT_LOCKED — akun demo bersama }
  *       404: { description: NOT_FOUND — auto-renew tidak diaktifkan di server }
  *       422: { description: VALIDATION_ERROR — sudah aktif, Free, atau paket lebih rendah }
  *   delete:
@@ -185,10 +187,11 @@ router.get('/payments/pending', paymentController.pending)
  *       200: { description: '{ autoRenew: false }' }
  *       401: { description: UNAUTHORIZED }
  *       404: { description: NOT_FOUND — auto-renew tidak diaktifkan di server }
+ *       403: { description: DEMO_ACCOUNT_LOCKED — akun demo bersama }
  *       502: { description: PAYMENT_PROVIDER_ERROR — Midtrans gagal membatalkan }
  */
-router.post('/payments/auto-renew', paymentController.enableAutoRenew)
-router.delete('/payments/auto-renew', paymentController.disableAutoRenew)
+router.post('/payments/auto-renew', demoGuard, paymentController.enableAutoRenew)
+router.delete('/payments/auto-renew', demoGuard, paymentController.disableAutoRenew)
 
 /**
  * @swagger
@@ -247,9 +250,10 @@ router.get('/payments/:orderId', paymentController.show)
  *       404: { description: NOT_FOUND — tidak ada, atau milik akun lain }
  *       422: { description: VALIDATION_ERROR — pembayaran sudah tidak terbuka }
  *       502: { description: PAYMENT_PROVIDER_ERROR — Midtrans gagal membatalkan }
+ *       403: { description: DEMO_ACCOUNT_LOCKED — akun demo bersama }
  *       503: { description: PAYMENTS_NOT_CONFIGURED }
  */
-router.post('/payments/:orderId/change-method', paymentController.changeMethod)
+router.post('/payments/:orderId/change-method', demoGuard, paymentController.changeMethod)
 
 /**
  * @swagger

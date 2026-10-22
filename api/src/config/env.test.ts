@@ -177,3 +177,24 @@ describe('email provider config', () => {
     expect(() => buildConfig({ ...base, EMAIL_PROVIDER: 'mailchimp' })).toThrow(/EMAIL_PROVIDER/)
   })
 })
+
+describe('demo account config', () => {
+  it('is off by default, for demo@hokya.dev, with no password or sample zone', () => {
+    const c = buildConfig(base)
+    expect(c.demoEnabled).toBe(false)
+    expect(c.demoEmail).toBe('demo@hokya.dev')
+    expect(c.demoPassword).toBeUndefined()
+    expect(c.demoSourceZoneId).toBeUndefined()
+  })
+
+  it('refuses DEMO_ENABLED without a password of 8+ characters (the sign-up rule)', () => {
+    expect(() => buildConfig({ ...base, DEMO_ENABLED: 'true' })).toThrow(/DEMO_PASSWORD/)
+    expect(() => buildConfig({ ...base, DEMO_ENABLED: 'true', DEMO_PASSWORD: 'demo123' })).toThrow(/DEMO_PASSWORD/)
+    expect(buildConfig({ ...base, DEMO_ENABLED: 'true', DEMO_PASSWORD: 'demo1234' }).demoEnabled).toBe(true)
+  })
+
+  it('takes an empty DEMO_SOURCE_ZONE_ID as unset and refuses one that is not a uuid', () => {
+    expect(buildConfig({ ...base, DEMO_SOURCE_ZONE_ID: '' }).demoSourceZoneId).toBeUndefined()
+    expect(() => buildConfig({ ...base, DEMO_SOURCE_ZONE_ID: 'yog' })).toThrow(/DEMO_SOURCE_ZONE_ID/)
+  })
+})

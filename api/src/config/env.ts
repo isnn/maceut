@@ -167,6 +167,17 @@ const schema = z.object({
   RETENTION_SWEEPER_ENABLED: boolFromEnv(false),
 
   /**
+   * A shared demo account, deleted and rebuilt every day at 00:00 WIB (demo.service).
+   * Off unless set. Its password comes from here and nowhere else; plan, payment and
+   * account changes are refused for it (lib/demo).
+   */
+  DEMO_ENABLED: boolFromEnv(false),
+  DEMO_EMAIL: z.string().trim().toLowerCase().email().default('demo@hokya.dev'),
+  DEMO_PASSWORD: optionalStr,
+  /** The zone whose latest full day of captures is copied into the demo each reset. */
+  DEMO_SOURCE_ZONE_ID: z.preprocess((v) => (v === '' ? undefined : v), z.string().trim().uuid().optional()),
+
+  /**
    * Transactional email — sign-up verification and password-reset codes (lib/email).
    * `auto` (default) uses whichever keys are set: Mailtrap first, Resend as the backup
    * when Mailtrap fails or runs out; with no key at all it falls to `console`, which
@@ -210,6 +221,10 @@ const schema = z.object({
   }
   if (e.EMAIL_PROVIDER === 'mailtrap' && !e.MAILTRAP_API_TOKEN) {
     ctx.addIssue({ code: 'custom', path: ['MAILTRAP_API_TOKEN'], message: 'required when EMAIL_PROVIDER=mailtrap' })
+  }
+  // Same as the sign-up rule (auth.ts minPasswordLength): Better Auth would refuse it anyway.
+  if (e.DEMO_ENABLED && (!e.DEMO_PASSWORD || e.DEMO_PASSWORD.length < 8)) {
+    ctx.addIssue({ code: 'custom', path: ['DEMO_PASSWORD'], message: 'required (8+ characters) when DEMO_ENABLED=true' })
   }
   if (emailProviders(e)[0] === 'console' && e.NODE_ENV === 'production') {
     ctx.addIssue({
@@ -316,6 +331,11 @@ export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
 
     swaggerEnabled: e.SWAGGER_ENABLED,
     retentionSweeperEnabled: e.RETENTION_SWEEPER_ENABLED,
+
+    demoEnabled: e.DEMO_ENABLED,
+    demoEmail: e.DEMO_EMAIL,
+    demoPassword: e.DEMO_PASSWORD,
+    demoSourceZoneId: e.DEMO_SOURCE_ZONE_ID,
 
     emailProviders: emailProviders(e),
     emailFrom: e.EMAIL_FROM,

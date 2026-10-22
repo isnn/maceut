@@ -2,6 +2,7 @@ import { Router } from 'express'
 import * as meController from '../controllers/me.controller'
 import * as usageController from '../controllers/usage.controller'
 import { authMiddleware } from '../middlewares/auth.middleware'
+import { demoGuard } from '../middlewares/demo.middleware'
 
 const router = Router()
 
@@ -21,6 +22,7 @@ const router = Router()
  *         planExpiresAt: { type: string, format: date-time, nullable: true, description: "Akhir periode berbayar (FE-56); null = tidak kedaluwarsa" }
  *         autoRenew: { type: boolean, description: "Diperpanjang otomatis dengan kartu (FE-56 fase 5)" }
  *         emailVerified: { type: boolean, description: Alamat sudah dikonfirmasi dengan kode OTP }
+ *         isDemo: { type: boolean, description: Akun demo bersama — ganti paket & pembayaran dimatikan }
  *         createdAt: { type: string, format: date-time }
  */
 
@@ -115,10 +117,10 @@ router.post('/me/onboarding', authMiddleware, meController.completeOnboarding)
  *                 success: { type: boolean, example: true }
  *                 data: { $ref: '#/components/schemas/User' }
  *       401: { description: UNAUTHORIZED }
- *       403: { description: UPGRADE_NOT_SELF_SERVE — naik paket harus lewat staf }
+ *       403: { description: UPGRADE_NOT_SELF_SERVE — naik paket harus lewat staf · DEMO_ACCOUNT_LOCKED — akun demo bersama }
  *       422: { description: VALIDATION_ERROR — paket tidak dikenal }
  */
-router.patch('/me/plan', authMiddleware, meController.changeOwnPlan)
+router.patch('/me/plan', authMiddleware, demoGuard, meController.changeOwnPlan)
 
 /**
  * @swagger

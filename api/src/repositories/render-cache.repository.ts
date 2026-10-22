@@ -57,3 +57,9 @@ export async function bytesByDaySince(since: Date): Promise<Map<string, number>>
     .groupBy(day)
   return new Map(rows.map((r) => [r.day, Number(r.bytes)]))
 }
+
+/** Every cached frame path an account holds in R2 — what the demo reset removes. */
+export async function pathsForUser(userId: string): Promise<string[]> {
+  const rows = await db.select({ path: renderCache.path }).from(renderCache).where(eq(renderCache.userId, userId))
+  return rows.map((r) => r.path)
+}
