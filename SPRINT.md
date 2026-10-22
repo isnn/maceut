@@ -239,6 +239,10 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
   jumlah yang sama), `Frame.day` dihitung sekali saat load, dan capture dikelompokkan per hari di memo.
   Render peta sendiri hanya 3–13 ms/frame. Sisa: tiap frame slim ±625 KB JSON (Cloudflare kompres br)
   dan 857 capture YOG belum punya `traffic_slim` (dibuat saat pertama dibuka).
+  (7) YOG vs JKT (laporan user: JKT lebih cepat): server sama cepat (DB 16–58 ms YOG vs ~30 ms JKT),
+  bedanya jumlah frame — JKT 4 frame termuat semua sekaligus; di YOG frame aktif berebut koneksi
+  dengan 5 prefetch. Kini frame aktif diunduh sendirian dulu, tetangga setelahnya; cache dibatasi
+  48 frame (±1,25 MB heap per frame terukur → ±60 MB), di luar jendela aktif dibuang.
 
 [2026-10-21] Mobile (laporan user): (1) menu ☰ app/internal/publik kini satu hook — tutup saat
   halaman berganti, tap di luar, atau Escape (sebelumnya hanya saat link-nya sendiri diklik; Log in /

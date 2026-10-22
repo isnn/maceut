@@ -101,6 +101,8 @@ import type { Zone } from '@/features/zones/types'
 /** Frames fetched ahead of the current one (when they exist), and behind it for Previous. */
 const PREFETCH_AHEAD = 5
 const PREFETCH_BEHIND = 2
+/** Frames kept in memory at most (~1.25 MB each): about 60 MB. */
+const TRAFFIC_CACHE_LIMIT = 48
 
 const SPEEDS = [
   { label: '0.5×', ms: 2000 },
@@ -370,12 +372,31 @@ export default function StudioPage() {
 
   const frame = frames[current] ?? null
 
-  /** Loads a frame's geometry into the cache, once. */
+  /** The frames around the current one — never evicted from the cache. */
+  const keepIds = useRef(new Set<string>())
+
+  /**
+   * Loads a frame's geometry into the cache, once. A parsed frame holds ~1.25 MB of JS
+   * heap (measured, YOG), so the cache is capped: past TRAFFIC_CACHE_LIMIT frames,
+   * everything outside the current window is dropped and fetched again if revisited.
+   * A range of a few dozen frames stays fully cached, so looping it stays free.
+   */
   const ensureLoaded = useCallback(async (id: string) => {
     if (inFlight.current.has(id)) return
     inFlight.current.add(id)
     const traffic = await studioApi.getFrameTraffic(id).catch(() => null)
-    setTraffics((prev) => (id in prev ? prev : { ...prev, [id]: traffic }))
+    setTraffics((prev) => {
+      if (id in prev) return prev
+      const next = { ...prev, [id]: traffic }
+      const ids = Object.keys(next)
+      if (ids.length <= TRAFFIC_CACHE_LIMIT) return next
+      for (const old of ids) {
+        if (old === id || keepIds.current.has(old)) continue
+        delete next[old]
+        inFlight.current.delete(old)
+      }
+      return next
+    })
   }, [])
 
   // The current frame first, then the next PREFETCH_AHEAD frames that exist, nearest
@@ -383,16 +404,28 @@ export default function StudioPage() {
   // instead of waiting on a request. Only while playing does "ahead" wrap past the end
   // to the start of the range, because only playback loops; paused on the last frames,
   // there is simply less ahead to fetch.
+  //
+  // The current frame goes alone: started together with its neighbours, it shared the
+  // connection with five other ~625 KB downloads and arrived last as often as first.
+  // The neighbours start once it is in (this effect re-runs when the cache changes).
   useEffect(() => {
     if (!frame) return
-    const wanted: (Frame | undefined)[] = [frame]
+    const wanted: Frame[] = [frame]
     for (let k = 1; k <= PREFETCH_AHEAD; k++) {
       const i = current + k
-      if (i < frames.length) wanted.push(frames[i])
-      else if (playing && i - frames.length < current) wanted.push(frames[i - frames.length])
+      const f = i < frames.length ? frames[i] : playing && i - frames.length < current ? frames[i - frames.length] : undefined
+      if (f) wanted.push(f)
     }
-    for (let k = 1; k <= PREFETCH_BEHIND; k++) wanted.push(frames[current - k])
-    for (const f of wanted) if (f && !(f.id in traffics)) void ensureLoaded(f.id)
+    for (let k = 1; k <= PREFETCH_BEHIND; k++) {
+      const f = frames[current - k]
+      if (f) wanted.push(f)
+    }
+    keepIds.current = new Set(wanted.map((f) => f.id))
+    if (!(frame.id in traffics)) {
+      void ensureLoaded(frame.id)
+      return
+    }
+    for (const f of wanted) if (!(f.id in traffics)) void ensureLoaded(f.id)
   }, [frame, frames, current, playing, traffics, ensureLoaded])
 
   /** The frame whose map is on screen — set once its render is blitted. */
