@@ -26,24 +26,30 @@
 
 MVP menggunakan **single workspace** — tidak ada multi-tenant atau team role. Satu akun = satu workspace.
 
-| Permission | Free | Standard | Premium |
-|-----------|:----:|:--------:|:-------:|
-| Buat & kelola zona (polygon) | ✅ | ✅ | ✅ |
-| Road class: Nasional | ✅ | ✅ | ✅ |
-| Road class: Provinsi | ❌ | ✅ | ✅ |
-| Road class: Kota / Lokal | ❌ | ❌ | ✅ |
-| Max Active Schedules | 10 | 20 | 50 |
-| Daily Capture Limit | 10 | 50 | 100 |
-| Export PNG/JPG | ✅ | ✅ | ✅ |
-| Custom Branding (logo + nama) | ✅ | ✅ | ✅ |
+| Permission | Free | Starter | Standard | Premium |
+|-----------|:----:|:-------:|:--------:|:-------:|
+| Harga / bulan | Rp 0 | Rp 99k | Rp 349k | Rp 1,49m |
+| Buat & kelola zona (polygon) | 1 | 3 | 10 | 15 |
+| Road class: Nasional | ✅ | ✅ | ✅ | ✅ |
+| Road class: Provinsi | ❌ | ✅ | ✅ | ✅ |
+| Road class: Kota / Lokal | ❌ | ❌ | ❌ | ✅ |
+| Max Active Schedules | 3 | 9 | 30 | 45 |
+| Pool capture / bulan (BR-006) | 45 | 450 | 2.000 | 3.000 |
+| Riwayat (tampilan & CSV) | 7 hari | 30 hari | 30 hari | 30 hari |
+| File ekspor disimpan (PKG-F9) | 7 hari | 14 hari | 30 hari | 30 hari |
+| Data capture (H1, ADR-035) | 30 hari, lalu soft delete (disembunyikan, bisa dipulihkan); dihapus permanen setelah 6 bulan | sama | sama | sama |
+| Pengguna | 1 | 1 | 5 | 5 |
+| Export PNG/JPG | ✅ | ✅ | ✅ | ✅ |
 
-*Semua user bisa membuat zona polygon di area mana saja. Tier membatasi kedalaman data jalan yang bisa dipilih (road class) DAN volume penggunaan (active schedule & daily capture limit) — lihat BR-005, BR-006.*
+*Katalog 4 paket dari dokumen "Delivery Paket & Fitur" (2026-10). Paket Business ditunda.*
+
+*Semua user bisa membuat zona polygon di area mana saja. Tier membatasi kedalaman data jalan yang bisa dipilih (road class) DAN volume penggunaan (active schedule & pool capture bulanan) — lihat BR-005, BR-006.*
 
 ### Platform Administration (prototype)
 
 Ada field **platform-level** `role: 'user' | 'internal'` di record user — `internal` = staf Maceut,
 dipakai untuk gate area `/internal` (manajemen user + konfigurasi sistem). Siapa yang mendapatkannya
-ditentukan env `NEXT_PUBLIC_INTERNAL_EMAILS` (daftar email dipisah koma), bukan lewat pendaftaran.
+ditentukan env server `INTERNAL_EMAILS` di `api/.env` (daftar email dipisah koma), bukan lewat pendaftaran. Web tidak lagi menyimpan salinan daftar ini; ia membaca flag `roleLockedByConfig` per user dari API.
 Ini **berbeda** dari
 workspace/team role (`owner`/`editor`/`viewer`) yang tetap out of scope MVP: yang satu operator
 platform, yang satu kolaborasi di dalam satu workspace.
@@ -84,8 +90,8 @@ Lihat `.claude/specs/internal/requirements.md`.
 - BR-023: Style (skema warna overlay + teks title + tampilan timestamp) dipilih **setiap kali** sebelum preview atau trigger manual capture — bersifat ephemeral, **tidak disimpan** sebagai profil per zona maupun per user. Untuk **scheduled capture** (trigger otomatis tanpa interaksi user), sistem menggunakan style preset **"Default"**. Setiap record capture tetap menyimpan snapshot style yang dipakai (`style_used`) untuk keperluan histori, bukan untuk dipakai ulang otomatis.
 
 **Schedule & Capture Limits**
-- BR-005: Batas active schedule bersamaan per user sesuai plan: Free 10, Standard 20, Premium 50. Schedule `paused` atau `deleted` tidak dihitung.
-- BR-006: Daily capture limit per user sesuai plan: Free 10, Standard 50, Premium 100 captures/hari. Dihitung per kalender hari (WIB UTC+7).
+- BR-005: Batas active schedule bersamaan per user sesuai plan: Free 3, Starter 9, Standard 30, Premium 45. Schedule `paused` atau `deleted` tidak dihitung.
+- BR-006: Pool capture bulanan per user sesuai plan: Free 45, Starter 450, Standard 2.000, Premium 3.000 capture per bulan kalender WIB, reset tanggal 1 pukul 00:00 WIB, dibagi bebas antar zona & jadwal. Dihitung: capture terjadwal & manual yang dikirim ke HERE, termasuk yang gagal setelahnya; tidak dihitung: `skipped_limit`, `missed`, preview zona. Jadwal tidak pernah ditolak karena proyeksi — papan jadwal hanya memperingatkan (delivery doc F5/F6).
 - BR-007: Enforcement limit dilakukan di **service layer** — handler tidak boleh melakukan validasi limit sendiri.
 - BR-008: Jika capture gagal karena limit tercapai, job di-drop (bukan di-retry) dan dicatat di capture history dengan status `skipped_limit`.
 
@@ -97,13 +103,15 @@ Lihat `.claude/specs/internal/requirements.md`.
 
 **Zone & Geometry**
 - BR-013: Zone disimpan sebagai PostGIS Polygon dalam CRS WGS84 (SRID 4326).
+  Bounding box zona maksimal **100 km per sisi** dan ≤ 1° per sisi (batas bbox HERE Traffic Flow v7);
+  ditolak 422 saat dibuat, dan wizard menolak titik yang melewatinya dengan pop-up (2026-10-13).
 - BR-014: User menggambar polygon zone secara manual di peta. Tidak ada import dari file eksternal di MVP.
 - BR-015: Nama zone bersifat unik per user (case-insensitive).
 
 **Map Visualization**
 - BR-016: Layer peta hanya menampilkan road network dan traffic state. POI, toko, restoran, dan hotel tidak ditampilkan.
 - BR-017: Color mapping traffic: `normal=green`, `slow=yellow`, `heavy=orange`, `congested=red`. Mengikuti data HERE Traffic Flow.
-- BR-018: Setiap gambar capture wajib menyertakan: company logo, zone name, dan timestamp (format: `DD MMM YYYY HH:mm WIB`).
+- BR-018: Setiap gambar capture wajib menyertakan: zone name dan timestamp (format: `DD MMM YYYY HH:mm WIB`). (Company logo dihapus dari scope — lihat SPRINT.md 2026-09-28d.)
 - BR-019: Legend traffic wajib tampil di setiap gambar capture.
 
 ---
@@ -144,11 +152,6 @@ Lihat `.claude/specs/internal/requirements.md`.
 - Pause & resume schedule `📋`
 - Schedule dengan kondisi (cuaca, jam tertentu) `❌`
 
-**Branding**
-- Upload company logo `📋`
-- Konfigurasi nama perusahaan untuk watermark `📋`
-- Custom color watermark `❌`
-
 **Subscription**
 - Free / Standard / Premium plan `📋`
 - Upgrade plan (Stripe atau payment gateway lokal) `📋`
@@ -165,8 +168,7 @@ Lihat `.claude/specs/internal/requirements.md`.
 - Team member & role management
 - Import zone dari file eksternal (GeoJSON, KML)
 - Schedule dengan kondisi dinamis
-- Custom color watermark
-- Multiple branding profile per user
+- Company branding (logo / nama perusahaan di gambar) — dihapus dari scope 2026-09-28
 - Mobile native app
 - Public API / webhook
 - Invoice & billing history

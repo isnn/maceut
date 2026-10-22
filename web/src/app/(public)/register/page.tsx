@@ -1,16 +1,28 @@
 'use client'
 
-import { useEffect } from 'react'
+import { linkClass } from '@/components/ui/Button'
+import { Suspense, useEffect } from 'react'
+import { Alert } from '@/components/ui/Alert'
+import { PLAN_LABEL } from '@/lib/constants'
+import { isPaidPlan, rememberIntendedPlan } from '@/features/marketing/intended-plan'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Logo } from '@/components/ui/Logo'
 import { RegisterForm } from '@/features/auth/components/RegisterForm'
 import { useCurrentUser } from '@/features/auth/hooks/useAuth'
 import { homePathFor } from '@/features/auth/home-path'
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const { user, loading } = useCurrentUser()
   const router = useRouter()
+  /** A paid plan picked on /pricing (FE-37): remembered, started on Free. */
+  const searchParams = useSearchParams()
+  const planParam = searchParams.get('plan')
+  const intended = isPaidPlan(planParam) ? planParam : null
+
+  useEffect(() => {
+    if (intended) rememberIntendedPlan(intended)
+  }, [intended])
 
   useEffect(() => {
     if (!loading && user) router.replace(homePathFor(user))
@@ -24,10 +36,13 @@ export default function RegisterPage() {
       <div className="w-full max-w-[34rem]">
         <Logo href="/" />
 
-        <h1 className="mt-xxl text-display text-text-primary">Create your account</h1>
-        <p className="mt-xs text-body text-text-secondary mb-xl">
-          One account per agency workspace — invite your team afterwards. You&rsquo;ll pick a plan next.
-        </p>
+        <h1 className="mt-xxl mb-xl text-display text-text-primary">Create your account</h1>
+        {intended && (
+          <Alert variant="info" className="mb-lg">
+            You picked {PLAN_LABEL[intended]}. Your account starts on Free, and {PLAN_LABEL[intended]} is ready to
+            choose as soon as payment opens.
+          </Alert>
+        )}
 
         <div className="bg-card border border-border rounded-lg p-xl">
           <RegisterForm />
@@ -35,11 +50,28 @@ export default function RegisterPage() {
 
         <p className="text-body text-text-secondary text-center mt-xl">
           Already have an account?{' '}
-          <Link href="/login" className="text-info font-medium no-underline hover:underline">
+          <Link href="/login" className={linkClass()}>
             Log in
+          </Link>
+        </p>
+        <p className="flex justify-center gap-lg text-caption text-text-muted mt-md">
+          <Link href="/terms" className={linkClass('caption')}>
+            Terms of Service
+          </Link>
+          <Link href="/privacy" className={linkClass('caption')}>
+            Privacy Policy
           </Link>
         </p>
       </div>
     </main>
+  )
+}
+
+/** `useSearchParams` needs a Suspense boundary in the app router. */
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterPageContent />
+    </Suspense>
   )
 }

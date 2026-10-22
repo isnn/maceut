@@ -5,13 +5,21 @@ import { usePathname } from 'next/navigation'
 import { Logo } from '@/components/ui/Logo'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { cn } from '@/lib/utils'
+import { PAGE_WIDTH } from './page-width'
 import { useCurrentUser, useLogout } from '@/features/auth/hooks/useAuth'
+import { accessOf } from '@/features/auth/types'
+import { NotificationBell } from '@/features/notifications/NotificationBell'
+import { MobileNavPanel, MobileNavToggle, useMobileNav } from './MobileNav'
 
 const NAV_ITEMS = [
-  { href: '/internal', label: 'Overview' },
-  { href: '/internal/users', label: 'Users' },
-  { href: '/internal/config', label: 'Configuration' },
+  { href: '/internal', label: 'Overview', superadmin: false },
+  { href: '/internal/users', label: 'Users', superadmin: false },
+  { href: '/internal/here', label: 'HERE usage', superadmin: true },
+  { href: '/internal/config', label: 'Configuration', superadmin: true },
 ]
+
+/** Staff pages only a superadmin may open (FE-34) — the layout and the API enforce it too. */
+export const SUPERADMIN_PATHS = NAV_ITEMS.filter((i) => i.superadmin).map((i) => i.href)
 
 function initials(name: string, email: string): string {
   const source = name.trim() || email
@@ -24,20 +32,25 @@ export function InternalHeader() {
   const pathname = usePathname()
   const { user } = useCurrentUser()
   const logout = useLogout()
+  const menu = useMobileNav()
+  const items = NAV_ITEMS.filter((item) => !item.superadmin || (user && accessOf(user) === 'superadmin')).map((item) => ({
+    href: item.href,
+    label: item.label,
+    active: item.href === '/internal' ? pathname === item.href : pathname.startsWith(item.href),
+  }))
 
   return (
     <header className="sticky top-0 z-20 bg-canvas border-b border-border">
-      <div className="mx-auto max-w-[1180px] px-xl h-16 flex items-center gap-xxl">
+      <div className={cn('mx-auto px-lg tablet:px-xl h-16 flex items-center gap-xxl', PAGE_WIDTH)}>
         <div className="flex items-center gap-sm">
           <Logo href="/internal" />
-          <span className="bg-primary-soft text-[#5A35F3] text-micro font-semibold rounded-xs px-sm py-xs uppercase tracking-wide">
+          <span className="bg-primary-soft text-primary text-micro font-semibold rounded-xs px-sm py-xs uppercase tracking-wide">
             Internal
           </span>
         </div>
 
-        <nav className="flex items-center gap-lg overflow-x-auto">
-          {NAV_ITEMS.map((item) => {
-            const active = item.href === '/internal' ? pathname === item.href : pathname.startsWith(item.href)
+        <nav className="hidden laptop:flex items-center gap-xl">
+          {items.map(({ active, ...item }) => {
             return (
               <Link
                 key={item.href}
@@ -57,10 +70,12 @@ export function InternalHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-md">
+          {/* Staff get HERE budget alerts here (NOTIF). */}
+          <NotificationBell />
           {user && (
             <Dropdown
               triggerLabel="Account menu"
-              triggerClassName="w-10 h-10 rounded-full bg-primary-soft text-[#5A35F3] text-label font-bold flex items-center justify-center hover:bg-primary-soft/70"
+              triggerClassName="w-10 h-10 rounded-full bg-primary-soft text-primary text-label font-bold flex items-center justify-center hover:bg-primary-soft/70"
               trigger={<>{initials(user.fullName, user.email)}</>}
             >
               {(close) => (
@@ -68,7 +83,7 @@ export function InternalHeader() {
                   <div className="px-lg py-md border-b border-divider">
                     <p className="text-label font-semibold text-text-primary truncate">{user.fullName || user.email}</p>
                     <p className="text-caption text-text-muted truncate">{user.email}</p>
-                    <span className="inline-block mt-sm bg-primary-soft text-[#5A35F3] text-micro font-semibold rounded-xs px-sm py-xs">
+                    <span className="inline-block mt-sm bg-primary-soft text-primary text-micro font-semibold rounded-xs px-sm py-xs">
                       Internal
                     </span>
                   </div>
@@ -99,8 +114,10 @@ export function InternalHeader() {
               )}
             </Dropdown>
           )}
+          <MobileNavToggle open={menu.open} onToggle={menu.toggle} controls="internal-menu" />
         </div>
       </div>
+      {menu.open && <MobileNavPanel id="internal-menu" items={items} onPick={menu.close} />}
     </header>
   )
 }

@@ -22,19 +22,17 @@ workspace/team role (`owner`/`editor`/`viewer`) yang masih out of scope MVP.
 - `user` — pelanggan biasa, hanya punya akses ke workspace-nya sendiri.
 - `internal` — staf Maceut, bisa membuka `/internal` untuk mengelola semua akun & konfigurasi sistem.
 
-**Siapa yang dapat role `internal`** ditentukan lewat env `NEXT_PUBLIC_INTERNAL_EMAILS` di
-`web/.env.local` — daftar email dipisah koma. Setiap akun yang emailnya ada di daftar itu otomatis
-ber-role `internal` saat dibaca; akun lain bisa dipromosikan lewat `/internal/users` dan tersimpan
-di record user.
+**Siapa yang dapat role `internal`** ditentukan lewat env server `INTERNAL_EMAILS` di `api/.env` —
+daftar email dipisah koma, dan satu-satunya salinan. Setiap akun yang emailnya ada di daftar itu
+ber-role `internal` saat di-resolve server; akun lain bisa dipromosikan lewat `/internal/users` dan
+tersimpan di record user.
 
-- Akun yang di-grant lewat env **tidak bisa** diturunkan dari UI (`ROLE_SET_BY_CONFIG`) — sumber
-  kebenarannya file env, bukan tabel. Hapus emailnya dari env untuk mencabut akses.
+- Akun yang di-grant lewat config **tidak bisa** diturunkan dari UI (`ROLE_SET_BY_CONFIG`). Web
+  mengetahuinya dari flag `roleLockedByConfig` per user yang dikirim API — web TIDAK lagi punya
+  salinan daftar sendiri (dulu `NEXT_PUBLIC_INTERNAL_EMAILS`, yang ikut ter-bundle ke browser dan
+  bisa berbeda dari daftar server; dihapus 2026-09-28).
 - Daftar kosong = tidak ada yang bisa membuka `/internal`.
-- Mengubah env butuh restart dev server / container agar Next memuat ulang `.env.local`.
-
-⚠️ `NEXT_PUBLIC_` berarti nilainya ikut ter-bundle ke browser — daftar ini **bukan rahasia dan bukan
-pengaman**, hanya konfigurasi prototipe. Saat `api/` ada, penentuan role pindah ke kolom `users.role`
-+ middleware server.
+- Mengubah daftar butuh restart service api.
 
 ---
 

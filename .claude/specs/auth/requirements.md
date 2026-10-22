@@ -26,9 +26,16 @@ supaya **saya bisa mulai menggunakan Maceut**.
 - Submit form dua kali cepat (double click) → disable tombol setelah submit pertama
 - Email dengan karakter unicode atau subdomain panjang → tetap valid selama format RFC-5322
 
+> **Diperbarui 2026-09-28 (ADR-026):** setelah register TIDAK langsung login. Kode 6 digit
+> dikirim ke email; memasukkannya di `/verify-email` memverifikasi alamat DAN membuat sesi.
+> Email yang sudah terdaftar dijawab sama seperti email baru (tidak ada lagi
+> `EMAIL_ALREADY_TAKEN`) — pemiliknya tidak menerima kode, dan layar kode menyarankan login.
+> Login ke akun yang belum terverifikasi → 403 `EMAIL_NOT_VERIFIED`, kode baru otomatis
+> terkirim, UI pindah ke `/verify-email`. Lupa password: `/forgot-password` (kode + password baru).
+
 **Out of Scope (fase ini):**
 - Register via Google / OAuth
-- Verifikasi email (email confirmation link)
+- ~~Verifikasi email~~ — dikerjakan dengan kode OTP, lihat catatan di atas
 - Invite-based registration
 - CAPTCHA
 

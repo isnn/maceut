@@ -1,5 +1,6 @@
 'use client'
 
+import { linkClass } from '@/components/ui/Button'
 import { Suspense, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -63,7 +64,7 @@ export default function LoginPage() {
               </ul>
               <div className="space-y-xs pt-md border-t border-white/15">
                 <p className="text-caption text-white/70">
-                  Used by provincial and city road agencies across Java and Sumatra.
+                  Used by road agencies and city planners to watch traffic, zone by zone.
                 </p>
                 <p className="text-micro text-white/45">
                   Photo by{' '}
@@ -98,7 +99,7 @@ export default function LoginPage() {
 
               <p className="text-body text-text-secondary text-center mt-xl">
                 New to Maceut?{' '}
-                <Link href="/register" className="text-info font-medium no-underline hover:underline">
+                <Link href="/register" className={linkClass()}>
                   Create an account
                 </Link>
               </p>
