@@ -224,8 +224,8 @@ Format: [YYYY-MM-DD] nama-task — catatan jika ada keputusan
 
 [2026-10-21] Studio: Next/Play lambat (laporan user). (1) Preview menggambar ulang frame yang sama
   setiap kali traffic frame tetangga selesai di-prefetch (effect bergantung pada seluruh cache) — kini
-  hanya traffic frame aktif. (2) Prefetch 1 frame → jendela 2 di belakang + 5 di depan (melingkar,
-  karena playback loop). (3) Frame tidak digambar sebelum traffic-nya datang (dulu peta kosong dulu,
+  hanya traffic frame aktif. (2) Prefetch 1 frame → 5 frame berikutnya yang ada (terdekat dulu) + 2 di
+  belakang; melingkar ke awal range hanya saat Play (playback loop). (3) Frame tidak digambar sebelum traffic-nya datang (dulu peta kosong dulu,
   lalu render kedua), caption mengikuti frame yang tampil, dan tick playback berikutnya baru mulai
   setelah frame tergambar. (4) Satu canvas scratch dipakai ulang + canvas preview/overlay hanya
   di-resize saat ukuran berubah (`ctx.reset()`), bukan alokasi ~6 MB per frame.

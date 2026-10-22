@@ -98,7 +98,7 @@ import {
 import type { Zone } from '@/features/zones/types'
 
 /** Playback speeds, as milliseconds between frames. */
-/** Frames fetched around the current one: enough ahead for a few seconds of 4× playback. */
+/** Frames fetched ahead of the current one (when they exist), and behind it for Previous. */
 const PREFETCH_AHEAD = 5
 const PREFETCH_BEHIND = 2
 
@@ -363,18 +363,22 @@ export default function StudioPage() {
     setTraffics((prev) => (id in prev ? prev : { ...prev, [id]: traffic }))
   }, [])
 
-  // The current frame first, then a window around it, so Next, Previous and playback
-  // find their frame already loaded instead of waiting on a request each step. Wraps
-  // past the end, because playback loops back to the start of the range.
+  // The current frame first, then the next PREFETCH_AHEAD frames that exist, nearest
+  // first, then a couple behind for Previous — so a step finds its frame already loaded
+  // instead of waiting on a request. Only while playing does "ahead" wrap past the end
+  // to the start of the range, because only playback loops; paused on the last frames,
+  // there is simply less ahead to fetch.
   useEffect(() => {
     if (!frame) return
-    if (!(frame.id in traffics)) void ensureLoaded(frame.id)
-    for (let offset = -PREFETCH_BEHIND; offset <= PREFETCH_AHEAD; offset++) {
-      if (offset === 0 || Math.abs(offset) >= frames.length) continue
-      const near = frames[(current + offset + frames.length) % frames.length]
-      if (near && !(near.id in traffics)) void ensureLoaded(near.id)
+    const wanted: (Frame | undefined)[] = [frame]
+    for (let k = 1; k <= PREFETCH_AHEAD; k++) {
+      const i = current + k
+      if (i < frames.length) wanted.push(frames[i])
+      else if (playing && i - frames.length < current) wanted.push(frames[i - frames.length])
     }
-  }, [frame, frames, current, traffics, ensureLoaded])
+    for (let k = 1; k <= PREFETCH_BEHIND; k++) wanted.push(frames[current - k])
+    for (const f of wanted) if (f && !(f.id in traffics)) void ensureLoaded(f.id)
+  }, [frame, frames, current, playing, traffics, ensureLoaded])
 
   /** The frame whose map is on screen — set once its render is blitted. */
   const [shownId, setShownId] = useState<string | null>(null)
