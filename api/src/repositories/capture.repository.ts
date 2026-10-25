@@ -606,3 +606,88 @@ export async function retentionCounts(softBefore: Date, purgeBefore: Date): Prom
     .from(captures)
   return rows[0] ?? { toSoftDelete: 0, toPurge: 0, toPurgeWithImage: 0 }
 }
+
+/** Every capture image path an account holds — what the demo reset removes from R2. */
+export async function filePathsForUser(userId: string): Promise<string[]> {
+  const rows = await db
+    .select({ filePath: captures.filePath })
+    .from(captures)
+    .where(and(eq(captures.userId, userId), sql`${captures.filePath} IS NOT NULL`))
+  return rows.map((r) => r.filePath!)
+}
+
+/**
+ * The latest WIB day before `before` on which a zone has collected captures, as
+ * 'YYYY-MM-DD' — the demo's sample day. Null when the zone has none.
+ */
+export async function latestDoneWibDayBefore(zoneId: string, before: Date): Promise<string | null> {
+  const rows = await db
+    .select({ day: sql<string>`to_char(max(${captures.capturedAt} AT TIME ZONE 'Asia/Jakarta'), 'YYYY-MM-DD')` })
+    .from(captures)
+    .where(
+      and(
+        eq(captures.zoneId, zoneId),
+        eq(captures.status, 'done'),
+        isNull(captures.deletedAt),
+        sql`(${captures.capturedAt} AT TIME ZONE 'Asia/Jakarta')::date < (${before}::timestamptz AT TIME ZONE 'Asia/Jakarta')::date`,
+      ),
+    )
+  return rows[0]?.day ?? null
+}
+
+/** A zone's collected captures on one WIB day ('YYYY-MM-DD'), oldest first — ids, times and images only. */
+export async function listDoneOnWibDay(
+  zoneId: string,
+  day: string,
+): Promise<{ id: string; capturedAt: Date; filePath: string | null; fileSize: number | null }[]> {
+  return db
+    .select({ id: captures.id, capturedAt: captures.capturedAt, filePath: captures.filePath, fileSize: captures.fileSize })
+    .from(captures)
+    .where(
+      and(
+        eq(captures.zoneId, zoneId),
+        eq(captures.status, 'done'),
+        isNull(captures.deletedAt),
+        sql`(${captures.capturedAt} AT TIME ZONE 'Asia/Jakarta')::date = ${day}::date`,
+      ),
+    )
+    .orderBy(asc(captures.capturedAt))
+}
+
+/**
+ * Copies one capture into another account's zone — traffic and all — as a new row with
+ * no schedule and no image (the caller copies the file and calls `setImage`). Done
+ * inside Postgres with INSERT … SELECT, so the ~2 MB of traffic never crosses into Node.
+ */
+export async function copyInto(sourceId: string, target: { userId: string; zoneId: string }): Promise<string | undefined> {
+  const rows = await db
+    .insert(captures)
+    .select(
+      db
+        .select({
+          id: sql`gen_random_uuid()`.as('id'),
+          userId: sql`${target.userId}`.as('user_id'),
+          zoneId: sql`${target.zoneId}::uuid`.as('zone_id'),
+          scheduleId: sql`NULL::uuid`.as('schedule_id'),
+          status: captures.status,
+          trigger: captures.trigger,
+          roadClass: captures.roadClass,
+          traffic: captures.traffic,
+          trafficSlim: captures.trafficSlim,
+          roadsCount: captures.roadsCount,
+          jamFactorAvg: captures.jamFactorAvg,
+          filePath: sql`NULL::text`.as('file_path'),
+          fileSize: sql`NULL::integer`.as('file_size'),
+          styleUsed: captures.styleUsed,
+          error: captures.error,
+          scheduledFor: captures.scheduledFor,
+          capturedAt: captures.capturedAt,
+          createdAt: sql`now()`.as('created_at'),
+          deletedAt: sql`NULL::timestamptz`.as('deleted_at'),
+        })
+        .from(captures)
+        .where(eq(captures.id, sourceId)),
+    )
+    .returning({ id: captures.id })
+  return rows[0]?.id
+}

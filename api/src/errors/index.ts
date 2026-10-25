@@ -30,6 +30,7 @@ export type ErrorCode =
   | 'PAYMENTS_NOT_CONFIGURED'
   | 'PAYMENT_PROVIDER_ERROR'
   | 'RATE_LIMITED'
+  | 'DEMO_ACCOUNT_LOCKED'
   | 'INTERNAL_ERROR'
 
 export class AppError extends Error {
@@ -218,6 +219,15 @@ export class RateLimitedError extends AppError {
 }
 
 /** FE-56: no MIDTRANS_SERVER_KEY, so plans can't be paid for yet. */
+/** The shared demo account cannot change its plan, pay, or change its own sign-in. */
+export const DEMO_LOCKED_MESSAGE = 'This is a shared demo account, so account, plan and payment changes are turned off.'
+
+export class DemoAccountLockedError extends AppError {
+  constructor() {
+    super('DEMO_ACCOUNT_LOCKED', 403, DEMO_LOCKED_MESSAGE)
+  }
+}
+
 export class PaymentsNotConfiguredError extends AppError {
   constructor() {
     super('PAYMENTS_NOT_CONFIGURED', 503, 'Payments are not available yet. Contact the Maceut team to upgrade.')

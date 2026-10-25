@@ -68,6 +68,10 @@ export const CONFIG_VARS: ConfigVarMeta[] = [
   { key: 'RABBITMQ_QUEUE_DEAD_LETTER', group: 'queue', label: 'Dead-letter queue', defaultValue: 'capture-dead-letter' },
   { key: 'CAPTURE_CONCURRENCY', group: 'queue', label: 'Captures at once', defaultValue: '4' },
   { key: 'RETENTION_SWEEPER_ENABLED', group: 'queue', label: 'Capture retention sweeper (30 d / 1 y)', defaultValue: 'false' },
+  { key: 'DEMO_ENABLED', group: 'queue', label: 'Demo account (reset daily 00:00 WIB)', defaultValue: 'false' },
+  { key: 'DEMO_EMAIL', group: 'queue', label: 'Demo account email', defaultValue: 'demo@hokya.dev' },
+  { key: 'DEMO_PASSWORD', group: 'queue', label: 'Demo account password', help: 'Secret; 8+ characters.' },
+  { key: 'DEMO_SOURCE_ZONE_ID', group: 'queue', label: 'Demo sample zone', help: 'Zone id whose latest full day is copied in.' },
 
   { key: 'PLAYWRIGHT_HEADLESS', group: 'capture_engine', label: 'Headless', defaultValue: 'true' },
   { key: 'PLAYWRIGHT_TIMEOUT_MS', group: 'capture_engine', label: 'Timeout (ms)', defaultValue: '30000' },

@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth'
 import { emailOTP } from 'better-auth/plugins'
-import { APIError, createAuthMiddleware } from 'better-auth/api'
+import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { db } from './drizzle-client'
 import * as schema from '../../drizzle/schema'
@@ -8,6 +8,8 @@ import { config } from '../config/env'
 import { expiryToSeconds } from './duration'
 import { OTP_EXPIRES_SECONDS, sendOtpEmail } from '../services/email.service'
 import { consentProblem, consentStamp, TERMS_NOT_ACCEPTED } from '../services/consent.service'
+import { DEMO_LOCKED_MESSAGE } from '../errors'
+import { demoLocked, isDemoUser } from './demo'
 
 /**
  * Better Auth owns the auth module (ADR-009).
@@ -86,6 +88,9 @@ export const auth = betterAuth({
       // Not awaited: whether a send happens (it doesn't for an unknown address on
       // password reset) must not show up in the response time.
       async sendVerificationOTP({ email, otp, type }) {
+        // The demo is created verified (demo.service); its server-side sign-up must not
+        // email a code to an inbox nobody reads, every night.
+        if (isDemoUser(email)) return
         void sendOtpEmail(email, otp, type)
       },
     }),
@@ -130,7 +135,12 @@ export const auth = betterAuth({
    */
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
-      if (ctx.path !== '/sign-up/email' || !ctx.request) return
+      // Server-side calls (staff creating an account, the demo reset) have no request.
+      if (!ctx.request) return
+      if (await demoLocked(ctx.path, ctx.body, async () => (await getSessionFromCtx(ctx))?.user.email)) {
+        throw new APIError('FORBIDDEN', { code: 'DEMO_ACCOUNT_LOCKED', message: DEMO_LOCKED_MESSAGE })
+      }
+      if (ctx.path !== '/sign-up/email') return
       const problem = consentProblem(ctx.body)
       if (problem) throw new APIError('BAD_REQUEST', { code: TERMS_NOT_ACCEPTED, message: problem })
     }),

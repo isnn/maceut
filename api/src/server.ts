@@ -6,6 +6,7 @@ import { startScheduler, stopScheduler } from './schedulers/capture.scheduler'
 import { startExportSweeper, stopExportSweeper } from './schedulers/export.sweeper'
 import { startNotificationSweeper, stopNotificationSweeper } from './schedulers/notification.sweeper'
 import { startRetentionSweeper, stopRetentionSweeper } from './schedulers/retention.sweeper'
+import { startDemoSweeper, stopDemoSweeper } from './schedulers/demo.sweeper'
 
 const server = app.listen(config.port, () => {
   console.log(`[api] listening on :${config.port} (${config.nodeEnv})`)
@@ -28,6 +29,7 @@ const server = app.listen(config.port, () => {
   startExportSweeper()
   startNotificationSweeper()
   startRetentionSweeper()
+  startDemoSweeper()
 })
 
 async function shutdown(signal: string) {
@@ -36,6 +38,7 @@ async function shutdown(signal: string) {
   stopExportSweeper()
   stopNotificationSweeper()
   stopRetentionSweeper()
+  stopDemoSweeper()
   server.close(async () => {
     await Promise.allSettled([closeDb(), closeQueue()])
     process.exit(0)
