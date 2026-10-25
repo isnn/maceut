@@ -3,87 +3,126 @@ import type { Plan } from '@/features/auth/types'
 /**
  * Plan catalog — single source of truth for the frontend.
  *
- * `schedulesLimit` and `capturesLimit` carry BR-005 / BR-006 (10/20/50 active
- * schedules, 10/50/100 daily captures). The remaining fields come from the
- * turn 3/4 mockups (zone slots, seats, capture interval, retention, export
- * formats), which price Standard at Rp 490rb and Premium at Rp 1,9jt.
+ * The four-plan catalog from the delivery doc (2026-10). Mirrors PLAN_LIMITS in
+ * api/src/types/plan.ts field for field; api/src/types/plan-catalog.test.ts fails when
+ * the two drift. `monthlyCaptures` is the monthly capture pool (BR-006, delivery doc
+ * F5): captures per WIB calendar month, shared by every zone and window.
  */
 export const PLAN_LIMITS = {
   free: {
     maxRoadClass: 'nasional',
-    schedulesLimit: 10,
-    capturesLimit: 10,
+    schedulesLimit: 3,
+    monthlyCaptures: 45,
     zonesLimit: 1,
     seatsLimit: 1,
     storageGb: 1,
     captureInterval: 'Daily',
+    /** How far back the captures CSV reaches, in days; null = all (FE-30). */
+    historyDays: 7,
     historyLabel: '7 days',
-    exportLabel: 'Images only',
+    /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
+    exportFramesLimit: 60,
+    exportBudgetMpFrames: 120,
+    /** Days a finished export stays downloadable (PKG-F9). */
+    exportRetentionDays: 7,
+    exportLabel: 'MP4 and WebM',
+  },
+  starter: {
+    maxRoadClass: 'nasional_provinsi',
+    schedulesLimit: 9,
+    monthlyCaptures: 450,
+    zonesLimit: 3,
+    seatsLimit: 1,
+    storageGb: 5,
+    captureInterval: 'Hourly',
+    /** How far back the captures CSV reaches, in days; null = all (FE-30). */
+    historyDays: 30,
+    historyLabel: '30 days',
+    /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
+    exportFramesLimit: 120,
+    exportBudgetMpFrames: 250,
+    /** Days a finished export stays downloadable (PKG-F9). */
+    exportRetentionDays: 14,
+    exportLabel: 'MP4 and WebM',
   },
   standard: {
     maxRoadClass: 'nasional_provinsi',
-    schedulesLimit: 20,
-    capturesLimit: 50,
-    zonesLimit: 5,
+    schedulesLimit: 30,
+    monthlyCaptures: 2000,
+    zonesLimit: 10,
     seatsLimit: 5,
     storageGb: 10,
     captureInterval: 'Hourly',
-    historyLabel: '90 days',
-    exportLabel: 'GIF + MP4',
+    /** How far back the captures CSV reaches, in days; null = all (FE-30). */
+    historyDays: 30,
+    historyLabel: '30 days',
+    /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
+    exportFramesLimit: 240,
+    exportBudgetMpFrames: 500,
+    /** Days a finished export stays downloadable (PKG-F9). */
+    exportRetentionDays: 30,
+    exportLabel: 'MP4 and WebM',
   },
   premium: {
     maxRoadClass: 'semua',
-    schedulesLimit: 50,
-    capturesLimit: 100,
-    zonesLimit: 25,
-    seatsLimit: 25,
+    schedulesLimit: 45,
+    monthlyCaptures: 3000,
+    zonesLimit: 15,
+    seatsLimit: 5,
     storageGb: 100,
     captureInterval: '15 minutes',
-    historyLabel: 'Unlimited',
-    exportLabel: 'All formats + API',
+    /** How far back the captures CSV reaches, in days; null = all (FE-30). */
+    historyDays: 30,
+    historyLabel: '30 days',
+    /** Frames per export, and frames × pixels (megapixel-frames) per export — EXP-C. */
+    exportFramesLimit: 720,
+    exportBudgetMpFrames: 2900,
+    /** Days a finished export stays downloadable (PKG-F9). */
+    exportRetentionDays: 30,
+    exportLabel: 'MP4 and WebM',
   },
 } as const
 
-export const PLAN_ORDER: Plan[] = ['free', 'standard', 'premium']
+export const PLAN_ORDER: Plan[] = ['free', 'starter', 'standard', 'premium']
 
 export const PLAN_LABEL: Record<Plan, string> = {
   free: 'Free',
+  starter: 'Starter',
   standard: 'Standard',
   premium: 'Premium',
 }
 
 export const PLAN_PRICE: Record<Plan, { amount: string; period: string }> = {
   free: { amount: 'Rp 0', period: '/ month' },
-  standard: { amount: 'Rp 490k', period: '/ month' },
-  premium: { amount: 'Rp 1.9m', period: '/ month' },
+  starter: { amount: 'Rp 99k', period: '/ month' },
+  standard: { amount: 'Rp 349k', period: '/ month' },
+  premium: { amount: 'Rp 1.49m', period: '/ month' },
 }
 
 /** Bullet list shown on plan cards (landing, sign up, onboarding). */
 export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
-  free: ['1 zone · 10 captures / day', 'Nasional road class', '7-day frame history', 'Images only, no animation export'],
-  standard: [
-    '5 zones · 50 captures / day',
-    'Nasional + Provinsi road classes',
-    '90-day history · CSV export',
-    'GIF + MP4 animation export',
-  ],
-  premium: [
-    '25 zones · 100 captures / day',
-    'Adds Kota / Lokal road classes',
-    'Unlimited history · 15-minute interval',
-    'API access · SSO · SLA',
-  ],
+  // Facts only (FE-36): every line comes from PLAN_LIMITS / the API's plan rules. Every
+  // plan exports ZIP, WebM and MP4, so export formats are not listed as a tier difference.
+  free: ['1 zone', '45 captures', 'Highways', 'One capture a day per window', '7 days of history', '7 days data retention'],
+  starter: ['3 zones', '450 captures', 'Highways + main roads', 'Hourly captures', '30 days of history', '14 days data retention'],
+  standard: ['10 zones', '2,000 captures', 'Highways + main roads', 'Hourly captures', '30 days of history', '30 days data retention'],
+  premium: ['15 zones', '3,000 captures', 'All roads, down to local streets', 'Captures every 15 minutes', '30 days of history', '30 days data retention'],
 }
 
+/**
+ * Road classes as people see them (FE-33) — described by the road, not by Indonesia's
+ * administrative tiers, so they read the same anywhere. The ids stay `nasional` /
+ * `nasional_provinsi` / `semua`: they are the DB enum and the API contract.
+ */
 export const ROAD_CLASS_LABEL: Record<string, string> = {
-  nasional: 'Nasional',
-  nasional_provinsi: 'Nasional + Provinsi',
+  nasional: 'Highways',
+  nasional_provinsi: 'Highways + main roads',
   semua: 'All roads',
 }
 
 export const ROAD_CLASS_REQUIRED_PLAN: Record<string, string> = {
   nasional: 'free',
-  nasional_provinsi: 'standard',
+  nasional_provinsi: 'starter',
   semua: 'premium',
 }
 

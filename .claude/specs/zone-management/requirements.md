@@ -143,7 +143,6 @@ supaya **saya mendapat data yang sesuai kebutuhan saya (dan sesuai plan yang say
 
 **Out of Scope (fase ini):**
 - Custom road class (pilih kelas jalan spesifik selain 3 preset)
-- Preview hasil akhir dengan branding logo asli (preview hanya traffic + style, tanpa logo — logo hanya muncul di capture asli)
 
 ---
 
@@ -248,7 +247,7 @@ supaya **saya bisa mendapatkan snapshot traffic terkini tanpa harus menunggu sch
 - [ ] Panel Style Selector punya tombol konfirmasi "Capture Sekarang" (final) untuk benar-benar trigger, dan opsi batal
 - [ ] Setelah konfirmasi, tampilkan status "Memproses..." dan `captureId` dikembalikan (async, status `pending`)
 - [ ] Polling status capture setiap 3 detik sampai status berubah ke `done` atau `failed`
-- [ ] Gambar capture menampilkan: basemap OpenStreetMap + traffic layer HERE Traffic overlay (BR-024), company logo, title & timestamp sesuai style yang dipilih (BR-018, BR-023)
+- [ ] Gambar capture menampilkan: basemap OpenStreetMap + traffic layer HERE Traffic overlay (BR-024), zone name & timestamp sesuai style yang dipilih (BR-018, BR-023)
 - [ ] Legend traffic (green/yellow/orange/red) tampil di sudut gambar (BR-019)
 - [ ] Setelah `done`, tampilkan preview gambar dan tombol download PNG
 - [ ] Gambar capture menampilkan road class **efektif** = MIN(road class tersimpan di zona, batas plan aktif user saat ini) (BR-022)
@@ -258,7 +257,6 @@ supaya **saya bisa mendapatkan snapshot traffic terkini tanpa harus menunggu sch
 - Capture gagal (Playwright error / R2 error) → status `failed`, tampilkan pesan error dari `error_message`, sediakan tombol "Coba Lagi" (membuka lagi Style Selector, tidak otomatis pakai style sebelumnya)
 - User klik "Capture Sekarang" berkali-kali cepat → disable tombol setelah konfirmasi pertama sampai ada respons
 - Daily limit `skipped_limit` → tidak ada retry, langsung tampilkan pesan limit (BR-008)
-- Branding config belum diisi → capture tetap berjalan, logo kosong / nama perusahaan kosong
 - User downgrade plan setelah zona dibuat dengan road class lebih tinggi → capture tetap jalan tapi road class efektif otomatis diturunkan (BR-022), tidak ada pesan error ke user (silent cap)
 - Scheduled capture (via cron, F-05) tidak melalui Style Selector — otomatis pakai style preset "Default" (BR-023)
 

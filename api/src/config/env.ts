@@ -1,0 +1,398 @@
+/**
+ * Loads and validates the environment, once, at import time.
+ *
+ * Two rules shape this file:
+ *
+ * 1. Field names are flat camelCase (`config.hereApiKey`) — structure.md's naming
+ *    table specifies exactly that.
+ *
+ * 2. Credentials for *external* services (R2, HERE) are optional to boot with.
+ *    The API refusing to start because R2 is unconfigured would be wrong — almost
+ *    no endpoint touches R2, and a half-configured dev machine should still be able
+ *    to run auth and zones. The clients that need them fail loudly at call time
+ *    instead (see `requireR2()` / `requireHere()`), and `npm run env:check` reports
+ *    them. Anything the process genuinely cannot run without — the database, the
+ *    JWT secret — is required here and fails at boot.
+ */
+import path from 'node:path'
+import dotenv from 'dotenv'
+
+/**
+ * docker compose's `env_file` injects `KEY=''` into the container for every key in
+ * api/.env that has no value yet. dotenv refuses to overwrite an entry that already
+ * exists in process.env — even an empty one — so those blanks would mask the real
+ * values in the file: set HERE_API_KEY, run env:check, and be told it is MISSING.
+ *
+ * Dropping empty entries first lets the file fill them, while a genuinely provided
+ * override (`docker compose exec -e KEY=value`, a CI secret) still wins because it is
+ * not empty. `override: true` would have been the blunt fix and would break those.
+ */
+export function dropEmptyEnvEntries(env: NodeJS.ProcessEnv = process.env): string[] {
+  const dropped: string[] = []
+  for (const [key, value] of Object.entries(env)) {
+    if (value === '') {
+      delete env[key]
+      dropped.push(key)
+    }
+  }
+  return dropped
+}
+
+dropEmptyEnvEntries()
+
+dotenv.config({ path: path.resolve(__dirname, '../../.env') })
+
+import { z } from 'zod'
+
+/**
+ * An unset optional value, allowing for how the two env parsers differ.
+ *
+ * dotenv strips an inline `# comment` and leaves `''`. Docker Compose's `env_file`
+ * strips it too — but only when there is a value in front of it. With an empty value,
+ * `KEY=   # fill me` arrives as the literal string `# fill me`, which every
+ * `if (value)` check in the codebase would read as configured. Treating a leading `#`
+ * as unset closes that gap, and costs nothing: no real key or URL starts with one.
+ */
+const optionalStr = z
+  .string()
+  .trim()
+  .optional()
+  .transform((v) => (v === undefined || v === '' || v.startsWith('#') ? undefined : v))
+
+const requiredStr = (label: string) =>
+  z
+    .string({ required_error: `${label} is required` })
+    .trim()
+    .min(1, `${label} is required but empty`)
+
+const boolFromEnv = (fallback: boolean) =>
+  z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => (v === undefined ? fallback : v === 'true'))
+
+const intFromEnv = (fallback: number) => z.coerce.number().int().positive().optional().default(fallback)
+
+const schema = z.object({
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  PORT: intFromEnv(8080),
+  APP_BASE_URL: z.string().url().default('http://localhost:8080'),
+
+  DB_HOST: requiredStr('DB_HOST'),
+  DB_PORT: intFromEnv(5432),
+  DB_NAME: requiredStr('DB_NAME'),
+  DB_USER: requiredStr('DB_USER'),
+  DB_PASSWORD: requiredStr('DB_PASSWORD'),
+  DB_SSLMODE: z.enum(['disable', 'require']).default('disable'),
+  DATABASE_URL: optionalStr,
+  DB_POOL_MAX: intFromEnv(25),
+  DB_POOL_IDLE_TIMEOUT_MS: intFromEnv(30_000),
+
+  /**
+   * Comma-separated emails granted the `internal` platform role (BR-027).
+   * The only copy: the web app no longer keeps one (it used to, in a NEXT_PUBLIC_
+   * variable bundled into every browser); it reads `roleLockedByConfig` per user.
+   */
+  INTERNAL_EMAILS: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) =>
+      (v ?? '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => e.length > 0 && !e.startsWith('#')),
+    ),
+
+  JWT_SECRET: requiredStr('JWT_SECRET').min(32, 'JWT_SECRET must be at least 32 characters'),
+  JWT_EXPIRY: z.string().trim().default('7d'),
+  COOKIE_DOMAIN: z.string().trim().default('localhost'),
+  COOKIE_SECURE: boolFromEnv(false),
+  COOKIE_SAME_SITE: z.enum(['strict', 'lax', 'none']).default('lax'),
+
+  RABBITMQ_URL: requiredStr('RABBITMQ_URL'),
+  RABBITMQ_QUEUE_CAPTURE: z.string().trim().default('capture-jobs'),
+  /** How many captures the worker runs at once. Raise for throughput, lower if HERE rate-limits. */
+  CAPTURE_CONCURRENCY: z.coerce.number().int().positive().max(32).default(4),
+  RABBITMQ_QUEUE_DEAD_LETTER: z.string().trim().default('capture-dead-letter'),
+  /** FE-21 — Studio exports rendered by the worker. Consumed one at a time. */
+  RABBITMQ_QUEUE_EXPORT: z.string().trim().default('export-jobs'),
+  /** CAP-02 — one image per collected capture, rendered by the worker's single browser. */
+  RABBITMQ_QUEUE_RENDER: z.string().trim().default('render-jobs'),
+
+  // Optional at boot — see rule 2 above.
+  R2_ACCOUNT_ID: optionalStr,
+  R2_ACCESS_KEY_ID: optionalStr,
+  R2_ACCESS_KEY_SECRET: optionalStr,
+  R2_BUCKET_NAME: optionalStr,
+  R2_PUBLIC_URL: optionalStr,
+  R2_ENDPOINT: optionalStr,
+
+  HERE_API_KEY: optionalStr,
+  HERE_TRAFFIC_FLOW_URL: z.string().url().default('https://data.traffic.hereapi.com/v7/flow'),
+  /**
+   * Place search on the zone map. HERE Geocoding's free tier is 5,000 a month; past this
+   * many HERE searches in a WIB month, search moves to OpenStreetMap Nominatim.
+   */
+  HERE_GEOCODE_MONTHLY_LIMIT: z.coerce.number().int().min(0).default(4000),
+  /**
+   * Per-account limits on the HERE-backed wizard calls (map previews, road-class counts,
+   * place search), together. Each cache miss is a billed HERE request.
+   */
+  PREVIEW_RATE_PER_10MIN: z.coerce.number().int().min(1).default(30),
+  PREVIEW_RATE_PER_DAY: z.coerce.number().int().min(1).default(200),
+  /** Previews may use at most this share of the HERE daily cap, so captures keep the rest. */
+  PREVIEW_CAP_SHARE: z.coerce.number().min(0).max(1).default(0.3),
+
+  OSM_TILE_URL: z.string().trim().default('https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+
+  PLAYWRIGHT_HEADLESS: boolFromEnv(true),
+  PLAYWRIGHT_TIMEOUT_MS: intFromEnv(30_000),
+  PLAYWRIGHT_SCREENSHOT_WIDTH: intFromEnv(1280),
+  PLAYWRIGHT_SCREENSHOT_HEIGHT: intFromEnv(720),
+  PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: optionalStr,
+  /** EXP-B — the ffmpeg binary that encodes export videos (installed in the worker image). */
+  FFMPEG_PATH: z.string().trim().default('ffmpeg'),
+  /** EXP-B — scratch space for a video while ffmpeg writes it; cleaned after each export. */
+  EXPORT_TMP_DIR: z.string().trim().default('/tmp/maceut-exports'),
+
+  FRONTEND_URL: z.string().url('FRONTEND_URL must be a full origin, e.g. http://localhost:3000'),
+  RENDER_BASE_URL: z.string().url().default('http://web:3000'),
+
+  SWAGGER_ENABLED: boolFromEnv(true),
+  /**
+   * H1 — the capture retention sweeper (ADR-035). Off until the owner has read
+   * `npm run retention:dry-run` against the real data, then switched on.
+   */
+  RETENTION_SWEEPER_ENABLED: boolFromEnv(false),
+
+  /**
+   * A shared demo account, deleted and rebuilt every day at 00:00 WIB (demo.service).
+   * Off unless set. Its password comes from here and nowhere else; plan, payment and
+   * account changes are refused for it (lib/demo).
+   */
+  DEMO_ENABLED: boolFromEnv(false),
+  DEMO_EMAIL: z.string().trim().toLowerCase().email().default('demo@hokya.dev'),
+  DEMO_PASSWORD: optionalStr,
+  /** The zone whose latest full day of captures is copied into the demo each reset. */
+  DEMO_SOURCE_ZONE_ID: z.preprocess((v) => (v === '' ? undefined : v), z.string().trim().uuid().optional()),
+
+  /**
+   * Transactional email — sign-up verification and password-reset codes (lib/email).
+   * `auto` (default) uses whichever keys are set: Mailtrap first, Resend as the backup
+   * when Mailtrap fails or runs out; with no key at all it falls to `console`, which
+   * prints the message to the API log (dev only). Naming one provider uses only that one.
+   */
+  EMAIL_PROVIDER: z.enum(['auto', 'console', 'resend', 'mailtrap']).default('auto'),
+  EMAIL_FROM: z.string().trim().min(3).default('Maceut <no-reply@maceut.id>'),
+  /**
+   * Where people reach a human. EMAIL_FROM is a no-reply sender for automatic mail; this
+   * address is every email's Reply-To and the "Need help?" contact in footers and invoices.
+   */
+  EMAIL_SUPPORT: z.string().trim().email().default('support.maceut@hokya.dev'),
+  RESEND_API_KEY: optionalStr,
+  MAILTRAP_API_TOKEN: optionalStr,
+  /** Set to send into a Mailtrap *sandbox* inbox (testing) instead of real delivery. */
+  MAILTRAP_INBOX_ID: optionalStr,
+
+  /**
+   * Midtrans Snap payments for plan upgrades (FE-56). Optional at boot like R2/HERE:
+   * without the server key the payment routes answer PAYMENTS_NOT_CONFIGURED and the
+   * Profile page keeps "Contact us to upgrade". The server key never leaves the API;
+   * the client key is the web app's (NEXT_PUBLIC_MIDTRANS_CLIENT_KEY).
+   */
+  MIDTRANS_SERVER_KEY: optionalStr,
+  /** When set, a notification for any other merchant is refused. */
+  MIDTRANS_MERCHANT_ID: optionalStr,
+  /** false = sandbox hosts. Must match the key: a sandbox key on production hosts is a 401. */
+  MIDTRANS_IS_PRODUCTION: boolFromEnv(false),
+  /**
+   * FE-56 phase 5: the Auto-renew switch (card + Midtrans Subscription API). Off until
+   * recurring card payments are activated on the Midtrans account and the dashboard's
+   * Recurring Notification URL points at /payments/midtrans/notification.
+   */
+  MIDTRANS_AUTO_RENEW_ENABLED: boolFromEnv(false),
+}).superRefine((e, ctx) => {
+  // Unlike R2 and HERE (rule 2), a chosen email provider without its credential fails
+  // at boot: sign-up is blocked until the address is verified, so a provider that can't
+  // send locks every new account out — silently, until someone asks why no code came.
+  if (e.EMAIL_PROVIDER === 'resend' && !e.RESEND_API_KEY) {
+    ctx.addIssue({ code: 'custom', path: ['RESEND_API_KEY'], message: 'required when EMAIL_PROVIDER=resend' })
+  }
+  if (e.EMAIL_PROVIDER === 'mailtrap' && !e.MAILTRAP_API_TOKEN) {
+    ctx.addIssue({ code: 'custom', path: ['MAILTRAP_API_TOKEN'], message: 'required when EMAIL_PROVIDER=mailtrap' })
+  }
+  // Same as the sign-up rule (auth.ts minPasswordLength): Better Auth would refuse it anyway.
+  if (e.DEMO_ENABLED && (!e.DEMO_PASSWORD || e.DEMO_PASSWORD.length < 8)) {
+    ctx.addIssue({ code: 'custom', path: ['DEMO_PASSWORD'], message: 'required (8+ characters) when DEMO_ENABLED=true' })
+  }
+  if (emailProviders(e)[0] === 'console' && e.NODE_ENV === 'production') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['EMAIL_PROVIDER'],
+      message: 'console only logs codes — set MAILTRAP_API_TOKEN and/or RESEND_API_KEY in production',
+    })
+  }
+})
+
+function parseEnv(raw: NodeJS.ProcessEnv = process.env) {
+  const result = schema.safeParse(raw)
+  if (!result.success) {
+    const lines = result.error.issues.map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`)
+    throw new Error(
+      `Invalid environment in api/.env — ${result.error.issues.length} problem(s):\n${lines.join('\n')}\n\n` +
+        `Compare against api/.env.example. Every key there has a comment explaining what it is for.`,
+    )
+  }
+  return result.data
+}
+
+/**
+ * Postgres connection string. Derived from the DB_* parts so there is one source of
+ * truth; DATABASE_URL overrides it only when explicitly set, for managed databases
+ * that need connection parameters the parts cannot express.
+ */
+function deriveDatabaseUrl(e: z.infer<typeof schema>): string {
+  if (e.DATABASE_URL) return e.DATABASE_URL
+  const auth = `${encodeURIComponent(e.DB_USER)}:${encodeURIComponent(e.DB_PASSWORD)}`
+  const ssl = e.DB_SSLMODE === 'require' ? '?sslmode=require' : ''
+  return `postgres://${auth}@${e.DB_HOST}:${e.DB_PORT}/${e.DB_NAME}${ssl}`
+}
+
+/**
+ * R2's S3 endpoint is `https://{account}.r2.cloudflarestorage.com`. Jurisdiction-bound
+ * buckets use a different host (EU inserts `.eu.`), which only R2_ENDPOINT can express.
+ */
+function deriveR2Endpoint(e: z.infer<typeof schema>): string | undefined {
+  if (e.R2_ENDPOINT) return e.R2_ENDPOINT
+  if (!e.R2_ACCOUNT_ID) return undefined
+  return `https://${e.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+}
+
+export function buildConfig(raw: NodeJS.ProcessEnv = process.env) {
+  const e = parseEnv(raw)
+  return {
+    nodeEnv: e.NODE_ENV,
+    isProduction: e.NODE_ENV === 'production',
+    port: e.PORT,
+    appBaseUrl: e.APP_BASE_URL,
+
+    dbHost: e.DB_HOST,
+    dbPort: e.DB_PORT,
+    dbName: e.DB_NAME,
+    dbUser: e.DB_USER,
+    dbPassword: e.DB_PASSWORD,
+    dbSslMode: e.DB_SSLMODE,
+    databaseUrl: deriveDatabaseUrl(e),
+    dbPoolMax: e.DB_POOL_MAX,
+    dbPoolIdleTimeoutMs: e.DB_POOL_IDLE_TIMEOUT_MS,
+
+    internalEmails: e.INTERNAL_EMAILS,
+
+    jwtSecret: e.JWT_SECRET,
+    jwtExpiry: e.JWT_EXPIRY,
+    cookieDomain: e.COOKIE_DOMAIN,
+    cookieSecure: e.COOKIE_SECURE,
+    cookieSameSite: e.COOKIE_SAME_SITE,
+
+    rabbitmqUrl: e.RABBITMQ_URL,
+    rabbitmqQueueCapture: e.RABBITMQ_QUEUE_CAPTURE,
+    captureConcurrency: e.CAPTURE_CONCURRENCY,
+    rabbitmqQueueDeadLetter: e.RABBITMQ_QUEUE_DEAD_LETTER,
+    rabbitmqQueueExport: e.RABBITMQ_QUEUE_EXPORT,
+    rabbitmqQueueRender: e.RABBITMQ_QUEUE_RENDER,
+
+    r2AccountId: e.R2_ACCOUNT_ID,
+    r2AccessKeyId: e.R2_ACCESS_KEY_ID,
+    r2AccessKeySecret: e.R2_ACCESS_KEY_SECRET,
+    r2BucketName: e.R2_BUCKET_NAME,
+    r2PublicUrl: e.R2_PUBLIC_URL,
+    r2Endpoint: deriveR2Endpoint(e),
+
+    hereApiKey: e.HERE_API_KEY,
+    hereTrafficFlowUrl: e.HERE_TRAFFIC_FLOW_URL,
+    hereGeocodeMonthlyLimit: e.HERE_GEOCODE_MONTHLY_LIMIT,
+    previewRatePer10Min: e.PREVIEW_RATE_PER_10MIN,
+    previewRatePerDay: e.PREVIEW_RATE_PER_DAY,
+    previewCapShare: e.PREVIEW_CAP_SHARE,
+
+    osmTileUrl: e.OSM_TILE_URL,
+
+    playwrightHeadless: e.PLAYWRIGHT_HEADLESS,
+    playwrightTimeoutMs: e.PLAYWRIGHT_TIMEOUT_MS,
+    playwrightScreenshotWidth: e.PLAYWRIGHT_SCREENSHOT_WIDTH,
+    playwrightScreenshotHeight: e.PLAYWRIGHT_SCREENSHOT_HEIGHT,
+    playwrightChromiumExecutablePath: e.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+    ffmpegPath: e.FFMPEG_PATH,
+    exportTmpDir: e.EXPORT_TMP_DIR,
+
+    frontendUrl: e.FRONTEND_URL,
+    renderBaseUrl: e.RENDER_BASE_URL,
+
+    swaggerEnabled: e.SWAGGER_ENABLED,
+    retentionSweeperEnabled: e.RETENTION_SWEEPER_ENABLED,
+
+    demoEnabled: e.DEMO_ENABLED,
+    demoEmail: e.DEMO_EMAIL,
+    demoPassword: e.DEMO_PASSWORD,
+    demoSourceZoneId: e.DEMO_SOURCE_ZONE_ID,
+
+    emailProviders: emailProviders(e),
+    emailFrom: e.EMAIL_FROM,
+    emailSupport: e.EMAIL_SUPPORT,
+    resendApiKey: e.RESEND_API_KEY,
+    mailtrapApiToken: e.MAILTRAP_API_TOKEN,
+    mailtrapInboxId: e.MAILTRAP_INBOX_ID,
+
+    midtransServerKey: e.MIDTRANS_SERVER_KEY,
+    midtransMerchantId: e.MIDTRANS_MERCHANT_ID,
+    midtransIsProduction: e.MIDTRANS_IS_PRODUCTION,
+    midtransAutoRenewEnabled: e.MIDTRANS_AUTO_RENEW_ENABLED,
+  }
+}
+
+/** The providers to try, in order. `auto`: Mailtrap, then Resend, for each key set. */
+function emailProviders(e: {
+  EMAIL_PROVIDER: 'auto' | 'console' | 'resend' | 'mailtrap'
+  MAILTRAP_API_TOKEN?: string
+  RESEND_API_KEY?: string
+}): ('console' | 'resend' | 'mailtrap')[] {
+  if (e.EMAIL_PROVIDER !== 'auto') return [e.EMAIL_PROVIDER]
+  const chain: ('resend' | 'mailtrap')[] = []
+  if (e.MAILTRAP_API_TOKEN) chain.push('mailtrap')
+  if (e.RESEND_API_KEY) chain.push('resend')
+  return chain.length ? chain : ['console']
+}
+
+export type Config = ReturnType<typeof buildConfig>
+
+export const config: Config = buildConfig()
+
+/** True when every value the R2 client needs is present. */
+export function isR2Configured(c: Config = config): boolean {
+  return Boolean(c.r2AccountId && c.r2AccessKeyId && c.r2AccessKeySecret && c.r2BucketName && c.r2Endpoint)
+}
+
+/** True when the HERE Traffic client can be used. */
+export function isHereConfigured(c: Config = config): boolean {
+  return Boolean(c.hereApiKey)
+}
+
+/** True when payments can be taken (FE-56). */
+export function isMidtransConfigured(c: Config = config): boolean {
+  return Boolean(c.midtransServerKey)
+}
+
+/** Names of the env keys each integration is still missing — for env:check and boot warnings. */
+export function missingIntegrationKeys(c: Config = config): { r2: string[]; here: string[] } {
+  const r2: string[] = []
+  if (!c.r2AccountId) r2.push('R2_ACCOUNT_ID')
+  if (!c.r2AccessKeyId) r2.push('R2_ACCESS_KEY_ID')
+  if (!c.r2AccessKeySecret) r2.push('R2_ACCESS_KEY_SECRET')
+  if (!c.r2BucketName) r2.push('R2_BUCKET_NAME')
+
+  const here: string[] = []
+  if (!c.hereApiKey) here.push('HERE_API_KEY')
+
+  return { r2, here }
+}

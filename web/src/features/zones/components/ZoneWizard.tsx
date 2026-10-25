@@ -1,26 +1,30 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { LatLngExpression } from 'leaflet'
 import { Button } from '@/components/ui/Button'
 import { FormLabel, Input } from '@/components/ui/Input'
 import { Alert } from '@/components/ui/Alert'
-import { RoadClassBadge } from '@/components/ui/Badge'
-import { cn } from '@/lib/utils'
+import { RoadClassBadge, StatusPill } from '@/components/ui/Badge'
+import { cn, formatNumber, formatKm } from '@/lib/utils'
 import { IconCheck } from '@/components/ui/icons'
 import { PLAN_LIMITS, ROAD_CLASS_LABEL } from '@/lib/constants'
 import { ApiError } from '@/types/api'
 import { MapCanvas } from './MapCanvas'
+import { InfoDialog } from '@/components/ui/InfoDialog'
 import { ZoneMapEditor, pointsToGeometry } from './ZoneMapEditor'
 import { RoadClassPicker } from './RoadClassPicker'
 import * as zonesApi from '../api'
-import type { MatchedRoad, RoadClass, Zone } from '../types'
+import type { RoadClass, Zone } from '../types'
 import type { Plan } from '@/features/auth/types'
 
 const STEPS = ['Boundary', 'Road class', 'Review']
 
 
+
+/** Road classes from narrowest to widest; each includes the ones before it. */
+const ROAD_CLASS_ORDER: RoadClass[] = ['nasional', 'nasional_provinsi', 'semua']
 
 export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones: Zone[] }) {
   const router = useRouter()
@@ -30,31 +34,116 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
   const [roadClass, setRoadClass] = useState<RoadClass | null>(null)
   const [mode, setMode] = useState<'draw' | 'import'>('draw')
   const [withTraffic, setWithTraffic] = useState(true)
-  const [traffic, setTraffic] = useState<zonesApi.TrafficPreview | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The size a refused point would have made the zone, for the "too large" pop-up.
+  const [tooLarge, setTooLarge] = useState<{ widthKm: number; heightKm: number } | null>(null)
+  // Keyed by the ring it happened on, so redrawing the boundary clears it.
+  const [previewFailure, setPreviewFailure] = useState<{ key: string; message: string } | null>(null)
 
   const geometry = pointsToGeometry(points)
+
+  /** Adds a point unless it would make the zone more than 100 km a side; then the pop-up says so. */
+  function addPoint(lat: number, lng: number) {
+    const all = [...(points as [number, number][]), [lat, lng] as [number, number]]
+    const lats = all.map(([la]) => la)
+    const lngs = all.map(([, ln]) => ln)
+    const box: [number, number, number, number] = [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)]
+    if (!zonesApi.bboxFits(box)) {
+      setTooLarge(zonesApi.bboxSideKm(box))
+      return
+    }
+    setPoints(all)
+  }
   const nameTaken = name.trim() !== '' && existingZones.some((z) => z.name.toLowerCase() === name.trim().toLowerCase())
   const area = geometry ? zonesApi.areaKm2(geometry) : 0
+  const sideKm = useMemo(() => (geometry ? zonesApi.bboxSideKm(zonesApi.bboxOf(geometry)) : null), [geometry])
 
-  const matched: MatchedRoad[] = useMemo(
-    () => (geometry && roadClass ? zonesApi.matchRoads(geometry, roadClass) : []),
-    [geometry, roadClass]
-  )
-  const matchedLength = Number(matched.reduce((sum, r) => sum + r.lengthKm, 0).toFixed(1))
-
+  // Real counts for the drawn boundary, from HERE. Fetched once per geometry, not per
+  // class: one answer carries all three tiers, so switching class costs nothing.
+  //
+  // Keyed by the bbox it answers for, so redrawing the boundary needs no reset: a
+  // result that no longer matches is ignored and the row reads "—" again.
+  const bboxKey = useMemo(() => (geometry ? zonesApi.bboxOf(geometry).join(',') : null), [geometry])
+  const [roadCounts, setRoadCounts] =
+    useState<{ key: string; counts: zonesApi.RoadClassCounts['counts'] } | null>(null)
 
   useEffect(() => {
-    if (step !== 1 || !geometry || !withTraffic) return
-    const ring = geometry.coordinates[0]
+    if (!bboxKey) return
+    let cancelled = false
+    const bbox = bboxKey.split(',').map(Number) as [number, number, number, number]
+    zonesApi
+      .getRoadClassCounts(bbox)
+      .then((res) => !cancelled && setRoadCounts({ key: bboxKey, counts: res.counts }))
+      .catch(() => {
+        // Counts are a convenience on the review rail; the zone still saves without them.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [bboxKey])
+
+  const matched = roadClass && roadCounts?.key === bboxKey ? roadCounts.counts[roadClass] : undefined
+
+
+  /**
+   * The preview, loaded tier by tier up to the selected class (ZONE-PERF): Nasional first
+   * (few roads, draws at once), then Provinsi, then local roads — each drawn as it
+   * arrives, and nothing beyond the class the user chose.
+   *
+   * Keyed by a STRING of the ring. `geometry` is a new object on every render, and the
+   * old effect depended on it: every render re-fetched the preview, whose result caused
+   * another render — a loop that redrew thousands of roads and could re-ask HERE.
+   */
+  const ringKey = geometry ? JSON.stringify(geometry.coordinates[0]) : null
+  const wantedTiers = useMemo(
+    () => ROAD_CLASS_ORDER.slice(0, ROAD_CLASS_ORDER.indexOf(roadClass ?? 'nasional') + 1),
+    [roadClass],
+  )
+  const [tiers, setTiers] = useState<{ key: string; byClass: Partial<Record<RoadClass, zonesApi.SlimTraffic>> }>({
+    key: '',
+    byClass: {},
+  })
+  const tiersRef = useRef(tiers)
+  useEffect(() => {
+    tiersRef.current = tiers
+  }, [tiers])
+  useEffect(() => {
+    if (step !== 1 || !ringKey || !withTraffic) return
+    const ring = JSON.parse(ringKey) as [number, number][]
     const lngs = ring.map(([lng]) => lng)
     const lats = ring.map(([, lat]) => lat)
-    zonesApi
-      .getTrafficPreview([Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)])
-      .then(setTraffic)
-      .catch(() => setTraffic(null))
-  }, [step, geometry, withTraffic])
+    const bbox: [number, number, number, number] = [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)]
+    let cancelled = false
+    void (async () => {
+      for (const tier of wantedTiers) {
+        if (cancelled) return
+        // Already loaded for this ring — switching class down and back costs nothing.
+        const t = tiersRef.current
+        if (t.key === ringKey && t.byClass[tier] !== undefined) continue
+        const roads = await zonesApi.getTrafficTier(bbox, tier, ring).catch((err) => {
+          // Rate-limited or over the preview budget: say so once, and don't keep asking.
+          if (!cancelled)
+            setPreviewFailure({ key: ringKey, message: err instanceof ApiError ? err.message : 'The traffic preview is unavailable right now.' })
+          return null
+        })
+        if (cancelled || !roads) return
+        setTiers((t) => ({ key: ringKey, byClass: { ...(t.key === ringKey ? t.byClass : {}), [tier]: roads } }))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [step, ringKey, withTraffic, wantedTiers])
+
+  // What the map draws: the loaded tiers up to the selected class, merged.
+  const shownRoads = useMemo(() => {
+    if (tiers.key !== ringKey) return null
+    const features = wantedTiers.flatMap((t) => tiers.byClass[t]?.features ?? [])
+    return { type: 'FeatureCollection' as const, features }
+  }, [tiers, ringKey, wantedTiers])
+  const previewError = previewFailure?.key === ringKey ? previewFailure.message : null
+  const loadingTier = step === 1 && withTraffic && !previewError ? wantedTiers.find((t) => tiers.key !== ringKey || !tiers.byClass[t]) : undefined
 
 
   async function submit() {
@@ -62,7 +151,7 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
     setSubmitting(true)
     setError(null)
     try {
-      await zonesApi.createZone({ name: name.trim(), geometry, roadClass }, plan)
+      await zonesApi.createZone({ name: name.trim(), geometry, roadClass })
       router.push('/schedule')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
@@ -137,23 +226,25 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
                 <>
                   <ZoneMapEditor
                     points={points}
-                    onAddPoint={(lat, lng) => setPoints((p) => [...p, [lat, lng]])}
+                    onAddPoint={addPoint}
                     onUndo={() => setPoints((p) => p.slice(0, -1))}
                     onReset={() => setPoints([])}
                   />
                   <p className="text-caption text-text-secondary">
                     {points.length === 0 && 'Click the map to start. Add at least 3 points to close the shape.'}
-                    {points.length > 0 && points.length < 3 && `${points.length} point(s) placed · needs at least 3.`}
-                    {points.length >= 3 && `${points.length} points · shape closed · ${area} km²`}
+                    {points.length > 0 && points.length < 3 && 'Place at least 3 points.'}
+                    {points.length >= 3 &&
+                      sideKm &&
+                      `${area} km² drawn, ${Math.round(sideKm.widthKm)} × ${Math.round(sideKm.heightKm)} km (max ${zonesApi.MAX_ZONE_SIDE_KM} km a side)`}
                   </p>
                 </>
               ) : (
                 <div className="border border-dashed border-border rounded-md p-section text-center space-y-sm">
-                  <p className="text-body text-text-primary font-medium">Import a boundary file</p>
-                  <p className="text-caption text-text-secondary">
-                    GeoJSON and SHP are in the mockups, but boundary import is out of MVP scope — draw the boundary on
-                    the map for now.
+                  <p className="flex items-center justify-center gap-sm text-body text-text-primary font-medium">
+                    Import a boundary file
+                    <StatusPill tone="info">Coming soon</StatusPill>
                   </p>
+                  <p className="text-caption text-text-secondary">Draw the boundary on the map for now.</p>
                   <div className="flex justify-center gap-sm pt-sm">
                     <span className="text-micro text-text-muted border border-border rounded-xs px-sm py-xs">GeoJSON</span>
                     <span className="text-micro text-text-muted border border-border rounded-xs px-sm py-xs">SHP</span>
@@ -190,23 +281,33 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
 
               <MapCanvas
                 polygon={geometry}
-                trafficGeoJSON={step === 1 && withTraffic && traffic ? traffic : undefined}
-                className="h-96 w-full"
+                slimTraffic={step === 1 && withTraffic ? shownRoads : undefined}
+                className="h-[480px] laptop:h-[640px] w-full"
               />
+              {previewError && step === 1 && withTraffic && (
+                <p className="text-caption text-warning-text" role="status">
+                  {previewError}
+                </p>
+              )}
+              {loadingTier && (
+                <p className="text-caption text-text-muted" aria-live="polite">
+                  Loading {ROAD_CLASS_LABEL[loadingTier].toLowerCase()} roads…
+                </p>
+              )}
 
               {step === 1 && (
                 <div className="space-y-sm">
                   <p className="text-micro font-semibold uppercase tracking-wide text-text-muted">Rendering</p>
                   <ul className="space-y-xs">
                     {[
-                      { label: 'Nasional', collected: true },
-                      { label: 'Provinsi', collected: roadClass !== 'nasional' },
-                      { label: 'Kota / Lokal', collected: roadClass === 'semua' },
+                      { label: 'Highways', collected: true },
+                      { label: 'Main roads', collected: roadClass !== 'nasional' },
+                      { label: 'Local streets', collected: roadClass === 'semua' },
                     ].map((row) => (
                       <li key={row.label} className="flex items-center gap-sm text-caption">
                         <span className={cn('w-2.5 h-2.5 rounded-full', row.collected ? 'bg-success-icon' : 'bg-border')} />
                         <span className={row.collected ? 'text-text-primary' : 'text-text-muted'}>
-                          {row.label} · {row.collected ? 'with traffic' : 'not collected'}
+                          {row.label}: {row.collected ? 'with traffic' : 'not collected'}
                         </span>
                       </li>
                     ))}
@@ -237,10 +338,14 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
           </div>
 
           <dl className="space-y-md border-t border-divider pt-lg">
-            <RailRow label="Area drawn" value={points.length >= 3 ? `${area} km² · ${points.length} points` : '—'} />
+            <RailRow label="Area drawn" value={points.length >= 3 ? `${area} km²` : '—'} />
             <RailRow
               label="Roads inside"
-              value={roadClass ? `${matched.length} · ${matchedLength} km` : '—'}
+              value={
+                matched
+                  ? `${formatNumber(matched.roads)} roads, ${formatKm(matched.lengthKm)}`
+                  : '—'
+              }
             />
             {roadClass && <RailRow label="Road class" value={ROAD_CLASS_LABEL[roadClass]} />}
             {step === 2 && <RailRow label="Zone slot" value={`${existingZones.length + 1} of ${PLAN_LIMITS[plan].zonesLimit}`} />}
@@ -248,8 +353,8 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
 
           {step === 0 && (
             <p className="text-caption text-text-secondary border-t border-divider pt-lg">
-              <span className="font-semibold text-text-primary">Tip</span> — draw a little wider than the roads you care
-              about. You pick which road classes to collect in the next step.
+              <span className="font-semibold text-text-primary">Tip:</span> draw a little wider than the roads you care
+              about.
             </p>
           )}
 
@@ -269,7 +374,7 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
                 {roadClass && <RoadClassBadge roadClass={roadClass} />}
               </div>
               <p className="text-caption text-text-secondary">
-                No capture times yet. After creating, set windows on the Schedule page — until then this zone stays idle.
+                No capture times yet. Set them on the Schedule page after creating.
               </p>
               {error && <Alert variant="warning">{error}</Alert>}
             </div>
@@ -280,7 +385,7 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
       {/* Footer actions */}
       <div className="flex flex-wrap items-center justify-between gap-md border-t border-border pt-lg">
         <span className="text-caption text-text-muted">
-          Step {step + 1} of 3 · {STEPS[step]}
+          Step {step + 1} of 3: {STEPS[step]}
         </span>
         <div className="flex gap-sm">
           {step > 0 && (
@@ -291,9 +396,13 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
           {step < 2 && (
             <Button
               disabled={step === 0 ? !canLeaveStep1 : !canLeaveStep2}
-              onClick={() => setStep(step + 1)}
+              onClick={() => {
+                // Start on the widest road class the plan allows; the user can still go narrower.
+                if (step === 0 && !roadClass) setRoadClass(PLAN_LIMITS[plan].maxRoadClass)
+                setStep(step + 1)
+              }}
             >
-              {step === 0 ? 'Next: road class' : 'Next: review'}
+              Next
             </Button>
           )}
           {step === 2 && (
@@ -304,6 +413,18 @@ export function ZoneWizard({ plan, existingZones }: { plan: Plan; existingZones:
         </div>
       </div>
 
+      <InfoDialog
+        open={tooLarge !== null}
+        title="Zone too large"
+        description={
+          <p>
+            A zone can be at most {zonesApi.MAX_ZONE_SIDE_KM} km across. This point would make it{' '}
+            {tooLarge && `${Math.round(tooLarge.widthKm)} × ${Math.round(tooLarge.heightKm)} km`}. Draw a smaller area, or
+            split it into several zones.
+          </p>
+        }
+        onClose={() => setTooLarge(null)}
+      />
     </div>
   )
 }

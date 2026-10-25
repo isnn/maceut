@@ -23,7 +23,7 @@ export function ActionMenu({ label, items }: { label: string; items: ActionItem[
     <Menu.Root modal={false}>
       <Menu.Trigger
         aria-label={label}
-        className="inline-flex items-center justify-center w-9 h-9 rounded-sm text-text-muted hover:bg-canvas-secondary hover:text-text-primary focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors"
+        className="inline-flex items-center justify-center w-9 h-9 rounded-sm text-text-muted hover:bg-canvas-secondary hover:text-text-primary focus:outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors"
       >
         <IconDotsVertical size={18} />
       </Menu.Trigger>
@@ -41,7 +41,7 @@ export function ActionMenu({ label, items }: { label: string; items: ActionItem[
                     'block w-full text-left px-md py-sm rounded-sm text-body cursor-pointer select-none outline-none transition-colors',
                     item.destructive ? 'text-danger-text' : 'text-text-secondary',
                     state.highlighted && (item.destructive ? 'bg-danger-bg/60' : 'bg-canvas-secondary text-text-primary'),
-                    state.disabled && 'opacity-50 cursor-not-allowed'
+                    state.disabled && 'opacity-50'
                   )
                 }
               >
