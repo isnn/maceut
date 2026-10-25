@@ -16,6 +16,8 @@ const nextConfig: NextConfig = {
   // socket and the render page never hydrates. `maceut.hokya.dev`: the dev server
   // opened through its public hostname. Dev-only; production has no such check.
   allowedDevOrigins: ["15.235.167.41", "web", "maceut.hokya.dev"],
+  // Which upgrades `next upgrade --agent` proposes: security fixes only.
+  experimental: { agentUpgrade: "security" },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
