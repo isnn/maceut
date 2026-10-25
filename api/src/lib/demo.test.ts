@@ -31,6 +31,12 @@ describe('demoLocked (Better Auth hook)', () => {
     expect(await demoLocked('/revoke-other-sessions', {}, session('demo@hokya.dev'))).toBe(true)
   })
 
+  it("keeps the other visitors' sessions out of reach", async () => {
+    expect(await demoLocked('/list-sessions', {}, session('demo@hokya.dev'))).toBe(true)
+    expect(await demoLocked('/revoke-session', { token: 't' }, session('demo@hokya.dev'))).toBe(true)
+    expect(await demoLocked('/list-sessions', {}, session('someone@hokya.dev'))).toBe(false)
+  })
+
   it('lets any other account change its password', async () => {
     expect(await demoLocked('/change-password', {}, session('someone@hokya.dev'))).toBe(false)
   })

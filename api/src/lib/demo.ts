@@ -13,7 +13,9 @@ export function isDemoUser(email: string | null | undefined): boolean {
 /**
  * Better Auth endpoints refused for the demo: with one password shared by every
  * visitor, any of these would lock the others out, sign them out, or send codes to an
- * inbox nobody reads. Identified by the session…
+ * inbox nobody reads. The session list is shared too: it would show each visitor the
+ * others' IP addresses and browsers, and hand over the tokens that sign them out.
+ * Identified by the session…
  */
 export const DEMO_LOCKED_SESSION_PATHS = new Set([
   '/change-password',
@@ -21,6 +23,8 @@ export const DEMO_LOCKED_SESSION_PATHS = new Set([
   '/delete-user',
   '/email-otp/change-email',
   '/email-otp/request-email-change',
+  '/list-sessions',
+  '/revoke-session',
   '/revoke-sessions',
   '/revoke-other-sessions',
 ])
